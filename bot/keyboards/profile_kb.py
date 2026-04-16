@@ -65,7 +65,7 @@ def profile_full_stats_keyboard(character: Character | None = None, *, locale: s
         pet_txt = (
             t(loc, "profile_pet_switch_btn") if len(owned) >= 2 else t(loc, "profile_pet_btn")
         )
-            rows.append([InlineKeyboardButton(text=pet_txt, callback_data="prf:pet")])
+        rows.append([InlineKeyboardButton(text=pet_txt, callback_data="prf:pet")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
