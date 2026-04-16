@@ -246,7 +246,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
     rk = ""
     if await leaderboard_service.character_has_ranker_gold_bonus(session, char):
         rk = t(loc, "profile_ranker_line")
-    return _build_profile_text(
+    base = _build_profile_text(
         char,
         compact=True,
         weapon_attack=w_atk,
@@ -257,6 +257,8 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         effective_stats=eff,
         ranker_line=rk,
     )
+    pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc)
+    return f"{base}\n{LINE_SEP}\n{pet_blk}"
 
 
 async def build_profile_full_stats_html_async(session: AsyncSession, char: Character) -> str:
@@ -273,7 +275,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     rk = ""
     if await leaderboard_service.character_has_ranker_gold_bonus(session, char):
         rk = t(loc, "profile_ranker_line")
-    return _build_profile_text(
+    base = _build_profile_text(
         char,
         compact=False,
         weapon_attack=w_atk,
@@ -284,6 +286,8 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         effective_stats=eff,
         ranker_line=rk,
     )
+    pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc)
+    return f"{base}\n{LINE_SEP}\n{pet_blk}"
 
 
 @router.message(Command("profile", "status", "профиль", "статус"))

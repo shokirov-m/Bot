@@ -16,6 +16,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.i18n import get_locale
 from bot.keyboards.floor_kb import floor_screen_keyboard, long_floor_screen_keyboard
 from bot.utils.game_ui import push_game_ui, remember_game_ui_anchor
 from db.models.character import Character
@@ -28,6 +29,7 @@ from game.floors import floor_data
 from game.locations import cities as city_locations
 from game.floors import long_floor as long_floor_mod
 from game.floors.tower_ascent import clear_tower_ascent_pending, tower_next_floor_pending
+from services.rest_service import apply_completed_rest_if_needed
 from game.items.equipment import (
     SECRET_GEAR_DROP_CHANCE,
     SECRET_GEAR_EARLY_MAX_FLOOR,
@@ -85,7 +87,9 @@ def format_city_hub_message(character: Character) -> str:
         "раздел <b>«Экономика»</b> (лотерея, ростовщик, пожертвования). "
         "Квесты странника — на боевых этажах (кнопка «К этажу»)."
     )
-    return f"{rich}\n{LINE_SEP_CITY}\n{hub}"
+    loc = get_locale(character, None)
+    pet_hint = pets_mod.format_city_hub_pets_hint_html(locale=loc)
+    return f"{rich}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
 
 
 def format_floor_message(character: Character) -> str:
@@ -140,7 +144,10 @@ def format_floor_message(character: Character) -> str:
     lines.append(sec + ".")
 
     if n in pets_mod.pet_gacha_floors_for_pet_switch():
-        lines.append("🐾 <b>Призыв питомца</b> — в разделе «Город» (лавка хаба).")
+        lines.append(
+            "🐾 <b>Питомцы:</b> призыв в «Город» (лавка). Пассив в бою — у <b>одного</b> активного; "
+            "смена здесь кнопкой или в статусе.",
+        )
 
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️ · при входе цели сбрасываются.")
@@ -202,7 +209,7 @@ def format_floor_message_photo_caption(character: Character) -> str:
         sec += f", экип ~{int(SECRET_GEAR_DROP_CHANCE * 100)}%"
     lines.append(sec)
     if n in pets_mod.pet_gacha_floors_for_pet_switch():
-        lines.append("🐾 Призыв — в «Город»")
+        lines.append("🐾 Питомцы: город / пассив · один активен")
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 1–{hi} · ⬆️⬇️ · цели сбрасываются при входе")
     if needs_base_class_choice(character):
@@ -296,6 +303,8 @@ async def push_floor_screen_ui(
     text_suffix: str = "",
 ) -> None:
     """Экран этажа: случайное событие (10%), заставка при первом заходе (visits==0), затем полный текст."""
+    if apply_completed_rest_if_needed(character):
+        await session.flush()
     n = int(character.floor_number)
     row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
     event_html = await maybe_roll_floor_entry_event(session, character, row)

@@ -12,6 +12,7 @@ from typing import Any
 from bot.i18n import t
 from db.models.character import Character
 from sqlalchemy.ext.asyncio import AsyncSession
+from utils.ui import LINE_SEP
 
 from services import character_service
 
@@ -59,22 +60,43 @@ def record_kill(character: Character) -> None:
 
 
 def describe_daily_html(character: Character, *, locale: str, title_html: str) -> str:
-    """Текст экрана /daily (без награды). Заголовок и строки — по locale."""
+    """Текст экрана /daily (без блока подписки снаружи). Заголовок и строки — по locale."""
     today = _utc_today_iso()
     _, st = _load_state(character)
     kc = st["kc"] if st["kd"] == today else 0
     claimed = st["lcd"] == today
-    lines = [
-        title_html,
-        t(locale, "daily_today_kills", kc=kc, goal=KILLS_GOAL),
-        t(locale, "daily_streak_line", streak=st["streak"]),
-    ]
-    if claimed:
-        lines.append(t(locale, "daily_claimed_today"))
-    elif kc >= KILLS_GOAL:
-        lines.append(t(locale, "daily_can_claim_hint"))
+    lines = [title_html, LINE_SEP]
+    if kc >= KILLS_GOAL:
+        lines.append(t(locale, "daily_progress_done", kc=kc, goal=KILLS_GOAL))
     else:
-        lines.append(t(locale, "daily_need_kills", need=KILLS_GOAL - kc))
+        lines.append(t(locale, "daily_progress_need", kc=kc, goal=KILLS_GOAL))
+    lines.append(t(locale, "daily_streak_line", streak=st["streak"]))
+    lines.append("")
+    preview = compute_next_daily_claim_rewards(character)
+    if claimed:
+        lines.append(t(locale, "daily_reward_section_title"))
+        lines.append(t(locale, "daily_claimed_reward_hint", streak=st["streak"]))
+        lines.append(t(locale, "daily_claimed_today"))
+    elif preview is not None:
+        gold, xp, nstreak = preview
+        lines.append(t(locale, "daily_reward_section_title"))
+        lines.append(
+            t(
+                locale,
+                "daily_reward_preview",
+                gold=gold,
+                xp=xp,
+                streak=nstreak,
+            ),
+        )
+        lines.append(t(locale, "daily_reward_streak_note"))
+        lines.append("")
+        if kc >= KILLS_GOAL:
+            lines.append(t(locale, "daily_can_claim_hint"))
+        else:
+            lines.append(t(locale, "daily_need_kills", need=KILLS_GOAL - kc))
+    lines.append("")
+    lines.append(t(locale, "daily_conditions_short"))
     return "\n".join(lines)
 
 
@@ -82,6 +104,33 @@ def describe_daily_html(character: Character, *, locale: str, title_html: str) -
 class ClaimResult:
     ok: bool
     message_html: str
+
+
+def compute_next_daily_claim_rewards(character: Character) -> tuple[int, int, int] | None:
+    """
+    Если сегодня награду ещё не забирали — (gold, xp, streak_после_получения).
+    Если уже забрали — None.
+    """
+    today = _utc_today_iso()
+    _, st = _load_state(character)
+    if st["lcd"] == today:
+        return None
+    prev_lcd = st["lcd"]
+    if prev_lcd is None:
+        new_streak = 1
+    else:
+        try:
+            prev_day = date.fromisoformat(str(prev_lcd))
+            today_day = date.fromisoformat(today)
+            if (today_day - prev_day).days == 1:
+                new_streak = st["streak"] + 1
+            else:
+                new_streak = 1
+        except ValueError:
+            new_streak = 1
+    gold = 35 + new_streak * 8
+    xp = 15 + new_streak * 4
+    return gold, xp, new_streak
 
 
 def can_claim_daily_today(character: Character) -> bool:

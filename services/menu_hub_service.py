@@ -21,6 +21,7 @@ def format_menu_hub_html(character: Character, *, locale: str) -> str:
         f"{t(locale, 'hub_floor_line', floor=int(character.floor_number), level=int(character.level))}\n"
         f"{t(locale, 'hub_rank_line', rank=rank_s)}\n"
         f"{t(locale, 'hub_title_line', title=title_s)}\n"
+        f"{t(locale, 'hub_pet_line')}\n"
         f"{LINE_SEP}\n"
         f"{t(locale, 'hub_daily_hint', channel=html.escape(ch))}"
     )

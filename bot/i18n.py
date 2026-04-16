@@ -19,8 +19,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_top": "📊 Топ игроков",
         "menu_city": "🏙️ Город",
         "menu_city_unavailable": "Город только на городских этажах. Открой этаж с хабом или спустись к нему.",
-        "city_pet_summon_1": "🐾 Призыв ×1 ({cost}💰)",
-        "city_pet_summon_3": "🐾 Призыв ×3 ({cost}💰)",
+        "city_pet_summon_1": "🐾 ×1 {cost}💰 · сегодня {left}/3",
+        "city_pet_summon_3": "🐾 ×3 {cost}💰 · сегодня {left}/3",
+        "pet_city_summon_limit": (
+            "Лимит призывов за сегодня (UTC): <b>{limit}</b> броска. "
+            "Свободно сейчас: <b>{left}</b> (×3 забирает три за раз)."
+        ),
         "menu_daily": "📅 Ежедневка",
         "menu_arena": "⚔️ Арена",
         "menu_quests": "📋 Задания",
@@ -104,15 +108,45 @@ STRINGS: dict[str, dict[str, str]] = {
         "hub_floor_line": "📍 Этаж <b>{floor}</b> / 100 · Ур. <b>{level}</b>",
         "hub_rank_line": "🎖️ Звание: <b>{rank}</b>",
         "hub_title_line": "🏆 Титул: <b>{title}</b>",
+        "hub_pet_line": (
+            "<i>🐾 Питомцы: пассивный бонус в бою, активен <b>один</b> — призыв в "
+            "<b>Городе</b>, смена в статусе или на этажах 8/48.</i>"
+        ),
         "hub_daily_hint": "<i>Ежедневка — канал «{channel}» (кнопка ниже).</i>",
         "channel_display_name": "Испытание тьмы",
         "daily_today_kills": "Сегодня (UTC): побед <b>{kc}</b> / {goal}.",
-        "daily_streak_line": "🔥 Стрик дней с наградой: <b>{streak}</b>.",
-        "daily_claimed_today": "✅ Награда сегодня уже получена. Завтра снова.",
-        "daily_can_claim_hint": "Нажми «Забрать награду» или команду ещё раз.",
-        "daily_need_kills": "Осталось побед: <b>{need}</b>.",
-        "daily_sub_required": "⚠️ <b>Нужна подписка</b> на канал «{channel}»: {link}\nПосле подписки нажми «Проверить» или снова открой ежедневку.",
-        "daily_sub_ok": "✅ Канал: подписка учтена.",
+        "daily_progress_done": (
+            "⚔️ <b>Победы сегодня (UTC):</b> <b>{kc}</b> — цель <b>{goal}</b> выполнена ✅"
+        ),
+        "daily_progress_need": "⚔️ <b>Победы сегодня (UTC):</b> <b>{kc}</b> из <b>{goal}</b>.",
+        "daily_streak_line": "🔥 <b>Стрик наград</b> (дней подряд): <b>{streak}</b>",
+        "daily_reward_section_title": "🎁 <b>Награда</b>",
+        "daily_reward_preview": (
+            "Если забрать сегодня: <b>+{gold}</b> 💰 · <b>+{xp}</b> опыта · серия станет <b>{streak}</b> дн."
+        ),
+        "daily_reward_streak_note": (
+            "<i>Каждый новый день с наградой подряд увеличивает золото и опыт (формула в бою после 3 побед).</i>"
+        ),
+        "daily_claimed_reward_hint": (
+            "Текущая серия: <b>{streak}</b> дн. — завтра (UTC) снова <b>3 победы</b>, и награда вырастет."
+        ),
+        "daily_claimed_today": "✅ <b>Сегодня награда уже получена.</b> Новый цикл — с полуночи UTC.",
+        "daily_can_claim_hint": "👉 Нажми <b>«Забрать награду»</b> ниже.",
+        "daily_need_kills": "Ещё нужно побед до цели: <b>{need}</b>.",
+        "daily_conditions_short": (
+            "📌 <b>Условия:</b> <b>3 победы</b> в боях за календарный день (UTC) и активная подписка на канал башни."
+        ),
+        "daily_sub_required": (
+            "────────────\n"
+            "📢 <b>Канал</b>\n"
+            "⚠️ Подпишись на «{channel}»: {link}\n"
+            "<i>Затем «Проверить подписку» или заново открой ежедневку.</i>"
+        ),
+        "daily_sub_ok": (
+            "────────────\n"
+            "📢 <b>Канал</b>\n"
+            "✅ <b>Подписка засчитана.</b> Когда будет 3 победы — жми «Забрать награду»."
+        ),
         "daily_btn_channel": "📢 Канал: {channel}",
         "daily_btn_verify": "✅ Проверить подписку",
         "daily_btn_claim": "🎁 Забрать награду",
@@ -138,7 +172,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "arena_no_game_id_yet": "<i>Игровой ID появится после сохранения героя в базе.</i>",
         "arena_id_hint_alert": "Напиши в чат: /arena N — N = игровой ID соперника (в его «Статус»). Твой: {gid}.",
         "arena_id_hint_no_gid": "Напиши в чат: /arena N — N из статуса соперника. У тебя пока нет игрового ID.",
-        "profile_pet_single_hint": "Один питомец — смена в городе / на этаже призыва.",
+        "profile_pet_single_hint": (
+            "Один питомец уже даёт пассив в бою. Второго можно призвать в городе; "
+            "смена активного — статус или этажи 8/48."
+        ),
         "arena_no_char": "Сначала создай героя через /start.",
         "arena_result_win": "🏆 <b>Победа!</b> Твой билд сильнее.\n+{gold} 💰",
         "arena_result_lose": "💀 <b>Поражение.</b> У соперника билд жёстче. Попробуй позже.",
@@ -188,8 +225,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_top": "📊 Leaderboard",
         "menu_city": "🏙️ City",
         "menu_city_unavailable": "City hub is only on certain floors. Go to a city floor (or travel there).",
-        "city_pet_summon_1": "🐾 Summon ×1 ({cost}💰)",
-        "city_pet_summon_3": "🐾 Summon ×3 ({cost}💰)",
+        "city_pet_summon_1": "🐾 ×1 {cost}💰 · today {left}/3",
+        "city_pet_summon_3": "🐾 ×3 {cost}💰 · today {left}/3",
+        "pet_city_summon_limit": (
+            "Daily summon limit (UTC): <b>{limit}</b> pulls. "
+            "Available now: <b>{left}</b> (×3 uses three at once)."
+        ),
         "menu_daily": "📅 Daily",
         "menu_arena": "⚔️ Arena",
         "menu_quests": "📋 Quests",
@@ -273,15 +314,43 @@ STRINGS: dict[str, dict[str, str]] = {
         "hub_floor_line": "📍 Floor <b>{floor}</b> / 100 · Lv. <b>{level}</b>",
         "hub_rank_line": "🎖️ Path rank: <b>{rank}</b>",
         "hub_title_line": "🏆 Title: <b>{title}</b>",
+        "hub_pet_line": (
+            "<i>🐾 Pets: passive combat bonus, only <b>one</b> active — summon in "
+            "<b>City</b>; switch in Status or on floors 8/48.</i>"
+        ),
         "hub_daily_hint": "<i>Daily reward — channel «{channel}» (button below).</i>",
         "channel_display_name": "Trial of Darkness",
         "daily_today_kills": "Today (UTC): wins <b>{kc}</b> / {goal}.",
-        "daily_streak_line": "🔥 Reward streak (days): <b>{streak}</b>.",
-        "daily_claimed_today": "✅ Reward already claimed today. Come back tomorrow.",
-        "daily_can_claim_hint": "Tap «Claim reward» or use the command again.",
-        "daily_need_kills": "Wins left: <b>{need}</b>.",
-        "daily_sub_required": "⚠️ <b>Subscription required</b> for «{channel}»: {link}\nAfter subscribing, tap «Verify» or open daily again.",
-        "daily_sub_ok": "✅ Channel subscription OK.",
+        "daily_progress_done": "⚔️ <b>Wins today (UTC):</b> <b>{kc}</b> — goal <b>{goal}</b> done ✅",
+        "daily_progress_need": "⚔️ <b>Wins today (UTC):</b> <b>{kc}</b> / <b>{goal}</b>.",
+        "daily_streak_line": "🔥 <b>Reward streak</b> (days in a row): <b>{streak}</b>",
+        "daily_reward_section_title": "🎁 <b>Reward</b>",
+        "daily_reward_preview": (
+            "If you claim today: <b>+{gold}</b> 💰 · <b>+{xp}</b> XP · streak becomes <b>{streak}</b> day(s)."
+        ),
+        "daily_reward_streak_note": (
+            "<i>Each consecutive reward day increases gold and XP (after 3 wins).</i>"
+        ),
+        "daily_claimed_reward_hint": (
+            "Current streak: <b>{streak}</b> day(s) — tomorrow (UTC) again <b>3 wins</b> for the next reward."
+        ),
+        "daily_claimed_today": "✅ <b>Reward already claimed today.</b> Next cycle from UTC midnight.",
+        "daily_can_claim_hint": "👉 Tap <b>«Claim reward»</b> below.",
+        "daily_need_kills": "Wins still needed: <b>{need}</b>.",
+        "daily_conditions_short": (
+            "📌 <b>Rules:</b> <b>3 combat wins</b> per calendar day (UTC) and an active channel subscription."
+        ),
+        "daily_sub_required": (
+            "────────────\n"
+            "📢 <b>Channel</b>\n"
+            "⚠️ Subscribe to «{channel}»: {link}\n"
+            "<i>Then «Verify subscription» or open daily again.</i>"
+        ),
+        "daily_sub_ok": (
+            "────────────\n"
+            "📢 <b>Channel</b>\n"
+            "✅ <b>Subscribed.</b> After 3 wins, tap «Claim reward»."
+        ),
         "daily_btn_channel": "📢 Channel: {channel}",
         "daily_btn_verify": "✅ Verify subscription",
         "daily_btn_claim": "🎁 Claim reward",
@@ -307,7 +376,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "arena_no_game_id_yet": "<i>Game ID appears after your hero is saved to the database.</i>",
         "arena_id_hint_alert": "Type in chat: /arena N — N = rival's game ID (their Status). Yours: {gid}.",
         "arena_id_hint_no_gid": "Type: /arena N — N from rival's Status. You have no game ID yet.",
-        "profile_pet_single_hint": "One pet — switch in City / on summon floor.",
+        "profile_pet_single_hint": (
+            "One pet already gives a combat passive. Summon more in the City; "
+            "switch the active pet in Status or on floors 8/48."
+        ),
         "arena_no_char": "Create a hero with /start first.",
         "arena_result_win": "🏆 <b>Victory!</b> Your build won.\n+{gold} 💰",
         "arena_result_lose": "💀 <b>Defeat.</b> The opponent's build was stronger. Try again later.",

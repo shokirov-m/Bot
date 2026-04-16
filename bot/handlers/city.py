@@ -141,7 +141,7 @@ async def on_city_pet_summon(
         if floor_key != char.floor_number or floor_data.get_city_for_floor(char.floor_number) is None:
             await query.answer(t(loc, "menu_city_unavailable"), show_alert=True)
             return
-        ok, msg = pets_mod.try_city_pet_summon(char, pulls=pulls)
+        ok, msg = pets_mod.try_city_pet_summon(char, pulls=pulls, locale=loc)
         await session.flush()
         plain = re.sub(r"<[^>]+>", "", msg)
         if ok:

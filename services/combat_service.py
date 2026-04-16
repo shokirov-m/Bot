@@ -349,10 +349,8 @@ def _build_combat_dict(
         "monster_last_damage_to_player": None,
     }
     effects.init_effects(state)
-    pet_disp = pets_mod.active_pet_display(character)
-    state["pet_line_html"] = (
-        f"🐾 <b>{html.escape(pet_disp)}</b>" if pet_disp else ""
-    )
+    loc_battle = get_locale(character, None)
+    state["pet_line_html"] = pets_mod.format_pet_battle_line_html(character, locale=loc_battle)
     return state
 
 
@@ -503,7 +501,8 @@ async def start_combat(
         await query.answer("Недостаточно стамины (нужна 1).", show_alert=True)
         return False
 
-    rest_service.apply_completed_rest_if_needed(character)
+    if rest_service.apply_completed_rest_if_needed(character):
+        await session.flush()
     if rest_service.is_rest_in_progress(character):
         left = rest_service.rest_seconds_left(character)
         await query.answer(
@@ -651,7 +650,8 @@ async def start_tutorial_combat(
         await query.answer("Сначала заверши выбор класса / подкласса на этаже.", show_alert=True)
         return False
 
-    rest_service.apply_completed_rest_if_needed(character)
+    if rest_service.apply_completed_rest_if_needed(character):
+        await session.flush()
     if rest_service.is_rest_in_progress(character):
         left = rest_service.rest_seconds_left(character)
         await query.answer(

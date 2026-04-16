@@ -33,9 +33,9 @@ async def build_daily_body_html(
     url = channel_public_url()
     link = f'<a href="{html.escape(url)}">{html.escape(name)}</a>'
     if api_hint:
-        extra = "\n\n" + api_hint
+        extra = "\n" + api_hint
     elif not subscribed:
-        extra = "\n\n" + t(locale, "daily_sub_required", channel=html.escape(name), link=link)
+        extra = "\n" + t(locale, "daily_sub_required", channel=html.escape(name), link=link)
     else:
-        extra = "\n\n" + t(locale, "daily_sub_ok")
+        extra = "\n" + t(locale, "daily_sub_ok")
     return intro + extra, subscribed
