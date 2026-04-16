@@ -84,6 +84,15 @@ MONSTER_TOWER_SCALING_CAP = 5.0
 # Мини-босс на 5 этаже — дополнительно ×2,2 к HP/атаке/защите (поверх множителя этажа).
 MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT = 2.2
 
+# С 6-го этажа: к итоговым HP/атаке/защите врага (+mult за каждый этаж выше 5-го).
+MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR = 0.03
+
+# Главный босс 10-го яруса — дополнительно ×2.5 к HP/атаке/защите (после прочих множителей).
+MONSTER_FLOOR10_MAJOR_BOSS_MULT = 2.5
+
+# Сумка: верхняя граница слота для проверок (фактически без лимита ячеек).
+BAG_MAX_SLOT_INDEX = 9_999_999
+
 
 def monster_tower_floor_strength_multiplier(floor_number: int) -> float:
     """Множитель силы врага от номера этажа (этаж 1 → 1.0)."""

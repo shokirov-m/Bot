@@ -105,6 +105,16 @@ def floor_screen_keyboard(
             ],
         )
 
+    if floor_number == 3 and not long_floor_mod.is_long_floor_active(character):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="💰 Скупщик",
+                    callback_data=_cb(floor_number, "scrap"),
+                ),
+            ],
+        )
+
     rows.extend(_pet_rows(character, floor_number))
 
     if forest_beginnings_mod.is_forest_beginnings_zone(floor_number) and not long_floor_mod.is_long_floor_active(

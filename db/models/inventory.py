@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class InventoryItem(Base):
     """
     Один экземпляр предмета.
-    Слот сумки: bag_slot 0..19; экипировка: is_equipped + equip_slot.
+    Слот сумки: bag_slot — неотрицательный индекс (лимита по числу ячеек нет); экипировка: is_equipped + equip_slot.
     """
 
     __tablename__ = "inventory_items"
@@ -36,7 +36,7 @@ class InventoryItem(Base):
     is_equipped: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
     # weapon, armor, helmet, gloves, ring, amulet — если надето
     equip_slot: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    # Индекс ячейки сумки (0–19); NULL если предмет только в экипировке
+    # Индекс ячейки сумки; NULL если предмет только в экипировке
     bag_slot: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Полное состояние: имя, редкость, статы, заточка, прочность, руны и т.д.

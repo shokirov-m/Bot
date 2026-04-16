@@ -78,9 +78,10 @@ async def _apply_promo_rewards_async(
 
 
 async def _free_bag_slots_count(session: AsyncSession, character_id: int) -> int:
+    """Грубая оценка «запаса» для промо: при отсутствии лимита сумки возвращаем большое число."""
     items = await inventory_repo.list_bag_items(session, character_id)
     used = len({i.bag_slot for i in items if i.bag_slot is not None})
-    return max(0, 20 - used)
+    return max(0, 1_000_000 - used)
 
 
 async def _grant_promo_bag_items(

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.inventory import InventoryItem
+from game.balance import BAG_MAX_SLOT_INDEX
 from game.items import equipment as equip_meta
 
 
@@ -16,7 +17,7 @@ async def get_bag_item_at_slot(
     character_id: int,
     bag_slot: int,
 ) -> InventoryItem | None:
-    """Предмет в сумке в указанной ячейке 0..19."""
+    """Предмет в сумке в указанной ячейке."""
     result = await session.execute(
         select(InventoryItem).where(
             InventoryItem.character_id == character_id,
@@ -83,13 +84,15 @@ async def get_equipped_in_slot(
 
 
 async def first_free_bag_slot(session: AsyncSession, character_id: int) -> int | None:
-    """Первый свободный индекс 0..19 или None если сумка полна."""
+    """Первый свободный индекс сумки (лимита по количеству ячеек нет)."""
     items = await list_bag_items(session, character_id)
     used = {i.bag_slot for i in items if i.bag_slot is not None}
-    for s in range(20):
-        if s not in used:
-            return s
-    return None
+    n = 0
+    while n in used:
+        n += 1
+        if n > BAG_MAX_SLOT_INDEX:
+            return None
+    return n
 
 
 async def equip_item_from_bag(session: AsyncSession, item: InventoryItem) -> str | None:

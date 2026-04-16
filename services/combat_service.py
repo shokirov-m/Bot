@@ -45,7 +45,9 @@ from game.balance import (
     MONSTER_DEF_DIV_FLOOR,
     MONSTER_FLOOR_DEF_PER_LEVEL,
     MONSTER_FLOOR_POWER_PER_LEVEL,
+    MONSTER_FLOOR10_MAJOR_BOSS_MULT,
     MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT,
+    MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR,
     MONSTER_HP_CURVE_MULT,
     MONSTER_HP_RAW_BASE,
     MONSTER_HP_RAW_PER_FLOOR,
@@ -71,13 +73,14 @@ from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawn
 from game.economy import sinks as sink_rules
 from game.floors.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
 from game.items import enchant as enchant_rules
-from game.items.rarity_scaling import scaled_armor_defense_value
+from game.items.rarity_scaling import armor_enchant_defensive_bonus, scaled_armor_defense_value
 from game.items import loot as loot_tables
 from game.characters.global_passives import refresh_global_passives
 from services import (
     anticheat_service,
     character_service,
     city_quest_service,
+    clan_service,
     daily_service,
     game_metrics_service,
     leaderboard_service,
@@ -175,6 +178,41 @@ def _tutorial_monster_wave2() -> dict[str, Any]:
     }
 
 
+def _monster_post_floor5_strength_mult(floor_number: int) -> float:
+    """С 6-го этажа: чуть больше HP/атака/защита за каждый этаж выше 5-го."""
+    fl = int(floor_number)
+    if fl < 6:
+        return 1.0
+    return 1.0 + (fl - 5) * float(MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR)
+
+
+def _monster_strike_ailment(
+    floor_number: int,
+    spawn: FloorMonsterSpawn,
+) -> tuple[float, str, str]:
+    """
+    Доля доп. «стихийного» урона от базы удара (до защиты) и подпись для лога.
+    У элит/боссов всегда; у обычных — ~40%.
+    """
+    if spawn.is_elite or spawn.is_mini_boss or spawn.is_major_boss:
+        take = True
+    else:
+        h = (int(floor_number) * 7919 + abs(hash(spawn.template.key))) % 100
+        take = h < 40
+    if not take:
+        return 0.0, "", ""
+    opts: tuple[tuple[float, str, str], ...] = (
+        (0.055, "огнём", "🔥"),
+        (0.05, "ядом", "☠️"),
+        (0.045, "морозом", "❄️"),
+        (0.045, "молнией", "⚡"),
+        (0.04, "порчей", "🌑"),
+    )
+    i = abs(hash(spawn.template.key) + int(floor_number) * 17) % len(opts)
+    mult, lab, em = opts[i]
+    return mult, lab, em
+
+
 def _monster_stat_bundle(
     floor_number: int,
     spawn: FloorMonsterSpawn,
@@ -220,6 +258,19 @@ def _monster_stat_bundle(
     hp_out = max(1, int(hp * mult_hp * pwr * pl_hp * tower_m))
     atk_out = max(1, int(atk_final * pwr * pl_atk * tower_m))
     def_out = max(0, int(defense * dfn * pl_def * tower_m))
+
+    post5 = _monster_post_floor5_strength_mult(floor_number)
+    hp_out = max(1, int(hp_out * post5))
+    atk_out = max(1, int(atk_out * post5))
+    def_out = max(0, int(def_out * post5))
+
+    if int(floor_number) == 10 and spawn.is_major_boss:
+        m10 = float(MONSTER_FLOOR10_MAJOR_BOSS_MULT)
+        hp_out = max(1, int(hp_out * m10))
+        atk_out = max(1, int(atk_out * m10))
+        def_out = max(0, int(def_out * m10))
+
+    ail_mult, ail_lab, ail_em = _monster_strike_ailment(floor_number, spawn)
     return {
         "name": spawn.template.name,
         "emoji": spawn.template.emoji,
@@ -229,6 +280,9 @@ def _monster_stat_bundle(
         "atk": atk_out,
         "defense": def_out,
         "element": spawn.template.element or "earth",
+        "strike_ailment_mult": ail_mult,
+        "strike_ailment_label_ru": ail_lab,
+        "strike_ailment_emoji": ail_em,
     }
 
 
@@ -271,6 +325,11 @@ def _apply_weapon_runes_to_state(
     runes_list = parse_weapon_runes(weapon_item_data)
     mon_el = str(combat_state.get("monster", {}).get("element") or "earth")
     pct = calculate_elemental_bonus(runes_list, mon_el, character.element)
+    loc_rune = get_locale(character, None)
+    if pct >= 30:
+        _append_logs(combat_state, [t(loc_rune, "combat_rune_weak_spot", pct=int(pct))])
+    elif pct >= 15:
+        _append_logs(combat_state, [t(loc_rune, "combat_rune_elemental_hit", pct=int(pct))])
     ex = rune_combat_extras(runes_list)
     combat_state["weapon_rune_bonus_pct"] = int(pct)
     combat_state["rune_crit_damage_bonus_percent"] = int(ex.get("crit_damage_bonus_percent", 0))
@@ -292,7 +351,7 @@ async def _equipped_gear_defense_total(session: AsyncSession, character_id: int)
         if base_atk > 0:
             total += def_val
         else:
-            total += def_val + ench
+            total += def_val + armor_enchant_defensive_bonus(ench, data)
     return total
 
 
@@ -352,7 +411,14 @@ def _build_combat_dict(
     }
     effects.init_effects(state)
     loc_battle = get_locale(character, None)
-    state["pet_line_html"] = pets_mod.format_pet_battle_line_html(character, locale=loc_battle)
+    pet_hi = pets_mod.format_pet_combat_highlight_line_html(character, locale=loc_battle)
+    pet_base = pets_mod.format_pet_battle_line_html(character, locale=loc_battle)
+    if pet_hi and pet_base:
+        state["pet_line_html"] = f"{pet_hi}\n{pet_base}"
+    elif pet_hi:
+        state["pet_line_html"] = pet_hi
+    else:
+        state["pet_line_html"] = pet_base
     return state
 
 
@@ -980,11 +1046,14 @@ async def _victory_sequence(
     character.meta_progress = mp_xp
     gross_gold = int(gross_gold * gm)
     loc_victory = get_locale(character, message.from_user.language_code if message.from_user else None)
-    ranker_note = ""
-    if await leaderboard_service.character_has_ranker_gold_bonus(session, character):
-        gross_gold = int(round(gross_gold * leaderboard_service.RANKER_GOLD_MULT))
-        ranker_note = "\n" + t(loc_victory, "combat_ranker_gold_bonus")
-    xp = int(xp * xm * esc_m * max(0.1, star_xp_mult))
+    rank_gm, rank_xm, ranker_note_html = await leaderboard_service.victory_rank_reward_multipliers(
+        session,
+        character,
+        locale=loc_victory,
+    )
+    gross_gold = int(round(gross_gold * rank_gm))
+    ranker_note = ("\n" + ranker_note_html) if ranker_note_html else ""
+    xp = int(xp * xm * rank_xm * esc_m * max(0.1, star_xp_mult))
     escape_xp_note = ""
     if esc_m < 0.999:
         escape_xp_note = (
@@ -1014,6 +1083,7 @@ async def _victory_sequence(
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
     daily_service.record_kill(character)
+    await clan_service.on_monster_win_add_clan_xp(session, character, delta=5)
     refresh_global_passives(character)
 
     if roll_rune_stone(spawn):
@@ -1025,13 +1095,7 @@ async def _victory_sequence(
     dropped = False
     drop_label = ""
     if roll_item_drop(spawn):
-        items = await inventory_repo.list_bag_items(session, character.id)
-        used = {i.bag_slot for i in items if i.bag_slot is not None}
-        slot: int | None = None
-        for s in range(20):
-            if s not in used:
-                slot = s
-                break
+        slot = await inventory_repo.first_free_bag_slot(session, character.id)
         if slot is not None:
             item_payload = loot_tables.roll_victory_item_payload(character.floor_number, spawn)
             await inventory_repo.add_bag_item(

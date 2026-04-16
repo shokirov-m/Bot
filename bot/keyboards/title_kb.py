@@ -1,4 +1,4 @@
-"""Выбор активного титула."""
+"""Выбор активного титула (два слота)."""
 
 from __future__ import annotations
 
@@ -14,14 +14,27 @@ def titles_pick_keyboard(unlocked_keys: list[str]) -> InlineKeyboardMarkup:
         t = TITLE_BY_KEY.get(key)
         if t is None:
             continue
-        label = f"🏆 {t.name_ru}"
-        if len(label) > 42:
-            label = label[:39] + "…"
+        base = t.name_ru
+        if len(base) > 16:
+            base = base[:13] + "…"
         rows.append(
-            [InlineKeyboardButton(text=label, callback_data=f"ttl:eq:{key}")],
+            [
+                InlineKeyboardButton(
+                    text=f"① {base}",
+                    callback_data=f"ttl:1:{key}",
+                ),
+                InlineKeyboardButton(
+                    text=f"② {base}",
+                    callback_data=f"ttl:2:{key}",
+                ),
+            ],
         )
     rows.append(
-        [InlineKeyboardButton(text="❌ Снять титул", callback_data="ttl:clr")],
+        [
+            InlineKeyboardButton(text="❌ Снять ①", callback_data="ttl:clr1"),
+            InlineKeyboardButton(text="❌ Снять ②", callback_data="ttl:clr2"),
+        ],
     )
+    rows.append([InlineKeyboardButton(text="❌ Снять оба", callback_data="ttl:clra")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)

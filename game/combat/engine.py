@@ -594,6 +594,14 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             return logs, "win"
 
     dmg = max(1, base - defense)
+    extra_mult = float(m.get("strike_ailment_mult") or 0.0)
+    if extra_mult > 0:
+        extra = max(0, int(base * extra_mult))
+        if extra > 0:
+            dmg += extra
+            em = str(m.get("strike_ailment_emoji") or "✨")
+            lab = str(m.get("strike_ailment_label_ru") or "особым ударом")
+            logs.append(f"{em} Доп. урон {lab}: −{extra} HP")
     pre_php = int(state["player_hp"])
     shield = int(state.get("player_shield_hp", 0))
     if shield > 0:

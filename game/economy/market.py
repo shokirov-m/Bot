@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.auction_lot import AuctionLot
 from db.models.character import Character
 from db.repository import auction_repo, character_repo, inventory_repo
+from game.balance import BAG_MAX_SLOT_INDEX
 
 MAX_ACTIVE_LOTS_PER_SELLER = 5
 LOT_DURATION_DAYS = 3
@@ -33,8 +34,8 @@ async def create_lot(
     price: int,
 ) -> tuple[bool, str]:
     """Снять предмет из сумки и создать лот. Лимит активных лотов — в economy_service."""
-    if bag_slot < 0 or bag_slot > 19:
-        return False, "Некорректный слот сумки (0–19)."
+    if bag_slot < 0 or bag_slot > BAG_MAX_SLOT_INDEX:
+        return False, "Некорректный слот сумки."
     p = int(price)
     if p < 1:
         return False, "Стартовая цена должна быть не меньше 1 золота."

@@ -1,5 +1,5 @@
 """
-Разблокировка титулов (meta_progress.titles_unlocked) и смена active_title.
+Разблокировка титулов (meta_progress.titles_unlocked) и смена active_title (+ второй слот в meta).
 """
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from db.models.character import Character
 from game.characters.titles import ALL_TITLES, TITLE_BY_KEY
 
 _META_UNLOCKED = "titles_unlocked"
+_META_SECONDARY_TITLE = "active_title_secondary_name_ru"
 
 
 def _unlocked_list(character: Character) -> list[str]:
@@ -47,19 +48,55 @@ def display_names(keys: list[str]) -> list[str]:
     return [TITLE_BY_KEY[k].name_ru for k in keys if k in TITLE_BY_KEY]
 
 
-def equip(character: Character, key: str) -> tuple[bool, str]:
+def _name_ru_for_secondary(character: Character) -> str | None:
+    raw = (character.meta_progress or {}).get(_META_SECONDARY_TITLE)
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return s or None
+
+
+def active_secondary_title_key(character: Character) -> str | None:
+    """Второй активный титул (имя в meta, как у основного)."""
+    at = _name_ru_for_secondary(character)
+    if not at:
+        return None
+    for tt in ALL_TITLES:
+        if tt.name_ru == at:
+            return tt.key
+    return None
+
+
+def equip(character: Character, key: str, *, slot: int = 1) -> tuple[bool, str]:
+    """slot 1 — колонка active_title; slot 2 — meta active_title_secondary_name_ru."""
     refresh_unlocks(character)
     if key not in set(_unlocked_list(character)):
         return False, "Титул ещё не открыт."
-    t = TITLE_BY_KEY.get(key)
-    if t is None:
+    td = TITLE_BY_KEY.get(key)
+    if td is None:
         return False, "Неизвестный титул."
-    character.active_title = t.name_ru
-    return True, t.name_ru
+    if slot == 1 and active_secondary_title_key(character) == key:
+        return False, "Этот титул уже во втором слоте."
+    if slot == 2 and active_title_key(character) == key:
+        return False, "Этот титул уже в первом слоте."
+    if slot == 2:
+        mp = dict(character.meta_progress or {})
+        mp[_META_SECONDARY_TITLE] = td.name_ru
+        character.meta_progress = mp
+        return True, td.name_ru
+    character.active_title = td.name_ru
+    return True, td.name_ru
 
 
-def clear_active(character: Character) -> None:
-    character.active_title = None
+def clear_active(character: Character, *, slot: int | None = None) -> None:
+    """slot None — снять оба; 1 — только основной; 2 — только второй."""
+    if slot is None or slot == 1:
+        character.active_title = None
+    if slot is None or slot == 2:
+        mp = dict(character.meta_progress or {})
+        if _META_SECONDARY_TITLE in mp:
+            del mp[_META_SECONDARY_TITLE]
+            character.meta_progress = mp
 
 
 def active_title_key(character: Character) -> str | None:
@@ -67,20 +104,21 @@ def active_title_key(character: Character) -> str | None:
     at = character.active_title
     if not at:
         return None
-    for t in ALL_TITLES:
-        if t.name_ru == at:
-            return t.key
+    for tt in ALL_TITLES:
+        if tt.name_ru == at:
+            return tt.key
     return None
 
 
 def reward_bonus_multipliers(character: Character) -> tuple[float, float]:
-    """Множители (золото, опыт) за победу, если выбран активный титул."""
-    k = active_title_key(character)
-    if not k:
-        return 1.0, 1.0
-    t = TITLE_BY_KEY.get(k)
-    if t is None:
-        return 1.0, 1.0
-    gm = 1.0 + t.gold_bonus_pct / 100.0
-    xm = 1.0 + t.xp_bonus_pct / 100.0
+    """Множители (золото, опыт) за победу — оба слота титула перемножаются."""
+    gm, xm = 1.0, 1.0
+    for k in (active_title_key(character), active_secondary_title_key(character)):
+        if not k:
+            continue
+        tt = TITLE_BY_KEY.get(k)
+        if tt is None:
+            continue
+        gm *= 1.0 + tt.gold_bonus_pct / 100.0
+        xm *= 1.0 + tt.xp_bonus_pct / 100.0
     return gm, xm

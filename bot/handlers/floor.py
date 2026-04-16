@@ -39,6 +39,7 @@ from utils.ui import LINE_SEP
 router = Router(name="floor")
 
 _FLOOR_CB = re.compile(r"^fl:(\d+):([a-z0-9]+)$")
+_SCR_CB = re.compile(r"^scr:(\d+|back)$")
 
 
 @router.message(Command("floor"))
@@ -117,6 +118,73 @@ async def on_floor_nav_step(
         await query.answer(f"Этаж {char.floor_number}")
     except Exception:
         logger.exception("flnav")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("scr:"))
+async def on_scrap_merchant_callback(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        m = _SCR_CB.match(query.data)
+        if m is None:
+            await query.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        tok = m.group(1)
+        if tok == "back":
+            await push_floor_screen_ui(
+                session,
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                character=char,
+                reply_markup=await floor_keyboard_for_character(session, char),
+                target_message=query.message,
+            )
+            await query.answer()
+            return
+        from bot.keyboards.scrap_kb import scrap_merchant_keyboard
+        from db.repository import inventory_repo
+        from services import scrap_merchant_service
+
+        ok, msg = await scrap_merchant_service.try_sell_bag_item_by_id(
+            session,
+            char,
+            int(tok),
+            telegram_id=query.from_user.id,
+            username=query.from_user.username,
+            bot=query.bot,
+        )
+        if not ok:
+            await query.answer(msg, show_alert=True)
+            return
+        await session.refresh(char)
+        items = await inventory_repo.list_bag_items(session, char.id)
+        text = scrap_merchant_service.format_scrap_menu_html(char, items)
+        await query.message.edit_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=scrap_merchant_keyboard(items),
+        )
+        await query.answer("Продано.", show_alert=False)
+    except Exception:
+        logger.exception("scr callback")
         await query.answer("Ошибка.", show_alert=True)
 
 
@@ -203,6 +271,27 @@ async def on_floor_callback(
                     show_alert=True,
                 )
                 return
+
+        if code == "scrap":
+            if query.message is None:
+                await query.answer()
+                return
+            if floor != 3:
+                await query.answer("Скупщик только на 3 этаже.", show_alert=True)
+                return
+            from bot.keyboards.scrap_kb import scrap_merchant_keyboard
+            from db.repository import inventory_repo
+            from services import scrap_merchant_service
+
+            items = await inventory_repo.list_bag_items(session, char.id)
+            text = scrap_merchant_service.format_scrap_menu_html(char, items)
+            await query.message.edit_text(
+                text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=scrap_merchant_keyboard(items),
+            )
+            await query.answer()
+            return
 
         if code == "return":
             if query.message is None:

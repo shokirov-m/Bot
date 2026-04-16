@@ -240,13 +240,37 @@ STRINGS: dict[str, dict[str, str]] = {
         "arena_err_target_banned": "Этот аккаунт заблокирован.",
         "combat_revive_btn": "✨ Возродиться — на этаж",
         "top_ranker_badge": "· 🏅 <i>Ранкер</i>",
+        "combat_rune_weak_spot": "🎯 <b>Слабое место!</b> Стихийный урон +{pct}%",
+        "combat_rune_elemental_hit": "🔥 <b>Элементальный удар</b> +{pct}% к стихийному урону",
         "top_ranker_rule_hint": (
             "<i>Метка «Ранкер» у первых пяти в каждой категории. "
-            "Если ты в топ-5 хотя бы в одной — +5% золота с монстров (отдельно от выбранного титула).</i>"
+            "Лучшее место среди четырёх топов: <b>1-е</b> — +10% золота и +5% опыта с монстров; "
+            "<b>2-е</b> — +8% / +3%; <b>3-е</b> — +6% / +1%; <b>4–5-е</b> — +5% золота (без опыта). "
+            "Суммируется с титулами по отдельным множителям.</i>"
         ),
-        "combat_ranker_gold_bonus": "<i>🏅 Ранкер (топ рейтинга): золото с монстра +5%.</i>",
-        "profile_ranker_line": (
-            "🏅 <b>Ранкер</b> <i>(топ-5 рейтинга: +5% золота с монстров; не титул, вешается само)</i>"
+        "combat_leader_tier_1_note": (
+            "<i>🏅 <b>Топ-1 рейтинга:</b> золото с монстра +10%, опыт +5%.</i>"
+        ),
+        "combat_leader_tier_2_note": (
+            "<i>🏅 <b>Топ-2 рейтинга:</b> золото с монстра +8%, опыт +3%.</i>"
+        ),
+        "combat_leader_tier_3_note": (
+            "<i>🏅 <b>Топ-3 рейтинга:</b> золото с монстра +6%, опыт +1%.</i>"
+        ),
+        "combat_leader_tier_mid_note": (
+            "<i>🏅 <b>Топ-4–5 рейтинга:</b> золото с монстра +5%.</i>"
+        ),
+        "profile_ranker_tier_1_line": (
+            "🏅 <b>Ранкер (лучшее место — 1-е)</b> <i>+10% золота и +5% опыта с монстров; не титул.</i>"
+        ),
+        "profile_ranker_tier_2_line": (
+            "🏅 <b>Ранкер (лучшее место — 2-е)</b> <i>+8% золота и +3% опыта с монстров; не титул.</i>"
+        ),
+        "profile_ranker_tier_3_line": (
+            "🏅 <b>Ранкер (лучшее место — 3-е)</b> <i>+6% золота и +1% опыта с монстров; не титул.</i>"
+        ),
+        "profile_ranker_tier_45_line": (
+            "🏅 <b>Ранкер (топ-4–5)</b> <i>+5% золота с монстров; не титул.</i>"
         ),
     },
     "en": {
@@ -476,14 +500,38 @@ STRINGS: dict[str, dict[str, str]] = {
         "arena_err_no_hero_target": "That player has no hero yet.",
         "arena_err_target_banned": "That account is banned.",
         "combat_revive_btn": "✨ Revive — back to floor",
+        "combat_rune_weak_spot": "🎯 <b>Weak spot!</b> Elemental damage +{pct}%",
+        "combat_rune_elemental_hit": "🔥 <b>Elemental strike</b> +{pct}% elemental damage",
         "top_ranker_badge": "· 🏅 <i>Ranker</i>",
         "top_ranker_rule_hint": (
             "<i>«Ranker» tag for the top five in each category. "
-            "If you are top five in any category — +5% monster gold (separate from your equipped title).</i>"
+            "Your <b>best</b> rank across four boards: <b>1st</b> — +10% gold and +5% XP from monsters; "
+            "<b>2nd</b> — +8% / +3%; <b>3rd</b> — +6% / +1%; <b>4th–5th</b> — +5% gold (no XP). "
+            "Stacks with titles as separate multipliers.</i>"
         ),
-        "combat_ranker_gold_bonus": "<i>🏅 Ranker (leaderboard top): +5% monster gold.</i>",
-        "profile_ranker_line": (
-            "🏅 <b>Ranker</b> <i>(top 5 in any leaderboard: +5% monster gold; not a title, applied automatically)</i>"
+        "combat_leader_tier_1_note": (
+            "<i>🏅 <b>Leaderboard #1 (best):</b> +10% monster gold, +5% XP.</i>"
+        ),
+        "combat_leader_tier_2_note": (
+            "<i>🏅 <b>Leaderboard #2 (best):</b> +8% monster gold, +3% XP.</i>"
+        ),
+        "combat_leader_tier_3_note": (
+            "<i>🏅 <b>Leaderboard #3 (best):</b> +6% monster gold, +1% XP.</i>"
+        ),
+        "combat_leader_tier_mid_note": (
+            "<i>🏅 <b>Leaderboard #4–5 (best):</b> +5% monster gold.</i>"
+        ),
+        "profile_ranker_tier_1_line": (
+            "🏅 <b>Ranker (best rank — 1st)</b> <i>+10% gold and +5% XP from monsters; not a title.</i>"
+        ),
+        "profile_ranker_tier_2_line": (
+            "🏅 <b>Ranker (best rank — 2nd)</b> <i>+8% gold and +3% XP from monsters; not a title.</i>"
+        ),
+        "profile_ranker_tier_3_line": (
+            "🏅 <b>Ranker (best rank — 3rd)</b> <i>+6% gold and +1% XP from monsters; not a title.</i>"
+        ),
+        "profile_ranker_tier_45_line": (
+            "🏅 <b>Ranker (top 4–5)</b> <i>+5% gold from monsters; not a title.</i>"
         ),
     },
 }

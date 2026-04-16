@@ -241,6 +241,41 @@ def format_pet_profile_block_html(character: Character, *, locale: str) -> str:
     )
 
 
+def format_pet_combat_highlight_line_html(character: Character, *, locale: str) -> str:
+    """
+    Короткая строка «Питомец: +N% …» для экрана боя (видно без раскрытия пассива).
+    Приоритет: маг. %, затем крит/уклонение как проценты.
+    """
+    d = pet_passive_delta(character)
+    if not d:
+        return ""
+    loc = "en" if str(locale).lower().startswith("en") else "ru"
+    mag = int(d.get("mag_bonus_percent") or 0)
+    if mag > 0:
+        if loc == "en":
+            return f"🐾 <b>Pet:</b> +{mag}% magic skill damage."
+        return f"🐾 <b>Питомец:</b> +{mag}% к урону маг. навыков."
+    if "crit_bonus" in d:
+        p = round(float(d["crit_bonus"]) * 100.0, 1)
+        if p > 0:
+            if loc == "en":
+                return f"🐾 <b>Pet:</b> +{p}% crit chance."
+            return f"🐾 <b>Питомец:</b> +{p}% к шансу крита."
+    if "dodge_bonus" in d:
+        p = round(float(d["dodge_bonus"]) * 100.0, 1)
+        if p > 0:
+            if loc == "en":
+                return f"🐾 <b>Pet:</b> +{p}% dodge."
+            return f"🐾 <b>Питомец:</b> +{p}% к уклонению."
+    if "def_bonus" in d:
+        v = float(d["def_bonus"])
+        vs = str(int(v)) if v == int(v) else str(v)
+        if loc == "en":
+            return f"🐾 <b>Pet:</b> +{vs} defense in combat."
+        return f"🐾 <b>Питомец:</b> +{vs} к защите в бою."
+    return ""
+
+
 def format_pet_battle_line_html(character: Character, *, locale: str) -> str:
     """Строка в экране боя: активный питомец и краткий эффект."""
     disp = active_pet_display(character)

@@ -137,6 +137,9 @@ def format_floor_message(character: Character) -> str:
     if tutorial_battle_pending(character) and n == 1:
         lines.append("🎓 <b>Учебный бой</b> наставника — кнопка ниже.")
 
+    if n == 3 and not long_floor_mod.is_long_floor_active(character):
+        lines.append("💰 <b>Скупщик</b> на этом ярусе — кнопка «Скупщик»: продать лут из сумки за золото.")
+
     sec = f"🔮 Тайник после боя ~{int(floor_data.SECRET_ROOM_CHANCE * 100)}%"
     if n <= SECRET_GEAR_EARLY_MAX_FLOOR:
         sec += ", иногда экипировка"
@@ -209,6 +212,8 @@ def format_floor_message_photo_caption(character: Character) -> str:
         lines.append(" · ".join(tags))
     if tutorial_battle_pending(character) and n == 1:
         lines.append("🎓 Учебный бой — внизу")
+    if n == 3 and not long_floor_mod.is_long_floor_active(character):
+        lines.append("💰 Скупщик — кнопка, лут→золото")
     sec = f"🔮 Тайник ~{int(floor_data.SECRET_ROOM_CHANCE * 100)}%"
     if n <= SECRET_GEAR_EARLY_MAX_FLOOR:
         sec += ", экип. возможна"

@@ -1,4 +1,4 @@
-"""Текст экрана топа игроков."""
+"""Текст экрана топа игроков и бонусы за место в рейтинге."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from db.models.character import Character
 from db.repository import leaderboard_repo
 
 RANKER_TOP_N = 5
-RANKER_GOLD_MULT = 1.05
 
 _FETCHERS_FOR_RANKER = (
     leaderboard_repo.top_by_level,
@@ -28,14 +27,69 @@ def _short_display(name: str, max_len: int = 22) -> str:
     return n[: max_len - 1] + "…"
 
 
-async def character_has_ranker_gold_bonus(session: AsyncSession, character: Character) -> bool:
-    """Топ-5 в любой из четырёх категорий — +5% золота с монстров (не титул)."""
+async def best_leaderboard_rank(session: AsyncSession, character: Character) -> int | None:
+    """
+    Лучшее место (1 = лучший) среди четырёх топов по текущему снимку.
+    None — ни в одном топе из первых пяти.
+    """
     cid = int(character.id)
+    best: int | None = None
     for fetcher in _FETCHERS_FOR_RANKER:
         rows = await fetcher(session, limit=RANKER_TOP_N)
-        if any(int(c.id) == cid for c in rows):
-            return True
-    return False
+        for i, c in enumerate(rows, start=1):
+            if int(c.id) == cid:
+                best = i if best is None else min(best, i)
+                break
+    return best
+
+
+def rank_victory_gold_xp_multipliers(rank: int | None) -> tuple[float, float]:
+    """Множители (золото, опыт) за победу над монстром по лучшему месту в топах."""
+    if rank is None:
+        return 1.0, 1.0
+    if rank == 1:
+        return 1.10, 1.05
+    if rank == 2:
+        return 1.08, 1.03
+    if rank == 3:
+        return 1.06, 1.01
+    if rank <= RANKER_TOP_N:
+        return 1.05, 1.0
+    return 1.0, 1.0
+
+
+async def victory_rank_reward_multipliers(
+    session: AsyncSession,
+    character: Character,
+    *,
+    locale: str,
+) -> tuple[float, float, str]:
+    """
+    (gold_mult, xp_mult, html_note) для экрана победы.
+    """
+    rank = await best_leaderboard_rank(session, character)
+    gm, xm = rank_victory_gold_xp_multipliers(rank)
+    if rank is None:
+        return 1.0, 1.0, ""
+    note_key = f"combat_leader_tier_{rank}_note" if rank <= 3 else "combat_leader_tier_mid_note"
+    note = t(locale, note_key)
+    return gm, xm, note
+
+
+async def profile_ranker_status_line(session: AsyncSession, character: Character, *, locale: str) -> str:
+    """Строка для профиля; пусто если нет бонуса."""
+    rank = await best_leaderboard_rank(session, character)
+    if rank is None:
+        return ""
+    if rank <= 3:
+        return t(locale, f"profile_ranker_tier_{rank}_line")
+    return t(locale, "profile_ranker_tier_45_line")
+
+
+async def character_has_ranker_gold_bonus(session: AsyncSession, character: Character) -> bool:
+    """Совместимость: True если персонаж в топ-5 хотя бы в одной категории."""
+    r = await best_leaderboard_rank(session, character)
+    return r is not None and r <= RANKER_TOP_N
 
 
 def format_leaderboard_html(category: str, rows: list[Character], *, locale: str = "ru") -> str:

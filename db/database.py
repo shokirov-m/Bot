@@ -349,6 +349,142 @@ def patch_sqlite_auction_lots_table() -> None:
         logger.exception("Патч SQLite (auction_lots) не удался: {}", p)
 
 
+def patch_sqlite_clans_tables() -> None:
+    """Таблицы кланов (базовый уровень: создание, участники, XP)."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            row = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='clans'",
+            ).fetchone()
+            if row is not None:
+                return
+            con.execute(
+                """
+                CREATE TABLE clans (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(64) NOT NULL UNIQUE,
+                    leader_character_id INTEGER NOT NULL,
+                    chat_url VARCHAR(256),
+                    clan_xp INTEGER NOT NULL DEFAULT 0,
+                    clan_level INTEGER NOT NULL DEFAULT 1,
+                    created_at VARCHAR(40)
+                )
+                """,
+            )
+            con.execute(
+                """
+                CREATE TABLE clan_memberships (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    clan_id INTEGER NOT NULL,
+                    character_id INTEGER NOT NULL UNIQUE,
+                    role VARCHAR(16) NOT NULL DEFAULT 'member'
+                )
+                """,
+            )
+            con.execute("CREATE INDEX IF NOT EXISTS ix_clan_memberships_clan_id ON clan_memberships (clan_id)")
+            con.commit()
+            logger.info("Патч SQLite: созданы таблицы clans и clan_memberships")
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (clans) не удался: {}", p)
+
+
+def patch_sqlite_stored_gear_boost_v3() -> None:
+    """
+    Одноразово усилить defense и статы в JSON экипировки в сумке/слотах и на лотах аукциона.
+    Флаг в app_global.payload.gear_stats_boost_v3 — не повторять.
+    """
+    import json
+    import sqlite3
+
+    from loguru import logger
+
+    from game.items.rarity_scaling import apply_stored_gear_balance_boost_v3
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        with sqlite3.connect(str(p)) as con:
+            row_tbl = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_global'",
+            ).fetchone()
+            if row_tbl is None:
+                return
+            con.execute("INSERT OR IGNORE INTO app_global (id, payload) VALUES (1, '{}')")
+            row = con.execute("SELECT payload FROM app_global WHERE id = 1").fetchone()
+            raw_payload = row[0] if row else "{}"
+            try:
+                payload = json.loads(raw_payload) if isinstance(raw_payload, str) else dict(raw_payload or {})
+            except json.JSONDecodeError:
+                payload = {}
+            if payload.get("gear_stats_boost_v3"):
+                return
+
+            def _loads_item_data(raw: object) -> dict[str, object]:
+                if raw is None:
+                    return {}
+                if isinstance(raw, dict):
+                    return dict(raw)
+                if isinstance(raw, str):
+                    try:
+                        return dict(json.loads(raw))
+                    except json.JSONDecodeError:
+                        return {}
+                return {}
+
+            n_inv = 0
+            if con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory_items'",
+            ).fetchone():
+                for iid, raw in con.execute("SELECT id, item_data FROM inventory_items"):
+                    d = _loads_item_data(raw)
+                    new_d, changed = apply_stored_gear_balance_boost_v3(d)
+                    if changed:
+                        con.execute(
+                            "UPDATE inventory_items SET item_data = ? WHERE id = ?",
+                            (json.dumps(new_d, ensure_ascii=False), int(iid)),
+                        )
+                        n_inv += 1
+
+            n_lot = 0
+            if con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='auction_lots'",
+            ).fetchone():
+                for lid, raw in con.execute("SELECT id, item_data FROM auction_lots"):
+                    d = _loads_item_data(raw)
+                    new_d, changed = apply_stored_gear_balance_boost_v3(d)
+                    if changed:
+                        con.execute(
+                            "UPDATE auction_lots SET item_data = ? WHERE id = ?",
+                            (json.dumps(new_d, ensure_ascii=False), int(lid)),
+                        )
+                        n_lot += 1
+
+            payload["gear_stats_boost_v3"] = True
+            con.execute(
+                "UPDATE app_global SET payload = ? WHERE id = 1",
+                (json.dumps(payload, ensure_ascii=False),),
+            )
+            if n_inv or n_lot:
+                logger.info(
+                    "Патч SQLite gear_stats_boost_v3: inventory_items={}, auction_lots={}",
+                    n_inv,
+                    n_lot,
+                )
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (gear_stats_boost_v3) не удался: {}", p)
+
+
 def resolve_db_path() -> Path:
     """
     Абсолютный путь к файлу SQLite.
@@ -397,6 +533,8 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_auction_lots_table()
     patch_sqlite_promo_redemptions_table()
     patch_sqlite_promo_offers_table()
+    patch_sqlite_clans_tables()
+    patch_sqlite_stored_gear_boost_v3()
     had_users = False
     if p.exists():
         try:

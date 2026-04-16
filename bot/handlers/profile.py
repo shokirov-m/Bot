@@ -172,14 +172,19 @@ def _build_profile_text(
         class_title += f" · ⭐ {html.escape(sub)}"
     rank = path_rank_name_ru(char)
     rank_s = html.escape(rank) if rank else "—"
-    title = html.escape(char.active_title) if char.active_title else "—"
+    sec_raw = (char.meta_progress or {}).get("active_title_secondary_name_ru")
+    sec_s = str(sec_raw).strip() if sec_raw else ""
+    t1 = html.escape(char.active_title) if char.active_title else "—"
+    t2 = html.escape(sec_s) if sec_s else "—"
+    title = f"① {t1} · ② {t2}" if (char.active_title or sec_s) else "—"
     title_bonus = ""
-    if not compact and char.active_title:
-        k = title_service.active_title_key(char)
-        if k and k in TITLE_BY_KEY:
-            title_bonus = (
-                f"\n<i>Титул: {html.escape(format_title_bonus_line(TITLE_BY_KEY[k]))}</i>"
-            )
+    if not compact:
+        t_parts: list[str] = []
+        for tk in (title_service.active_title_key(char), title_service.active_secondary_title_key(char)):
+            if tk and tk in TITLE_BY_KEY:
+                t_parts.append(html.escape(format_title_bonus_line(TITLE_BY_KEY[tk])))
+        if t_parts:
+            title_bonus = "\n<i>Титулы: " + " · ".join(t_parts) + "</i>"
 
     xp_need = experience_needed_for_next_level(char.level, char.floor_number)
     st_hint = _stamina_minutes_hint(char.stamina, char.last_stamina_regen_at)
@@ -223,7 +228,7 @@ def _build_profile_text(
         f"🗡️ {html.escape(char.display_name)} · 🎮 <b>ID {gid_s}</b> • {class_title} • Ур.{char.level}",
         f"🎖️ Звание: <b>{rank_s}</b>",
     ]
-    lines.append(f"🏆 Титул: {title}{title_bonus}")
+    lines.append(f"🏆 Титулы: {title}{title_bonus}")
     if ranker_line:
         lines.append(ranker_line)
     lines.append(f"🌐 Глобальные бонусы: <i>{gp_show}</i>")
@@ -298,9 +303,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
     loc = get_locale(char, None)
-    rk = ""
-    if await leaderboard_service.character_has_ranker_gold_bonus(session, char):
-        rk = t(loc, "profile_ranker_line")
+    rk = await leaderboard_service.profile_ranker_status_line(session, char, locale=loc)
     base = _build_profile_text(
         char,
         compact=True,
@@ -327,9 +330,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
     loc = get_locale(char, None)
-    rk = ""
-    if await leaderboard_service.character_has_ranker_gold_bonus(session, char):
-        rk = t(loc, "profile_ranker_line")
+    rk = await leaderboard_service.profile_ranker_status_line(session, char, locale=loc)
     base = _build_profile_text(
         char,
         compact=False,

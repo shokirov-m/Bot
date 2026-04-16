@@ -75,7 +75,7 @@ async def try_buy_good(
 
     free = await inventory_repo.first_free_bag_slot(session, character.id)
     if free is None:
-        return False, "Сумка полна (20 ячеек)."
+        return False, "Не удалось найти свободный слот в сумке."
 
     character.gold = int(character.gold) - price
     if used_discount:

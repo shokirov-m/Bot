@@ -15,11 +15,14 @@ from db.models.promo_offer import PromoOffer
 from db.models.promo_redemption import PromoRedemption
 from db.models.game_event import GameEvent
 from db.models.auction_lot import AuctionLot
+from db.models.clan import Clan, ClanMembership
 
 __all__ = [
     "AdminLog",
     "AppGlobal",
     "AuctionLot",
+    "Clan",
+    "ClanMembership",
     "Character",
     "EnchantLog",
     "FloorProgress",
