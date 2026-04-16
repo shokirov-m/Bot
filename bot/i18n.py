@@ -13,6 +13,10 @@ STRINGS: dict[str, dict[str, str]] = {
     "ru": {
         "menu_profile": "🗡️ Статус",
         "profile_back_compact": "⬅️ К статусу",
+        "profile_class_btn": "📜 Класс",
+        "profile_class_screen_title": "📜 <b>Класс героя</b>",
+        "profile_rest_btn_start": "🛏️ Передышка (1 мин)",
+        "profile_rest_btn_wait": "🛏️ ~{sec} с до полного HP/MP",
         "menu_floor": "🗺️ Этаж",
         "menu_inv": "🎒 Инвентарь",
         "menu_titles": "🏆 Титулы",
@@ -39,8 +43,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "settings_referral_body": (
             "Отправь другу ссылку ниже. Если он <b>впервые</b> зайдёт в бота по ней и "
             "создаст героя, а потом <b>достигнет 2 уровня</b>, ты получишь:\n"
-            "• <b>2</b> простых предмета экипировки в сумку\n"
-            "• <b>+100</b> опыта на твоего героя\n\n"
+            "• <b>2</b> предмета экипировки <b>редкой</b> редкости в сумку\n"
+            "• <b>+200</b> опыта на твоего героя\n\n"
             "<b>Твоя ссылка:</b>\n<code>{link}</code>"
         ),
         "settings_referral_no_username": "У бота нет username в Telegram — задай имя в @BotFather, чтобы ссылка работала.",
@@ -62,6 +66,24 @@ STRINGS: dict[str, dict[str, str]] = {
             "✅ <b>Прогресс сброшен.</b> Ты на 1 этаже со стартовой экипировкой и хлебом, как после регистрации. "
             "Имя и класс не менялись — можно сразу идти на этаж."
         ),
+        "settings_stat_reset_btn": "📊 Сброс распределения статов",
+        "settings_stat_reset_warn": (
+            "<b>Сброс вложенных очков характеристик</b>\n\n"
+            "Стоимость: <b>{gold}</b> 💰. Не чаще <b>одного раза в календарный день (UTC)</b>.\n"
+            "Очки, вложенные через /stats сверх базы класса, вернутся в <b>свободные</b>; "
+            "статы станут как у класса (с учётом подкласса ×2, если он есть).\n\n"
+            "Сейчас можно вернуть: <b>{points}</b> оч.\n\n"
+            "<i>Бонусы экипировки и титула не сбрасываются.</i>"
+        ),
+        "settings_stat_reset_yes": "✅ Сбросить за {gold} 💰",
+        "settings_stat_reset_no": "⬅ Отмена",
+        "settings_stat_reset_done": (
+            "✅ <b>Сброс выполнен.</b> Возвращено <b>{points}</b> свободных очков. "
+            "Списано <b>{gold}</b> 💰. Распредели заново через /stats."
+        ),
+        "settings_stat_reset_today": "Сброс статов уже использован сегодня (UTC). Завтра снова.",
+        "settings_stat_reset_none": "Нет вложенных очков — нечего сбрасывать (команда /stats).",
+        "settings_stat_reset_no_gold": "Недостаточно золота. Нужно <b>{gold}</b> 💰.",
         "settings_back_menu": "📋 В меню",
         "settings_rename_intro": "Стоимость смены имени: <b>{gold}</b> 💰. Напиши новое имя <b>одним сообщением</b> (2–32 символа, буквы и цифры).",
         "settings_rename_done": "✅ Имя изменено на: <b>{name}</b>\nСписано <b>{gold}</b> 💰.",
@@ -172,9 +194,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "arena_no_game_id_yet": "<i>Игровой ID появится после сохранения героя в базе.</i>",
         "arena_id_hint_alert": "Напиши в чат: /arena N — N = игровой ID соперника (в его «Статус»). Твой: {gid}.",
         "arena_id_hint_no_gid": "Напиши в чат: /arena N — N из статуса соперника. У тебя пока нет игрового ID.",
+        "profile_pet_btn": "🐾 Питомец",
+        "profile_pet_switch_btn": "🔄 Сменить питомца",
         "profile_pet_single_hint": (
             "Один питомец уже даёт пассив в бою. Второго можно призвать в городе; "
-            "смена активного — статус или этажи 8/48."
+            "смена активного — в статусе (кнопка ниже), на полном экране характеристик или на этажах 8/48."
         ),
         "arena_no_char": "Сначала создай героя через /start.",
         "arena_result_win": "🏆 <b>Победа!</b> Твой билд сильнее.\n+{gold} 💰",
@@ -219,6 +243,10 @@ STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "menu_profile": "🗡️ Status",
         "profile_back_compact": "⬅️ Back to status",
+        "profile_class_btn": "📜 Class",
+        "profile_class_screen_title": "📜 <b>Your class</b>",
+        "profile_rest_btn_start": "🛏️ Rest (1 min)",
+        "profile_rest_btn_wait": "🛏️ ~{sec}s to full HP/MP",
         "menu_floor": "🗺️ Floor",
         "menu_inv": "🎒 Inventory",
         "menu_titles": "🏆 Titles",
@@ -245,8 +273,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "settings_referral_body": (
             "Send the link below to a friend. If they <b>first</b> open the bot via it, create a hero, "
             "and reach <b>level 2</b>, you get:\n"
-            "• <b>2</b> simple gear items to your bag\n"
-            "• <b>+100</b> XP for your hero\n\n"
+            "• <b>2</b> rare gear items in your bag\n"
+            "• <b>+200</b> XP for your hero\n\n"
             "<b>Your link:</b>\n<code>{link}</code>"
         ),
         "settings_referral_no_username": "This bot has no @username — set it in @BotFather so the link works.",
@@ -268,6 +296,24 @@ STRINGS: dict[str, dict[str, str]] = {
             "✅ <b>Progress reset.</b> You are on floor 1 with starter gear and bread, like a new hero. "
             "Name and class are unchanged — open the floor when ready."
         ),
+        "settings_stat_reset_btn": "📊 Reset stat allocation",
+        "settings_stat_reset_warn": (
+            "<b>Reset manually placed stat points</b>\n\n"
+            "Cost: <b>{gold}</b> gold. At most <b>once per calendar day (UTC)</b>.\n"
+            "Points spent via /stats above your class baseline return to <b>unspent</b>; "
+            "primary stats match the class again (×2 if you already picked a subclass).\n\n"
+            "You can refund now: <b>{points}</b> pts.\n\n"
+            "<i>Gear and title bonuses are unchanged — only manual allocation is reset.</i>"
+        ),
+        "settings_stat_reset_yes": "✅ Reset for {gold} gold",
+        "settings_stat_reset_no": "⬅ Cancel",
+        "settings_stat_reset_done": (
+            "✅ <b>Allocation reset.</b> Refunded <b>{points}</b> unspent points. "
+            "Charged <b>{gold}</b> gold. Redistribute with /stats."
+        ),
+        "settings_stat_reset_today": "Stat reset already used today (UTC). Try again tomorrow.",
+        "settings_stat_reset_none": "No extra points invested — nothing to reset (/stats).",
+        "settings_stat_reset_no_gold": "Not enough gold. Need <b>{gold}</b>.",
         "settings_back_menu": "📋 Main menu",
         "settings_rename_intro": "Name change costs <b>{gold}</b> gold. Send the new name in <b>one message</b> (2–32 chars, letters and numbers).",
         "settings_rename_done": "✅ Name set to: <b>{name}</b>\nCharged <b>{gold}</b> gold.",
@@ -376,9 +422,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "arena_no_game_id_yet": "<i>Game ID appears after your hero is saved to the database.</i>",
         "arena_id_hint_alert": "Type in chat: /arena N — N = rival's game ID (their Status). Yours: {gid}.",
         "arena_id_hint_no_gid": "Type: /arena N — N from rival's Status. You have no game ID yet.",
+        "profile_pet_btn": "🐾 Pet",
+        "profile_pet_switch_btn": "🔄 Switch pet",
         "profile_pet_single_hint": (
             "One pet already gives a combat passive. Summon more in the City; "
-            "switch the active pet in Status or on floors 8/48."
+            "switch the active pet in Status, on the full stats screen, or on floors 8/48."
         ),
         "arena_no_char": "Create a hero with /start first.",
         "arena_result_win": "🏆 <b>Victory!</b> Your build won.\n+{gold} 💰",

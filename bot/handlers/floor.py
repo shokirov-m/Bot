@@ -5,9 +5,11 @@
 from __future__ import annotations
 
 import html
+import random
 import re
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -15,11 +17,13 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.floor_kb import secret_result_keyboard
+from bot.keyboards.forest_kb import forest_mushroom_keyboard, forest_spirit_keyboard
 from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.characters import pets as pets_mod
 from game.floors import floor_data
+from game.floors import forest_beginnings as fb
 from game.floors import long_floor as long_floor_mod
 from services import combat_service
 from services.floor_service import (
@@ -200,29 +204,11 @@ async def on_floor_callback(
                 )
                 return
 
-            await session.flush()
-            plain = re.sub(r"<[^>]+>", "", msg)
-            if ok:
-                await query.answer(plain[:180] if plain else "Ок.", show_alert=False)
-            else:
-                await query.answer(plain[:200] if plain else "Нельзя.", show_alert=True)
-            sfx = f"\n\n{LINE_SEP}\n{msg}" if msg else ""
-            await push_floor_screen_ui(
-                session,
-                state,
-                query.bot,
-                chat_id=query.message.chat.id,
-                character=char,
-                reply_markup=await floor_keyboard_for_character(session, char),
-                target_message=query.message,
-                text_suffix=sfx,
-            )
-            return
-
         if code == "return":
             if query.message is None:
                 await query.answer()
                 return
+            await state.update_data(svc_forest_spirit=None)
             await push_floor_screen_ui(
                 session,
                 state,
@@ -382,6 +368,66 @@ async def on_floor_callback(
         if query.message is None:
             await query.answer()
             return
+
+        if (
+            not long_floor_mod.is_long_floor_active(char)
+            and fb.is_forest_beginnings_zone(int(char.floor_number))
+            and fb.eligible_for_forest_tricks(chosen)
+        ):
+            kind = fb.roll_prefight_kind(char)
+            if kind == "bypass":
+                suffix = await combat_service.apply_forest_bypass_outcome(
+                    session,
+                    char,
+                    chosen,
+                    telegram_id=query.from_user.id,
+                    username=query.from_user.username,
+                    bot=query.bot,
+                )
+                await session.refresh(char)
+                await push_floor_screen_ui(
+                    session,
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    character=char,
+                    reply_markup=await floor_keyboard_for_character(session, char),
+                    target_message=query.message,
+                    text_suffix=suffix,
+                )
+                await query.answer("Тайная тропа…")
+                return
+            if kind == "mushroom":
+                try:
+                    await query.message.edit_text(
+                        fb.mushroom_intro_html(),
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=forest_mushroom_keyboard(floor, code),
+                    )
+                except Exception:
+                    logger.exception("forest mushroom UI")
+                    await query.answer("Не удалось показать сцену.", show_alert=True)
+                    return
+                await query.answer()
+                return
+            if kind == "spirit":
+                correct = random.randint(0, 2)
+                await state.update_data(
+                    svc_forest_spirit={"correct": correct, "slot": chosen.slot_code, "floor": floor},
+                )
+                try:
+                    await query.message.edit_text(
+                        fb.spirit_intro_html(),
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=forest_spirit_keyboard(floor, code),
+                    )
+                except Exception:
+                    logger.exception("forest spirit UI")
+                    await state.update_data(svc_forest_spirit=None)
+                    await query.answer("Не удалось показать сцену.", show_alert=True)
+                    return
+                await query.answer()
+                return
 
         await combat_service.start_combat(
             query=query,

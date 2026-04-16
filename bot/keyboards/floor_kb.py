@@ -18,6 +18,7 @@ from game.characters.class_arcs import (
 from game.characters.classes import get_class_or_none
 from game.characters import pets as pets_mod
 from game.floors import floor_data
+from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import long_floor as long_floor_mod
 from game.floors.monsters import FloorMonsterSpawn
 from game.floors.tower_ascent import tower_next_floor_pending
@@ -105,6 +106,21 @@ def floor_screen_keyboard(
         )
 
     rows.extend(_pet_rows(character, floor_number))
+
+    if forest_beginnings_mod.is_forest_beginnings_zone(floor_number) and not long_floor_mod.is_long_floor_active(
+        character,
+    ):
+        camp_lbl = "🏕️ Привал (полн. HP, без ⚡)"
+        if forest_beginnings_mod.camp_used(character):
+            camp_lbl = "🏕️ Привал (использован)"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=camp_lbl,
+                    callback_data=f"flf:camp:{floor_number}",
+                ),
+            ],
+        )
 
     buffer: list[InlineKeyboardButton] = []
 
@@ -204,6 +220,21 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
         )
 
     rows.extend(_pet_rows(character, floor_number))
+
+    if forest_beginnings_mod.is_forest_beginnings_zone(floor_number) and not long_floor_mod.is_long_floor_active(
+        character,
+    ):
+        camp_lbl = "🏕️ Привал (полн. HP, без ⚡)"
+        if forest_beginnings_mod.camp_used(character):
+            camp_lbl = "🏕️ Привал (использован)"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=camp_lbl,
+                    callback_data=f"flf:camp:{floor_number}",
+                ),
+            ],
+        )
 
     if ph == "keys":
         rows.append(

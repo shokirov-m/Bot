@@ -19,6 +19,7 @@ from bot.keyboards.settings_kb import (
     settings_cancel_keyboard,
     settings_reset_confirm_keyboard,
     settings_screen_keyboard,
+    settings_stat_reset_confirm_keyboard,
 )
 from bot.states.combat_states import CombatStates
 from bot.states.settings_states import SettingsStates
@@ -173,6 +174,109 @@ async def stg_promo_start(callback: CallbackQuery, session: AsyncSession, state:
         await callback.answer()
     except Exception:
         logger.exception("stg:promo")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stg:stat_rst")
+async def stg_stat_reset_prompt(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer(t("ru", "settings_combat_block"), show_alert=True)
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer("Нет героя.", show_alert=True)
+            return
+        _, char = pair
+        loc = get_locale(char, callback.from_user.language_code)
+        if not character_service.stat_alloc_reset_available_today(char):
+            await callback.answer(t(loc, "settings_stat_reset_today"), show_alert=True)
+            return
+        pts = character_service.count_allocated_stat_points_over_nominal(char)
+        if pts <= 0:
+            await callback.answer(t(loc, "settings_stat_reset_none"), show_alert=True)
+            return
+        cost = int(character_service.STAT_ALLOC_RESET_COST_GOLD)
+        if int(char.gold) < cost:
+            await callback.answer(t(loc, "settings_stat_reset_no_gold", gold=cost), show_alert=True)
+            return
+        await state.clear()
+        await callback.message.edit_text(
+            f"{t(loc, 'settings_title')}\n{LINE_SEP}\n"
+            f"{t(loc, 'settings_stat_reset_warn', gold=cost, points=pts)}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=settings_stat_reset_confirm_keyboard(locale=loc, gold=cost),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:stat_rst")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stg:stat_rst:back")
+async def stg_stat_reset_back(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await state.clear()
+            await callback.answer()
+            return
+        _, char = pair
+        loc = get_locale(char, callback.from_user.language_code)
+        await state.clear()
+        await callback.message.edit_text(
+            _settings_body_html(loc),
+            parse_mode=ParseMode.HTML,
+            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:stat_rst:back")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stg:stat_rst:go")
+async def stg_stat_reset_execute(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer(t("ru", "settings_combat_block"), show_alert=True)
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer("Нет героя.", show_alert=True)
+            return
+        _, char = pair
+        loc = get_locale(char, callback.from_user.language_code)
+        pts = character_service.count_allocated_stat_points_over_nominal(char)
+        cost = int(character_service.STAT_ALLOC_RESET_COST_GOLD)
+        ok, err_key = character_service.try_paid_reset_stat_allocations(char)
+        if not ok:
+            await callback.answer(t(loc, err_key, gold=cost), show_alert=True)
+            await callback.message.edit_text(
+                _settings_body_html(loc),
+                parse_mode=ParseMode.HTML,
+                reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            )
+            return
+        await state.clear()
+        await callback.message.edit_text(
+            f"{t(loc, 'settings_title')}\n{LINE_SEP}\n"
+            f"{t(loc, 'settings_stat_reset_done', points=pts, gold=cost)}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:stat_rst:go")
         await callback.answer("Ошибка.", show_alert=True)
 
 

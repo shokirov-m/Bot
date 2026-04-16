@@ -32,6 +32,16 @@ def roll_dodge(dexterity: int, *, dodge_bonus_flat: float = 0.0) -> bool:
     return random.random() < dodge_chance_percent(dexterity, dodge_bonus_flat=dodge_bonus_flat)
 
 
+def int_skill_phys_tuning_multiplier(intelligence: int) -> float:
+    """Физические навыки: ИНТ немного усиливает технику удара (все классы)."""
+    return 1.0 + min(0.11, max(0.0, float(intelligence)) * 0.0020)
+
+
+def int_skill_mag_extra_scale(intelligence: int) -> float:
+    """Магические навыки: лёгкий доп. масштаб от ИНТ поверх базы magical_damage."""
+    return 1.0 + min(0.07, max(0.0, float(intelligence)) * 0.0014)
+
+
 def physical_damage_range(
     strength: int,
     weapon_attack: int,
@@ -77,8 +87,9 @@ def magical_damage(
     mag_bonus_percent: int = 0,
     elemental_bonus_percent: int = 0,
 ) -> int:
-    """Магический урон: ИНТ*2 + фокус, те же колебания."""
-    base = intelligence * 2 + weapon_or_focus
+    """Магический урон: усиленная доля ИНТ + фокус, те же колебания."""
+    int_core = intelligence * 2 + max(0, intelligence // 5)
+    base = int_core + weapon_or_focus
     if mag_bonus_percent:
         base = int(base * (1 + mag_bonus_percent / 100.0))
     if elemental_bonus_percent:

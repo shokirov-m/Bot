@@ -71,6 +71,7 @@ from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawn
 from game.economy import sinks as sink_rules
 from game.floors.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
 from game.items import enchant as enchant_rules
+from game.items.rarity_scaling import scaled_armor_defense_value
 from game.items import loot as loot_tables
 from game.characters.global_passives import refresh_global_passives
 from services import (
@@ -285,12 +286,13 @@ async def _equipped_gear_defense_total(session: AsyncSession, character_id: int)
     for it in items:
         data = it.item_data or {}
         base_def = int(data.get("defense", data.get("armor", 0)) or 0)
+        def_val = scaled_armor_defense_value(base_def, data)
         ench = enchant_rules.current_enchant_level(data)
         base_atk = int(data.get("attack", data.get("atk", 0)) or 0)
         if base_atk > 0:
-            total += base_def
+            total += def_val
         else:
-            total += base_def + ench
+            total += def_val + ench
     return total
 
 
@@ -790,6 +792,46 @@ async def _apply_tower_progress_after_victory(
         f"Поднимись на <b>{nxt}</b> / 100 — <i>{html.escape(room_next)}</i> "
         f"(кнопка «Следующий этаж» или ⬆️ Выше).\n"
         f"<i>{html.escape(zone_next.description)}</i>"
+    )
+
+
+async def apply_forest_bypass_outcome(
+    session: AsyncSession,
+    character: Character,
+    spawn: FloorMonsterSpawn,
+    *,
+    telegram_id: int | None = None,
+    username: str | None = None,
+    bot: Any | None = None,
+) -> str:
+    """
+    Тайная тропа (1–10): цель считается пройденной без боя и без стамины.
+    Награда скромнее полноценной победы; убийства и квесты на убийство не считаются.
+    """
+    gross = gold_reward(int(character.floor_number), spawn)
+    xp_base = experience_reward(int(character.floor_number), spawn)
+    g = max(3, int(gross * 0.22))
+    x = max(2, int(xp_base * 0.18))
+    character_service.add_gold(character, g)
+    if telegram_id is not None:
+        await anticheat_service.record_gold_gain(
+            session,
+            character,
+            telegram_id=telegram_id,
+            username=username,
+            gold_delta=g,
+            bot=bot,
+        )
+    await character_service.add_experience_async(session, character, x, bot=bot)
+    refresh_global_passives(character)
+    m_disp = html.escape(getattr(spawn, "display_name", None) or spawn.template.name)
+    banner = await _apply_tower_progress_after_victory(session, character, spawn)
+    await session.flush()
+    return (
+        f"\n{LINE_SEP}\n"
+        f"🌿 <b>Тайная тропа:</b> ты обошёл <b>{m_disp}</b> без боя.\n"
+        f"💰 +{g} золота · 📈 +{x} опыта."
+        f"{banner}"
     )
 
 

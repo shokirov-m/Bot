@@ -35,6 +35,12 @@ def settings_screen_keyboard(*, locale: str, character: Character | None = None)
             ],
             [
                 InlineKeyboardButton(
+                    text=t(loc, "settings_stat_reset_btn"),
+                    callback_data="stg:stat_rst",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
                     text=t(loc, "settings_lang_btn"),
                     callback_data="stg:lang",
                 ),
@@ -65,6 +71,26 @@ def settings_screen_keyboard(*, locale: str, character: Character | None = None)
                 InlineKeyboardButton(
                     text=t(loc, "settings_back_menu"),
                     callback_data="mnu:hub",
+                ),
+            ],
+        ],
+    )
+
+
+def settings_stat_reset_confirm_keyboard(*, locale: str, gold: int) -> InlineKeyboardMarkup:
+    loc = locale if locale in ("ru", "en") else "ru"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_stat_reset_yes", gold=gold),
+                    callback_data="stg:stat_rst:go",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_stat_reset_no"),
+                    callback_data="stg:stat_rst:back",
                 ),
             ],
         ],

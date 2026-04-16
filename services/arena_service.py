@@ -157,6 +157,35 @@ def _finish_match(
     return (report, gold_delta, outcome)
 
 
+async def prepare_arena_turn_opponent(
+    session: AsyncSession,
+    character: Character,
+    *,
+    fixed_opponent: Character | None,
+) -> tuple[Character | None, str, float, str, int, bool]:
+    """
+    Соперник и баннер для пошаговой дуэли (как в run_shadow_match).
+    Возвращает: opp | None, o_name, o_pow, banner_html, win_bonus, is_npc.
+    """
+    if fixed_opponent is not None:
+        o_pow, o_name = await _power_label(session, fixed_opponent)
+        gid = int(fixed_opponent.game_id) if fixed_opponent.game_id is not None else 0
+        banner = (
+            "<i>⚔️ Дуэль 1×1 (пошагово) с <b>"
+            f"{html.escape(o_name)}</b> · игровой ID <b>{gid}</b>.</i>\n\n"
+        )
+        return fixed_opponent, o_name, float(o_pow), banner, 12, False
+
+    opp = await character_repo.random_shadow_opponent(session, character.id)
+    if opp is None:
+        o_pow, o_name = npc_shadow_power(character), "Тень башни"
+        banner = "<i>Пошаговый бой с <b>Тенью башни</b> (пока нет других героев в базе).</i>\n\n"
+        return None, o_name, float(o_pow), banner, 0, True
+    o_pow, o_name = await _power_label(session, opp)
+    banner = "<i>Пошаговый бой со случайным героем из базы.</i>\n\n"
+    return opp, o_name, float(o_pow), banner, 6, False
+
+
 async def run_shadow_match(
     session: AsyncSession,
     character: Character,
@@ -250,3 +279,163 @@ async def run_shadow_match(
 # Обратная совместимость для тестов
 async def player_power(session: AsyncSession, character: Character) -> float:
     return await character_arena_power(session, character)
+
+
+def _hp_pool(character: Character) -> int:
+    return max(
+        35,
+        40 + int(character.level) * 2 + int(character.floor_number) // 2 + int(character.stat_vitality) // 2,
+    )
+
+
+def build_turn_duel_open_state(
+    *,
+    character: Character,
+    opponent: Character | None,
+    opponent_name: str,
+    opponent_power: float,
+    banner_html: str,
+    win_bonus: int,
+    is_npc: bool,
+) -> dict:
+    """Снимок для FSM: пошаговая дуэль (один игрок в чате, соперник из БД или тень)."""
+    pm = _hp_pool(character)
+    # «Тень» без записи героя — те же правила по этажу
+    if opponent is None:
+        om = max(30, 35 + int(character.floor_number) * 2)
+        oid = 0
+    else:
+        om = _hp_pool(opponent)
+        oid = int(opponent.id)
+    return {
+        "v": 1,
+        "p_hp": pm,
+        "p_max": pm,
+        "o_hp": om,
+        "o_max": om,
+        "o_name": opponent_name[:48],
+        "o_pow": float(opponent_power),
+        "banner": banner_html,
+        "win_bonus": int(win_bonus),
+        "is_npc": bool(is_npc),
+        "opp_id": oid,
+        "next_inc_reduction": 0.0,
+        "round_i": 0,
+        "max_rounds": 8,
+    }
+
+
+def format_turn_duel_screen_html(state: dict, *, log_lines: list[str] | None = None) -> str:
+    log_lines = log_lines or []
+    body = (
+        f"{state['banner']}"
+        f"<b>{html.escape(state['o_name'])}</b> · раунд <b>{int(state['round_i']) + 1}</b> / {int(state['max_rounds'])}\n"
+        f"Ты: <b>{int(state['p_hp'])}</b> / {int(state['p_max'])} HP · "
+        f"Соперник: <b>{int(state['o_hp'])}</b> / {int(state['o_max'])} HP\n"
+        "<i>Удар — урон обоим; Защита — меньше урона в ответ, без твоего удара.</i>\n"
+    )
+    if log_lines:
+        body += "\n" + "\n".join(log_lines[-6:])
+    return body
+
+
+def apply_turn_duel_step(
+    character: Character,
+    state: dict,
+    move: str,
+) -> tuple[dict, list[str], Outcome | None]:
+    """
+    Один ход игрока (atk|def). Возвращает (нов_state, log, outcome или None если бой продолжается).
+    """
+    import random
+
+    move = (move or "").lower().strip()
+    if move not in ("atk", "def"):
+        move = "atk"
+
+    logs: list[str] = []
+    red = float(state.get("next_inc_reduction") or 0.0)
+    st = int(character.stat_strength)
+    floor_f = max(1, int(character.floor_number))
+    o_pow = max(20.0, float(state.get("o_pow") or 40.0))
+
+    if move == "atk":
+        raw = random.randint(6, 14) + st // 4 + floor_f // 5
+        dealt = max(2, int(raw * random.uniform(0.92, 1.08)))
+        state["o_hp"] = int(state["o_hp"]) - dealt
+        logs.append(f"⚔️ Ты бьёшь на <b>{dealt}</b>.")
+
+        back = int((o_pow * 0.12 + random.uniform(3, 9)) * random.uniform(0.88, 1.12))
+        back = max(2, int(back * (1.0 - min(0.75, red))))
+        state["p_hp"] = int(state["p_hp"]) - back
+        logs.append(f"↩️ Ответ: <b>-{back}</b> HP.")
+        state["next_inc_reduction"] = 0.0
+    else:
+        heal = min(6, int(state["p_max"]) - int(state["p_hp"]))
+        if heal > 0:
+            state["p_hp"] = int(state["p_hp"]) + heal
+            logs.append(f"🛡️ Защита · +{heal} HP.")
+        else:
+            logs.append("🛡️ Защита · HP уже полные.")
+        state["next_inc_reduction"] = 0.38
+
+        opp_act = random.choice(("atk", "def"))
+        if opp_act == "atk":
+            hit = int((o_pow * 0.10 + random.uniform(2, 8)) * random.uniform(0.85, 1.1))
+            hit = max(1, int(hit * (1.0 - min(0.75, red))))
+            state["p_hp"] = int(state["p_hp"]) - hit
+            logs.append(f"Соперник бьёт: <b>-{hit}</b> HP.")
+        else:
+            tick = min(5, int(state["o_max"]) - int(state["o_hp"]))
+            if tick > 0:
+                state["o_hp"] = int(state["o_hp"]) + tick
+                logs.append(f"Соперник в защите · +{tick} HP себе.")
+            else:
+                logs.append("Соперник в защите.")
+
+    state["p_hp"] = max(0, min(int(state["p_max"]), int(state["p_hp"])))
+    state["o_hp"] = max(0, min(int(state["o_max"]), int(state["o_hp"])))
+    state["round_i"] = int(state["round_i"]) + 1
+
+    if int(state["o_hp"]) <= 0:
+        return state, logs, "win"
+    if int(state["p_hp"]) <= 0:
+        return state, logs, "lose"
+    if int(state["round_i"]) >= int(state["max_rounds"]):
+        if int(state["p_hp"]) > int(state["o_hp"]):
+            return state, logs + ["⏱️ Время — по HP ты впереди."], "win"
+        if int(state["p_hp"]) < int(state["o_hp"]):
+            return state, logs + ["⏱️ Время — соперник впереди по HP."], "lose"
+        return state, logs + ["⏱️ Время — равные HP."], "draw"
+
+    return state, logs, None
+
+
+def finish_turn_duel_economy(
+    character: Character,
+    *,
+    outcome: Outcome,
+    is_npc: bool,
+    win_bonus: int,
+) -> tuple[str, int, Outcome]:
+    """Награды и учёт дневного лимита арены (один бой)."""
+    base_gold = 12 + int(character.floor_number) // 2 + int(character.level)
+    gold_delta = 0
+    if outcome == "win":
+        gold_delta = base_gold + (0 if is_npc else int(win_bonus))
+        character.gold = int(character.gold) + gold_delta
+        report = f"Итог: <b>победа</b>.\nНаграда: <b>+{gold_delta}</b> 💰"
+    elif outcome == "lose":
+        raw_penalty = max(8, int(base_gold * 0.4))
+        cur = int(character.gold)
+        penalty = min(raw_penalty, cur)
+        if penalty > 0:
+            character.gold = cur - penalty
+        gold_delta = -penalty
+        report = (
+            f"Итог: <b>поражение</b>.\nШтраф: <b>-{penalty}</b> 💰" if penalty > 0 else "Итог: <b>поражение</b>."
+        )
+    else:
+        report = "Итог: <b>ничья</b>."
+    _record_arena_match(character)
+    return report, gold_delta, outcome

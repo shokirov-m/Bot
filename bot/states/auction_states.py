@@ -7,3 +7,4 @@ from aiogram.fsm.state import State, StatesGroup
 
 class AuctionCreateStates(StatesGroup):
     waiting_price = State()
+    waiting_reprice = State()

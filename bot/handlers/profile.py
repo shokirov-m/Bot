@@ -21,6 +21,7 @@ from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
 from bot.keyboards.menu_kb import main_menu_keyboard
 from bot.keyboards.profile_kb import (
+    profile_class_detail_keyboard,
     profile_full_stats_keyboard,
     profile_view_keyboard,
 )
@@ -44,6 +45,7 @@ from utils.game_images_prefs import game_images_enabled
 from utils.profile_portraits import portrait_path_for_character
 from utils.ui import (
     LINE_SEP,
+    element_label,
     element_profile_line,
     format_number,
     render_exp_bar,
@@ -93,6 +95,58 @@ def _fmt_stat_base_plus(base: int, extra: int) -> str:
     if extra <= 0:
         return str(int(base))
     return f"{int(base)} <i>(+{int(extra)})</i>"
+
+
+def build_class_info_html(char: Character, *, locale: str) -> str:
+    """Экран «Класс»: пассив, навыки, стартовые статы (тексты классов на русском)."""
+    loc = locale if locale in ("ru", "en") else "ru"
+    title = t(loc, "profile_class_screen_title")
+    cls = get_class_or_none(str(char.class_key or ""))
+    sub = class_arc_service.subclass_display_ru(char.subclass_key)
+    lines = [LINE_SEP, title, LINE_SEP]
+    if cls is None:
+        unk = "Класс не выбран или неизвестен." if loc == "ru" else "Class not set or unknown."
+        lines.append(f"<i>{html.escape(unk)}</i>")
+        return "\n".join(lines)
+    lines.append(f"{cls.emoji} <b>{html.escape(cls.name_ru)}</b>")
+    if sub:
+        sub_lbl = "Подкласс" if loc == "ru" else "Subclass"
+        lines.append(f"⭐ {sub_lbl}: <b>{html.escape(sub)}</b>")
+    lines.append("")
+    pas_lbl = "<b>Пассив класса</b>" if loc == "ru" else "<b>Class passive</b>"
+    lines.append(f"{pas_lbl}: <i>{html.escape(cls.passive_ru)}</i>")
+    sk_lbl = "<b>Навыки в бою</b>" if loc == "ru" else "<b>Combat skills</b>"
+    lines.extend(["", sk_lbl])
+    for sk in (cls.skill_1, cls.skill_2, cls.skill_3):
+        lines.append(f" · {html.escape(sk)}")
+    base_lbl = (
+        "<b>Стартовые статы шаблона класса</b> (до экипировки и роста):"
+        if loc == "ru"
+        else "<b>Class template base stats</b> (before gear and growth):"
+    )
+    lines.extend(
+        [
+            "",
+            base_lbl,
+            (
+                f"СИЛ {cls.strength} · ЛОВ {cls.dexterity} · ИНТ {cls.intelligence} · "
+                f"ВЫН {cls.vitality} · УДА {cls.luck}"
+            ),
+        ],
+    )
+    if cls.hp_multiplier != 1.0 or cls.mp_multiplier != 1.0:
+        lines.append(
+            f"<i>HP ×{cls.hp_multiplier} · MP ×{cls.mp_multiplier}</i>",
+        )
+    if cls.default_element:
+        lines.append("")
+        lines.append(
+            ("<b>Стихия класса:</b> " if loc == "ru" else "<b>Class element:</b> ")
+            + element_label(cls.default_element),
+        )
+    lines.append("")
+    lines.append(element_profile_line(char.element))
+    return "\n".join(lines)
 
 
 def _build_profile_text(
@@ -189,7 +243,7 @@ def _build_profile_text(
             "",
         ],
     )
-    if not compact:
+    if compact:
         lines.append(format_rest_status_line_html(char))
         lines.append("")
     lines.extend(
@@ -360,7 +414,7 @@ async def on_profile_full_stats(callback: CallbackQuery, session: AsyncSession, 
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=profile_full_stats_keyboard(locale=loc),
+            reply_markup=profile_full_stats_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=None,
         )
@@ -403,6 +457,41 @@ async def on_profile_back_compact(callback: CallbackQuery, session: AsyncSession
         await callback.answer()
     except Exception:
         logger.exception("prf:back")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:class")
+async def on_profile_class_info(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Отдельный экран: описание класса, пассив, навыки."""
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        title_service.refresh_unlocks(char)
+        apply_completed_rest_if_needed(char)
+        await session.flush()
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        text = build_class_info_html(char, locale=loc)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=profile_class_detail_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:class")
         await callback.answer("Ошибка.", show_alert=True)
 
 

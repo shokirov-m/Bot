@@ -133,7 +133,7 @@ def _pick_rarity_for_floor(floor_number: int, tier: int) -> str:
 
 
 def _stat_pack_for_kind(kind: str, rarity: str) -> dict[str, int]:
-    mult = {"common": 1, "uncommon": 1, "rare": 2, "epic": 2, "legendary": 3}.get(rarity, 1)
+    mult = {"common": 1, "uncommon": 2, "rare": 3, "epic": 4, "legendary": 5}.get(rarity, 1)
     if kind == "armor":
         return {"vit": 1 * mult, "str": max(0, mult - 1)}
     if kind == "helmet":
@@ -153,6 +153,7 @@ def _scaled_secret_gear(floor_number: int) -> dict[str, Any]:
     defense = 2 + tier + (1 if floor_number >= 50 else 0)
     kind, base, emo = random.choice(_KINDS_HIGH)
     rarity = _pick_rarity_for_floor(floor_number, tier)
+    defense += {"common": 0, "uncommon": 1, "rare": 2, "epic": 3, "legendary": 5}.get(rarity, 0)
     stats = _stat_pack_for_kind(kind, rarity)
     rarity_ru = RARITY_NAME_RU.get(rarity, rarity)
     name = f"{emo} {base} «{rarity_ru}» — ярус {floor_number}"
@@ -199,26 +200,27 @@ def promo_starter_armor_amulet_payloads() -> tuple[dict[str, Any], dict[str, Any
 
 
 def referral_inviter_gear_payloads() -> tuple[dict[str, Any], dict[str, Any]]:
-    """Две простые вещи для награды пригласившему (не зависят от индексов SECRET_GEAR_ITEMS)."""
+    """Две вещи редкой редкости пригласившему, когда приглашённый достигает 2 уровня."""
     return (
         copy.deepcopy(
             {
                 "name": "Перчатки благодарности башни",
                 "kind": "gloves",
-                "rarity": "common",
-                "defense": 1,
-                "dex": 1,
-                "summary": "Простой дар за приведённого друга — чуть ловчее пальцы.",
+                "rarity": "rare",
+                "defense": 2,
+                "str": 1,
+                "dex": 2,
+                "summary": "Редкий дар за приведённого друга — крепче и точнее удар.",
             },
         ),
         copy.deepcopy(
             {
                 "name": "Кольцо приглашения",
                 "kind": "ring",
-                "rarity": "common",
-                "defense": 1,
-                "luck": 1,
-                "summary": "Мелкий талисман удачи за верного реферала.",
+                "rarity": "rare",
+                "defense": 2,
+                "luck": 2,
+                "summary": "Редкий талисман удачи за верного реферала.",
             },
         ),
     )

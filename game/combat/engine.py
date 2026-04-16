@@ -18,13 +18,40 @@ COMBO_BONUS_MULT = 1.15
 
 
 def _log_weapon_rune_elemental_once(state: dict[str, Any], elem_bonus: int, logs: list[str]) -> None:
-    """Один раз за ход — строка про стихийный бонус рун (урон в формуле уже с pct)."""
+    """
+    Строка в лог боя: как руны на оружии пересекаются со стихией врага (бонус уже в формуле).
+    Показываем при каждом ударе/скилле, где учитывается weapon_rune_bonus_pct.
+    """
     pct = int(elem_bonus)
-    if pct < 15 or state.get("rune_elem_logged"):
+    payloads = list(state.get("weapon_rune_payloads") or [])
+    mon = state.get("monster") or {}
+    mon_el = str(mon.get("element") or "earth")
+    mon_meta = ELEMENTS.get(mon_el, ELEMENTS["earth"])
+    mon_lbl = f"{mon_meta.get('emoji', '')} {mon_meta.get('name', mon_el)}".strip()
+    if not payloads and pct <= 0:
         return
-    state["rune_elem_logged"] = True
-    weak_tag = "🎯 Слабое место!" if pct >= 30 else "🔥 Элементальный удар!"
-    logs.append(f"{weak_tag} +{pct}% к урону")
+    if not payloads:
+        head = "🎯 <b>Слабое звено стихии!</b>" if pct >= 30 else "✨ <b>Стихийный резонанс</b>"
+        logs.append(f"{head} против <i>{mon_lbl}</i>: <b>+{pct}%</b> к урону.")
+        return
+    bits: list[str] = []
+    for raw in payloads:
+        rd = raw if isinstance(raw, dict) else {}
+        try:
+            r = RuneData.from_dict(rd)
+        except (ValueError, TypeError, KeyError):
+            continue
+        em = ELEMENTS.get(r.element, {}).get("emoji", "·")
+        rom = ("", "I", "II", "III", "IV", "V")[r.rank] if 1 <= r.rank <= 5 else str(r.rank)
+        bits.append(f"{em}{rom}")
+    rune_lbl = " ".join(bits) if bits else "руны"
+    if pct <= 0:
+        if bits and not state.get("rune_neutral_logged"):
+            state["rune_neutral_logged"] = True
+            logs.append(f"⚪ Руны ({rune_lbl}) без преимущества против <i>{mon_lbl}</i>.")
+        return
+    head = "🎯 <b>Слабое звено стихии!</b>" if pct >= 30 else "✨ <b>Удар по стихии</b>"
+    logs.append(f"{head} — {rune_lbl} vs <i>{mon_lbl}</i>: <b>+{pct}%</b> к урону.")
 
 
 COMBO_STREAK_TO_TRIGGER = 3
@@ -396,6 +423,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
             mdef,
             mag_bonus_percent=int(mods.get("mag_bonus_percent", 0)),
         )
+        base = int(base * formulas.int_skill_mag_extra_scale(int(st["int"])))
     else:
         rb = int(state.get("weapon_rune_bonus_pct", 0))
         _log_weapon_rune_elemental_once(state, rb, logs)
@@ -405,6 +433,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
             mdef,
             elemental_bonus_percent=rb,
         )
+        base = int(base * formulas.int_skill_phys_tuning_multiplier(int(st["int"])))
 
     dmg = int(base * sk.power) if sk.power else int(base)
 

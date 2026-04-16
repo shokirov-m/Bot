@@ -22,7 +22,7 @@ from services import character_service, title_service
 if TYPE_CHECKING:
     from aiogram import Bot
 
-REFERRAL_INVITER_XP = 100
+REFERRAL_INVITER_XP = 200
 
 
 def parse_referrer_telegram_id_from_start_text(text: str | None) -> int | None:
@@ -106,7 +106,7 @@ async def try_reward_referrer_for_invitee_level_two(
 ) -> None:
     """
     Если у персонажа только что стал уровень ≥ 2, а пользователь пришёл по рефке
-    и награда ещё не выдана — дать пригласившему 2 предмета в сумку и +100 XP.
+    и награда ещё не выдана — дать пригласившему 2 предмета редкой редкости в сумку и +200 XP.
     """
     invitee_user = await session.get(User, int(invitee_char.user_id))
     if invitee_user is None:

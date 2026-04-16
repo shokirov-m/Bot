@@ -43,3 +43,20 @@ async def auction_place_bid(
 async def auction_finalize_lots(session: AsyncSession) -> int:
     """Для планировщика: закрыть просроченные лоты."""
     return await market.finalize_lots(session)
+
+
+async def auction_seller_cancel_lot(
+    session: AsyncSession,
+    char: Character,
+    lot_id: int,
+) -> tuple[bool, str]:
+    return await market.seller_cancel_lot(session, char, lot_id)
+
+
+async def auction_seller_reprice_lot(
+    session: AsyncSession,
+    char: Character,
+    lot_id: int,
+    new_price: int,
+) -> tuple[bool, str]:
+    return await market.seller_reprice_lot(session, char, lot_id, new_price)

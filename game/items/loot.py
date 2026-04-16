@@ -88,16 +88,83 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "rarity": "common",
         "summary": f"Уцелевший фрагмент после боя с {spawn.template.name.lower()}.",
     }
-    return _weighted_payload(
-        (
-            (1.2, elixir),
-            (1.0, mp_vial),
-            (0.65, pct_vial),
-            (0.55, gloves),
-            (0.28, ring),
-            (0.12, trophy),
-        ),
+    wt = _rand_weapon_type()
+    atk_low = max(4, 4 + fl // 3 + (1 if wt in ("dagger", "bow") else 0))
+    forest_blade = {
+        "name": f"Ржавый клинок леса ({fl})",
+        "kind": "weapon",
+        "rarity": "common",
+        "attack": atk_low,
+        "enchant": 0,
+        "weapon_type": wt,
+        "summary": "Первые яруши — любое оружие лучше кулаков.",
+    }
+    forest_staff = {
+        "name": f"Сук ведьмы ({fl})",
+        "kind": "weapon",
+        "rarity": "common",
+        "attack": max(3, atk_low - 1),
+        "enchant": 0,
+        "weapon_type": "staff",
+        "summary": "Грубая магическая направляющая из корня.",
+    }
+    moss_armor = {
+        "name": f"Моховая накидка ({fl})",
+        "kind": "armor",
+        "rarity": "common",
+        "defense": max(2, 2 + fl // 8),
+        "summary": "Пахнет лесом и чуть отталкивает когти.",
+    }
+    cap = {
+        "name": f"Капюшон тропы ({fl})",
+        "kind": "helmet",
+        "rarity": "uncommon",
+        "defense": max(1, 1 + fl // 10),
+        "summary": "Скрывает лицо от лишних глаз.",
+    }
+    charm = {
+        "name": "Костяной оберег",
+        "kind": "amulet",
+        "rarity": "uncommon",
+        "defense": max(1, 1 + fl // 12),
+        "summary": "Слабый резонанс — чуть крепче дух.",
+    }
+    boots_like = {
+        "name": f"Обмотки путника ({fl})",
+        "kind": "gloves",
+        "rarity": "common",
+        "defense": max(1, 1 + fl // 14),
+        "dex": 1,
+        "summary": "Не броня для ног — но ловкость в пути заметна.",
+    }
+    rare_edge = {
+        "name": f"Клинок росы ({fl})",
+        "kind": "weapon",
+        "rarity": "uncommon",
+        "attack": max(7, 6 + fl // 2),
+        "enchant": 0,
+        "weapon_type": random.choice(("blade", "polearm")),
+        "summary": "Редкая удача на ранних этажах.",
+    }
+    options: tuple[tuple[float, dict[str, Any]], ...] = (
+        (1.15, elixir),
+        (0.95, mp_vial),
+        (0.62, pct_vial),
+        (0.52, gloves),
+        (0.26, ring),
+        (0.11, trophy),
     )
+    if fl <= 12:
+        options = options + (
+            (0.42, forest_blade),
+            (0.32, forest_staff),
+            (0.38, moss_armor),
+            (0.22, cap),
+            (0.2, charm),
+            (0.28, boots_like),
+            (0.06, rare_edge),
+        )
+    return _weighted_payload(options)
 
 
 def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:

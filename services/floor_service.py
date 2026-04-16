@@ -28,6 +28,7 @@ from game.combat import night_mode as combat_night
 from game.floors import floor_data
 from game.locations import cities as city_locations
 from game.floors import long_floor as long_floor_mod
+from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors.tower_ascent import clear_tower_ascent_pending, tower_next_floor_pending
 from services.rest_service import apply_completed_rest_if_needed
 from game.items.equipment import (
@@ -158,6 +159,12 @@ def format_floor_message(character: Character) -> str:
         lines.append("⚠️ Ур.57: подкласс — «Углубление пути».")
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
         lines.append("🗝️ Новый ярус: зачисти все цели, затем кнопка «Этаж N» или ⬆️ Выше.")
+    if forest_beginnings_mod.is_forest_beginnings_zone(n):
+        lines.append(
+            "🌲 <b>Лес Начал (1–10)</b> — обучение: "
+            "<i>тайная тропа ~20% обойти обычную цель без боя</i>, грибы, дух (1× за проход зоны); "
+            "кнопка «Привал» — полное HP/MP без стамины (1× за проход).",
+        )
     pend = tower_next_floor_pending(character)
     if pend is not None:
         lines.append(f"✅ <b>Ярус зачищен.</b> Поднимись на этаж <b>{pend}</b> кнопкой выше или «⬆️ Выше».")
@@ -218,6 +225,8 @@ def format_floor_message_photo_caption(character: Character) -> str:
         lines.append("⚠️ Ур.57: подкласс")
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
         lines.append("🗝️ Зачистка → кнопка этажа / ⬆️")
+    if forest_beginnings_mod.is_forest_beginnings_zone(n):
+        lines.append("🌲 Лес 1–10: тропа / грибы / дух · 🏕️ привал")
     pend = tower_next_floor_pending(character)
     if pend is not None:
         lines.append(f"✅ Подъём на <b>{pend}</b> — кнопка или ⬆️")
@@ -326,11 +335,12 @@ async def push_floor_screen_ui(
         await session.flush()
         splash = f"🗼 <b>ЭТАЖ {n}</b> — <i>{html.escape(room)}</i>"
         if target_message is not None and target_message.chat.id == chat_id:
-            try:
-                await target_message.edit_text(splash, parse_mode=ParseMode.HTML, reply_markup=None)
-                await asyncio.sleep(0.5)
-            except Exception:
-                pass
+            if not target_message.photo:
+                try:
+                    await target_message.edit_text(splash, parse_mode=ParseMode.HTML, reply_markup=None)
+                    await asyncio.sleep(0.5)
+                except Exception:
+                    pass
             await push_game_ui(
                 state,
                 bot,
@@ -396,6 +406,10 @@ async def travel_to_floor(
     old_floor = int(character.floor_number)
     if target_floor > old_floor:
         clear_tower_ascent_pending(character)
+    if old_floor == 10 and target_floor == 11:
+        mp = dict(character.meta_progress or {})
+        mp.pop(forest_beginnings_mod.META_KEY, None)
+        character.meta_progress = mp
     character.floor_number = target_floor
     row = await floor_progress_repo.ensure_floor_row(session, character.id, target_floor)
     ex = dict(row.extra or {})

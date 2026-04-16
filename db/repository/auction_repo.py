@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.auction_lot import AuctionLot
+from game.items import item_categories
 
 
 async def count_active_by_seller(session: AsyncSession, seller_char_id: int) -> int:
@@ -27,36 +28,64 @@ async def get_by_id(session: AsyncSession, lot_id: int) -> AuctionLot | None:
     return r.scalar_one_or_none()
 
 
+def _auction_lot_category_clause(cat: str | None):
+    """Фильтр по категории предмета (SQLite json_extract)."""
+    if not cat or cat == item_categories.BAG_CAT_ALL:
+        return None
+    kind_expr, use_expr = _auction_kind_use_exprs()
+    equip_tuple = tuple(sorted(item_categories.EQUIP_KINDS))
+    eq_c = kind_expr.in_(equip_tuple)
+    us_c = or_(
+        kind_expr == "consumable",
+        func.ifnull(use_expr, "") != "",
+    )
+    if cat == item_categories.BAG_CAT_EQUIP:
+        return eq_c
+    if cat == item_categories.BAG_CAT_USE:
+        return us_c
+    if cat == item_categories.BAG_CAT_OTHER:
+        return not_(or_(eq_c, us_c))
+    return None
+
+
 async def list_active(
     session: AsyncSession,
     *,
     limit: int = 8,
     offset: int = 0,
+    category: str | None = None,
 ) -> list[AuctionLot]:
     now = datetime.now(UTC)
-    r = await session.execute(
+    stmt = (
         select(AuctionLot)
         .where(
             AuctionLot.status == "active",
             AuctionLot.expires_at > now,
         )
         .order_by(AuctionLot.expires_at.asc())
-        .limit(limit)
-        .offset(offset),
     )
+    extra = _auction_lot_category_clause(category)
+    if extra is not None:
+        stmt = stmt.where(extra)
+    stmt = stmt.limit(limit).offset(offset)
+    r = await session.execute(stmt)
     return list(r.scalars().all())
 
 
-async def count_active_visible(session: AsyncSession) -> int:
+async def count_active_visible(session: AsyncSession, category: str | None = None) -> int:
     now = datetime.now(UTC)
-    r = await session.execute(
+    stmt = (
         select(func.count())
         .select_from(AuctionLot)
         .where(
             AuctionLot.status == "active",
             AuctionLot.expires_at > now,
-        ),
+        )
     )
+    extra = _auction_lot_category_clause(category)
+    if extra is not None:
+        stmt = stmt.where(extra)
+    r = await session.execute(stmt)
     return int(r.scalar_one() or 0)
 
 

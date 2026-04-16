@@ -22,6 +22,7 @@ from db.repository import character_repo, inventory_repo
 from game.characters.classes import ClassDefinition, get_class_or_none
 from game.characters.progression import experience_needed_for_next_level
 from game.items.equipment import starter_bread_payload, starter_weapon_payload
+from game.items.rarity_scaling import scaled_weapon_attack_value
 from utils.profile_portraits import META_PORTRAIT_KEY
 
 
@@ -119,7 +120,8 @@ def weapon_attack_value_from_item_data(
         return 5 + int(level) + int(floor_number) // 10
     base = int(item_data.get("attack", item_data.get("atk", 8)))
     ench = int(item_data.get("enchant", item_data.get("plus", 0)) or 0)
-    return base + max(0, ench)
+    atk = scaled_weapon_attack_value(base, item_data)
+    return atk + max(0, ench)
 
 
 async def equipped_weapon_attack_value(session: AsyncSession, character: Character) -> int:
@@ -304,6 +306,73 @@ async def reset_all_progress_keep_identity(session: AsyncSession, character: Cha
             bag_slot=slot,
         )
     await session.flush()
+
+
+STAT_ALLOC_RESET_COST_GOLD = 200
+STAT_ALLOC_RESET_DAY_META_KEY = "stat_alloc_reset_utc_day"
+
+
+def nominal_primary_stats_tuple(character: Character) -> tuple[int, int, int, int, int]:
+    """
+    Ожидаемые базовые статы персонажа из класса (без ручного распределения из /stats).
+    После подкласса (57) статы в БД хранятся как база класса ×2.
+    """
+    cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
+    mult = 2 if character.subclass_key else 1
+    return (
+        int(cls.strength) * mult,
+        int(cls.dexterity) * mult,
+        int(cls.intelligence) * mult,
+        int(cls.vitality) * mult,
+        int(cls.luck) * mult,
+    )
+
+
+def count_allocated_stat_points_over_nominal(character: Character) -> int:
+    """Сколько очков вложено в статы сверх номинала класса (то, что вернёт сброс)."""
+    nom = nominal_primary_stats_tuple(character)
+    cur = (
+        int(character.stat_strength),
+        int(character.stat_dexterity),
+        int(character.stat_intelligence),
+        int(character.stat_vitality),
+        int(character.stat_luck),
+    )
+    return sum(max(0, c - n) for c, n in zip(cur, nom))
+
+
+def stat_alloc_reset_available_today(character: Character) -> bool:
+    """Раз в календарный день UTC."""
+    today = datetime.now(UTC).date().isoformat()
+    mp = character.meta_progress or {}
+    return str(mp.get(STAT_ALLOC_RESET_DAY_META_KEY) or "") != today
+
+
+def try_paid_reset_stat_allocations(character: Character) -> tuple[bool, str]:
+    """
+    Сбросить вручную вложенные очки в статы: вернуть номинал класса и вернуть очки в unspent.
+    Стоимость STAT_ALLOC_RESET_COST_GOLD, не чаще 1 раза в сутки UTC.
+    Возвращает (True, "") или (False, ключ i18n).
+    """
+    if not stat_alloc_reset_available_today(character):
+        return False, "settings_stat_reset_today"
+    pts = count_allocated_stat_points_over_nominal(character)
+    if pts <= 0:
+        return False, "settings_stat_reset_none"
+    if not try_spend_gold(character, STAT_ALLOC_RESET_COST_GOLD):
+        return False, "settings_stat_reset_no_gold"
+    nom = nominal_primary_stats_tuple(character)
+    character.stat_strength = nom[0]
+    character.stat_dexterity = nom[1]
+    character.stat_intelligence = nom[2]
+    character.stat_vitality = nom[3]
+    character.stat_luck = nom[4]
+    character.unspent_stat_points = int(character.unspent_stat_points) + pts
+    mp = dict(character.meta_progress or {})
+    mp[STAT_ALLOC_RESET_DAY_META_KEY] = datetime.now(UTC).date().isoformat()
+    character.meta_progress = mp
+    refresh_hp_mp_after_stats(character)
+    return True, ""
 
 
 def try_allocate_stat_point(character: Character, stat_key: str) -> bool:

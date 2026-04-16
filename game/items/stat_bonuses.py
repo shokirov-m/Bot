@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from game.items.rarity_scaling import extra_stat_points_for_rarity_on_item
+
 STAT_KEYS: tuple[str, ...] = ("str", "dex", "int", "vit", "luck")
 
 _ITEM_ALIASES: dict[str, str] = {
@@ -39,6 +41,11 @@ def stat_bonuses_from_item_data(data: dict[str, Any] | None) -> dict[str, int]:
             v = nested.get(k)
             if v is not None:
                 out[k] += int(v)
+    extra = extra_stat_points_for_rarity_on_item(data)
+    if extra and any(out[k] for k in STAT_KEYS):
+        for k in STAT_KEYS:
+            if out[k] > 0:
+                out[k] += extra
     return out
 
 

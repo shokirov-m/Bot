@@ -101,6 +101,65 @@ async def place_bid(
     return True, f"Ставка {amt} зол. · лот #{lot.id}."
 
 
+async def seller_cancel_lot(
+    session: AsyncSession,
+    char: Character,
+    lot_id: int,
+) -> tuple[bool, str]:
+    """Снять свой лот, пока нет ставок; предмет возвращается в сумку."""
+    lot = await auction_repo.get_by_id(session, lot_id)
+    if lot is None or lot.status != "active":
+        return False, "Лот не найден или уже закрыт."
+    if int(lot.seller_char_id) != int(char.id):
+        return False, "Это не твой лот."
+    if datetime.now(UTC) >= lot.expires_at:
+        return False, "Срок лота истёк — дождись итога или обнови экран."
+    if int(lot.current_bid) > 0 or lot.buyer_char_id is not None:
+        return False, "Уже есть ставка — снять лот нельзя. Дождись окончания торгов."
+
+    free = await inventory_repo.first_free_bag_slot(session, int(char.id))
+    if free is None:
+        return False, "В сумке нет свободной ячейки — освободи место и попробуй снова."
+
+    await inventory_repo.add_bag_item(
+        session,
+        int(char.id),
+        copy.deepcopy(lot.item_data or {}),
+        bag_slot=free,
+    )
+    lot.status = "cancelled"
+    await session.flush()
+    return True, f"Лот #{lot.id} снят, предмет возвращён в сумку (ячейка {free})."
+
+
+async def seller_reprice_lot(
+    session: AsyncSession,
+    char: Character,
+    lot_id: int,
+    new_price: int,
+) -> tuple[bool, str]:
+    """Изменить стартовую цену своего лота, пока нет ставок."""
+    lot = await auction_repo.get_by_id(session, lot_id)
+    if lot is None or lot.status != "active":
+        return False, "Лот не найден или уже закрыт."
+    if int(lot.seller_char_id) != int(char.id):
+        return False, "Это не твой лот."
+    if datetime.now(UTC) >= lot.expires_at:
+        return False, "Срок лота истёк."
+    if int(lot.current_bid) > 0 or lot.buyer_char_id is not None:
+        return False, "Уже есть ставка — цену менять нельзя."
+
+    p = int(new_price)
+    if p < 1:
+        return False, "Цена должна быть не меньше 1 золота."
+    if p > MAX_GOLD_BID:
+        return False, "Слишком большая цена."
+
+    lot.start_price = p
+    await session.flush()
+    return True, f"Лот #{lot.id}: новая стартовая цена {p} зол."
+
+
 async def finalize_lots(session: AsyncSession) -> int:
     """
     Закрыть просроченные активные лоты.
