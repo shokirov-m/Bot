@@ -1,0 +1,340 @@
+"""Квесты: странник (qst:*), расширенные поручения (qtk:/qcl:), /quests."""
+
+from __future__ import annotations
+
+import asyncio
+import html
+import re
+from typing import TYPE_CHECKING
+
+from aiogram import F, Router
+from aiogram.enums import ParseMode
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from bot.keyboards.quest_kb import quest_back_keyboard, quest_dialog_keyboard
+from bot.states.combat_states import CombatStates
+from db.repository import character_repo, quest_repo, user_repo
+from game.floors import floor_data
+from game.quests.floor_quests import npc_quest_template
+from game.quests.npc_quests import templates_for_floor
+from services import quest_service
+from services.floor_service import floor_keyboard_for_character, format_floor_message
+from utils.ui import LINE_SEP
+
+if TYPE_CHECKING:
+    from db.models.character import Character
+
+router = Router(name="quests")
+
+_QST_CB = re.compile(r"^qst:(\d+):(view|acc|back)$")
+
+
+def _strip_html_alert(msg: str) -> str:
+    return re.sub(r"<[^>]+>", "", msg).strip()
+
+
+async def render_quests_hub(session: AsyncSession, char: Character) -> tuple[str, InlineKeyboardMarkup]:
+    """Экран «Задания» для текущего этажа (npcq_*)."""
+    fl = int(char.floor_number)
+    lines = [LINE_SEP, f"📋 <b>ЗАДАНИЯ — ЭТАЖ {fl}</b>", LINE_SEP, ""]
+    rows_btn: list[list[InlineKeyboardButton]] = []
+
+    if fl % 3 != 0 or fl >= 100:
+        lines.append("На этом этаже нет заказчика таких поручений.")
+        lines.append("<i>NPC стоят на этажах 3, 6, 9 … 99.</i>")
+        rows_btn.append(
+            [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
+        )
+        return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
+
+    tpls = templates_for_floor(fl)
+    if not tpls:
+        rows_btn.append(
+            [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
+        )
+        return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
+
+    npc_name = tpls[0].npc_name
+    npc_emoji = tpls[0].npc_emoji
+    lines.append(f"{npc_emoji} <b>{html.escape(npc_name)}</b> говорит:")
+    lines.append("«Есть работа для того, кто не боится крови и пыли.»")
+    lines.append("")
+
+    has_active = False
+    has_claim = False
+    for tpl in tpls:
+        row = await quest_repo.get_by_key(session, char.id, tpl.key)
+        if row is None:
+            lines.append(f"○ <b>{html.escape(tpl.title)}</b> — можно взять.")
+            rows_btn.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"📋 Взять: {tpl.title[:22]}…"
+                        if len(tpl.title) > 22
+                        else f"📋 Взять: {tpl.title}",
+                        callback_data=f"qtk:{tpl.key}",
+                    ),
+                ],
+            )
+            continue
+        if row.status == "completed":
+            lines.append(f"🏁 <b>{html.escape(tpl.title)}</b> — уже выполнено.")
+            continue
+        if row.status != "active":
+            continue
+        has_active = True
+        p = dict(row.progress or {})
+        if p.get("pending_claim"):
+            has_claim = True
+            lines.append(f"✅ <b>{html.escape(tpl.title)}</b> — <b>готово</b>, забирай награду!")
+            rows_btn.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"🎁 Сдать: {tpl.title[:20]}…"
+                        if len(tpl.title) > 20
+                        else f"🎁 Сдать: {tpl.title}",
+                        callback_data=f"qcl:{tpl.key}",
+                    ),
+                ],
+            )
+        else:
+            cur = int(p.get("current", 0))
+            need = int(p.get("target_count", 1))
+            lines.append(f"⚔️ <b>{html.escape(tpl.title)}</b> — <b>{cur}/{need}</b>")
+
+    if has_active and not has_claim:
+        lines.append("")
+        lines.append("<i>Продолжай бой на башне.</i>")
+
+    rows_btn.append(
+        [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
+    )
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
+
+
+@router.message(Command("quests", "задания"))
+async def cmd_quests(message: Message, session: AsyncSession) -> None:
+    try:
+        if message.from_user is None:
+            return
+        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
+        if user is None or user.is_banned:
+            await message.answer("Нет доступа.")
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await message.answer("Сначала /start.")
+            return
+        text, kb = await render_quests_hub(session, char)
+        await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    except Exception:
+        logger.exception("cmd_quests")
+        await message.answer("Ошибка.")
+
+
+@router.callback_query(F.data == "qhub:")
+async def quests_hub_refresh(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.message is None or query.from_user is None:
+            await query.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+        text, kb = await render_quests_hub(session, char)
+        await query.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+        await query.answer()
+    except Exception:
+        logger.exception("qhub")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("qtk:"))
+async def on_quest_take(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        key = query.data.split(":", 1)[1]
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+        ok, msg = await quest_service.take_quest(session, char, key)
+        if not ok:
+            await query.answer(_strip_html_alert(msg)[:180], show_alert=True)
+            return
+        await query.answer("Поручение принято.")
+        text, kb = await render_quests_hub(session, char)
+        await query.message.edit_text(msg, parse_mode=ParseMode.HTML, reply_markup=kb)
+    except Exception:
+        logger.exception("qtk")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("qcl:"))
+async def on_quest_claim(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        key = query.data.split(":", 1)[1]
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+
+        await query.message.edit_text("🎉 <b>Задание выполнено!</b>", parse_mode=ParseMode.HTML)
+        await asyncio.sleep(0.8)
+
+        res = await quest_service.claim_quest_reward(session, char, key)
+        if not res.get("ok"):
+            await query.answer(str(res.get("error", "Нельзя")), show_alert=True)
+            text, kb = await render_quests_hub(session, char)
+            await query.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+            return
+
+        parts = [
+            f"💰 +{res['gold']} золота",
+            f"✨ +{res['exp']} опыта",
+        ]
+        if res.get("item"):
+            parts.append("📦 Редкий предмет в сумку!")
+        if int(res.get("rune_stones") or 0) > 0:
+            parts.append(f"⚗️ +{res['rune_stones']} рунных камней")
+        body = "🎁 " + "  ".join(parts) + str(res.get("level_up_html") or "")
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="📋 Задания", callback_data="qhub:")],
+                [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
+            ],
+        )
+        await query.message.edit_text(body, parse_mode=ParseMode.HTML, reply_markup=kb)
+        await query.answer("Награда получена.")
+    except Exception:
+        logger.exception("qcl")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("qst:"))
+async def on_quest_callback(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+
+        m = _QST_CB.match(query.data)
+        if m is None:
+            await query.answer()
+            return
+
+        floor = int(m.group(1))
+        code = m.group(2)
+
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+
+        if floor != char.floor_number:
+            await query.answer("Этаж устарел. Открой /floor.", show_alert=True)
+            return
+
+        if not floor_data.has_quest_npc(floor):
+            await query.answer("Здесь нет странника.", show_alert=True)
+            return
+
+        if code == "back":
+            await query.message.edit_text(
+                format_floor_message(char),
+                reply_markup=await floor_keyboard_for_character(session, char),
+            )
+            await query.answer()
+            return
+
+        if code == "view":
+            tpl = npc_quest_template(floor)
+            if tpl is None:
+                await query.answer("Нет квеста.", show_alert=True)
+                return
+            row = await quest_repo.get_by_key(session, char.id, tpl.quest_key)
+            if row is None:
+                intro = quest_service.format_quest_intro_html(floor)
+                if intro is None:
+                    await query.answer("Нет квеста.", show_alert=True)
+                    return
+                await query.message.edit_text(
+                    intro,
+                    reply_markup=quest_dialog_keyboard(floor),
+                )
+            elif row.status == "completed":
+                await query.message.edit_text(
+                    f"📜 <b>{html.escape(tpl.title)}</b>\n"
+                    "Странник кивает: долг на этом этаже уже исполнен.",
+                    reply_markup=quest_back_keyboard(floor),
+                )
+            else:
+                p = dict(row.progress or {})
+                k = int(p.get("kills", 0))
+                need = int(p.get("need", tpl.kills_needed))
+                await query.message.edit_text(
+                    f"📜 <b>{html.escape(tpl.title)}</b>\n"
+                    f"Прогресс: побед — <b>{k}/{need}</b>.\n"
+                    "Продолжай сражаться на башне.",
+                    reply_markup=quest_back_keyboard(floor),
+                )
+            await query.answer()
+            return
+
+        if code == "acc":
+            ok, msg = await quest_service.try_accept_quest(session, char, floor)
+            if not ok:
+                await query.answer(msg.replace("<b>", "").replace("</b>", ""), show_alert=True)
+                return
+            await query.message.edit_text(
+                msg,
+                reply_markup=await floor_keyboard_for_character(session, char),
+            )
+            await query.answer("Квест обновлён.")
+            return
+
+        await query.answer()
+    except Exception:
+        logger.exception("Ошибка в callback квеста")
+        await query.answer("Ошибка.", show_alert=True)

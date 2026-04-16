@@ -1,0 +1,105 @@
+"""Клавиатура экрана «Настройки»."""
+
+from __future__ import annotations
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from bot.i18n import t
+from db.models.character import Character
+from utils.game_images_prefs import game_images_enabled
+
+
+def settings_screen_keyboard(*, locale: str, character: Character | None = None) -> InlineKeyboardMarkup:
+    loc = locale if locale in ("ru", "en") else "ru"
+    hide = character is not None and not game_images_enabled(character)
+    img_btn = t(loc, "settings_images_enable") if hide else t(loc, "settings_images_disable")
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_rename_btn"),
+                    callback_data="stg:rename",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_promo_btn"),
+                    callback_data="stg:promo",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_referral_btn"),
+                    callback_data="stg:refer",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_lang_btn"),
+                    callback_data="stg:lang",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_my_id_btn"),
+                    callback_data="stg:tid",
+                ),
+                InlineKeyboardButton(
+                    text=t(loc, "settings_tips_btn"),
+                    callback_data="stg:tips",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=img_btn,
+                    callback_data="stg:img",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_reset_btn"),
+                    callback_data="stg:reset",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_back_menu"),
+                    callback_data="mnu:hub",
+                ),
+            ],
+        ],
+    )
+
+
+def settings_reset_confirm_keyboard(*, locale: str) -> InlineKeyboardMarkup:
+    loc = locale if locale in ("ru", "en") else "ru"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_reset_yes"),
+                    callback_data="stg:reset:go",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_reset_no"),
+                    callback_data="stg:reset:back",
+                ),
+            ],
+        ],
+    )
+
+
+def settings_cancel_keyboard(*, locale: str) -> InlineKeyboardMarkup:
+    loc = locale if locale in ("ru", "en") else "ru"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "settings_cancel_btn"),
+                    callback_data="stg:cancel",
+                ),
+            ],
+        ],
+    )

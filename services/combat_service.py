@@ -1,0 +1,1434 @@
+"""
+Старт боя, обработка ходов, победа/поражение, награды и штрафы смерти.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import copy
+import html
+import random
+from typing import Any
+
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from bot.keyboards.combat_kb import combat_item_picker_keyboard, combat_main_keyboard
+from bot.keyboards.menu_kb import menu_nav_button_row
+from bot.states.combat_states import CombatStates
+from bot.utils.game_ui import GAME_UI_CHAT_ID, GAME_UI_MESSAGE_ID, push_game_ui
+from config import settings
+from db.models.character import Character
+from db.models.inventory import InventoryItem
+from db.repository import character_repo, floor_progress_repo, inventory_repo
+from game.characters.class_arcs import needs_base_class_choice, needs_subclass_choice
+from game.characters.classes import get_class_or_none
+from game.characters.path_ranks import PATH_RANK_BY_KEY
+from game.characters.skills import passive_combat_modifiers_merged, skills_for_class
+from game.characters.weapon_mastery import damage_multiplier_for_type, record_strike, weapon_type_from_item_data
+from game.combat import consumables, effects, engine, formulas, monster_ai, night_mode as combat_night
+from game.items import runes as rune_items
+from game.balance import (
+    MONSTER_ATK_CURVE_MULT,
+    MONSTER_ATK_FLAT_ELITE,
+    MONSTER_ATK_FLAT_NORMAL,
+    MONSTER_ATK_RAW_BASE,
+    MONSTER_ATK_RAW_DIV_FLOOR,
+    MONSTER_DEF_BASE,
+    MONSTER_DEF_CURVE_MULT,
+    MONSTER_DEF_DIV_FLOOR,
+    MONSTER_FLOOR_DEF_PER_LEVEL,
+    MONSTER_FLOOR_POWER_PER_LEVEL,
+    MONSTER_HP_CURVE_MULT,
+    MONSTER_HP_RAW_BASE,
+    MONSTER_HP_RAW_PER_FLOOR,
+    MONSTER_LATE_ATK_MULT,
+    MONSTER_LATE_FLOOR_THRESHOLD,
+    MONSTER_LATE_HP_MULT,
+    MONSTER_MULT_ELITE_ATK,
+    MONSTER_MULT_ELITE_HP,
+    MONSTER_MULT_MAJOR_ATK,
+    MONSTER_MULT_MAJOR_HP,
+    MONSTER_MULT_MINI_ATK,
+    MONSTER_MULT_MINI_HP,
+    MONSTER_PLAYER_LEVEL_ATK_PER_LEVEL,
+    MONSTER_PLAYER_LEVEL_DEF_PER_LEVEL,
+    MONSTER_PLAYER_LEVEL_HP_PER_LEVEL,
+    PLAYER_DEFENSE_BONUS_PER_LEVEL,
+)
+from game.characters import pets as pets_mod
+from game.floors import floor_data
+from game.floors import long_floor as long_floor_mod
+from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawns_for_floor
+from game.economy import sinks as sink_rules
+from game.floors.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
+from game.items import enchant as enchant_rules
+from game.items import loot as loot_tables
+from game.characters.global_passives import refresh_global_passives
+from services import (
+    anticheat_service,
+    character_service,
+    city_quest_service,
+    daily_service,
+    game_metrics_service,
+    quest_service,
+    rest_service,
+    season_record_service,
+    stat_bonus_service,
+    title_service,
+)
+from services.tutorial_battle_service import apply_path_rank_from_tutorial, tutorial_battle_pending
+from game.economy.stamina import spend_stamina
+from services.stamina_service import can_start_combat
+from utils.ui import LINE_SEP, LINE_SEP_BATTLE, render_hp_bar, render_mp_bar
+
+TUTORIAL_DUMMY_TEMPLATE = MonsterTemplate(
+    "tutorial_dummy",
+    "Учебный манекен",
+    "🎭",
+    "earth",
+    "Наставник наблюдает за твоим стилем боя.",
+)
+TUTORIAL_SPAWN = FloorMonsterSpawn(
+    slot_code="tutorial",
+    template=TUTORIAL_DUMMY_TEMPLATE,
+    is_elite=False,
+    is_mini_boss=False,
+    is_major_boss=False,
+)
+
+
+def _taunt_banner_html(taunt_line: str) -> str:
+    """Насмешка монстра: пустые строки до/после, весь блок в курсиве — заметно среди статов."""
+    t = (taunt_line or "").strip()
+    if not t:
+        return ""
+    return f"\n\n<i>{html.escape(t)}</i>\n\n"
+
+
+async def _safe_edit_combat_message_text(
+    message: Message,
+    text: str,
+    *,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> bool:
+    """
+    Правка текста боя / победы / поражения.
+    Не рвёт транзакцию из‑за «message is not modified» или редкого несовпадения типа сообщения.
+    """
+    try:
+        await message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
+        return True
+    except TelegramBadRequest as e:
+        err = str(e).lower()
+        if "message is not modified" in err:
+            return True
+        if "message can't be edited" in err or "there is no text" in err or "have no text" in err:
+            logger.warning("combat UI: edit_text пропущен ({})", e)
+            return False
+        raise
+
+
+def _tutorial_monster_bundle() -> dict[str, Any]:
+    return {
+        "name": TUTORIAL_DUMMY_TEMPLATE.name,
+        "emoji": TUTORIAL_DUMMY_TEMPLATE.emoji,
+        "template_key": TUTORIAL_DUMMY_TEMPLATE.key,
+        "hp": 34,
+        "max_hp": 34,
+        "atk": 4,
+        "defense": 0,
+        "element": "earth",
+        "is_elite": False,
+        "is_mini_boss": False,
+        "is_major_boss": False,
+    }
+
+
+def _tutorial_monster_wave2() -> dict[str, Any]:
+    return {
+        "name": "Манекен — давление",
+        "emoji": "🥊",
+        "template_key": "tutorial_dummy_2",
+        "hp": 32,
+        "max_hp": 32,
+        "atk": 7,
+        "defense": 1,
+        "element": "earth",
+        "is_elite": False,
+        "is_mini_boss": False,
+        "is_major_boss": False,
+    }
+
+
+def _monster_stat_bundle(
+    floor_number: int,
+    spawn: FloorMonsterSpawn,
+    *,
+    player_level: int = 1,
+) -> dict[str, Any]:
+    """HP/атака/защита с учётом типа цели и уровня героя."""
+    raw_hp = MONSTER_HP_RAW_BASE + floor_number * MONSTER_HP_RAW_PER_FLOOR
+    hp = int(raw_hp * MONSTER_HP_CURVE_MULT)
+    raw_atk = MONSTER_ATK_RAW_BASE + floor_number // MONSTER_ATK_RAW_DIV_FLOOR
+    atk = max(1, int(raw_atk * MONSTER_ATK_CURVE_MULT))
+    defense = max(0, int((MONSTER_DEF_BASE + floor_number // MONSTER_DEF_DIV_FLOOR) * MONSTER_DEF_CURVE_MULT))
+    mult_hp = 1.0
+    mult_atk = 1.0
+    if spawn.is_elite:
+        mult_hp *= MONSTER_MULT_ELITE_HP
+        mult_atk *= MONSTER_MULT_ELITE_ATK
+    if spawn.is_mini_boss:
+        mult_hp *= MONSTER_MULT_MINI_HP
+        mult_atk *= MONSTER_MULT_MINI_ATK
+    if spawn.is_major_boss:
+        mult_hp *= MONSTER_MULT_MAJOR_HP
+        mult_atk *= MONSTER_MULT_MAJOR_ATK
+    if floor_number >= MONSTER_LATE_FLOOR_THRESHOLD:
+        mult_hp *= MONSTER_LATE_HP_MULT
+        mult_atk *= MONSTER_LATE_ATK_MULT
+    atk_final = max(1, int(atk * mult_atk))
+    atk_final += MONSTER_ATK_FLAT_ELITE if spawn.is_elite else MONSTER_ATK_FLAT_NORMAL
+
+    lv = max(0, floor_number - 1)
+    pwr = 1.0 + lv * MONSTER_FLOOR_POWER_PER_LEVEL
+    dfn = 1.0 + lv * MONSTER_FLOOR_DEF_PER_LEVEL
+
+    plv = max(0, int(player_level) - 1)
+    pl_hp = 1.0 + plv * MONSTER_PLAYER_LEVEL_HP_PER_LEVEL
+    pl_atk = 1.0 + plv * MONSTER_PLAYER_LEVEL_ATK_PER_LEVEL
+    pl_def = 1.0 + plv * MONSTER_PLAYER_LEVEL_DEF_PER_LEVEL
+
+    return {
+        "name": spawn.template.name,
+        "emoji": spawn.template.emoji,
+        "template_key": spawn.template.key,
+        "hp": max(1, int(hp * mult_hp * pwr * pl_hp)),
+        "max_hp": max(1, int(hp * mult_hp * pwr * pl_hp)),
+        "atk": max(1, int(atk_final * pwr * pl_atk)),
+        "defense": max(0, int(defense * dfn * pl_def)),
+        "element": spawn.template.element or "earth",
+    }
+
+
+async def _weapon_profile(
+    session: AsyncSession,
+    character: Character,
+) -> tuple[int, str, float, dict | None]:
+    """Атака оружия, тип для мастерства, множитель мастерства, item_data оружия (или None)."""
+    weapon = await inventory_repo.get_equipped_weapon(session, character.id)
+    if weapon is None:
+        atk = character_service.weapon_attack_value_from_item_data(
+            None,
+            level=int(character.level),
+            floor_number=int(character.floor_number),
+        )
+        wtype = "unarmed"
+        return atk, wtype, damage_multiplier_for_type(character, wtype), None
+    data = dict(weapon.item_data or {})
+    atk = character_service.weapon_attack_value_from_item_data(
+        data,
+        level=int(character.level),
+        floor_number=int(character.floor_number),
+    )
+    wtype = weapon_type_from_item_data(data)
+    return atk, wtype, damage_multiplier_for_type(character, wtype), data
+
+
+def _apply_weapon_runes_to_state(
+    combat_state: dict[str, Any],
+    character: Character,
+    weapon_item_data: dict | None,
+) -> None:
+    """Бонусы рун с надетого оружия: урон, крит, защита, полезная нагрузка для статусов."""
+    from game.items.runes import (
+        calculate_elemental_bonus,
+        parse_weapon_runes,
+        rune_combat_extras,
+    )
+
+    runes_list = parse_weapon_runes(weapon_item_data)
+    mon_el = str(combat_state.get("monster", {}).get("element") or "earth")
+    pct = calculate_elemental_bonus(runes_list, mon_el, character.element)
+    if pct >= 15:
+        weak_tag = "🎯 Слабое место!" if pct >= 30 else "🔥 Элементальный удар!"
+        combat_state.setdefault("ui_logs", []).append(f"{weak_tag} +{pct}% к урону")
+    ex = rune_combat_extras(runes_list)
+    combat_state["weapon_rune_bonus_pct"] = int(pct)
+    combat_state["rune_crit_damage_bonus_percent"] = int(ex.get("crit_damage_bonus_percent", 0))
+    combat_state["rune_armor_mult"] = float(ex.get("armor_mult", 1.0))
+    combat_state["weapon_rune_payloads"] = [r.as_dict() for r in runes_list]
+    combat_state["rune_synergy_name"] = str(ex.get("synergy_name") or "")
+
+
+async def _equipped_gear_defense_total(session: AsyncSession, character_id: int) -> int:
+    """Сумма defense с надетых предметов; заточка даёт +def на всём, кроме оружия (там +к атаке)."""
+    items = await inventory_repo.list_equipped_items(session, character_id)
+    total = 0
+    for it in items:
+        data = it.item_data or {}
+        base_def = int(data.get("defense", data.get("armor", 0)) or 0)
+        ench = enchant_rules.current_enchant_level(data)
+        base_atk = int(data.get("attack", data.get("atk", 0)) or 0)
+        if base_atk > 0:
+            total += base_def
+        else:
+            total += base_def + ench
+    return total
+
+
+def _build_combat_dict(
+    character: Character,
+    spawn: FloorMonsterSpawn,
+    monster: dict[str, Any],
+    *,
+    primary_stats: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    mods = passive_combat_modifiers_merged(character)
+    if primary_stats is None:
+        st = {
+            "str": int(character.stat_strength),
+            "dex": int(character.stat_dexterity),
+            "int": int(character.stat_intelligence),
+            "vit": int(character.stat_vitality),
+            "luck": int(character.stat_luck),
+        }
+    else:
+        st = {k: int(primary_stats[k]) for k in ("str", "dex", "int", "vit", "luck")}
+    state: dict[str, Any] = {
+        "monster": monster,
+        "floor": character.floor_number,
+        "spawn_slot": spawn.slot_code,
+        "class_key": character.class_key,
+        "stats": st,
+        "player_hp": character.hp_current,
+        "player_hp_max": character.hp_max,
+        "player_mp": character.mp_current,
+        "player_mp_max": character.mp_max,
+        "weapon_attack": 0,
+        "skill_cd": {"0": 0, "1": 0, "2": 0},
+        "monster_turn": 0,
+        "monster_special_cd": 0,
+        "monster_phase": 1,
+        "monster_fortify_flat": 0,
+        "monster_fortify_turns": 0,
+        "passive_mods": mods,
+        "ui_logs": [],
+        "weapon_mastery_mult": 1.0,
+        "player_weapon_type": "blade",
+        "mastery_strike_pending": False,
+        "tutorial_phase": 0,
+        "weapon_rune_bonus_pct": 0,
+        "rune_crit_damage_bonus_percent": 0,
+        "rune_armor_mult": 1.0,
+        "weapon_rune_payloads": [],
+        "rune_synergy_name": "",
+        "player_level_def_bonus": max(0, int(character.level) - 1) * int(PLAYER_DEFENSE_BONUS_PER_LEVEL),
+        "battle_taunt_html": "",
+        "combo_streak": 0,
+        "combo_next_mult": 1.0,
+        "night_battle": False,
+        "player_last_damage_to_monster": None,
+        "monster_last_damage_to_player": None,
+    }
+    effects.init_effects(state)
+    pet_disp = pets_mod.active_pet_display(character)
+    state["pet_line_html"] = (
+        f"🐾 <b>{html.escape(pet_disp)}</b>" if pet_disp else ""
+    )
+    return state
+
+
+def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
+    """Текст боя в духе ТЗ (HTML)."""
+    m = state["monster"]
+    tags: list[str] = []
+    if m.get("is_major_boss"):
+        tags.append("БОСС")
+    elif m.get("is_mini_boss"):
+        tags.append("МИНИ-БОСС")
+    if m.get("is_elite"):
+        tags.append("ЭЛИТА")
+    tag_disp = f" <i>[{html.escape(', '.join(tags))}]</i>" if tags else ""
+
+    monster_ai.sync_monster_rage_visual(state)
+    rage = "💢 Ярость: <b>АКТИВНА</b> (+30% урон)\n" if state.get("monster_rage") else ""
+    night_line = (
+        "🌑 <b>[НОЧЬ UTC]</b> <i>Враг: <b>+20% HP и ATK</b>. Победа: <b>+40% золото и опыт</b>.</i>\n"
+        if state.get("night_battle")
+        else ""
+    )
+    shadow_line = (
+        "<i>Тени сгущаются — зверь ведёт себя агрессивнее, словно чует кровь.</i>\n"
+        if state.get("night_battle")
+        else ""
+    )
+    phase_note = ""
+    ph = int(state.get("monster_phase", 1))
+    if (m.get("is_mini_boss") or m.get("is_major_boss")) and ph >= 3:
+        phase_note = "💀 <b>Фаза 3 — ЯРОСТЬ</b> (+50% урон)\n"
+    elif (m.get("is_mini_boss") or m.get("is_major_boss")) and ph >= 2:
+        phase_note = "⚡ <b>Фаза 2</b>\n"
+
+    elem = m.get("element", "earth")
+    elem_icons = {
+        "fire": "🔥",
+        "ice": "❄️",
+        "lightning": "⚡",
+        "dark": "🌑",
+        "light": "✨",
+        "earth": "🌿",
+    }
+    el_icon = elem_icons.get(elem, "🌀")
+
+    hp_line = render_hp_bar(int(m["hp"]), int(m["max_hp"]))
+    mp_line = render_mp_bar(int(state["player_mp"]), int(state["player_mp_max"]))
+    php_line = render_hp_bar(int(state["player_hp"]), int(state["player_hp_max"]))
+
+    last_m = state.get("monster_last_damage_to_player")
+    monster_last_line = ""
+    if last_m is not None and int(last_m) > 0:
+        monster_last_line = f"→ Последний урон по тебе: <b>{int(last_m)}</b> HP\n"
+
+    last_p = state.get("player_last_damage_to_monster")
+    player_last_line = ""
+    if last_p is not None and int(last_p) > 0:
+        player_last_line = f"→ Твой последний урон по врагу: <b>{int(last_p)}</b> HP\n"
+
+    debuff_m = ""
+    if float(state.get("monster_outgoing_mult", 1.0)) < 1.0 and int(state.get("monster_debuff_turns", 0)) > 0:
+        debuff_m = f"🌫️ Атака врага ослаблена ({int(state['monster_debuff_turns'])} х.)\n"
+
+    shield_p = ""
+    sh_val = int(state.get("player_shield_hp", 0))
+    if sh_val > 0:
+        shield_p = f"🛡️ Щит: <b>{sh_val}</b>\n"
+
+    pet_p = ""
+    pl = state.get("pet_line_html")
+    if pl:
+        pet_p = f"{pl}\n"
+
+    logs = state.get("ui_logs", [])[-2:]
+    log_block = "\n".join(logs) if logs else ""
+    taunt_html = str(state.get("battle_taunt_html") or "")
+
+    mon_night_flavor = (
+        "<i>🌑 Ночной зверь — удары больнее, награда за падение твари щедрее.</i>\n"
+        if state.get("night_battle")
+        else ""
+    )
+
+    fln = int(state.get("floor", 0))
+    battle_title = (
+        f"<b>⚔️ БОЙ</b> 🌑 <b>[НОЧЬ]</b> · этаж <b>{fln}</b>"
+        if state.get("night_battle")
+        else f"<b>⚔️ БОЙ</b> · этаж <b>{fln}</b>"
+    )
+    return (
+        f"{LINE_SEP_BATTLE}\n"
+        f"{battle_title}\n"
+        f"{LINE_SEP_BATTLE}\n"
+        f"<b>▸ Враг</b>\n"
+        f"{m.get('emoji', '👹')} <b>{html.escape(m['name'])}</b> {el_icon}{tag_disp}\n"
+        f"{mon_night_flavor}"
+        f"{hp_line}\n"
+        f"{monster_last_line}"
+        f"{phase_note}"
+        f"{rage}"
+        f"{night_line}"
+        f"{shadow_line}"
+        f"{debuff_m}"
+        f"<i>Ход врага {int(state.get('monster_turn', 0))} · "
+        f"броня {engine.monster_armor_value(state)}</i>\n"
+        f"{taunt_html}"
+        f"{LINE_SEP_BATTLE}\n"
+        f"<b>▸ Ты</b>\n"
+        f"{php_line}\n"
+        f"{mp_line}\n"
+        f"{player_last_line}"
+        f"{shield_p}"
+        f"{pet_p}"
+        f"{LINE_SEP_BATTLE}\n"
+        f"<b>Лог</b>\n"
+        f"{log_block if log_block else '<i>—</i>'}"
+    )
+
+
+def _append_logs(state: dict[str, Any], lines: list[str]) -> None:
+    buf = list(state.get("ui_logs", []))
+    buf.extend(lines)
+    state["ui_logs"] = buf[-8:]
+
+
+async def start_combat(
+    *,
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    character: Character,
+    spawn: FloorMonsterSpawn,
+) -> bool:
+    """Начать бой. True если бой начат."""
+    if needs_base_class_choice(character):
+        await query.answer(
+            "Сначала выбери класс на этом этаже (кнопки «Путь героя»).",
+            show_alert=True,
+        )
+        return False
+    if needs_subclass_choice(character):
+        await query.answer(
+            "Сначала выбери подкласс (×2 к статам) — кнопки «Углубление пути».",
+            show_alert=True,
+        )
+        return False
+    if not can_start_combat(character, settings.MAX_STAMINA):
+        await query.answer("Недостаточно стамины (нужна 1).", show_alert=True)
+        return False
+
+    rest_service.apply_completed_rest_if_needed(character)
+    if rest_service.is_rest_in_progress(character):
+        left = rest_service.rest_seconds_left(character)
+        await query.answer(
+            f"Передышка: подожди ещё ~{left} с (полные HP/MP после отдыха).",
+            show_alert=True,
+        )
+        return False
+
+    current_state = await state.get_state()
+    if current_state == CombatStates.in_battle.state:
+        await query.answer("Ты уже в бою.", show_alert=True)
+        return False
+
+    spent = await spend_stamina(session, int(character.id))
+    if not spent:
+        await query.answer("Не удалось списать стамину. Попробуй ещё раз.", show_alert=True)
+        return False
+    await session.refresh(character)
+
+    if query.from_user is not None:
+        await anticheat_service.record_fight_start(
+            session,
+            character,
+            telegram_id=query.from_user.id,
+            username=query.from_user.username,
+            bot=query.bot,
+        )
+
+    monster = _monster_stat_bundle(
+        character.floor_number,
+        spawn,
+        player_level=int(character.level),
+    )
+    monster["is_elite"] = spawn.is_elite
+    monster["is_mini_boss"] = spawn.is_mini_boss
+    monster["is_major_boss"] = spawn.is_major_boss
+    monster["is_milestone_boss"] = spawn.is_major_boss and floor_data.is_tower_milestone_boss_floor(
+        int(character.floor_number),
+    )
+    night_on = combat_night.is_night_utc()
+    if night_on:
+        combat_night.apply_night_to_monster_bundle(monster)
+
+    eff_stats = await stat_bonus_service.effective_primary_stats(session, character)
+    combat_state = _build_combat_dict(character, spawn, monster, primary_stats=eff_stats)
+    combat_state["night_battle"] = night_on
+    wa, wtype, wmult, w_item = await _weapon_profile(session, character)
+    combat_state["weapon_attack"] = wa
+    combat_state["player_weapon_type"] = wtype
+    combat_state["weapon_mastery_mult"] = wmult
+    combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
+    _apply_weapon_runes_to_state(combat_state, character, w_item)
+
+    taunt = engine.opening_taunt(combat_state)
+    combat_state["battle_taunt_html"] = _taunt_banner_html(taunt)
+
+    await game_metrics_service.record_event(
+        session,
+        event_type="combat_start",
+        floor=int(character.floor_number),
+        class_key=str(character.class_key or ""),
+    )
+
+    await state.set_state(CombatStates.in_battle)
+    await state.update_data(combat=combat_state)
+
+    cls = get_class_or_none(character.class_key)
+    class_ru = cls.name_ru if cls else character.class_key
+    text = format_battle_view(combat_state, class_ru)
+    kb = combat_main_keyboard(character.class_key)
+
+    if query.message is None:
+        await query.answer()
+        return False
+
+    try:
+        ok = await _safe_edit_combat_message_text(query.message, text, reply_markup=kb)
+    except TelegramBadRequest:
+        logger.warning("Не удалось отредактировать сообщение этажа — замена через якорь UI.")
+        ok = False
+    if ok:
+        await state.update_data(
+            combat_message_id=query.message.message_id,
+            combat_chat_id=query.message.chat.id,
+        )
+    else:
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=kb,
+            target_message=query.message,
+            photo_path=None,
+        )
+        data = await state.get_data()
+        mid = data.get(GAME_UI_MESSAGE_ID)
+        cid = data.get(GAME_UI_CHAT_ID)
+        if mid is not None and cid is not None:
+            await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
+    await query.answer("Бой!")
+    return True
+
+
+async def start_tutorial_combat(
+    *,
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    character: Character,
+) -> bool:
+    """Разовый учебный бой на 1 этаже. Стамину не тратит."""
+    if int(character.floor_number) != 1:
+        await query.answer("Обучение только на первом этаже.", show_alert=True)
+        return False
+    if not tutorial_battle_pending(character):
+        await query.answer("Ты уже прошёл обучение у наставника.", show_alert=True)
+        return False
+    if needs_base_class_choice(character) or needs_subclass_choice(character):
+        await query.answer("Сначала заверши выбор класса / подкласса на этаже.", show_alert=True)
+        return False
+
+    rest_service.apply_completed_rest_if_needed(character)
+    if rest_service.is_rest_in_progress(character):
+        left = rest_service.rest_seconds_left(character)
+        await query.answer(
+            f"Передышка: подожди ещё ~{left} с.",
+            show_alert=True,
+        )
+        return False
+
+    if await state.get_state() == CombatStates.in_battle.state:
+        await query.answer("Ты уже в бою.", show_alert=True)
+        return False
+
+    monster = _tutorial_monster_bundle()
+    eff_stats = await stat_bonus_service.effective_primary_stats(session, character)
+    combat_state = _build_combat_dict(character, TUTORIAL_SPAWN, monster, primary_stats=eff_stats)
+    wa, wtype, wmult, w_item = await _weapon_profile(session, character)
+    combat_state["weapon_attack"] = wa
+    combat_state["player_weapon_type"] = wtype
+    combat_state["weapon_mastery_mult"] = wmult
+    _apply_weapon_runes_to_state(combat_state, character, w_item)
+    combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
+    combat_state["is_tutorial"] = True
+    combat_state["night_battle"] = False
+    combat_state["tutorial_phase"] = 1
+    combat_state["tutorial_player_rounds"] = 0
+    combat_state["tutorial_used_skill"] = False
+    combat_state["battle_taunt_html"] = _taunt_banner_html(engine.opening_taunt(combat_state))
+    prelude = list(combat_state.get("ui_logs", []))
+    combat_state["ui_logs"] = prelude + [
+        "🎓 <b>Наставник Зарен:</b> «Два раунда. Первый — разминка, второй — давление. "
+        "Смотрю на скорость, осторожность и используешь ли навык не только автоударами».",
+        "🌀 <i>По периметру круга встаёт первый манекен — дерево и железо скрипят.</i>",
+    ]
+
+    await state.set_state(CombatStates.in_battle)
+    await state.update_data(combat=combat_state)
+
+    cls = get_class_or_none(character.class_key)
+    class_ru = cls.name_ru if cls else character.class_key
+    text = format_battle_view(combat_state, class_ru)
+    kb = combat_main_keyboard(character.class_key)
+
+    if query.message is None:
+        await query.answer()
+        return False
+
+    try:
+        ok = await _safe_edit_combat_message_text(query.message, text, reply_markup=kb)
+    except TelegramBadRequest:
+        logger.warning("Не удалось отредактировать сообщение (учебный бой) — замена через якорь UI.")
+        ok = False
+    if ok:
+        await state.update_data(
+            combat_message_id=query.message.message_id,
+            combat_chat_id=query.message.chat.id,
+        )
+    else:
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=kb,
+            target_message=query.message,
+            photo_path=None,
+        )
+        data = await state.get_data()
+        mid = data.get(GAME_UI_MESSAGE_ID)
+        cid = data.get(GAME_UI_CHAT_ID)
+        if mid is not None and cid is not None:
+            await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
+    await query.answer("Учебный бой!")
+    return True
+
+
+async def _apply_tower_progress_after_victory(
+    session: AsyncSession,
+    character: Character,
+    spawn: FloorMonsterSpawn,
+) -> str:
+    """
+    Учёт посещений, флаги боссов, слоты поверженных врагов.
+    Когда побеждены все цели этажа — подъём на следующий (кроме финала 100).
+    """
+    cur = int(character.floor_number)
+    row = await floor_progress_repo.ensure_floor_row(session, character.id, cur)
+    row.visits = int(row.visits) + 1
+
+    if spawn.is_major_boss:
+        row.boss_defeated = True
+    if spawn.is_mini_boss:
+        row.mini_boss_defeated = True
+
+    extra = dict(row.extra or {})
+    cleared: list[str] = list(extra.get("slots_cleared", []))
+    if spawn.slot_code not in cleared:
+        cleared.append(spawn.slot_code)
+    extra["slots_cleared"] = cleared
+    row.extra = extra
+
+    all_spawns = long_floor_mod.spawns_for_tower_progress(character, cur)
+    needed = {s.slot_code for s in all_spawns}
+    if set(cleared) < needed:
+        return ""
+
+    if cur >= 100:
+        character.highest_floor_reached = max(int(character.highest_floor_reached), 100)
+        extra["slots_cleared"] = []
+        row.extra = extra
+        return "\n👁️ <b>Вершина башни:</b> страж повержен."
+
+    character.floor_number = cur + 1
+    character.highest_floor_reached = max(
+        int(character.highest_floor_reached),
+        int(character.floor_number),
+    )
+    extra["slots_cleared"] = []
+    row.extra = extra
+    nf = int(character.floor_number)
+    zone = floor_data.get_zone_for_floor(nf)
+    room = floor_data.epithet_for_floor(zone, nf)
+    return (
+        f"\n🪜 <b>Проход открыт!</b>\n"
+        f"🗼 <b>Этаж {nf}</b> / 100 — <i>{html.escape(room)}</i>\n"
+        f"<i>{html.escape(zone.description)}</i>"
+    )
+
+
+async def _flush_weapon_mastery(
+    session: AsyncSession,
+    character: Character,
+    combat_state: dict[str, Any],
+) -> None:
+    if not combat_state.pop("mastery_strike_pending", False):
+        return
+    wt = str(combat_state.get("player_weapon_type") or "blade")
+    record_strike(character, wt)
+    combat_state["weapon_mastery_mult"] = damage_multiplier_for_type(character, wt)
+    await session.flush()
+
+
+async def _after_monster_killed_player_action(
+    *,
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    character: Character,
+    combat_state: dict[str, Any],
+    class_ru: str,
+) -> bool:
+    """True если бой продолжается (2-я волна учебного боя)."""
+    if query.message is None:
+        return False
+    await _flush_weapon_mastery(session, character, combat_state)
+    if combat_state.get("is_tutorial") and int(combat_state.get("tutorial_phase", 1)) < 2:
+        combat_state["tutorial_phase"] = 2
+        combat_state["monster"] = _tutorial_monster_wave2()
+        combat_state["monster_turn"] = 0
+        combat_state["monster_special_cd"] = 0
+        combat_state["monster_effects"] = []
+        combat_state["monster_skip_next"] = False
+        combat_state["monster_def_mod"] = 0
+        combat_state["player_last_damage_to_monster"] = None
+        combat_state["monster_last_damage_to_player"] = None
+        combat_state["battle_taunt_html"] = _taunt_banner_html(engine.opening_taunt(combat_state))
+        _append_logs(
+            combat_state,
+            ["", "⚡ <b>Вторая фаза.</b> Наставник швыряет в круг второго манекена — он бьёт сильнее!"],
+        )
+        if query.message:
+            try:
+                await _safe_edit_combat_message_text(
+                    query.message,
+                    format_battle_view(combat_state, class_ru),
+                    reply_markup=combat_main_keyboard(character.class_key),
+                )
+            except Exception:
+                logger.exception("edit tutorial wave2")
+        await state.update_data(combat=combat_state)
+        await query.answer()
+        return True
+    await _victory_sequence(
+        message=query.message,
+        state=state,
+        session=session,
+        character=character,
+        combat_state=combat_state,
+    )
+    return False
+
+
+async def _victory_sequence(
+    *,
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    character: Character,
+    combat_state: dict[str, Any],
+) -> None:
+    """Анимация полосы награды и начисление."""
+    if combat_state.get("is_tutorial"):
+        rounds = int(combat_state.get("tutorial_player_rounds", 0))
+        used_skill = bool(combat_state.get("tutorial_used_skill"))
+        php = int(combat_state["player_hp"])
+        phm = int(combat_state["player_hp_max"])
+        _key, skill_line = apply_path_rank_from_tutorial(
+            character,
+            player_rounds=max(1, rounds),
+            hp_end=php,
+            hp_max=phm,
+            used_skill=used_skill,
+        )
+        r = PATH_RANK_BY_KEY.get(_key)
+        rank_name = html.escape(r.name_ru) if r else html.escape(_key)
+        bonus_gold = 18
+        bonus_xp = 12
+        character_service.add_gold(character, bonus_gold)
+        if message.from_user is not None:
+            await anticheat_service.record_gold_gain(
+                session,
+                character,
+                telegram_id=message.from_user.id,
+                username=message.from_user.username,
+                gold_delta=bonus_gold,
+                bot=message.bot,
+            )
+        await character_service.add_experience_async(session, character, bonus_xp, bot=message.bot)
+        refresh_global_passives(character)
+        character.hp_current = php
+        character.mp_current = int(combat_state["player_mp"])
+        fl = int(character.floor_number)
+        floor_rows: list[list[InlineKeyboardButton]] = [
+            [
+                InlineKeyboardButton(
+                    text="🗺️ На этаж",
+                    callback_data=f"fl:{fl}:return",
+                ),
+            ],
+            menu_nav_button_row(),
+        ]
+        victory_kb = InlineKeyboardMarkup(inline_keyboard=floor_rows)
+        try:
+            await _safe_edit_combat_message_text(
+                message,
+                f"🏆 <b>Учебный бой пройден!</b>\n"
+                f"{LINE_SEP}\n"
+                f"🎖️ <b>Звание башни</b> (не титул): {rank_name}\n"
+                f"<i>{html.escape(skill_line)}</i>\n"
+                f"{LINE_SEP}\n"
+                f"💰 +{bonus_gold} золота · 📈 +{bonus_xp} опыта\n"
+                f"Статы звания добавлены; его пассив суммируется с классом и глобальными бонусами.\n"
+                f"🏆 Отдельные <b>титулы</b> выбираются в разделе «Титулы».",
+                reply_markup=victory_kb,
+            )
+        finally:
+            await state.clear()
+        return
+
+    await character_repo.lock_character_row(session, character.id)
+
+    spawn = _spawn_from_state(character, combat_state)
+    gross_gold = gold_reward(character.floor_number, spawn)
+    xp = experience_reward(character.floor_number, spawn)
+    if combat_state.get("night_battle"):
+        gross_gold = int(gross_gold * combat_night.REWARD_MULT)
+        xp = int(xp * combat_night.REWARD_MULT)
+    gm, xm = title_service.reward_bonus_multipliers(character)
+    esc_m = sink_rules.pop_next_win_xp_multiplier(character)
+    mp_xp = dict(character.meta_progress or {})
+    star_xp_mult = float(mp_xp.pop("next_battle_xp_mult", 1.0) or 1.0)
+    character.meta_progress = mp_xp
+    gross_gold = int(gross_gold * gm)
+    xp = int(xp * xm * esc_m * max(0.1, star_xp_mult))
+    escape_xp_note = ""
+    if esc_m < 0.999:
+        escape_xp_note = (
+            f"\n<i>Опыт со скидкой {int(round((1.0 - esc_m) * 100))}% "
+            f"(недавний побег).</i>"
+        )
+    night_reward_note = ""
+    if combat_state.get("night_battle"):
+        night_reward_note = "\n<i>🌙 Ночной бой: к золоту и опыту уже учтён бонус +40%.</i>"
+    star_xp_note = ""
+    if star_xp_mult >= 1.45:
+        star_xp_note = "\n<i>⭐ Упавшая звезда: опыт этого боя ×1.5.</i>"
+
+    net_gold, ml_debt_note = sink_rules.garnish_victory_gold_for_debt(character, gross_gold)
+
+    character_service.add_gold(character, net_gold)
+    if message.from_user is not None:
+        await anticheat_service.record_gold_gain(
+            session,
+            character,
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            gold_delta=net_gold,
+            bot=message.bot,
+        )
+    levels_battle = await character_service.add_experience_async(session, character, xp, bot=message.bot)
+    level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
+    character.total_kills = int(character.total_kills) + 1
+    daily_service.record_kill(character)
+    refresh_global_passives(character)
+
+    if roll_rune_stone(spawn):
+        character.rune_stones = int(character.rune_stones) + 1
+        extra_rune = "\n⚗️ +1 рунный камень"
+    else:
+        extra_rune = ""
+
+    dropped = False
+    drop_label = ""
+    if roll_item_drop(spawn):
+        items = await inventory_repo.list_bag_items(session, character.id)
+        used = {i.bag_slot for i in items if i.bag_slot is not None}
+        slot: int | None = None
+        for s in range(20):
+            if s not in used:
+                slot = s
+                break
+        if slot is not None:
+            item_payload = loot_tables.roll_victory_item_payload(character.floor_number, spawn)
+            await inventory_repo.add_bag_item(
+                session,
+                character.id,
+                item_payload,
+                bag_slot=slot,
+            )
+            dropped = True
+            drop_label = str(item_payload.get("name", "Добыча"))
+
+    extra_drop = ""
+    if dropped:
+        extra_drop = f"\n📦 <b>{html.escape(drop_label)}</b> — в сумку"
+
+    extra_rune_item = ""
+    boss_like = spawn.is_mini_boss or spawn.is_major_boss
+    if spawn.is_elite or boss_like:
+        rd = rune_items.roll_rune_drop(int(character.floor_number), boss_like)
+        if rd is not None:
+            slot_r = await inventory_repo.first_free_bag_slot(session, character.id)
+            if slot_r is not None:
+                await inventory_repo.add_bag_item(
+                    session,
+                    character.id,
+                    copy.deepcopy(rune_items.rune_item_payload(rd)),
+                    bag_slot=slot_r,
+                )
+                extra_rune_item = f"\n💎 <b>{html.escape(rd.display_name)}</b> — в сумку"
+
+    mname = html.escape(str(combat_state.get("monster", {}).get("name", "Враг")))
+    floor_before = int(character.floor_number)
+    old_highest_reached = int(character.highest_floor_reached)
+    floor_banner = await _apply_tower_progress_after_victory(session, character, spawn)
+    floor_after = int(character.floor_number)
+    new_highest_reached = int(character.highest_floor_reached)
+    await game_metrics_service.record_event(
+        session,
+        event_type="battle_win",
+        floor=floor_before,
+        class_key=str(character.class_key or ""),
+    )
+    if message.from_user is not None and floor_after != floor_before:
+        await anticheat_service.record_floor_change(
+            session,
+            character,
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            old_floor=floor_before,
+            new_floor=floor_after,
+            bot=message.bot,
+        )
+    await season_record_service.notify_if_first_to_floor_milestone_this_season(
+        session,
+        message.bot,
+        character,
+        old_highest=old_highest_reached,
+        new_highest=new_highest_reached,
+    )
+    if spawn.slot_code in long_floor_mod.LONG_FLOOR_SLOTS:
+        if spawn.slot_code == long_floor_mod.SLOT_BOSS:
+            long_floor_mod.mark_completed(character)
+        else:
+            long_floor_mod.advance_phase_after_wave(character, spawn.slot_code)
+    quest_suffix = await quest_service.apply_kill_progress(session, character)
+    npc_done = await quest_service.update_kill_progress_from_spawn(session, character.id, spawn)
+    if npc_done:
+        quest_suffix += (
+            "\n✅ <b>Задание выполнено!</b> Иди к NPC за наградой "
+            "(раздел «Задания» или /quests)."
+        )
+    city_suffix = await city_quest_service.apply_kill_progress(session, character)
+    new_titles = title_service.refresh_unlocks(character)
+    title_suffix = ""
+    if new_titles:
+        label = "Новые титулы" if len(new_titles) > 1 else "Новый титул"
+        title_suffix = f"\n🏆 <b>{label}:</b> " + html.escape(
+            ", ".join(title_service.display_names(new_titles)),
+        )
+
+    reward_frames = ("▓░░░░░░░░░", "▓▓▓▓▓░░░░░", "▓▓▓▓▓▓▓▓▓▓")
+    fl = int(character.floor_number)
+    floor_rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text="🗺️ На этаж",
+                callback_data=f"fl:{fl}:return",
+            ),
+        ],
+        menu_nav_button_row(),
+    ]
+    victory_kb = InlineKeyboardMarkup(inline_keyboard=floor_rows)
+
+    try:
+        await _safe_edit_combat_message_text(
+            message,
+            f"🏆 <b>Победа!</b> <b>{mname}</b>\n⚔️ <b>Удар!</b>",
+            reply_markup=None,
+        )
+        await asyncio.sleep(0.6)
+        await _safe_edit_combat_message_text(
+            message,
+            f"🏆 <b>Победа!</b> <b>{mname}</b>\n💀 <b>Монстр повержен!</b>",
+            reply_markup=None,
+        )
+        await asyncio.sleep(0.5)
+
+        for i, label in enumerate(reward_frames):
+            is_last = i == len(reward_frames) - 1
+            suffix = ""
+            if is_last:
+                suffix = (
+                    floor_banner
+                    + level_battle_suffix
+                    + quest_suffix
+                    + city_suffix
+                    + title_suffix
+                    + escape_xp_note
+                    + night_reward_note
+                    + star_xp_note
+                )
+            gold_line = f"💰 +{net_gold} золота"
+            if gross_gold != net_gold and is_last:
+                gold_line += f" <i>(до удержания долга: {gross_gold})</i>"
+            await _safe_edit_combat_message_text(
+                message,
+                f"🏆 <b>Победа!</b> <b>{mname}</b>\n✨ Награда… {label}\n"
+                f"{gold_line}\n"
+                f"📈 +{xp} опыта{extra_rune}{extra_drop}{extra_rune_item}"
+                f"{ml_debt_note if is_last else ''}{suffix}",
+                reply_markup=victory_kb if is_last else None,
+            )
+            await asyncio.sleep(0.8)
+    except Exception:
+        logger.exception("victory UI: анимация награды")
+    finally:
+        character.hp_current = int(combat_state["player_hp"])
+        character.mp_current = int(combat_state["player_mp"])
+        await state.clear()
+
+
+def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> FloorMonsterSpawn:
+    slot = str(combat_state.get("spawn_slot"))
+    if slot == "tutorial":
+        return TUTORIAL_SPAWN
+    if slot in long_floor_mod.LONG_FLOOR_SLOTS:
+        found_lf = long_floor_mod.spawn_by_slot(slot)
+        if found_lf is not None:
+            return found_lf
+    battle_floor = int(combat_state.get("floor", character.floor_number))
+    spawns = build_spawns_for_floor(battle_floor)
+    found = next((s for s in spawns if s.slot_code == slot), None)
+    if found is None:
+        return spawns[0]
+    return found
+
+
+async def _defeat_sequence(
+    *,
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    character: Character,
+    combat_state: dict[str, Any] | None = None,
+) -> None:
+    """Смерть: предмет, зачарование, счётчик."""
+    if combat_state and combat_state.get("is_tutorial"):
+        character.hp_current = int(character.hp_max)
+        character.mp_current = int(character.mp_max)
+        try:
+            await _safe_edit_combat_message_text(
+                message,
+                "💠 <b>Учебный манекен</b> одержал верх — так и задумано.\n"
+                "HP и MP восстановлены. Открой этаж и попробуй снова "
+                "<b>«Учебный бой наставника»</b>.",
+                reply_markup=None,
+            )
+        finally:
+            await state.clear()
+        return
+
+    await character_repo.lock_character_row(session, character.id)
+
+    character.death_count = int(character.death_count) + 1
+    title_service.refresh_unlocks(character)
+
+    fl = int(character.floor_number)
+    g = int(character.gold)
+    if g <= 0:
+        lost_gold = 0
+    else:
+        pct = 0.18 + min(0.22, fl / 250.0)
+        lost_gold = max(1, int(g * pct))
+        lost_gold = min(lost_gold, g)
+    character.gold = g - lost_gold
+
+    weapon = await inventory_repo.get_equipped_weapon(session, character.id)
+    enchant_msg = ""
+    if weapon is not None and random.random() < 0.30:
+        data = dict(weapon.item_data or {})
+        ench = int(data.get("enchant", data.get("plus", 0)))
+        if ench > 0:
+            data["enchant"] = ench - 1
+            weapon.item_data = data
+            enchant_msg = f"\n⚠️ Заточка оружия снижена до +{ench - 1}."
+
+    character.hp_current = max(1, int(character.hp_max * 0.4))
+    character.mp_current = max(0, int(character.mp_max * 0.4))
+
+    gold_line = (
+        f"Потеряно золота: <b>{lost_gold}</b> 💰"
+        if lost_gold > 0
+        else "Золота не было — штраф только по HP/MP."
+    )
+    text = (
+        "💀 Ты пал… Сброс на начало текущего этажа.\n"
+        f"{gold_line}"
+        f"{enchant_msg}"
+    )
+    try:
+        await _safe_edit_combat_message_text(message, text, reply_markup=None)
+    finally:
+        await state.clear()
+
+
+async def _bag_combat_consumables(session: AsyncSession, character_id: int) -> list[InventoryItem]:
+    """Предметы из сумки, применимые в бою."""
+    bag = await inventory_repo.list_bag_items(session, character_id)
+    out: list[InventoryItem] = []
+    for it in bag:
+        data = it.item_data or {}
+        if data.get("use_tag") in consumables.COMBAT_USE_TAGS:
+            out.append(it)
+    out.sort(key=lambda x: (x.bag_slot is None, x.bag_slot or 0))
+    return out
+
+
+async def _apply_combat_item(
+    session: AsyncSession,
+    character: Character,
+    combat_state: dict[str, Any],
+    item_id: int,
+) -> tuple[bool, str | None, list[str]]:
+    item = await inventory_repo.get_item_for_character(session, character.id, item_id)
+    if item is None or item.is_equipped or item.bag_slot is None:
+        return False, "Предмета нет в сумке.", []
+    data = dict(item.item_data or {})
+    tag = data.get("use_tag")
+    if tag == "stamina_flat":
+        return False, "Пайок ешь после боя.", []
+    if tag not in consumables.COMBAT_USE_TAGS:
+        return False, "Нельзя использовать в бою.", []
+    try:
+        logs = consumables.apply_consumable(combat_state, data)
+    except ValueError:
+        return False, "Предмет испорчен.", []
+    await inventory_repo.delete_inventory_item(session, item)
+    await session.flush()
+    return True, None, logs
+
+
+async def handle_combat_callback(
+    *,
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    character: Character,
+    action: str,
+    skill_index: int | None,
+    item_id: int | None = None,
+) -> None:
+    """Маршрутизация действий боя."""
+    data = await state.get_data()
+    combat_state: dict[str, Any] | None = data.get("combat")
+    if combat_state is None:
+        await query.answer("Нет активного боя.", show_alert=True)
+        await state.clear()
+        return
+
+    if query.message is None:
+        await query.answer()
+        return
+
+    cls = get_class_or_none(character.class_key)
+    class_ru = cls.name_ru if cls else character.class_key
+
+    if action == "ret":
+        await query.message.edit_reply_markup(reply_markup=combat_main_keyboard(character.class_key))
+        await query.answer()
+        return
+
+    if action == "item":
+        usable = await _bag_combat_consumables(session, character.id)
+        if not usable:
+            await query.answer("В сумке нет зелий для боя. Купи в лавке (этажи ×5 или город).", show_alert=True)
+            return
+        await query.message.edit_reply_markup(reply_markup=combat_item_picker_keyboard(usable))
+        await query.answer("Выбери предмет")
+        return
+
+    lines: list[str] = []
+    failed_escape = False
+
+    # Доты и пассивная регенерация MP в начале твоего хода
+    lines.extend(engine.apply_dot_damage_player(combat_state))
+    if int(combat_state["player_hp"]) <= 0:
+        _append_logs(combat_state, lines)
+        await _defeat_sequence(
+            message=query.message,
+            state=state,
+            session=session,
+            character=character,
+            combat_state=combat_state,
+        )
+        await query.answer()
+        return
+
+    lines.extend(engine.regen_mp_passive(combat_state))
+
+    outcome: engine.Outcome = "continue"
+    skill_applied_outcome: engine.Outcome | None = None
+
+    if action == "atk":
+        atk_logs, outcome, phys_dmg = engine.player_attack(combat_state)
+        lines.extend(atk_logs)
+        if query.from_user is not None and phys_dmg > 0:
+            st = combat_state["stats"]
+            await anticheat_service.record_physical_damage(
+                session,
+                character,
+                telegram_id=query.from_user.id,
+                username=query.from_user.username,
+                damage=int(phys_dmg),
+                strength=int(st["str"]),
+                weapon_atk=int(combat_state.get("weapon_attack", 0)),
+                bot=query.bot,
+            )
+    elif action == "sk" and skill_index is not None:
+        sk_logs, maybe, skill_dmg = engine.player_skill(combat_state, skill_index)
+        lines.extend(sk_logs)
+        skill_applied_outcome = maybe
+        if maybe is None:
+            outcome = "continue"
+        else:
+            outcome = maybe
+        if skill_dmg > 0 and query.from_user is not None:
+            sks = skills_for_class(character.class_key)
+            if 0 <= skill_index < len(sks):
+                sk_def = sks[skill_index]
+                stt = combat_state["stats"]
+                await anticheat_service.record_skill_damage(
+                    session,
+                    character,
+                    telegram_id=query.from_user.id,
+                    username=query.from_user.username,
+                    damage=int(skill_dmg),
+                    skill_kind=sk_def.kind,
+                    skill_power=float(sk_def.power),
+                    strength=int(stt["str"]),
+                    intelligence=int(stt["int"]),
+                    weapon_atk=int(combat_state.get("weapon_attack", 0)),
+                    bot=query.bot,
+                )
+    elif action == "itm" and item_id is not None:
+        ok, err, item_logs = await _apply_combat_item(session, character, combat_state, item_id)
+        if not ok:
+            await query.answer(err or "Нельзя.", show_alert=True)
+            return
+        lines.extend(item_logs)
+        outcome = "continue"
+    elif action == "run":
+        if combat_state.get("is_tutorial"):
+            await query.answer("В учебном бою побег недоступен.", show_alert=True)
+            return
+        if random.random() < formulas.escape_chance(int(combat_state["stats"]["dex"])):
+            sink_rules.set_escape_success_xp_penalty(character)
+            try:
+                await _safe_edit_combat_message_text(
+                    query.message,
+                    "🏃 Ты сбежал из боя. Стамина уже потрачена.\n"
+                    "<i>Следующая победа даст на 10% меньше опыта.</i>",
+                    reply_markup=None,
+                )
+            finally:
+                character.hp_current = int(combat_state["player_hp"])
+                character.mp_current = int(combat_state["player_mp"])
+                await state.clear()
+            await query.answer("Побег!")
+            return
+        lines.append("🏃 Побег не удался! Враг бьёт <b>дважды</b>!")
+        failed_escape = True
+        outcome = "continue"
+    else:
+        await query.answer()
+        return
+
+    if combat_state.get("is_tutorial"):
+        if action == "atk":
+            combat_state["tutorial_player_rounds"] = int(combat_state.get("tutorial_player_rounds", 0)) + 1
+        elif action == "sk" and skill_index is not None and skill_applied_outcome is not None:
+            combat_state["tutorial_player_rounds"] = int(combat_state.get("tutorial_player_rounds", 0)) + 1
+            combat_state["tutorial_used_skill"] = True
+
+    _append_logs(combat_state, lines)
+
+    if outcome == "win":
+        continued = await _after_monster_killed_player_action(
+            query=query,
+            session=session,
+            state=state,
+            character=character,
+            combat_state=combat_state,
+            class_ru=class_ru,
+        )
+        if not continued:
+            await query.answer()
+        return
+
+    if outcome == "lose":
+        await _defeat_sequence(
+            message=query.message,
+            state=state,
+            session=session,
+            character=character,
+            combat_state=combat_state,
+        )
+        await query.answer()
+        return
+
+    m_logs = engine.apply_dot_damage_monster(combat_state)
+    _append_logs(combat_state, m_logs)
+    if int(combat_state["monster"]["hp"]) <= 0:
+        continued = await _after_monster_killed_player_action(
+            query=query,
+            session=session,
+            state=state,
+            character=character,
+            combat_state=combat_state,
+            class_ru=class_ru,
+        )
+        if not continued:
+            await query.answer()
+        return
+
+    mon_logs, outcome_m = engine.monster_turn(combat_state)
+    _append_logs(combat_state, mon_logs)
+    if failed_escape and outcome_m == "continue" and int(combat_state["player_hp"]) > 0:
+        mon_logs2, outcome_m2 = engine.monster_turn(combat_state)
+        _append_logs(combat_state, mon_logs2)
+        if outcome_m2 == "lose":
+            outcome_m = "lose"
+        elif outcome_m2 == "win":
+            outcome_m = "win"
+
+    tick_logs = engine.end_round_tick(combat_state)
+    _append_logs(combat_state, tick_logs)
+    engine.tick_cooldowns(combat_state)
+
+    if outcome_m == "lose":
+        await _defeat_sequence(
+            message=query.message,
+            state=state,
+            session=session,
+            character=character,
+            combat_state=combat_state,
+        )
+        await query.answer()
+        return
+
+    if outcome_m == "win":
+        continued = await _after_monster_killed_player_action(
+            query=query,
+            session=session,
+            state=state,
+            character=character,
+            combat_state=combat_state,
+            class_ru=class_ru,
+        )
+        if not continued:
+            await query.answer()
+        return
+
+    await _flush_weapon_mastery(session, character, combat_state)
+
+    try:
+        await _safe_edit_combat_message_text(
+            query.message,
+            format_battle_view(combat_state, class_ru),
+            reply_markup=combat_main_keyboard(character.class_key),
+        )
+    except Exception:
+        logger.exception("Не удалось обновить сообщение боя")
+    await state.update_data(combat=combat_state)
+    await query.answer()

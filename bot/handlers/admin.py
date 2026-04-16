@@ -1,0 +1,757 @@
+"""
+Админ-панель: инлайн-кнопки + текстовые команды (совместимость).
+ADMIN_IDS в .env обязателен для доступа.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import html
+
+from aiogram import F, Router
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import Command, CommandObject, StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from admin import panel
+from bot.middlewares.admin_check import IsAdmin
+from bot.keyboards.admin_kb import (
+    admin_back_keyboard,
+    admin_cancel_keyboard,
+    admin_panel_keyboard,
+    admin_promo_keyboard,
+)
+from bot.states.admin_states import AdminStates
+from config import settings
+from db.repository import admin_log_repo, character_repo, user_repo
+from services import anticheat_service, character_service
+from services.admin_promo_service import handle_admin_promo, promo_help_html
+
+router = Router(name="admin")
+
+PANEL_HTML = (
+    "🔧 <b>Админ-панель</b>\n"
+    "Выбери действие кнопкой.\n"
+    "<i>Команды <code>/admin …</code>, <code>/admin_stats</code>, "
+    "<code>/admin_ban</code> и т.д. тоже работают.</i>"
+)
+
+_PROMO_MENU_HTML = "🎁 <b>Промокоды</b>\nВыбери действие или вернись в панель."
+
+
+async def _dashboard_stats(session: AsyncSession) -> dict[str, object]:
+    m = await character_repo.admin_dashboard_metrics(session)
+    alerts_n, crit_n = await admin_log_repo.count_alerts_since(session, hours=24)
+    m["alerts_24h"] = alerts_n
+    m["critical_24h"] = crit_n
+    m["anticheat_enabled"] = settings.ANTICHEAT_ENABLED
+    return m
+
+
+async def _logs_html(session: AsyncSession, *, show_all: bool) -> str | None:
+    if show_all:
+        rows = await admin_log_repo.recent_all(session, limit=18)
+        header = "📋 <b>Последние события</b> (все)\n"
+    else:
+        rows = await admin_log_repo.recent_high_severity(session, limit=12)
+        header = "⚠️ <b>Алерты</b> (ALERT / CRITICAL)\n"
+    if not rows:
+        return None
+    lines: list[str] = [header]
+    for r in rows:
+        msg = html.escape((r.message or "")[:120])
+        actor = r.actor_telegram_id
+        act = f" · от <code>{actor}</code>" if actor else ""
+        lines.append(
+            f"<code>{r.created_at:%Y-%m-%d %H:%M}</code> "
+            f"[{html.escape(r.severity)}] <b>{html.escape(r.action)}</b>{act}\n{msg}",
+        )
+    return "\n\n".join(lines)
+
+
+def _truncate_html(s: str, max_len: int = 3800) -> str:
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 20] + "\n… <i>(обрезано)</i>"
+
+
+async def _safe_edit_panel(
+    message: Message,
+    text: str,
+    *,
+    reply_markup,
+) -> None:
+    try:
+        await message.edit_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=reply_markup,
+        )
+    except TelegramBadRequest:
+        logger.warning("admin: edit_text не удался")
+
+
+async def _restore_hub(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await _safe_edit_panel(message, PANEL_HTML, reply_markup=admin_panel_keyboard())
+
+
+async def _run_broadcast(
+    message: Message,
+    session: AsyncSession,
+    text: str,
+    *,
+    actor_telegram_id: int,
+) -> tuple[int, int]:
+    body = html.escape(text)
+    ids = await user_repo.list_telegram_ids_for_broadcast(session)
+    ok, fail = 0, 0
+    bot = message.bot
+    for tid in ids:
+        try:
+            await bot.send_message(
+                tid,
+                f"📢 <b>Сообщение от администрации</b>\n\n{body}",
+                parse_mode=ParseMode.HTML,
+            )
+            ok += 1
+        except Exception:
+            fail += 1
+        await asyncio.sleep(0.04)
+    try:
+        await anticheat_service.log_admin_action(
+            session,
+            actor_telegram_id=actor_telegram_id,
+            target_user_id=None,
+            action="admin_broadcast",
+            message=text[:500],
+            payload={
+                "recipients": len(ids),
+                "delivered_ok": ok,
+                "delivered_fail": fail,
+            },
+        )
+        await session.commit()
+    except Exception:
+        logger.exception("admin_broadcast log")
+    return ok, fail
+
+
+@router.message(Command("admin"), IsAdmin())
+async def cmd_admin(message: Message, session: AsyncSession, command: CommandObject, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+    parts = (command.args or "").strip().split()
+    if not parts:
+        await state.clear()
+        try:
+            await message.answer(PANEL_HTML, parse_mode=ParseMode.HTML, reply_markup=admin_panel_keyboard())
+        except Exception:
+            logger.exception("cmd_admin panel")
+            await message.answer("Ошибка.")
+        return
+
+    sub = parts[0].lower()
+    if sub == "stats":
+        try:
+            stats = await _dashboard_stats(session)
+            await message.answer(panel.format_dashboard_html(stats), parse_mode=ParseMode.HTML)
+        except Exception:
+            logger.exception("admin stats")
+            await message.answer("Ошибка запроса к БД.")
+        return
+
+    if sub == "logs":
+        try:
+            show_all = len(parts) >= 2 and parts[1].lower() == "all"
+            body = await _logs_html(session, show_all=show_all)
+            if body is None:
+                await message.answer(
+                    "Записей пока нет." if show_all else "Записей ALERT/CRITICAL пока нет.",
+                )
+                return
+            await message.answer(_truncate_html(body), parse_mode=ParseMode.HTML)
+        except Exception:
+            logger.exception("admin logs")
+            await message.answer("Ошибка запроса к БД.")
+        return
+
+    if sub == "promo":
+        try:
+            await handle_admin_promo(
+                message,
+                session,
+                parts,
+                actor_telegram_id=message.from_user.id,
+            )
+        except Exception:
+            logger.exception("admin promo")
+            await message.answer("Ошибка.")
+        return
+
+    if sub == "user" and len(parts) >= 2 and parts[1].isdigit():
+        await _answer_user_lookup(message, session, int(parts[1]))
+        return
+
+    if (
+        sub == "give"
+        and len(parts) >= 4
+        and parts[1].lower() == "gold"
+        and parts[2].isdigit()
+        and parts[3].isdigit()
+    ):
+        await _do_give_gold(
+            message,
+            session,
+            int(parts[2]),
+            int(parts[3]),
+            actor_telegram_id=message.from_user.id,
+        )
+        return
+
+    await message.answer(
+        "Неизвестная подкоманда. Отправь <code>/admin</code> без аргументов — откроется панель.",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def _answer_user_lookup(message: Message, session: AsyncSession, tid: int) -> None:
+    try:
+        u = await user_repo.get_by_telegram_id(session, tid)
+        if u is None:
+            await message.answer(f"Нет пользователя <code>{tid}</code>.", parse_mode=ParseMode.HTML)
+            return
+        ch = await character_repo.get_by_user_id(session, u.id)
+        if ch is None:
+            await message.answer(
+                f"TG <code>{tid}</code> — без персонажа. Бан: <b>{u.is_banned}</b>",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+        bag_n = await character_repo.count_bag_items(session, ch.id)
+        un = html.escape(u.username or "—")
+        dn = html.escape(ch.display_name)
+        await message.answer(
+            f"👤 TG <code>{tid}</code> @{un}\n"
+            f"user_id: <code>{u.id}</code> · бан: <b>{u.is_banned}</b>\n"
+            f"Персонаж: <b>{dn}</b> ур. <b>{ch.level}</b>\n"
+            f"Этаж: <b>{ch.floor_number}</b> · золото: <b>{ch.gold}</b>\n"
+            f"Предметов в сумке: <b>{bag_n}</b>",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception("admin user")
+        await message.answer("Ошибка запроса к БД.")
+
+
+async def _do_give_gold(
+    message: Message,
+    session: AsyncSession,
+    tid: int,
+    amt: int,
+    *,
+    actor_telegram_id: int,
+) -> None:
+    if amt <= 0 or amt > 50_000_000:
+        await message.answer("Сумма должна быть 1…50 000 000.")
+        return
+    try:
+        u = await user_repo.get_by_telegram_id(session, tid)
+        if u is None:
+            await message.answer(f"Нет пользователя <code>{tid}</code>.", parse_mode=ParseMode.HTML)
+            return
+        ch = await character_repo.get_by_user_id(session, u.id)
+        if ch is None:
+            await message.answer("У пользователя нет персонажа.", parse_mode=ParseMode.HTML)
+            return
+        character_service.add_gold(ch, amt)
+        await anticheat_service.log_admin_action(
+            session,
+            actor_telegram_id=actor_telegram_id,
+            target_user_id=u.id,
+            action="admin_give_gold",
+            message=f"+{amt}",
+            payload={"telegram_id": tid, "amount": amt, "character_id": ch.id},
+        )
+        await session.commit()
+        await message.answer(
+            f"Начислено <b>{amt}</b> золота персонажу <code>{html.escape(ch.display_name)}</code>.",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception("admin give")
+        await message.answer("Ошибка запроса к БД.")
+
+
+# ——— Колбэки панели ———
+
+
+@router.callback_query(F.data == "adm:hub", IsAdmin())
+async def cb_admin_hub(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _restore_hub(callback.message, state)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:cancel", IsAdmin())
+async def cb_admin_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _restore_hub(callback.message, state)
+    await callback.answer("Отменено.")
+
+
+@router.callback_query(F.data == "adm:stats", IsAdmin())
+async def cb_admin_stats(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await state.clear()
+    try:
+        stats = await _dashboard_stats(session)
+        body = panel.format_dashboard_html(stats)
+        await _safe_edit_panel(callback.message, body, reply_markup=admin_back_keyboard())
+        await callback.answer()
+    except Exception:
+        logger.exception("adm:stats")
+        await callback.answer("Ошибка БД.", show_alert=True)
+
+
+@router.callback_query(F.data == "adm:logs", IsAdmin())
+async def cb_admin_logs(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    try:
+        body = await _logs_html(session, show_all=False)
+        if body is None:
+            await callback.answer("Записей нет.", show_alert=True)
+            return
+        await callback.message.answer(_truncate_html(body), parse_mode=ParseMode.HTML)
+        await callback.answer("Логи отправлены в чат.")
+    except Exception:
+        logger.exception("adm:logs")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "adm:logs_all", IsAdmin())
+async def cb_admin_logs_all(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    try:
+        body = await _logs_html(session, show_all=True)
+        if body is None:
+            await callback.answer("Записей нет.", show_alert=True)
+            return
+        await callback.message.answer(_truncate_html(body), parse_mode=ParseMode.HTML)
+        await callback.answer("Логи отправлены в чат.")
+    except Exception:
+        logger.exception("adm:logs_all")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "adm:promo", IsAdmin())
+async def cb_admin_promo_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await state.clear()
+    await _safe_edit_panel(callback.message, _PROMO_MENU_HTML, reply_markup=admin_promo_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:promo_list", IsAdmin())
+async def cb_admin_promo_list(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
+    try:
+        await handle_admin_promo(
+            callback.message,
+            session,
+            ["promo", "list"],
+            actor_telegram_id=callback.from_user.id,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("adm:promo_list")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "adm:promo_help", IsAdmin())
+async def cb_admin_promo_help(callback: CallbackQuery) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    try:
+        await callback.message.answer(promo_help_html(), parse_mode=ParseMode.HTML)
+        await callback.answer("Справка в чате.")
+    except Exception:
+        logger.exception("adm:promo_help")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "adm:promo_cmd", IsAdmin())
+async def cb_admin_promo_cmd(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await state.set_state(AdminStates.waiting_input)
+    await state.update_data(
+        admin_kind="promo_cmd",
+        panel_mid=callback.message.message_id,
+        panel_cid=callback.message.chat.id,
+    )
+    await _safe_edit_panel(
+        callback.message,
+        "✏️ Отправь <b>одной строкой</b> команду, например:\n"
+        "<code>/admin promo add КОД 500 100 1 50 0</code>\n"
+        "или без префикса: <code>promo add КОД …</code>",
+        reply_markup=admin_cancel_keyboard(),
+    )
+    await callback.answer()
+
+
+async def _prompt_fsm(
+    callback: CallbackQuery,
+    state: FSMContext,
+    *,
+    kind: str,
+    html_text: str,
+) -> None:
+    if callback.message is None:
+        return
+    await state.set_state(AdminStates.waiting_input)
+    await state.update_data(
+        admin_kind=kind,
+        panel_mid=callback.message.message_id,
+        panel_cid=callback.message.chat.id,
+    )
+    await _safe_edit_panel(callback.message, html_text, reply_markup=admin_cancel_keyboard())
+
+
+@router.callback_query(F.data == "adm:user", IsAdmin())
+async def cb_admin_user(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="user",
+        html_text="👤 Введи <b>Telegram ID</b> игрока (только цифры).",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:give", IsAdmin())
+async def cb_admin_give(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="give",
+        html_text="💰 Введи через пробел: <code>TELEGRAM_ID СУММА</code>\n"
+        "Сумма 1…50 000 000.",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:ban", IsAdmin())
+async def cb_admin_ban(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="ban",
+        html_text="🚫 Введи <code>TELEGRAM_ID</code> или <code>TELEGRAM_ID причина</code> (причина — всё после первого пробела).",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:unban", IsAdmin())
+async def cb_admin_unban(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="unban",
+        html_text="✅ Введи <b>Telegram ID</b> для разбана.",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:broadcast", IsAdmin())
+async def cb_admin_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="broadcast",
+        html_text="📢 Отправь <b>текст рассылки</b> одним сообщением (поддерживается HTML как в Telegram).",
+    )
+    await callback.answer()
+
+
+async def _try_restore_hub_from_state(
+    bot,
+    state: FSMContext,
+) -> None:
+    data = await state.get_data()
+    mid = data.get("panel_mid")
+    cid = data.get("panel_cid")
+    if mid is not None and cid is not None:
+        try:
+            await bot.edit_message_text(
+                PANEL_HTML,
+                chat_id=int(cid),
+                message_id=int(mid),
+                parse_mode=ParseMode.HTML,
+                reply_markup=admin_panel_keyboard(),
+            )
+        except TelegramBadRequest:
+            pass
+    await state.clear()
+
+
+@router.message(StateFilter(AdminStates.waiting_input), F.text, IsAdmin())
+async def admin_fsm_text(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    if message.from_user is None:
+        return
+    data = await state.get_data()
+    kind = data.get("admin_kind")
+    text = (message.text or "").strip()
+    actor_id = message.from_user.id
+
+    async def finish(msg: str, *, ok: bool = True) -> None:
+        await _try_restore_hub_from_state(message.bot, state)
+        await message.answer(msg, parse_mode=ParseMode.HTML if ok else None)
+
+    try:
+        if kind == "user":
+            if not text.isdigit():
+                await message.answer("Нужен числовой Telegram ID.")
+                return
+            await _answer_user_lookup(message, session, int(text))
+            await _try_restore_hub_from_state(message.bot, state)
+            return
+
+        if kind == "give":
+            parts = text.split()
+            if len(parts) < 2 or not parts[0].isdigit() or not parts[1].isdigit():
+                await message.answer("Формат: <code>ID СУММА</code>", parse_mode=ParseMode.HTML)
+                return
+            await _do_give_gold(message, session, int(parts[0]), int(parts[1]), actor_telegram_id=actor_id)
+            await _try_restore_hub_from_state(message.bot, state)
+            return
+
+        if kind == "ban":
+            parts = text.split(maxsplit=1)
+            if not parts or not parts[0].isdigit():
+                await message.answer("Сначала числовой Telegram ID.")
+                return
+            tid = int(parts[0])
+            reason = parts[1].strip() if len(parts) > 1 else None
+            u = await user_repo.get_by_telegram_id(session, tid)
+            ok = await user_repo.set_ban_by_telegram_id(session, tid, banned=True, reason=reason)
+            if ok and u is not None:
+                await anticheat_service.log_admin_action(
+                    session,
+                    actor_telegram_id=actor_id,
+                    target_user_id=u.id,
+                    action="admin_ban",
+                    message=reason,
+                    payload={"telegram_id": tid},
+                )
+            await session.commit()
+            await finish(
+                f"Пользователь <code>{tid}</code> забанен." if ok else f"Не найден <code>{tid}</code>.",
+            )
+            return
+
+        if kind == "unban":
+            if not text.isdigit():
+                await message.answer("Нужен числовой Telegram ID.")
+                return
+            tid = int(text)
+            u = await user_repo.get_by_telegram_id(session, tid)
+            ok = await user_repo.set_ban_by_telegram_id(session, tid, banned=False, reason=None)
+            if ok and u is not None:
+                await anticheat_service.log_admin_action(
+                    session,
+                    actor_telegram_id=actor_id,
+                    target_user_id=u.id,
+                    action="admin_unban",
+                    message=None,
+                    payload={"telegram_id": tid},
+                )
+            await session.commit()
+            await finish(
+                f"Пользователь <code>{tid}</code> разбанен." if ok else f"Не найден <code>{tid}</code>.",
+            )
+            return
+
+        if kind == "broadcast":
+            await message.answer(f"Рассылка запущена…")
+            ok_n, fail_n = await _run_broadcast(message, session, text, actor_telegram_id=actor_id)
+            await _try_restore_hub_from_state(message.bot, state)
+            await message.answer(f"Готово: доставлено ~<b>{ok_n}</b>, ошибок <b>{fail_n}</b>.")
+            return
+
+        if kind == "promo_cmd":
+            raw = text
+            if raw.startswith("/admin"):
+                raw = raw[6:].strip()
+            promo_parts = raw.split()
+            if not promo_parts:
+                await message.answer("Пусто. Пример: <code>promo list</code>", parse_mode=ParseMode.HTML)
+                return
+            if promo_parts[0].lower() != "promo":
+                promo_parts = ["promo", *promo_parts]
+            await handle_admin_promo(
+                message,
+                session,
+                promo_parts,
+                actor_telegram_id=actor_id,
+            )
+            await _try_restore_hub_from_state(message.bot, state)
+            return
+
+        await message.answer("Состояние панели сброшено. Отправь <code>/admin</code>.", parse_mode=ParseMode.HTML)
+        await state.clear()
+
+    except Exception:
+        logger.exception("admin_fsm_text")
+        await state.clear()
+        await message.answer("Ошибка.")
+
+
+# ——— Старые команды ———
+
+
+@router.message(Command("admin_stats"), IsAdmin())
+async def cmd_admin_stats(message: Message, session: AsyncSession) -> None:
+    try:
+        stats = await _dashboard_stats(session)
+        await message.answer(panel.format_dashboard_html(stats), parse_mode=ParseMode.HTML)
+    except Exception:
+        logger.exception("admin_stats")
+        await message.answer("Ошибка запроса к БД.")
+
+
+@router.message(Command("admin_ban"), IsAdmin())
+async def cmd_admin_ban(message: Message, session: AsyncSession, command: CommandObject) -> None:
+    if message.from_user is None:
+        return
+    args = (command.args or "").split(maxsplit=1)
+    if not args or not args[0].isdigit():
+        await message.answer("Использование: <code>/admin_ban TELEGRAM_ID [причина]</code>")
+        return
+    tid = int(args[0])
+    reason = args[1].strip() if len(args) > 1 else None
+    try:
+        u = await user_repo.get_by_telegram_id(session, tid)
+        ok = await user_repo.set_ban_by_telegram_id(session, tid, banned=True, reason=reason)
+        if ok and u is not None:
+            await anticheat_service.log_admin_action(
+                session,
+                actor_telegram_id=message.from_user.id,
+                target_user_id=u.id,
+                action="admin_ban",
+                message=reason,
+                payload={"telegram_id": tid},
+            )
+        await session.commit()
+        if ok:
+            await message.answer(f"Пользователь <code>{tid}</code> забанен.")
+        else:
+            await message.answer(f"Не найден telegram_id <code>{tid}</code>.")
+    except Exception:
+        logger.exception("admin_ban")
+        await message.answer("Ошибка БД.")
+
+
+@router.message(Command("admin_unban"), IsAdmin())
+async def cmd_admin_unban(message: Message, session: AsyncSession, command: CommandObject) -> None:
+    if message.from_user is None:
+        return
+    arg = (command.args or "").strip()
+    if not arg.isdigit():
+        await message.answer("Использование: <code>/admin_unban TELEGRAM_ID</code>")
+        return
+    tid = int(arg)
+    try:
+        u = await user_repo.get_by_telegram_id(session, tid)
+        ok = await user_repo.set_ban_by_telegram_id(session, tid, banned=False, reason=None)
+        if ok and u is not None:
+            await anticheat_service.log_admin_action(
+                session,
+                actor_telegram_id=message.from_user.id,
+                target_user_id=u.id,
+                action="admin_unban",
+                message=None,
+                payload={"telegram_id": tid},
+            )
+        await session.commit()
+        if ok:
+            await message.answer(f"Пользователь <code>{tid}</code> разбанен.")
+        else:
+            await message.answer(f"Не найден telegram_id <code>{tid}</code>.")
+    except Exception:
+        logger.exception("admin_unban")
+        await message.answer("Ошибка БД.")
+
+
+@router.message(Command("admin_broadcast"), IsAdmin())
+async def cmd_admin_broadcast(message: Message, session: AsyncSession, command: CommandObject) -> None:
+    if message.from_user is None:
+        return
+    text = (command.args or "").strip()
+    if not text:
+        await message.answer("Использование: <code>/admin_broadcast текст сообщения</code>")
+        return
+    ids = await user_repo.list_telegram_ids_for_broadcast(session)
+    await message.answer(f"Рассылка <b>{len(ids)}</b> получателям…")
+    ok, fail = await _run_broadcast(message, session, text, actor_telegram_id=message.from_user.id)
+    await message.answer(f"Готово: доставлено ~<b>{ok}</b>, ошибок <b>{fail}</b>.")
+
+
+@router.message(F.text.startswith("/admin"), IsAdmin())
+async def admin_help(message: Message) -> None:
+    """Подсказка по опечаткам /admin_*."""
+    first = (message.text or "").split(maxsplit=1)[0]
+    if first in (
+        "/admin_stats",
+        "/admin_ban",
+        "/admin_unban",
+        "/admin_broadcast",
+        "/admin",
+        "/settings",
+        "/настройки",
+    ):
+        return
+    await message.answer(
+        "🔧 <b>Админ</b>\n"
+        "<code>/admin</code> — панель с кнопками\n"
+        "<code>/admin_stats</code> — сводка\n"
+        "<code>/admin_ban ID [причина]</code>\n"
+        "<code>/admin_unban ID</code>\n"
+        "<code>/admin_broadcast текст</code>",
+        parse_mode=ParseMode.HTML,
+    )
