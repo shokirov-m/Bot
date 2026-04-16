@@ -20,14 +20,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from admin import panel
 from bot.middlewares.admin_check import IsAdmin
 from bot.keyboards.admin_kb import (
+    ADMIN_PLAYERS_PAGE_SIZE,
     admin_back_keyboard,
     admin_cancel_keyboard,
     admin_panel_keyboard,
+    admin_player_snapshot_keyboard,
+    admin_players_browser_keyboard,
     admin_promo_keyboard,
 )
 from bot.states.admin_states import AdminStates
 from config import settings
-from db.repository import admin_log_repo, character_repo, user_repo
+from db.models.inventory import InventoryItem
+from db.repository import admin_log_repo, character_repo, inventory_repo, user_repo
+from game.items import equipment as equipment_mod
 from services import anticheat_service, character_service
 from services.admin_promo_service import handle_admin_promo, promo_help_html
 
@@ -71,6 +76,21 @@ async def _logs_html(session: AsyncSession, *, show_all: bool) -> str | None:
             f"[{html.escape(r.severity)}] <b>{html.escape(r.action)}</b>{act}\n{msg}",
         )
     return "\n\n".join(lines)
+
+
+def _admin_equipped_lines_from_items(items: list[InventoryItem]) -> list[str]:
+    """Короткие строки для админки: слот + редкость + имя."""
+    lines: list[str] = []
+    for it in items:
+        d = it.item_data or {}
+        name = html.escape(str(d.get("name", "—")))
+        rar = str(d.get("rarity", "common"))
+        emo = equipment_mod.RARITY_EMOJI.get(rar, "⚪")
+        slot = str(it.equip_slot or "?")
+        slot_lab = equipment_mod.slot_label_ru(slot)
+        slot_html = html.escape(slot_lab)
+        lines.append(f"{slot_html}: {emo} {name}")
+    return lines
 
 
 def _truncate_html(s: str, max_len: int = 3800) -> str:
@@ -306,6 +326,134 @@ async def cb_admin_cancel(callback: CallbackQuery, state: FSMContext) -> None:
         return
     await _restore_hub(callback.message, state)
     await callback.answer("Отменено.")
+
+
+async def _admin_render_players_page(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    *,
+    page: int,
+) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await state.clear()
+    page = max(0, int(page))
+    total = await character_repo.count_characters(session)
+    if total <= 0:
+        await _safe_edit_panel(
+            callback.message,
+            "🧙 <b>Игроки</b>\nПерсонажей в базе пока нет.",
+            reply_markup=admin_back_keyboard(),
+        )
+        await callback.answer()
+        return
+    max_page = (total - 1) // ADMIN_PLAYERS_PAGE_SIZE
+    if page > max_page:
+        page = max_page
+    offset = page * ADMIN_PLAYERS_PAGE_SIZE
+    rows_full = await character_repo.list_characters_admin_browser(
+        session,
+        offset=offset,
+        limit=ADMIN_PLAYERS_PAGE_SIZE,
+    )
+    entries = [(cid, dn, lvl, banned) for cid, dn, lvl, _tid, banned, _ck in rows_full]
+    total_pages = (total + ADMIN_PLAYERS_PAGE_SIZE - 1) // ADMIN_PLAYERS_PAGE_SIZE
+    header = (
+        f"🧙 <b>Список игроков</b> · стр. <b>{page + 1}</b>/<b>{total_pages}</b> "
+        f"(всего героев: <b>{total}</b>)\n"
+        "<i>Нажми строку — краткий статус и надетые вещи.</i>"
+    )
+    kb = admin_players_browser_keyboard(
+        entries,
+        page=page,
+        page_size=ADMIN_PLAYERS_PAGE_SIZE,
+        total_entries=total,
+    )
+    await _safe_edit_panel(callback.message, header, reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:players", IsAdmin())
+async def cb_admin_players_start(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    await _admin_render_players_page(callback, session, state, page=0)
+
+
+@router.callback_query(F.data.startswith("adm:pl:"), IsAdmin())
+async def cb_admin_players_page(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    parts = (callback.data or "").split(":")
+    if len(parts) != 3 or not parts[2].isdigit():
+        await callback.answer()
+        return
+    await _admin_render_players_page(callback, session, state, page=int(parts[2]))
+
+
+@router.callback_query(F.data.startswith("adm:pv:"), IsAdmin())
+async def cb_admin_player_view(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await state.clear()
+    parts = (callback.data or "").split(":")
+    if len(parts) < 3 or parts[0] != "adm" or parts[1] != "pv" or not parts[2].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    ret_page = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 0
+    try:
+        ch = await character_repo.get_by_id(session, cid)
+        if ch is None:
+            await callback.answer("Персонаж не найден.", show_alert=True)
+            return
+        u = await user_repo.get_by_id(session, int(ch.user_id))
+        if u is None:
+            await callback.answer("Пользователь не найден.", show_alert=True)
+            return
+        equipped = await inventory_repo.list_equipped_items(session, int(ch.id))
+        lines = _admin_equipped_lines_from_items(equipped)
+        body = panel.format_admin_player_snapshot_html(
+            telegram_id=int(u.telegram_id),
+            username=u.username,
+            display_name=ch.display_name,
+            level=int(ch.level),
+            floor_number=int(ch.floor_number),
+            class_key=str(ch.class_key),
+            is_banned=bool(u.is_banned),
+            hp_current=int(ch.hp_current),
+            hp_max=int(ch.hp_max),
+            mp_current=int(ch.mp_current),
+            mp_max=int(ch.mp_max),
+            gold=int(ch.gold),
+            equipped_lines=lines,
+        )
+        await _safe_edit_panel(
+            callback.message,
+            _truncate_html(body),
+            reply_markup=admin_player_snapshot_keyboard(return_page=ret_page),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("adm:pv")
+        await callback.answer("Ошибка БД.", show_alert=True)
+
+
+@router.callback_query(F.data == "adm:referrals", IsAdmin())
+async def cb_admin_referrals(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await state.clear()
+    try:
+        limit = 80
+        rows = await user_repo.referral_registrations_by_inviter(session, limit=limit)
+        total = await user_repo.count_users_with_referrer(session)
+        body = panel.format_referrals_admin_html(rows, total_with_referrer=total, limit_shown=limit)
+        await _safe_edit_panel(callback.message, _truncate_html(body), reply_markup=admin_back_keyboard())
+        await callback.answer()
+    except Exception:
+        logger.exception("adm:referrals")
+        await callback.answer("Ошибка БД.", show_alert=True)
 
 
 @router.callback_query(F.data == "adm:stats", IsAdmin())

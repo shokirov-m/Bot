@@ -71,6 +71,7 @@ AI_PROFILES: dict[str, MonsterAIProfile] = {
     "rune_golem": MonsterAIProfile("passive", ("🗿 Рунный удар", "⚙️ Сейсм"), True),
     "tower_warden": MonsterAIProfile("berserk", ("👁️ Суд ока", "💀 Приговор"), True),
     "boss_tower_core": MonsterAIProfile("berserk", ("👁️ Фаза разрушения", "⚡ Суд вечности"), True),
+    "boss_slime_king": MonsterAIProfile("berserk", ("☠️ Волна яда", "👑 Тронный удар"), True),
 }
 
 DEFAULT_PROFILE = MonsterAIProfile("aggressive", ("💥 Мощный удар", "⚠️ Особый приём"), True)
@@ -119,6 +120,13 @@ def taunts_for_monster(name: str, template_key: str = "") -> list[str]:
             [
                 "Ты слабее пыли на моём троне.",
                 "Башня испытывает только избранных.",
+            ],
+        )
+    if "слиз" in low or key == "boss_slime_king":
+        pool.extend(
+            [
+                "Болота помнят твой шаг…",
+                "Ты станешь частью трона.",
             ],
         )
 

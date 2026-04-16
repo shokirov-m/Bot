@@ -23,6 +23,7 @@ from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.characters import pets as pets_mod
 from game.floors import floor_data
+from game.floors import wandering_npcs as wandering_npcs_mod
 from game.floors import forest_beginnings as fb
 from game.floors import long_floor as long_floor_mod
 from services import combat_service
@@ -239,6 +240,15 @@ async def on_floor_callback(
                 state=state,
                 character=char,
             )
+            return
+
+        if code == "wnpc":
+            info = wandering_npcs_mod.wandering_npc_for_floor(int(char.id), floor)
+            if info is None:
+                await query.answer("Сейчас здесь никого нет.", show_alert=True)
+                return
+            msg = f"{info['title']}: {info['hint']}"
+            await query.answer(msg[:200], show_alert=True)
             return
 
         if code in ("petg", "petr", "petw"):

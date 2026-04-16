@@ -55,6 +55,37 @@ async def count_characters(session: AsyncSession) -> int:
     return int(r.scalar_one() or 0)
 
 
+async def list_characters_admin_browser(
+    session: AsyncSession,
+    *,
+    offset: int,
+    limit: int,
+) -> list[tuple[int, str, int, int, bool, str]]:
+    """
+    Срез персонажей для админ-обзора: character_id, display_name, level, telegram_id, is_banned, class_key.
+    """
+    stmt = (
+        select(
+            Character.id,
+            Character.display_name,
+            Character.level,
+            User.telegram_id,
+            User.is_banned,
+            Character.class_key,
+        )
+        .join(User, Character.user_id == User.id)
+        .order_by(Character.id.asc())
+        .offset(int(offset))
+        .limit(int(limit))
+    )
+    r = await session.execute(stmt)
+    rows = r.all()
+    return [
+        (int(row[0]), str(row[1]), int(row[2]), int(row[3]), bool(row[4]), str(row[5]))
+        for row in rows
+    ]
+
+
 async def get_by_game_id(session: AsyncSession, game_id: int) -> Character | None:
     """Персонаж по публичному игровому ID (не забаненный пользователь)."""
     stmt = (

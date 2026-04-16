@@ -49,6 +49,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "создаст героя, а потом <b>достигнет 2 уровня</b>, ты получишь:\n"
             "• <b>2</b> предмета экипировки <b>редкой</b> редкости в сумку\n"
             "• <b>+200</b> опыта на твоего героя\n\n"
+            "Если по твоей ссылке зарегистрируется <b>пять разных</b> игроков и у каждого герой "
+            "достигнет <b>3 уровня</b>, ты получишь <b>эпическое ожерелье</b> (амулет) в сумку "
+            "и <b>+5</b> свободных очков характеристик (нужна свободная ячейка в сумке).\n\n"
             "<b>Твоя ссылка:</b>\n<code>{link}</code>"
         ),
         "settings_referral_no_username": "У бота нет username в Telegram — задай имя в @BotFather, чтобы ссылка работала.",
@@ -318,6 +321,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "and reach <b>level 2</b>, you get:\n"
             "• <b>2</b> rare gear items in your bag\n"
             "• <b>+200</b> XP for your hero\n\n"
+            "If <b>five different</b> players register via your link and each hero reaches "
+            "<b>level 3</b>, you get an <b>epic necklace</b> (amulet) in your bag "
+            "and <b>+5</b> unspent stat points (you need a free bag slot).\n\n"
             "<b>Your link:</b>\n<code>{link}</code>"
         ),
         "settings_referral_no_username": "This bot has no @username — set it in @BotFather so the link works.",

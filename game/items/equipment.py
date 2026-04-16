@@ -226,6 +226,22 @@ def referral_inviter_gear_payloads() -> tuple[dict[str, Any], dict[str, Any]]:
     )
 
 
+def referral_inviter_epic_necklace_payload() -> dict[str, Any]:
+    """Эпический амулет (ожерелье) пригласившему, когда пять друзей по ссылке достигли 3 уровня."""
+    return copy.deepcopy(
+        {
+            "name": "Ожерелье пяти верных",
+            "kind": "amulet",
+            "rarity": "epic",
+            "defense": 3,
+            "vit": 2,
+            "int": 3,
+            "luck": 1,
+            "summary": "Эпический дар башни: пять героев по твоей ссылке достигли 3 уровня.",
+        },
+    )
+
+
 def try_roll_secret_gear_payload(floor_number: int) -> dict[str, Any] | None:
     """
     При успешной находке тайника — бросок на экипировку (ранние этажи: прежний пул; дальше — масштаб).

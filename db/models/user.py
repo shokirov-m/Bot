@@ -44,6 +44,12 @@ class User(Base):
         nullable=False,
         server_default="0",
     )
+    # Пригласившему уже выдано эпическое ожерелье за 5 приглашённых с уровнем ≥ 3.
+    referral_five_l3_necklace_done: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="0",
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

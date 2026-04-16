@@ -1,5 +1,6 @@
 """
-Рефералка: ссылка в настройках, /start ref_<telegram_id>, награда пригласившему при 2 ур. приглашённого.
+Рефералка: ссылка в настройках, /start ref_<telegram_id>, награды пригласившему
+(L2 приглашённого — редкие вещи + XP; пять приглашённых с 3+ ур. — эпическое ожерелье).
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from aiogram.enums import ParseMode
 from loguru import logger
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
@@ -23,6 +25,11 @@ if TYPE_CHECKING:
     from aiogram import Bot
 
 REFERRAL_INVITER_XP = 200
+
+# Пять разных приглашённых с уровнем героя ≥ 3 — пригласившему эпический амулет (ожерелье).
+REFERRAL_FIVE_L3_MIN_LEVEL = 3
+REFERRAL_FIVE_L3_INVITEE_COUNT = 5
+REFERRAL_FIVE_L3_INVITER_STAT_POINTS = 5
 
 
 def parse_referrer_telegram_id_from_start_text(text: str | None) -> int | None:
@@ -169,3 +176,103 @@ async def try_reward_referrer_for_invitee_level_two(
         )
     except Exception:
         logger.exception("referral reward notify failed")
+
+
+async def _count_invitees_at_least_level(
+    session: AsyncSession,
+    *,
+    inviter_user_id: int,
+    min_level: int,
+) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(User)
+        .join(Character, Character.user_id == User.id)
+        .where(
+            User.referred_by_user_id == int(inviter_user_id),
+            User.is_banned.is_(False),
+            Character.level >= int(min_level),
+        )
+    )
+    res = await session.execute(stmt)
+    return int(res.scalar_one() or 0)
+
+
+async def try_reward_referrer_five_invitees_level_three(
+    session: AsyncSession,
+    invitee_char: Character,
+    *,
+    bot: Bot | None,
+) -> None:
+    """
+    Если у приглашённого герой ≥ 3 ур., пригласивший ещё не получал награду
+    и среди приглашённых уже ≥5 с уровнем ≥3 — выдать эпическое ожерелье в сумку.
+    Вызывается при начислении опыта приглашённому с 3+ уровнем (в т.ч. повтор, если сумка была полна).
+    """
+    if int(invitee_char.level) < REFERRAL_FIVE_L3_MIN_LEVEL:
+        return
+
+    invitee_user = await session.get(User, int(invitee_char.user_id))
+    if invitee_user is None or not invitee_user.referred_by_user_id:
+        return
+
+    inviter = await session.get(User, int(invitee_user.referred_by_user_id))
+    if inviter is None or bool(inviter.is_banned):
+        return
+    if bool(inviter.referral_five_l3_necklace_done):
+        return
+
+    n = await _count_invitees_at_least_level(
+        session,
+        inviter_user_id=int(inviter.id),
+        min_level=REFERRAL_FIVE_L3_MIN_LEVEL,
+    )
+    if n < REFERRAL_FIVE_L3_INVITEE_COUNT:
+        return
+
+    inviter_char = await character_repo.get_by_user_id(session, int(inviter.id))
+    if inviter_char is None:
+        return
+
+    free = await inventory_repo.first_free_bag_slot(session, int(inviter_char.id))
+    if free is None:
+        if bot is not None:
+            try:
+                await bot.send_message(
+                    int(inviter.telegram_id),
+                    "🎁 <b>Реферальная награда!</b>\n"
+                    "Пять приглашённых друзей достигли <b>3 уровня</b>, но в сумке "
+                    "<b>нет свободной ячейки</b> для эпического ожерелья.\n"
+                    "Освободи место — при следующем получении опыта любым из этих друзей награда придёт снова.",
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception:
+                logger.exception("referral five-l3 bag full notify failed")
+        return
+
+    payload = equip_mod.referral_inviter_epic_necklace_payload()
+    await inventory_repo.add_bag_item(
+        session,
+        int(inviter_char.id),
+        copy.deepcopy(payload),
+        bag_slot=free,
+    )
+    inviter.referral_five_l3_necklace_done = True
+    inviter_char.unspent_stat_points = int(inviter_char.unspent_stat_points) + int(REFERRAL_FIVE_L3_INVITER_STAT_POINTS)
+    title_service.refresh_unlocks(inviter_char)
+    await session.flush()
+
+    if bot is None:
+        return
+    inviter_n = html.escape(inviter_char.display_name)
+    item_n = html.escape(str(payload.get("name", "Ожерелье")))
+    try:
+        await bot.send_message(
+            int(inviter.telegram_id),
+            f"🎁 <b>Пять друзей по ссылке — 3+ уровень!</b>\n"
+            f"В сумку героя <b>{inviter_n}</b> добавлено эпическое снаряжение: <b>{item_n}</b>.\n"
+            f"Бонус: <b>+{REFERRAL_FIVE_L3_INVITER_STAT_POINTS}</b> свободных очков характеристик.",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception("referral five-l3 reward notify failed")

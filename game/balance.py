@@ -98,9 +98,18 @@ MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR = 0.03
 # Главный босс 10-го яруса — дополнительно ×2.5 к HP/атаке/защите (после прочих множителей).
 MONSTER_FLOOR10_MAJOR_BOSS_MULT = 2.5
 
+# Босс 20-го (Царь слизней, зона болот): ×3 к HP/атаке/защите; в бою — игнор брони 50 % и яд по ударам.
+MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY = "boss_slime_king"
+MONSTER_FLOOR20_SLIME_KING_STAT_MULT = 3.0
+MONSTER_FLOOR20_SLIME_KING_ARMOR_PENETRATION = 0.50
+
 # С 12-го этажа: дополнительный множитель к HP всех врагов (атака без изменений).
 MONSTER_HP_FLOOR12_MULT = 1.12
 MONSTER_HP_FLOOR12_THRESHOLD = 12
+
+# Этажи 18–19: дополнительная сложность (HP / атака / защита).
+MONSTER_FLOOR18_19_MULT = 1.8
+MONSTER_FLOOR18_19_FLOORS = frozenset({18, 19})
 
 # Сумка: верхняя граница слота для проверок (фактически без лимита ячеек).
 BAG_MAX_SLOT_INDEX = 9_999_999

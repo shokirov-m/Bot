@@ -21,6 +21,7 @@ from game.floors import floor_data
 from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import long_floor as long_floor_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
+from game.floors import wandering_npcs as wandering_npcs_mod
 from game.floors.monsters import FloorMonsterSpawn
 from game.floors.tower_ascent import tower_next_floor_pending
 from services.tutorial_battle_service import tutorial_battle_pending
@@ -157,6 +158,20 @@ def floor_screen_keyboard(
             ],
         )
 
+    wnpc = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), floor_number)
+    if wnpc is not None:
+        btxt = str(wnpc["button"])
+        if len(btxt) > 18:
+            btxt = btxt[:15] + "…"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🎭 {btxt}",
+                    callback_data=_cb(floor_number, "wnpc"),
+                ),
+            ],
+        )
+
     buffer: list[InlineKeyboardButton] = []
 
     def flush() -> None:
@@ -289,6 +304,20 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=sc_lbl,
                     callback_data=f"flf:swcamp:{floor_number}",
+                ),
+            ],
+        )
+
+    wnpc = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), floor_number)
+    if wnpc is not None:
+        btxt = str(wnpc["button"])
+        if len(btxt) > 18:
+            btxt = btxt[:15] + "…"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🎭 {btxt}",
+                    callback_data=_cb(floor_number, "wnpc"),
                 ),
             ],
         )

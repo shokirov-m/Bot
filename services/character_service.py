@@ -179,18 +179,25 @@ async def add_experience_async(
     bot: Any = None,
 ) -> int:
     """
-    Начислить опыт и при переходе приглашённого на 2+ уровень — награда пригласившему (рефералка).
+    Начислить опыт и реферальные награды пригласившему (2 ур. приглашённого; пять приглашённых с 3+ ур.).
     """
     old_level = int(character.level)
     gained = add_experience(character, amount)
-    if old_level < 2 <= int(character.level):
+    if old_level < 2 <= int(character.level) or int(character.level) >= 3:
         from services import referral_service
 
-        await referral_service.try_reward_referrer_for_invitee_level_two(
-            session,
-            character,
-            bot=bot,
-        )
+        if old_level < 2 <= int(character.level):
+            await referral_service.try_reward_referrer_for_invitee_level_two(
+                session,
+                character,
+                bot=bot,
+            )
+        if int(character.level) >= 3:
+            await referral_service.try_reward_referrer_five_invitees_level_three(
+                session,
+                character,
+                bot=bot,
+            )
     return gained
 
 

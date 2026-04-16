@@ -265,11 +265,11 @@ def major_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> Monster
             "Корни сковывают поле боя.",
         ),
         "rotten_swamps": MonsterTemplate(
-            "boss_plague_hydra",
-            "Чумная гидра",
-            "🐍",
-            "dark",
-            "Три головы — три яда.",
+            "boss_slime_king",
+            "Царь слизней",
+            "👑",
+            "poison",
+            "Трон из слизи и яда: бьёт сильно и отравляет.",
         ),
         "shadow_caves": MonsterTemplate(
             "boss_night_stalker",

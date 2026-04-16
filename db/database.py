@@ -117,6 +117,13 @@ def patch_sqlite_users_referral_columns() -> None:
                 )
                 con.commit()
                 logger.info("Патч SQLite: добавлена колонка users.referral_l2_payout_done")
+            cols = {row[1] for row in con.execute("PRAGMA table_info(users)").fetchall()}
+            if "referral_five_l3_necklace_done" not in cols:
+                con.execute(
+                    "ALTER TABLE users ADD COLUMN referral_five_l3_necklace_done BOOLEAN NOT NULL DEFAULT 0",
+                )
+                con.commit()
+                logger.info("Патч SQLite: добавлена колонка users.referral_five_l3_necklace_done")
             con.execute(
                 "CREATE INDEX IF NOT EXISTS ix_users_referred_by_user_id ON users (referred_by_user_id)",
             )

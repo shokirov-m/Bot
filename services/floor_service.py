@@ -34,6 +34,7 @@ from game.locations import cities as city_locations
 from game.floors import long_floor as long_floor_mod
 from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
+from game.floors import wandering_npcs as wandering_npcs_mod
 from game.floors.tower_ascent import clear_tower_ascent_pending, tower_next_floor_pending
 from services.rest_service import apply_completed_rest_if_needed
 from game.items.equipment import (
@@ -139,6 +140,13 @@ def format_floor_message(character: Character) -> str:
     if tags:
         lines.append(" · ".join(tags))
 
+    wn = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), n)
+    if wn:
+        lines.append(
+            f"🎭 <b>{html.escape(wn['title'])}</b> — <i>{html.escape(wn['hint'])}</i> "
+            f"(кнопка «{html.escape(wn['button'])}»).",
+        )
+
     if tutorial_battle_pending(character) and n == 1:
         lines.append("🎓 <b>Учебный бой</b> наставника — кнопка ниже.")
 
@@ -226,6 +234,10 @@ def format_floor_message_photo_caption(character: Character) -> str:
         tags.append("👑 Босс")
     if tags:
         lines.append(" · ".join(tags))
+    wn = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), n)
+    if wn:
+        raw_wn = f"🎭 {wn['title']}: {wn['hint']}"
+        lines.append(html.escape(raw_wn if len(raw_wn) <= 120 else raw_wn[:117] + "…"))
     if tutorial_battle_pending(character) and n == 1:
         lines.append("🎓 Учебный бой — внизу")
     if n == 3 and not long_floor_mod.is_long_floor_active(character):

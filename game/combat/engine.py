@@ -313,6 +313,16 @@ def _rune_status_proc_logs(state: dict[str, Any]) -> list[str]:
             state["monster_outgoing_mult"] = min(float(state.get("monster_outgoing_mult", 1.0)), 0.78)
             state["monster_debuff_turns"] = max(int(state.get("monster_debuff_turns", 0)), 2)
             logs.append("🌿 Земля руны сковывает шаги!")
+        elif se == "poison":
+            effects.add_effect(
+                "monster",
+                state,
+                "Рунный яд",
+                "poison",
+                3,
+                {"potency_percent": 3},
+            )
+            logs.append("☠️ Руна отравляет врага!")
     return logs
 
 
@@ -628,11 +638,22 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     base = int(atk * random.uniform(0.9, 1.1) * mult * out_m)
     base = max(1, int(base * float(MONSTER_DAMAGE_DEALT_MULT)))
     defense = player_defense_value(state)
-    pen = (
-        float(MONSTER_ARMOR_PENETRATION_MAJOR_BOSS)
-        if bool(m.get("is_major_boss")) or bool(m.get("is_mini_boss"))
-        else float(MONSTER_ARMOR_PENETRATION)
-    )
+    raw_pen = m.get("armor_penetration", None)
+    if raw_pen is not None:
+        try:
+            pen = float(raw_pen)
+        except (TypeError, ValueError):
+            pen = (
+                float(MONSTER_ARMOR_PENETRATION_MAJOR_BOSS)
+                if bool(m.get("is_major_boss")) or bool(m.get("is_mini_boss"))
+                else float(MONSTER_ARMOR_PENETRATION)
+            )
+    else:
+        pen = (
+            float(MONSTER_ARMOR_PENETRATION_MAJOR_BOSS)
+            if bool(m.get("is_major_boss")) or bool(m.get("is_mini_boss"))
+            else float(MONSTER_ARMOR_PENETRATION)
+        )
     pen = max(0.0, min(0.95, pen))
     eff_defense = int(defense * (1.0 - pen))
 
@@ -678,6 +699,17 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     if dmg > 0:
         logs.append(f"→ {m.get('emoji', '👹')} Удар по тебе: −{dmg} HP")
         record_monster_last_damage_to_player(state, dmg)
+        if int(state["player_hp"]) > 0:
+            if bool(m.get("applies_poison_on_hit")) and random.random() < 0.42:
+                effects.add_effect(
+                    "player",
+                    state,
+                    "Яд",
+                    "poison",
+                    3,
+                    {"potency_percent": 4},
+                )
+                logs.append("☠️ Яд проникает в раны!")
 
     state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
 

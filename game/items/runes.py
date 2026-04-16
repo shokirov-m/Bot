@@ -15,6 +15,7 @@ ELEMENTS: dict[str, dict[str, str]] = {
     "dark": {"name": "Тьмы", "emoji": "🌑", "status_effect": "fear"},
     "light": {"name": "Света", "emoji": "✨", "status_effect": "blind"},
     "earth": {"name": "Земли", "emoji": "🌿", "status_effect": "slow"},
+    "poison": {"name": "Яда", "emoji": "☠️", "status_effect": "poison"},
 }
 
 # ранг: % элемент. к базе, шанс статуса, вес дропа, плоский элементальный урон (игнор брони в бою)

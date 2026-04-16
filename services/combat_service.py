@@ -50,6 +50,11 @@ from game.balance import (
     MONSTER_FLOOR_DEF_PER_LEVEL,
     MONSTER_FLOOR_POWER_PER_LEVEL,
     MONSTER_FLOOR10_MAJOR_BOSS_MULT,
+    MONSTER_FLOOR20_SLIME_KING_ARMOR_PENETRATION,
+    MONSTER_FLOOR20_SLIME_KING_STAT_MULT,
+    MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY,
+    MONSTER_FLOOR18_19_FLOORS,
+    MONSTER_FLOOR18_19_MULT,
     MONSTER_HP_FLOOR12_MULT,
     MONSTER_HP_FLOOR12_THRESHOLD,
     MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT,
@@ -282,6 +287,22 @@ def _monster_stat_bundle(
     if int(floor_number) >= MONSTER_HP_FLOOR12_THRESHOLD:
         hp_out = max(1, int(hp_out * MONSTER_HP_FLOOR12_MULT))
 
+    if int(floor_number) in MONSTER_FLOOR18_19_FLOORS:
+        m1819 = float(MONSTER_FLOOR18_19_MULT)
+        hp_out = max(1, int(hp_out * m1819))
+        atk_out = max(1, int(atk_out * m1819))
+        def_out = max(0, int(def_out * m1819))
+
+    if (
+        int(floor_number) == 20
+        and spawn.is_major_boss
+        and str(spawn.template.key) == MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY
+    ):
+        msk = float(MONSTER_FLOOR20_SLIME_KING_STAT_MULT)
+        hp_out = max(1, int(hp_out * msk))
+        atk_out = max(1, int(atk_out * msk))
+        def_out = max(0, int(def_out * msk))
+
     # Обычные цели с 10-го этажа: +8 к атаке (не элита и не боссы).
     if (
         int(floor_number) >= 10
@@ -292,7 +313,7 @@ def _monster_stat_bundle(
         atk_out = max(1, int(atk_out) + 8)
 
     ail_mult, ail_lab, ail_em = _monster_strike_ailment(floor_number, spawn)
-    return {
+    bundle: dict[str, Any] = {
         "name": spawn.template.name,
         "emoji": spawn.template.emoji,
         "template_key": spawn.template.key,
@@ -305,6 +326,14 @@ def _monster_stat_bundle(
         "strike_ailment_label_ru": ail_lab,
         "strike_ailment_emoji": ail_em,
     }
+    if (
+        int(floor_number) == 20
+        and spawn.is_major_boss
+        and str(spawn.template.key) == MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY
+    ):
+        bundle["armor_penetration"] = float(MONSTER_FLOOR20_SLIME_KING_ARMOR_PENETRATION)
+        bundle["applies_poison_on_hit"] = True
+    return bundle
 
 
 async def _weapon_profile(

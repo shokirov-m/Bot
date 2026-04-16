@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from loguru import logger
 
 from db.models.user import User
@@ -101,3 +102,36 @@ async def list_telegram_ids_for_broadcast(session: AsyncSession) -> list[int]:
         select(User.telegram_id).where(User.is_banned.is_(False)),
     )
     return [int(row[0]) for row in r.fetchall()]
+
+
+async def count_users_with_referrer(session: AsyncSession) -> int:
+    """Сколько аккаунтов зарегистрировано с указанным пригласившим (referred_by_user_id не NULL)."""
+    r = await session.execute(
+        select(func.count()).select_from(User).where(User.referred_by_user_id.isnot(None)),
+    )
+    return int(r.scalar_one() or 0)
+
+
+async def referral_registrations_by_inviter(
+    session: AsyncSession,
+    *,
+    limit: int = 80,
+) -> list[tuple[int, int, str | None, int]]:
+    """
+    Топ пригласивших: (users.id пригласившего, telegram_id, username, число приглашённых аккаунтов).
+    """
+    inviter = aliased(User)
+    cnt = func.count(User.id).label("invite_count")
+    stmt = (
+        select(inviter.id, inviter.telegram_id, inviter.username, cnt)
+        .select_from(User)
+        .join(inviter, User.referred_by_user_id == inviter.id)
+        .group_by(inviter.id, inviter.telegram_id, inviter.username)
+        .order_by(cnt.desc(), inviter.id.asc())
+        .limit(int(limit))
+    )
+    r = await session.execute(stmt)
+    out: list[tuple[int, int, str | None, int]] = []
+    for row in r.all():
+        out.append((int(row[0]), int(row[1]), row[2], int(row[3])))
+    return out
