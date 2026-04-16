@@ -183,7 +183,7 @@ async def menu_profile(callback: CallbackQuery, session: AsyncSession, state: FS
             callback.bot,
             chat_id=callback.message.chat.id,
             text=cap,
-            reply_markup=profile_view_keyboard(locale=loc),
+            reply_markup=profile_view_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=p,
         )

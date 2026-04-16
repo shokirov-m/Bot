@@ -27,6 +27,7 @@ from services.floor_service import (
     get_spawns_for_character,
     push_floor_screen_ui,
     travel_by_delta,
+    travel_to_floor,
     try_secret_search,
 )
 from utils.ui import LINE_SEP
@@ -232,6 +233,39 @@ async def on_floor_callback(
                 target_message=query.message,
             )
             await query.answer()
+            return
+
+        if code == "ascend":
+            if query.message is None:
+                await query.answer()
+                return
+            from game.floors.tower_ascent import tower_next_floor_pending
+
+            pend = tower_next_floor_pending(char)
+            if pend is None:
+                await query.answer("Сначала победи все цели на этом этаже.", show_alert=True)
+                return
+            ok, err = await travel_to_floor(
+                session,
+                char,
+                pend,
+                telegram_id=query.from_user.id,
+                username=query.from_user.username,
+                bot=query.bot,
+            )
+            if not ok:
+                await query.answer(err or "Нельзя подняться.", show_alert=True)
+                return
+            await push_floor_screen_ui(
+                session,
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                character=char,
+                reply_markup=await floor_keyboard_for_character(session, char),
+                target_message=query.message,
+            )
+            await query.answer(f"Этаж {char.floor_number}")
             return
 
         if code == "down":

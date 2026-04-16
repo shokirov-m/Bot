@@ -20,6 +20,7 @@ from game.characters import pets as pets_mod
 from game.floors import floor_data
 from game.floors import long_floor as long_floor_mod
 from game.floors.monsters import FloorMonsterSpawn
+from game.floors.tower_ascent import tower_next_floor_pending
 from services.tutorial_battle_service import tutorial_battle_pending
 
 
@@ -139,6 +140,17 @@ def floor_screen_keyboard(
 
     flush()
 
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"⬆️ Этаж {pend}",
+                    callback_data=_cb(floor_number, "ascend"),
+                ),
+            ],
+        )
+
     if floor_data.get_city_for_floor(floor_number):
         rows.append(
             [
@@ -235,6 +247,17 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="👑 Владыка топи",
                     callback_data=_cb(floor_number, "lf_boss"),
+                ),
+            ],
+        )
+
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"⬆️ Этаж {pend}",
+                    callback_data=_cb(floor_number, "ascend"),
                 ),
             ],
         )

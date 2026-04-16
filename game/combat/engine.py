@@ -15,21 +15,16 @@ from game.items.runes import ELEMENTS, RuneData
 Outcome = Literal["continue", "win", "lose"]
 
 COMBO_BONUS_MULT = 1.15
-# Порог для явного «СЛАБОЕ МЕСТО» в логе (руны vs стихия монстра).
-ELEMENTAL_WEAK_SPOT_LOG_PCT = 15
 
 
 def _log_weapon_rune_elemental_once(state: dict[str, Any], elem_bonus: int, logs: list[str]) -> None:
-    """Один раз за раунд боёвки — заметная строка про стихийный бонус рун."""
-    if elem_bonus <= 0 or state.get("rune_elem_logged"):
+    """Один раз за ход — строка про стихийный бонус рун (урон в формуле уже с pct)."""
+    pct = int(elem_bonus)
+    if pct < 15 or state.get("rune_elem_logged"):
         return
     state["rune_elem_logged"] = True
-    if elem_bonus >= ELEMENTAL_WEAK_SPOT_LOG_PCT:
-        logs.append(
-            f"🎯 <b>СЛАБОЕ МЕСТО!</b> Руны бьют по стихии врага (+{elem_bonus}% к базе)",
-        )
-    else:
-        logs.append(f"✨ Элементальный урон! (+{elem_bonus}% к базе)")
+    weak_tag = "🎯 Слабое место!" if pct >= 30 else "🔥 Элементальный удар!"
+    logs.append(f"{weak_tag} +{pct}% к урону")
 
 
 COMBO_STREAK_TO_TRIGGER = 3

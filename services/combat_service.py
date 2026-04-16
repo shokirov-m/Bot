@@ -261,9 +261,6 @@ def _apply_weapon_runes_to_state(
     runes_list = parse_weapon_runes(weapon_item_data)
     mon_el = str(combat_state.get("monster", {}).get("element") or "earth")
     pct = calculate_elemental_bonus(runes_list, mon_el, character.element)
-    if pct >= 15:
-        weak_tag = "🎯 Слабое место!" if pct >= 30 else "🔥 Элементальный удар!"
-        combat_state.setdefault("ui_logs", []).append(f"{weak_tag} +{pct}% к урону")
     ex = rune_combat_extras(runes_list)
     combat_state["weapon_rune_bonus_pct"] = int(pct)
     combat_state["rune_crit_damage_bonus_percent"] = int(ex.get("crit_damage_bonus_percent", 0))
@@ -770,20 +767,20 @@ async def _apply_tower_progress_after_victory(
         row.extra = extra
         return "\n👁️ <b>Вершина башни:</b> страж повержен."
 
-    character.floor_number = cur + 1
-    character.highest_floor_reached = max(
-        int(character.highest_floor_reached),
-        int(character.floor_number),
-    )
+    from game.floors.tower_ascent import set_tower_ascent_pending
+
+    nxt = cur + 1
+    set_tower_ascent_pending(character, nxt)
+    character.highest_floor_reached = max(int(character.highest_floor_reached), nxt)
     extra["slots_cleared"] = []
     row.extra = extra
-    nf = int(character.floor_number)
-    zone = floor_data.get_zone_for_floor(nf)
-    room = floor_data.epithet_for_floor(zone, nf)
+    zone_next = floor_data.get_zone_for_floor(nxt)
+    room_next = floor_data.epithet_for_floor(zone_next, nxt)
     return (
-        f"\n🪜 <b>Проход открыт!</b>\n"
-        f"🗼 <b>Этаж {nf}</b> / 100 — <i>{html.escape(room)}</i>\n"
-        f"<i>{html.escape(zone.description)}</i>"
+        f"\n🪜 <b>Этаж зачищен!</b>\n"
+        f"Поднимись на <b>{nxt}</b> / 100 — <i>{html.escape(room_next)}</i> "
+        f"(кнопка «Следующий этаж» или ⬆️ Выше).\n"
+        f"<i>{html.escape(zone_next.description)}</i>"
     )
 
 

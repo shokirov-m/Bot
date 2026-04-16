@@ -55,7 +55,11 @@ def format_leaderboard_html(category: str, rows: list[Character], *, locale: str
         name = html.escape(_short_display(c.display_name))
         ranker_suffix = f" {t(locale, 'top_ranker_badge')}" if i <= RANKER_TOP_N else ""
         if category == "lvl":
-            extra = f"Ур.{c.level} · этаж {c.floor_number} · опыт {int(c.experience):,}"
+            extra = (
+                f"Lv.{c.level} · XP {int(c.experience):,}"
+                if locale == "en"
+                else f"Ур.{c.level} · опыт {int(c.experience):,}"
+            )
         elif category == "flr":
             extra = f"этаж {c.floor_number} · Ур.{c.level}"
         elif category == "pow":
@@ -64,6 +68,8 @@ def format_leaderboard_html(category: str, rows: list[Character], *, locale: str
         else:
             extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
         lines.append(f"{med} <b>{name}</b>{ranker_suffix}\n   <i>{extra}</i>")
+        if i < len(rows):
+            lines.append("")
     lines.append("")
     lines.append(
         "<i>Забаненные не учитываются. Нажми категорию снизу, чтобы переключить.</i>\n"

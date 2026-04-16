@@ -27,6 +27,7 @@ from game.combat import night_mode as combat_night
 from game.floors import floor_data
 from game.locations import cities as city_locations
 from game.floors import long_floor as long_floor_mod
+from game.floors.tower_ascent import clear_tower_ascent_pending, tower_next_floor_pending
 from game.items.equipment import (
     SECRET_GEAR_DROP_CHANCE,
     SECRET_GEAR_EARLY_MAX_FLOOR,
@@ -149,7 +150,10 @@ def format_floor_message(character: Character) -> str:
     if needs_subclass_choice(character):
         lines.append("⚠️ Ур.57: подкласс — «Углубление пути».")
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
-        lines.append("🗝️ Новый ярус: все цели побеждены → ⬆️.")
+        lines.append("🗝️ Новый ярус: зачисти все цели, затем кнопка «Этаж N» или ⬆️ Выше.")
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        lines.append(f"✅ <b>Ярус зачищен.</b> Поднимись на этаж <b>{pend}</b> кнопкой выше или «⬆️ Выше».")
     if long_floor_mod.is_long_floor_active(character):
         lines.append("Сценарий этажа — шаги кнопками (−1 ⚡ за бой).")
     else:
@@ -206,7 +210,10 @@ def format_floor_message_photo_caption(character: Character) -> str:
     if needs_subclass_choice(character):
         lines.append("⚠️ Ур.57: подкласс")
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
-        lines.append("🗝️ Все цели → ⬆️")
+        lines.append("🗝️ Зачистка → кнопка этажа / ⬆️")
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        lines.append(f"✅ Подъём на <b>{pend}</b> — кнопка или ⬆️")
     if long_floor_mod.is_long_floor_active(character):
         lines.append("Сценарий: −1 ⚡ за бой")
     else:
@@ -378,6 +385,8 @@ async def travel_to_floor(
     if target_floor < 1 or target_floor > hi:
         return False, "Этаж ещё не открыт или недоступен."
     old_floor = int(character.floor_number)
+    if target_floor > old_floor:
+        clear_tower_ascent_pending(character)
     character.floor_number = target_floor
     row = await floor_progress_repo.ensure_floor_row(session, character.id, target_floor)
     ex = dict(row.extra or {})

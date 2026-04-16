@@ -31,6 +31,7 @@ from services.rest_service import (
     format_rest_status_line_html,
     try_begin_or_claim_rest,
 )
+from game.characters import pets as pets_mod
 from game.characters.classes import get_class_or_none
 from game.characters.global_passives import format_unlocked_global_passives_ru, refresh_global_passives
 from game.characters.path_ranks import path_rank_name_ru
@@ -315,7 +316,7 @@ async def cmd_profile(message: Message, session: AsyncSession, state: FSMContext
             message.bot,
             chat_id=message.chat.id,
             text=cap,
-            reply_markup=profile_view_keyboard(locale=loc),
+            reply_markup=profile_view_keyboard(char, locale=loc),
             fallback_message=message,
             photo_path=p,
         )
@@ -391,7 +392,7 @@ async def on_profile_back_compact(callback: CallbackQuery, session: AsyncSession
             callback.bot,
             chat_id=callback.message.chat.id,
             text=cap,
-            reply_markup=profile_view_keyboard(locale=loc),
+            reply_markup=profile_view_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=p,
         )
@@ -428,13 +429,63 @@ async def on_profile_rest(callback: CallbackQuery, session: AsyncSession, state:
             callback.bot,
             chat_id=callback.message.chat.id,
             text=cap,
-            reply_markup=profile_view_keyboard(locale=loc),
+            reply_markup=profile_view_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=p,
         )
         await callback.answer(payload[:200], show_alert=not ok)
     except Exception:
         logger.exception("prf:rest")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:pet")
+async def on_profile_pet_cycle(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Смена активного питомца из статуса (если открыто больше одного)."""
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        own = pets_mod.owned_keys(char)
+        if not own:
+            await callback.answer()
+            return
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        if len(own) < 2:
+            disp = pets_mod.active_pet_display(char)
+            await callback.answer(
+                (disp or t(loc, "profile_pet_single_hint"))[:200],
+                show_alert=True,
+            )
+            return
+        disp = pets_mod.cycle_active_pet(char)
+        await session.flush()
+        title_service.refresh_unlocks(char)
+        apply_completed_rest_if_needed(char)
+        await session.flush()
+        text_compact = await build_profile_html_async(session, char)
+        p = portrait_path_for_character(char) if game_images_enabled(char) else None
+        cap = clamp_profile_caption_for_photo(text_compact) if p is not None else text_compact
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=cap,
+            reply_markup=profile_view_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=p,
+        )
+        await callback.answer((disp or "🐾")[:180], show_alert=False)
+    except Exception:
+        logger.exception("prf:pet")
         await callback.answer("Ошибка.", show_alert=True)
 
 

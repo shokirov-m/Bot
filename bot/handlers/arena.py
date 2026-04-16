@@ -191,6 +191,12 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
             limit=arena_service.ARENA_MATCHES_PER_DAY,
             left=left,
         )
+        my_id = char.game_id
+        id_hint = (
+            t(loc, "arena_your_game_id", gid=my_id)
+            if my_id is not None
+            else t(loc, "arena_no_game_id_yet")
+        )
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -199,13 +205,25 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
                         callback_data="arn:rand",
                     ),
                 ],
+                [
+                    InlineKeyboardButton(
+                        text=t(loc, "arena_by_id_btn"),
+                        callback_data="arn:idhint",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=t(loc, "arena_back_btn"),
+                        callback_data="mnu:hub",
+                    ),
+                ],
             ],
         )
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
-            text=f"{intro}\n\n{limits}",
+            text=f"{intro}\n\n{id_hint}\n\n{limits}",
             reply_markup=kb,
             target_message=callback.message,
             photo_path=None,
@@ -213,6 +231,35 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
         await callback.answer()
     except Exception:
         logger.exception("mnu:arn")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "arn:idhint")
+async def arena_id_hint(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Напоминание: вызов по игровому ID — команда /arena N в чате."""
+    try:
+        if callback.from_user is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            loc = get_locale(None, callback.from_user.language_code)
+            await callback.answer(t(loc, "arena_no_char"), show_alert=True)
+            return
+        loc = get_locale(char, callback.from_user.language_code)
+        gid = char.game_id
+        msg = (
+            t(loc, "arena_id_hint_alert", gid=gid)
+            if gid is not None
+            else t(loc, "arena_id_hint_no_gid")
+        )
+        await callback.answer(msg[:200], show_alert=True)
+    except Exception:
+        logger.exception("arn:idhint")
         await callback.answer("Ошибка.", show_alert=True)
 
 
