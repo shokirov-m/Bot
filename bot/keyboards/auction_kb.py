@@ -7,7 +7,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.auction_lot import AuctionLot
 from game.items import item_categories
+from game.items.equipment import RARITY_EMOJI
 from utils.ui import format_number
+
+
+def _rarity_emoji_from_item_data(item_data: dict | None) -> str:
+    r = str((item_data or {}).get("rarity") or "common").lower()
+    return RARITY_EMOJI.get(r, "⚪")
 
 
 def auction_hub_keyboard() -> InlineKeyboardMarkup:
@@ -66,7 +72,7 @@ def viewer_lot_keyboard(
                 menu_nav_button_row(),
             ],
         )
-        return lot_buy_keyboard(lot, browse_page=browse_page, browse_cat=browse_cat)
+    return lot_buy_keyboard(lot, browse_page=browse_page, browse_cat=browse_cat)
 
 
 def auction_direct_bag_category_row(*, selected: str) -> list[InlineKeyboardButton]:
@@ -164,9 +170,10 @@ def auction_lots_page_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     rows.append(auction_browse_category_keyboard(page=page, selected=category))
     for lot in lots:
-        name = str((lot.item_data or {}).get("name", f"Лот #{lot.id}"))[:14]
+        em = _rarity_emoji_from_item_data(lot.item_data if isinstance(lot.item_data, dict) else None)
+        name = str((lot.item_data or {}).get("name", f"Лот #{lot.id}"))[:11]
         p = format_number(int(lot.start_price))
-        btn = f"#{lot.id} · {name} · {p}💰"
+        btn = f"#{lot.id} {em} {name} · {p}💰"
         rows.append(
             [
                 InlineKeyboardButton(
@@ -195,10 +202,11 @@ def lot_buy_keyboard(
 ) -> InlineKeyboardMarkup:
     p = int(lot.start_price)
     ptxt = format_number(p)
+    em = _rarity_emoji_from_item_data(lot.item_data if isinstance(lot.item_data, dict) else None)
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(
-                text=f"🛒 Купить за {ptxt} 💰"[:64],
+                text=f"{em} 🛒 Купить {ptxt}💰"[:64],
                 callback_data=f"auc:buy:{lot.id}:{browse_page}:{browse_cat}",
             ),
         ],
@@ -233,16 +241,19 @@ def auction_reprice_cancel_keyboard(lot_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def auction_my_lots_keyboard(active_lots: list[tuple[int, int]] | None = None) -> InlineKeyboardMarkup:
-    """active_lots: (lot_id, start_price) для активных лотов."""
+def auction_my_lots_keyboard(active_lots: list[tuple[int, int, str]] | None = None) -> InlineKeyboardMarkup:
+    """active_lots: (lot_id, start_price, rarity_emoji) для активных лотов."""
     rows: list[list[InlineKeyboardButton]] = []
     if active_lots:
-        for lid, price in active_lots[:8]:
-            ptxt = format_number(int(price))
+        for row in active_lots[:8]:
+            lid = int(row[0])
+            price = int(row[1])
+            em = str(row[2]) if len(row) >= 3 else "⚪"
+            ptxt = format_number(price)
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=f"⚙️#{lid} · {ptxt}💰"[:64],
+                        text=f"⚙️#{lid} {em} · {ptxt}💰"[:64],
                         callback_data=f"auc:lot:{lid}:0:{item_categories.BAG_CAT_ALL}",
                     ),
                 ],

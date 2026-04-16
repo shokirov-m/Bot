@@ -1,5 +1,5 @@
 """
-Игровой магазин (лоты): выставление, покупка по цене, личные предложения, финализация (комиссия 5 %).
+Игровой магазин (лоты): выставление, покупка по цене, личные предложения, финализация (налог с продажи 10 %).
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ from game.balance import BAG_MAX_SLOT_INDEX
 
 MAX_ACTIVE_LOTS_PER_SELLER = 5
 LOT_DURATION_DAYS = 3
-COMMISSION_RATE = 0.05
+# Удержание с продавца при сделке (налог площадки).
+COMMISSION_RATE = 0.10
 MAX_GOLD_BID = 9_999_999_999_999
 
 
@@ -345,7 +346,7 @@ async def decline_direct_offer(
 async def finalize_lots(session: AsyncSession) -> int:
     """
     Закрыть просроченные активные лоты.
-    Комиссия 5 % с выручки продавца; покупатель получает предмет в сумку.
+    Налог 10 % с выручки продавца; покупатель получает предмет в сумку.
     """
     lots = await auction_repo.list_expired_active(session)
     if not lots:

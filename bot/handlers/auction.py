@@ -27,6 +27,7 @@ from bot.keyboards.auction_kb import (
     direct_offer_keyboard,
     lot_seller_keyboard,
     viewer_lot_keyboard,
+    _rarity_emoji_from_item_data,
 )
 from bot.states.auction_states import AuctionCreateStates
 from bot.states.combat_states import CombatStates
@@ -51,7 +52,7 @@ async def _clear_auction_fsm_only(state: FSMContext) -> None:
 def _shop_intro_html() -> str:
     return (
         "🛒 <b>Магазин</b>\n"
-        f"Из сумки · до <b>{LOT_DURATION_DAYS}</b> дн. · комиссия <b>5%</b> · активных лотов — до <b>5</b>.\n"
+        f"Из сумки · до <b>{LOT_DURATION_DAYS}</b> дн. · налог с продажи <b>10%</b> · активных лотов — до <b>5</b>.\n"
         "Публичные лоты — <b>фиксированная цена</b>, покупка сразу.\n"
         "🎯 <b>Игроку по ID</b> — личное предложение по <b>игровому номеру</b> из профиля: "
         "адресат получит сообщение и сможет купить за указанную цену или отказаться."
@@ -136,7 +137,7 @@ async def _notify_direct_offer_target(
         f"От <b>{html.escape(seller.display_name)}</b> (игровой ID <code>{gid}</code>)\n"
         f"Лот <b>#{lot.id}</b> · цена <b>{format_number(price)}</b> зол.\n\n"
         f"{item_block}\n\n"
-        "<i>Комиссия 5% удерживается с продавца при продаже.</i>"
+        "<i>Налог 10% удерживается с продавца при продаже.</i>"
     )
     try:
         await bot.send_message(
@@ -644,7 +645,15 @@ async def auc_my(callback: CallbackQuery, session: AsyncSession, state: FSMConte
                 tc = await character_repo.get_by_id(session, int(lot.target_char_id))
                 tmap[int(lot.id)] = int(tc.game_id) if tc and tc.game_id is not None else None
         text = _my_lots_html(lots, target_game_by_lot_id=tmap)
-        active_lots = [(int(l.id), int(l.start_price)) for l in lots if l.status == "active"]
+        active_lots = [
+            (
+                int(l.id),
+                int(l.start_price),
+                _rarity_emoji_from_item_data(l.item_data if isinstance(l.item_data, dict) else None),
+            )
+            for l in lots
+            if l.status == "active"
+        ]
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
