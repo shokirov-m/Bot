@@ -122,6 +122,7 @@ def _register_update_middlewares(dp: Dispatcher) -> None:
 
 
 def _register_routers(dp: Dispatcher) -> None:
+    # clans_router — /clan; forest_beginnings_router — flf:*; floor_router — fl:* и scr:* (скупщик).
     dp.include_router(start_router)
     dp.include_router(tutorial_router)
     dp.include_router(admin_router)

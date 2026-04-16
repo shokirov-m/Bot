@@ -6,12 +6,15 @@ from __future__ import annotations
 
 import asyncio
 import random
+import time
 from datetime import UTC, datetime
 
 from aiogram import Bot
+from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramForbiddenError, TelegramNotFound
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 from sqlalchemy import func, select, text
@@ -19,9 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 
+_apscheduler: AsyncIOScheduler | None = None
+
 
 def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
     """Регистрация всех фоновых задач (UTC)."""
+    global _apscheduler
+    _apscheduler = scheduler
     regen_secs = max(60, int(settings.STAMINA_REGEN_INTERVAL))
 
     async def job_world_boss() -> None:
@@ -54,6 +61,87 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         id="tower_world_boss_spawn",
         replace_existing=True,
     )
+
+
+def schedule_rest_completion_notification(
+    bot: Bot,
+    *,
+    chat_id: int,
+    telegram_id: int,
+    until: float,
+) -> None:
+    """Одноразовое уведомление в чат, когда истечёт rest_until_ts."""
+    if _apscheduler is None:
+        logger.warning("[REST] Планировщик не привязан — уведомление о передышке не запланировано")
+        return
+    run_at = datetime.fromtimestamp(until, tz=UTC)
+    jid = f"rest_notify_{telegram_id}"
+
+    async def _job() -> None:
+        try:
+            await deliver_rest_completion_notification(
+                bot, chat_id=chat_id, telegram_id=telegram_id
+            )
+        except Exception:
+            logger.exception("[REST] Ошибка задачи уведомления о передышке")
+
+    _apscheduler.add_job(
+        _job,
+        DateTrigger(run_date=run_at),
+        id=jid,
+        replace_existing=True,
+        misfire_grace_time=300,
+    )
+
+
+async def deliver_rest_completion_notification(
+    bot: Bot, *, chat_id: int, telegram_id: int
+) -> None:
+    from bot.i18n import get_locale, t
+    from db.database import get_session_factory
+    from db.repository import character_repo, user_repo
+    from services.rest_service import apply_completed_rest_if_needed
+
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            user = await user_repo.get_by_telegram_id(session, telegram_id)
+            if user is None or getattr(user, "is_banned", False):
+                return
+            char = await character_repo.get_by_user_id(session, user.id)
+            if char is None:
+                return
+            loc = get_locale(char, None)
+            applied = apply_completed_rest_if_needed(char)
+            if not applied:
+                mp = dict(char.meta_progress or {})
+                raw_ts = mp.get("rest_until_ts")
+                if raw_ts is None:
+                    return
+                try:
+                    until2 = float(raw_ts)
+                except (TypeError, ValueError):
+                    return
+                if time.time() < until2:
+                    schedule_rest_completion_notification(
+                        bot,
+                        chat_id=chat_id,
+                        telegram_id=telegram_id,
+                        until=until2,
+                    )
+                    return
+                return
+            await session.commit()
+
+        await bot.send_message(
+            chat_id,
+            t(loc, "rest_complete_notify"),
+            parse_mode=ParseMode.HTML,
+        )
+    except (TelegramForbiddenError, TelegramNotFound):
+        pass
+    except Exception:
+        logger.exception("[REST] Не удалось отправить уведомление о передышке")
 
 
 async def task_stamina_regen() -> None:

@@ -64,6 +64,56 @@ async def create_lot(
     return True, f"Лот #{lot.id} · {LOT_DURATION_DAYS} дн. · старт {p} зол."
 
 
+async def create_direct_offered_lot(
+    session: AsyncSession,
+    seller: Character,
+    bag_slot: int,
+    price: int,
+    target: Character,
+) -> tuple[bool, str, AuctionLot | None]:
+    """
+    Личное предложение: предмет из сумки, фиксированная цена, только target может купить.
+    Не попадает в общий список лотов.
+    """
+    if int(seller.id) == int(target.id):
+        return False, "Нельзя отправить предложение самому себе.", None
+    if bag_slot < 0 or bag_slot > BAG_MAX_SLOT_INDEX:
+        return False, "Некорректный слот сумки.", None
+    p = int(price)
+    if p < 1:
+        return False, "Цена должна быть не меньше 1 золота.", None
+    if p > MAX_GOLD_BID:
+        return False, "Слишком большая цена.", None
+
+    item = await inventory_repo.get_bag_item_at_slot(session, int(seller.id), bag_slot)
+    if item is None:
+        return False, "В этой ячейке сумки нет предмета.", None
+
+    data = copy.deepcopy(dict(item.item_data or {}))
+    await inventory_repo.delete_inventory_item(session, item)
+
+    exp = datetime.now(UTC) + timedelta(days=LOT_DURATION_DAYS)
+    lot = AuctionLot(
+        seller_char_id=int(seller.id),
+        item_data=data,
+        start_price=p,
+        current_bid=0,
+        buyer_char_id=None,
+        target_char_id=int(target.id),
+        expires_at=exp,
+        status="active",
+    )
+    session.add(lot)
+    await session.flush()
+    gid = int(target.game_id) if target.game_id is not None else 0
+    return (
+        True,
+        f"Личное предложение #{lot.id} отправлено игроку (игровой ID {gid}) · цена {p} зол. · "
+        f"{LOT_DURATION_DAYS} дн.",
+        lot,
+    )
+
+
 async def place_bid(
     session: AsyncSession,
     char: Character,
@@ -78,6 +128,8 @@ async def place_bid(
     lot = await auction_repo.get_by_id(session, lot_id)
     if lot is None or lot.status != "active":
         return False, "Лот не найден или уже закрыт."
+    if lot.target_char_id is not None:
+        return False, "Это личное предложение — купи или откажись через кнопки в уведомлении."
     if datetime.now(UTC) >= lot.expires_at:
         return False, "Время торгов по лоту истекло."
     if int(lot.seller_char_id) == int(char.id):
@@ -159,6 +211,87 @@ async def seller_reprice_lot(
     lot.start_price = p
     await session.flush()
     return True, f"Лот #{lot.id}: новая стартовая цена {p} зол."
+
+
+async def accept_direct_offer(
+    session: AsyncSession,
+    buyer: Character,
+    lot_id: int,
+) -> tuple[bool, str]:
+    """Покупка личного предложения по фиксированной цене start_price."""
+    lot = await auction_repo.get_by_id(session, lot_id)
+    if lot is None or lot.status != "active":
+        return False, "Лот не найден или уже закрыт."
+    if lot.target_char_id is None:
+        return False, "Это не личное предложение."
+    if int(lot.target_char_id) != int(buyer.id):
+        return False, "Это предложение адресовано не тебе."
+    if datetime.now(UTC) >= lot.expires_at:
+        return False, "Срок предложения истёк."
+    price = int(lot.start_price)
+    if int(buyer.gold) < price:
+        return False, "Недостаточно золота."
+
+    seller = await character_repo.get_by_id(session, int(lot.seller_char_id))
+    if seller is None:
+        return False, "Продавец не найден."
+
+    free_b = await inventory_repo.first_free_bag_slot(session, int(buyer.id))
+    if free_b is None:
+        return False, "Освободи хотя бы одну ячейку сумки."
+
+    buyer.gold = int(buyer.gold) - price
+    payout = int(int(price) * (1.0 - COMMISSION_RATE))
+    seller.gold = int(seller.gold) + payout
+    await inventory_repo.add_bag_item(
+        session,
+        int(buyer.id),
+        copy.deepcopy(lot.item_data or {}),
+        bag_slot=free_b,
+    )
+    lot.status = "sold"
+    lot.current_bid = price
+    lot.buyer_char_id = int(buyer.id)
+    await session.flush()
+    return True, f"Куплено за {price} зол. Лот #{lot.id}."
+
+
+async def decline_direct_offer(
+    session: AsyncSession,
+    buyer: Character,
+    lot_id: int,
+) -> tuple[bool, str]:
+    """Отказ: предмет возвращается продавцу в сумку."""
+    lot = await auction_repo.get_by_id(session, lot_id)
+    if lot is None or lot.status != "active":
+        return False, "Лот не найден или уже закрыт."
+    if lot.target_char_id is None:
+        return False, "Это не личное предложение."
+    if int(lot.target_char_id) != int(buyer.id):
+        return False, "Это предложение адресовано не тебе."
+    if int(lot.current_bid) > 0 or lot.buyer_char_id is not None:
+        return False, "Лот уже обработан."
+
+    seller = await character_repo.get_by_id(session, int(lot.seller_char_id))
+    if seller is None:
+        lot.status = "cancelled"
+        await session.flush()
+        return False, "Продавец не найден — лот закрыт."
+
+    free_s = await inventory_repo.first_free_bag_slot(session, int(seller.id))
+    if free_s is None:
+        return False, "У продавца нет места в сумке — попробуй позже или напиши продавцу."
+
+    await inventory_repo.add_bag_item(
+        session,
+        int(seller.id),
+        copy.deepcopy(lot.item_data or {}),
+        bag_slot=free_s,
+    )
+    lot.status = "cancelled"
+    lot.target_char_id = None
+    await session.flush()
+    return True, f"Отказ от лота #{lot.id}. Предмет возвращён продавцу."
 
 
 async def finalize_lots(session: AsyncSession) -> int:

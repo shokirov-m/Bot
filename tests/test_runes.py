@@ -8,6 +8,7 @@ from game.items.runes import (
     get_synergy,
     max_rune_slots,
     rune_combat_extras,
+    total_weapon_rune_flat_elemental_damage,
 )
 
 
@@ -22,6 +23,11 @@ def test_weak_spot_multiplier() -> None:
     r = [RuneData("fire", 1)]
     # 8 * 1.5 = 12 vs fire monster
     assert calculate_elemental_bonus(r, "fire", None) >= 12
+
+
+def test_flat_elemental_sum() -> None:
+    runes = [RuneData("fire", 3)]
+    assert total_weapon_rune_flat_elemental_damage(runes) == 15
 
 
 def test_synergy_plasma() -> None:

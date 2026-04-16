@@ -164,15 +164,10 @@ async def admin_dashboard_metrics(session: AsyncSession) -> dict[str, Any]:
 
 async def admin_economy_meta_aggregates(session: AsyncSession) -> dict[str, Any]:
     """
-    Суммы по meta_progress (лотерея, пожертвования, долги) для /admin_stats.
+    Суммы по meta_progress (лотерея, долги, сейф) для /admin_stats.
     Обход персонажей не в бане; при очень большой базе можно заменить на JSON SQL.
     """
-    from game.economy.sinks import (
-        META_BANK_CUSTODY,
-        META_LOTTERY_SPENT,
-        META_ML_DEBT,
-        META_TITHE_GOLD_TOTAL,
-    )
+    from game.economy.sinks import META_BANK_SAFE_BALANCE, META_LOTTERY_SPENT, META_ML_DEBT
 
     stmt = (
         select(Character.meta_progress)
@@ -181,26 +176,27 @@ async def admin_economy_meta_aggregates(session: AsyncSession) -> dict[str, Any]
     )
     rows = (await session.execute(stmt)).all()
     lottery_sum = 0
-    tithe_sum = 0
+    safe_sum = 0
+    safe_users = 0
     debtors = 0
     debt_sum = 0
-    bank_custody_n = 0
     for (mp,) in rows:
         d = mp if isinstance(mp, dict) else {}
         lottery_sum += int(d.get(META_LOTTERY_SPENT) or 0)
-        tithe_sum += int(d.get(META_TITHE_GOLD_TOTAL) or 0)
+        sb = int(d.get(META_BANK_SAFE_BALANCE) or 0)
+        if sb > 0:
+            safe_sum += sb
+            safe_users += 1
         od = int(d.get(META_ML_DEBT) or 0)
         if od > 0:
             debtors += 1
             debt_sum += od
-        if d.get(META_BANK_CUSTODY):
-            bank_custody_n += 1
     return {
         "econ_lottery_spent_sum": lottery_sum,
-        "econ_tithe_sum": tithe_sum,
+        "econ_safe_gold_sum": safe_sum,
+        "econ_safe_user_count": safe_users,
         "econ_debtor_count": debtors,
         "econ_debt_sum": debt_sum,
-        "econ_bank_custody_count": bank_custody_n,
     }
 
 

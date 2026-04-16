@@ -31,9 +31,9 @@ def format_dashboard_html(stats: dict[str, Any]) -> str:
         f"(CRITICAL: <b>{stats.get('critical_24h', 0)}</b>)\n"
         f"ANTICHEAT: <code>{html.escape(str(stats.get('anticheat_enabled', False)))}</code>\n"
         f"💸 <b>Sinks (meta):</b> лотерея потрачено суммарно <b>{stats.get('econ_lottery_spent_sum', 0):,}</b> 💰 · "
-        f"пожертвования <b>{stats.get('econ_tithe_sum', 0):,}</b> 💰 · "
+        f"в банковских сейфах <b>{stats.get('econ_safe_gold_sum', 0):,}</b> 💰 "
+        f"(<b>{stats.get('econ_safe_user_count', 0)}</b> героев с остатком) · "
         f"должников ростовщику <b>{stats.get('econ_debtor_count', 0)}</b> "
-        f"(долг <b>{stats.get('econ_debt_sum', 0):,}</b> 💰) · "
-        f"опека сейфа: <b>{stats.get('econ_bank_custody_count', 0)}</b> героев\n"
+        f"(долг <b>{stats.get('econ_debt_sum', 0):,}</b> 💰)\n"
         f"<i>QA: этажи 3/31/61/91 — город, «Экономика», стражник, кузница.</i>"
     )

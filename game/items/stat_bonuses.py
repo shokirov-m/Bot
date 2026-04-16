@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from game.items import enchant as enchant_rules
 from game.items.rarity_scaling import extra_stat_points_for_rarity_on_item
 
 STAT_KEYS: tuple[str, ...] = ("str", "dex", "int", "vit", "luck")
@@ -20,6 +21,33 @@ _ITEM_ALIASES: dict[str, str] = {
 
 def empty_stat_bonus_map() -> dict[str, int]:
     return {k: 0 for k in STAT_KEYS}
+
+
+def _enchant_flat_stat_bonus(out: dict[str, int], raw: dict[str, Any]) -> None:
+    """Заточка даёт бонус к тем статам, что уже есть на предмете (и немного ВЫН чистой броне)."""
+    e = enchant_rules.current_enchant_level(raw)
+    if e <= 0:
+        return
+    kind = str(raw.get("kind") or "").lower()
+    if kind in ("consumable", "rune"):
+        return
+    atk = int(raw.get("attack", raw.get("atk", 0)) or 0)
+    defe = int(raw.get("defense", raw.get("armor", 0)) or 0)
+    has_stat = any(out[k] > 0 for k in STAT_KEYS)
+    if atk > 0:
+        per = max(1, (e + 2) // 3)
+        if has_stat:
+            for k in STAT_KEYS:
+                if out[k] > 0:
+                    out[k] += per
+        return
+    per = max(1, (e + 1) // 2)
+    if has_stat:
+        for k in STAT_KEYS:
+            if out[k] > 0:
+                out[k] += per
+    elif defe > 0 and kind in ("armor", "helmet", "gloves", "ring", "amulet"):
+        out["vit"] += max(1, per)
 
 
 def stat_bonuses_from_item_data(data: dict[str, Any] | None) -> dict[str, int]:
@@ -46,6 +74,7 @@ def stat_bonuses_from_item_data(data: dict[str, Any] | None) -> dict[str, int]:
         for k in STAT_KEYS:
             if out[k] > 0:
                 out[k] += extra
+    _enchant_flat_stat_bonus(out, data)
     return out
 
 

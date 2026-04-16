@@ -607,6 +607,13 @@ async def on_promo_text(message: Message, session: AsyncSession, state: FSMConte
         items_part = ""
         if fmt.get("item_names"):
             items_part = t(loc, "settings_promo_items", items=html.escape(str(fmt["item_names"])))
+        pet_part = ""
+        ps = fmt.get("pet_status")
+        pnm = fmt.get("pet_name")
+        if ps == "new" and pnm:
+            pet_part = t(loc, "settings_promo_pet_new", name=html.escape(str(pnm)))
+        elif ps == "dup" and pnm:
+            pet_part = t(loc, "settings_promo_pet_dup", name=html.escape(str(pnm)))
 
         await message.answer(
             t(
@@ -617,6 +624,7 @@ async def on_promo_text(message: Message, session: AsyncSession, state: FSMConte
                 rune_part=rune_part,
                 level_part=level_part,
                 items_part=items_part,
+                pet_part=pet_part,
             ),
             parse_mode=ParseMode.HTML,
             reply_markup=settings_screen_keyboard(locale=loc, character=char),

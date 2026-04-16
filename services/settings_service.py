@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from db.repository import inventory_repo, promo_offer_repo, promo_repo
 from game.characters.global_passives import refresh_global_passives
-from game.promos import bag_payloads_for_code, reward_for_code
+from game.characters import pets as pets_mod
+from game.promos import bag_payloads_for_code, promo_pet_key_for_code, reward_for_code
 from services import character_service
 
 if TYPE_CHECKING:
@@ -146,6 +147,7 @@ async def redeem_promo(
         return False, "settings_promo_unknown", {}
 
     bag_payloads = bag_payloads_for_code(code)
+    pet_key = promo_pet_key_for_code(code)
     need = len(bag_payloads) if bag_payloads else 0
     if need and await _free_bag_slots_count(session, int(character.id)) < need:
         return False, "settings_promo_bag_full", {}
@@ -157,5 +159,9 @@ async def redeem_promo(
     if bag_payloads:
         names = await _grant_promo_bag_items(session, int(character.id), bag_payloads)
         out["item_names"] = ", ".join(names)
+    if pet_key:
+        pet_st, pet_nm = pets_mod.try_grant_promo_pet(character, pet_key)
+        out["pet_status"] = pet_st
+        out["pet_name"] = pet_nm
     await session.flush()
     return True, "settings_promo_ok", out

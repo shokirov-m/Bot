@@ -22,13 +22,18 @@ from bot.utils.game_ui import push_game_ui, remember_game_ui_anchor
 from db.models.character import Character
 from db.models.floor_progress import FloorProgress
 from db.repository import floor_progress_repo, inventory_repo
-from game.characters.class_arcs import needs_base_class_choice, needs_subclass_choice
+from game.characters.class_arcs import (
+    can_pick_base_class_on_current_floor,
+    needs_base_class_choice,
+    needs_subclass_choice,
+)
 from game.characters import pets as pets_mod
 from game.combat import night_mode as combat_night
 from game.floors import floor_data
 from game.locations import cities as city_locations
 from game.floors import long_floor as long_floor_mod
 from game.floors import forest_beginnings as forest_beginnings_mod
+from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors.tower_ascent import clear_tower_ascent_pending, tower_next_floor_pending
 from services.rest_service import apply_completed_rest_if_needed
 from game.items.equipment import (
@@ -85,7 +90,7 @@ def format_city_hub_message(character: Character) -> str:
     rich = city_locations.format_city_hub_rich_html(city)
     hub = (
         "🛠️ <b>Сервисы:</b> кузница, таверна, лавка, поручение стражи, "
-        "раздел <b>«Экономика»</b> (лотерея, ростовщик, пожертвования). "
+        "раздел <b>«Экономика»</b> (лотерея, ростовщик, сейф банка). "
         "Квесты странника — на боевых этажах (кнопка «К этажу»)."
     )
     loc = get_locale(character, None)
@@ -157,7 +162,10 @@ def format_floor_message(character: Character) -> str:
     lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️ · при входе цели сбрасываются.")
 
     if needs_base_class_choice(character):
-        lines.append("⚠️ Ур.17: класс — «Путь героя».")
+        if can_pick_base_class_on_current_floor(character):
+            lines.append("🎓 <b>Наставник Эрид</b> — выбери класс (кнопки «Путь» ниже наставника).")
+        else:
+            lines.append("⚠️ С <b>10 ур.</b> нужен класс: наставник <b>Эрид на 11 ярусе</b> (ниже 11-го в бой можно).")
     if needs_subclass_choice(character):
         lines.append("⚠️ Ур.57: подкласс — «Углубление пути».")
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
@@ -167,6 +175,14 @@ def format_floor_message(character: Character) -> str:
             "🌲 <b>Лес Начал (1–10)</b> — обучение: "
             "<i>тайная тропа ~20% обойти обычную цель без боя</i>, грибы, дух (1× за проход зоны); "
             "кнопка «Привал» — полное HP/MP без стамины (1× за проход).",
+        )
+    if rotten_swamps_mod.is_rotten_swamps_zone(n):
+        lines.append(
+            "🌿 <b>Гнилые Болота (11–20)</b>: "
+            "<i>токсичный туман</i> (−5 HP перед каждым боем, нет урона при <b>защите снаряжения ≥5</b>); "
+            "<i>пиявки</i> — после боя шанс яда на <b>следующем этаже</b>; "
+            "<i>густой туман</i> скрывает обычных монстров на списке целей; "
+            "кнопка «Заброшенный лагерь» — случайный предмет <b>или</b> ловушка (1× за проход зоны).",
         )
     pend = tower_next_floor_pending(character)
     if pend is not None:
@@ -225,13 +241,15 @@ def format_floor_message_photo_caption(character: Character) -> str:
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 1–{hi} · ⬆️⬇️ · цели сбрасываются при входе")
     if needs_base_class_choice(character):
-        lines.append("⚠️ Ур.17: класс")
+        lines.append("🎓 Класс: Эрид на 11" if can_pick_base_class_on_current_floor(character) else "⚠️ Класс: 11 яр.")
     if needs_subclass_choice(character):
         lines.append("⚠️ Ур.57: подкласс")
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
         lines.append("🗝️ Зачистка → кнопка этажа / ⬆️")
     if forest_beginnings_mod.is_forest_beginnings_zone(n):
         lines.append("🌲 Лес 1–10: тропа / грибы / дух · 🏕️ привал")
+    if rotten_swamps_mod.is_rotten_swamps_zone(n):
+        lines.append("🌿 Болота: туман −5 HP · пиявки · туман целей · лагерь")
     pend = tower_next_floor_pending(character)
     if pend is not None:
         lines.append(f"✅ Подъём на <b>{pend}</b> — кнопка или ⬆️")
@@ -409,6 +427,8 @@ async def travel_to_floor(
     if target_floor < 1 or target_floor > hi:
         return False, "Этаж ещё не открыт или недоступен."
     old_floor = int(character.floor_number)
+    if old_floor != int(target_floor):
+        rotten_swamps_mod.on_travel_floor_change(character, old_floor, int(target_floor))
     if target_floor > old_floor:
         clear_tower_ascent_pending(character)
     if old_floor == 10 and target_floor == 11:

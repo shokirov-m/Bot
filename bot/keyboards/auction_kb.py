@@ -14,6 +14,12 @@ def auction_hub_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="📤 Выставить", callback_data="auc:create")],
+            [
+                InlineKeyboardButton(
+                    text="🎯 Игроку по ID",
+                    callback_data="auc:direct",
+                ),
+            ],
             [InlineKeyboardButton(text="💰 Сделать ставку", callback_data="auc:browse:0")],
             [InlineKeyboardButton(text="📋 Мои лоты", callback_data="auc:my")],
             menu_nav_button_row(),
@@ -27,6 +33,74 @@ def auction_cancel_create_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="⬅️ Отмена", callback_data="auc:hub")],
         ],
     )
+
+
+def direct_offer_keyboard(lot_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Купить", callback_data=f"auc:dacc:{lot_id}"),
+                InlineKeyboardButton(text="❌ Отказ", callback_data=f"auc:ddec:{lot_id}"),
+            ],
+            [InlineKeyboardButton(text="🏛️ Аукцион", callback_data="auc:hub")],
+            menu_nav_button_row(),
+        ],
+    )
+
+
+def viewer_lot_keyboard(
+    lot: AuctionLot,
+    viewer_char_id: int,
+    *,
+    browse_page: int = 0,
+    browse_cat: str = item_categories.BAG_CAT_ALL,
+) -> InlineKeyboardMarkup:
+    if int(lot.seller_char_id) == int(viewer_char_id):
+        return lot_seller_keyboard(lot.id)
+    if lot.target_char_id is not None:
+        if int(lot.target_char_id) == int(viewer_char_id):
+            return direct_offer_keyboard(lot.id)
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="⬅️ В аукцион", callback_data="auc:hub")],
+                menu_nav_button_row(),
+            ],
+        )
+    return lot_bid_keyboard(lot, browse_page=browse_page, browse_cat=browse_cat)
+
+
+def auction_direct_bag_category_row(*, selected: str) -> list[InlineKeyboardButton]:
+    """Категории сумки при личном предложении."""
+    opts = [
+        (item_categories.BAG_CAT_ALL, "Все"),
+        (item_categories.BAG_CAT_EQUIP, "⚔️ Экип"),
+        (item_categories.BAG_CAT_USE, "🧪 Расх."),
+        (item_categories.BAG_CAT_OTHER, "📦 Прочее"),
+    ]
+    row: list[InlineKeyboardButton] = []
+    for code, label in opts:
+        mark = f"·{label}" if code == selected else label
+        row.append(InlineKeyboardButton(text=mark[:12], callback_data=f"auc:directbag:{code}"))
+    return row
+
+
+def bag_slots_for_direct_offer_keyboard(
+    slots_with_items: list[tuple[int, str]],
+    *,
+    bag_cat: str = item_categories.BAG_CAT_ALL,
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    rows.append(auction_direct_bag_category_row(selected=bag_cat))
+    row: list[InlineKeyboardButton] = []
+    for slot, label in slots_with_items:
+        row.append(InlineKeyboardButton(text=label[:40], callback_data=f"auc:dpick:{slot}"))
+        if len(row) >= 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(text="⬅️ Отмена", callback_data="auc:hub")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def auction_bag_category_row(*, selected: str) -> list[InlineKeyboardButton]:
@@ -127,7 +201,12 @@ def lot_bid_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     for a in amounts:
-        row.append(InlineKeyboardButton(text=f"{a} 💰", callback_data=f"auc:bid:{lot.id}:{a}"))
+        row.append(
+            InlineKeyboardButton(
+                text=f"{a} 💰",
+                callback_data=f"auc:bid:{lot.id}:{a}:{browse_page}:{browse_cat}",
+            ),
+        )
         if len(row) >= 2:
             rows.append(row)
             row = []

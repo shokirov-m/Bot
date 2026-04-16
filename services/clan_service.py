@@ -89,9 +89,17 @@ async def format_clan_card_html(session: AsyncSession, character: Character) -> 
         if clan.chat_url
         else "<i>не задана — лидер: /clan chat URL</i>"
     )
+    lv = int(clan.clan_level)
+    cxp = int(clan.clan_xp)
+    if lv < clan_repo.CLAN_MAX_LEVEL:
+        need_total = lv * clan_repo.CLAN_XP_PER_LEVEL
+        left = max(0, need_total - cxp)
+        prog = f"\n<i>До ур. {lv + 1}: ещё <b>{left}</b> XP (шаг {clan_repo.CLAN_XP_PER_LEVEL} XP/ур.).</i>"
+    else:
+        prog = f"\n<i>Достигнут макс. уровень клана ({clan_repo.CLAN_MAX_LEVEL}).</i>"
     return (
         f"⚔️ <b>{html.escape(clan.name)}</b> · ID <code>{clan.id}</code>\n"
-        f"👥 Участников: <b>{n}</b> · Ур. клана: <b>{clan.clan_level}</b> · XP: <b>{clan.clan_xp}</b>\n"
+        f"👥 Участников: <b>{n}</b> · Ур. клана: <b>{lv}</b> · XP: <b>{cxp}</b>\n"
         f"💬 Чат: {chat}\n"
-        f"<i>Твоя роль: {html.escape(m.role)}</i>"
+        f"<i>Твоя роль: {html.escape(m.role)}</i>{prog}"
     )

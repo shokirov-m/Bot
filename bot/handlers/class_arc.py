@@ -1,5 +1,5 @@
 """
-Выбор базового класса (17) и подкласса (57): arc:b:*, arc:s:*.
+Выбор базового класса (11 яр., с 10 ур.) и подкласса (57): arc:b:*, arc:s:*.
 """
 
 from __future__ import annotations
@@ -10,7 +10,11 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repository import character_repo, user_repo
-from game.characters.class_arcs import offered_base_class_keys, subclass_keys_for_character
+from game.characters.class_arcs import (
+    can_pick_base_class_on_current_floor,
+    offered_base_class_keys,
+    subclass_keys_for_character,
+)
 from services import class_arc_service
 from services.floor_service import floor_keyboard_for_character, format_floor_message
 
@@ -32,9 +36,16 @@ async def on_pick_base_class(query: CallbackQuery, session: AsyncSession) -> Non
         if char is None:
             await query.answer("Нет героя.", show_alert=True)
             return
+        if not can_pick_base_class_on_current_floor(char):
+            await query.answer(
+                "Базовый путь выбирается только на 11 этаже у наставника Эрида.",
+                show_alert=True,
+            )
+            return
         if key not in offered_base_class_keys(char):
             await query.answer("Этот класс тебе сейчас недоступен.", show_alert=True)
             return
+        await character_repo.lock_character_row(session, char.id)
         if not class_arc_service.apply_base_class(char, key):
             await query.answer("Ошибка класса.", show_alert=True)
             return

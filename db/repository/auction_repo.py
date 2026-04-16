@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, not_, or_, select
+from sqlalchemy import String as SAString
+from sqlalchemy import func, not_, or_, select, type_coerce
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.auction_lot import AuctionLot
@@ -26,6 +27,22 @@ async def count_active_by_seller(session: AsyncSession, seller_char_id: int) -> 
 async def get_by_id(session: AsyncSession, lot_id: int) -> AuctionLot | None:
     r = await session.execute(select(AuctionLot).where(AuctionLot.id == lot_id))
     return r.scalar_one_or_none()
+
+
+def _auction_kind_use_exprs():
+    """
+    Выражения для полей kind / use_tag в JSON item_data (SQLite).
+    json_extract совместим с колонкой JSON в aiosqlite.
+    """
+    kind = type_coerce(
+        func.json_extract(AuctionLot.item_data, "$.kind"),
+        SAString,
+    )
+    use_tag = type_coerce(
+        func.json_extract(AuctionLot.item_data, "$.use_tag"),
+        SAString,
+    )
+    return kind, use_tag
 
 
 def _auction_lot_category_clause(cat: str | None):
@@ -61,6 +78,7 @@ async def list_active(
         .where(
             AuctionLot.status == "active",
             AuctionLot.expires_at > now,
+            AuctionLot.target_char_id.is_(None),
         )
         .order_by(AuctionLot.expires_at.asc())
     )
@@ -80,6 +98,7 @@ async def count_active_visible(session: AsyncSession, category: str | None = Non
         .where(
             AuctionLot.status == "active",
             AuctionLot.expires_at > now,
+            AuctionLot.target_char_id.is_(None),
         )
     )
     extra = _auction_lot_category_clause(category)

@@ -17,13 +17,13 @@ ELEMENTS: dict[str, dict[str, str]] = {
     "earth": {"name": "Земли", "emoji": "🌿", "status_effect": "slow"},
 }
 
-# ранг: бонус к «элементальному» % урона, шанс статуса, вес дропа
+# ранг: % элемент. к базе, шанс статуса, вес дропа, плоский элементальный урон (игнор брони в бою)
 RUNE_RANK_STATS: dict[int, dict[str, Any]] = {
-    1: {"damage_bonus_percent": 8, "status_chance": 0.10, "drop_weight": 60},
-    2: {"damage_bonus_percent": 15, "status_chance": 0.18, "drop_weight": 25},
-    3: {"damage_bonus_percent": 25, "status_chance": 0.28, "drop_weight": 10},
-    4: {"damage_bonus_percent": 40, "status_chance": 0.38, "drop_weight": 4},
-    5: {"damage_bonus_percent": 60, "status_chance": 0.50, "drop_weight": 1},
+    1: {"damage_bonus_percent": 8, "status_chance": 0.10, "drop_weight": 60, "flat_elemental": 6},
+    2: {"damage_bonus_percent": 15, "status_chance": 0.18, "drop_weight": 25, "flat_elemental": 10},
+    3: {"damage_bonus_percent": 25, "status_chance": 0.28, "drop_weight": 10, "flat_elemental": 15},
+    4: {"damage_bonus_percent": 40, "status_chance": 0.38, "drop_weight": 4, "flat_elemental": 22},
+    5: {"damage_bonus_percent": 60, "status_chance": 0.50, "drop_weight": 1, "flat_elemental": 30},
 }
 
 _ROMAN = ("0", "I", "II", "III", "IV", "V")
@@ -72,6 +72,10 @@ class RuneData:
         return float(RUNE_RANK_STATS[self.rank]["status_chance"])
 
     @property
+    def flat_elemental_damage(self) -> int:
+        return int(RUNE_RANK_STATS[self.rank].get("flat_elemental", 0))
+
+    @property
     def display_name(self) -> str:
         meta = ELEMENTS[self.element]
         rom = _ROMAN[self.rank] if 0 <= self.rank < len(_ROMAN) else str(self.rank)
@@ -116,6 +120,20 @@ def _same_element_mastery_bonus(runes: list[RuneData]) -> int:
     if any(c >= 2 for c in counts.values()):
         return MASTERY_SAME_ELEMENT_BONUS
     return 0
+
+
+def total_weapon_rune_flat_elemental_damage(weapon_runes: Sequence[RuneData]) -> int:
+    """Суммарный плоский стихийный урон с рун оружия (добавляется к удару после брони)."""
+    s = sum(r.flat_elemental_damage for r in weapon_runes)
+    return min(120, max(0, int(s)))
+
+
+def rune_burn_params_for_rank(rank: int) -> tuple[int, int]:
+    """(ходы поджога, potency_percent) для эффекта руны огня."""
+    r = max(1, min(5, int(rank)))
+    turns = 3 + (r + 1) // 2
+    potency = 3 + min(3, r // 2)
+    return turns, potency
 
 
 def calculate_elemental_bonus(

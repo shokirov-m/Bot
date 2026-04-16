@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import html
+import json
 import random
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -117,26 +118,110 @@ def _all_defs() -> dict[str, PetDef]:
     return out
 
 
-def _pets_meta(character: Character) -> dict[str, Any]:
-    mp = dict(character.meta_progress or {})
-    raw = mp.get(META_KEY)
-    if not isinstance(raw, dict):
-        raw = {}
-    return mp, raw
+def _character_meta_root(character: Character) -> dict[str, Any]:
+    """Корень meta_progress: иногда в БД приходит JSON-строка целиком."""
+    raw = character.meta_progress
+    if raw is None:
+        return {}
+    if isinstance(raw, str):
+        try:
+            obj = json.loads(raw)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return {}
+        return dict(obj) if isinstance(obj, dict) else {}
+    if isinstance(raw, dict):
+        return dict(raw)
+    return {}
+
+
+def _coerce_nested_dict(val: Any) -> dict[str, Any]:
+    """Вложенный объект (pets_v1): dict или JSON-строка."""
+    if isinstance(val, dict):
+        return dict(val)
+    if isinstance(val, str):
+        try:
+            obj = json.loads(val)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return {}
+        return dict(obj) if isinstance(obj, dict) else {}
+    return {}
+
+
+def _normalize_owned_list(val: Any) -> list[str]:
+    """Список ключей питомцев: list/tuple или JSON-массив в строке."""
+    if val is None:
+        return []
+    if isinstance(val, str):
+        try:
+            val = json.loads(val)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return []
+    if isinstance(val, tuple):
+        val = list(val)
+    if not isinstance(val, list):
+        return []
+    return [str(x).strip() for x in val if str(x).strip()]
+
+
+def _pets_meta(character: Character) -> tuple[dict[str, Any], dict[str, Any]]:
+    mp = _character_meta_root(character)
+    st = _coerce_nested_dict(mp.get(META_KEY))
+    return mp, st
 
 
 def owned_keys(character: Character) -> list[str]:
     _, st = _pets_meta(character)
-    raw = st.get("owned")
-    if not isinstance(raw, list):
-        return []
-    return [str(x) for x in raw]
+    return _normalize_owned_list(st.get("owned"))
+
+
+def repair_pet_meta_if_needed(character: Character) -> bool:
+    """
+    Исправить meta pets_v1 в памяти: JSON-строка, owned не list/tuple/str, active не из owned.
+    Возвращает True, если нужен flush/commit.
+    """
+    mp0 = character.meta_progress
+    mp = _character_meta_root(character)
+    raw_meta = mp.get(META_KEY)
+    changed = isinstance(mp0, str) or isinstance(raw_meta, str)
+    if isinstance(raw_meta, dict):
+        po = raw_meta.get("owned")
+        if po is not None and not isinstance(po, (list, tuple, str)):
+            changed = True
+
+    st = dict(_coerce_nested_dict(raw_meta))
+    for k in ("city_pull_date", "city_pulls"):
+        if isinstance(raw_meta, dict) and k in raw_meta:
+            st[k] = raw_meta[k]
+
+    owned = _normalize_owned_list(st.get("owned"))
+    seen: set[str] = set()
+    owned = [x for x in owned if x not in seen and not seen.add(x)]
+    if (owned or raw_meta is not None) and st.get("owned") != owned:
+        st["owned"] = owned
+        changed = True
+
+    act = str(st.get("active") or "").strip() or None
+    if act and owned and act not in owned:
+        st["active"] = owned[0]
+        changed = True
+    elif not act and owned:
+        st["active"] = owned[0]
+        changed = True
+    elif act and not owned:
+        st["active"] = None
+        changed = True
+
+    if changed:
+        mp[META_KEY] = st
+        character.meta_progress = dict(mp)
+        return True
+    return False
 
 
 def active_pet_key(character: Character) -> str | None:
     _, st = _pets_meta(character)
     a = st.get("active")
-    return str(a) if a else None
+    return str(a).strip() if a else None
 
 
 def active_pet_display(character: Character) -> str | None:
@@ -349,6 +434,30 @@ def format_city_hub_pets_hint_html(*, locale: str) -> str:
 def _save_meta(character: Character, mp: dict[str, Any], st: dict[str, Any]) -> None:
     mp[META_KEY] = st
     character.meta_progress = mp
+
+
+def try_grant_promo_pet(character: Character, key: str) -> tuple[str, str]:
+    """
+    Выдать питомца по промокоду (один ключ в коллекцию owned).
+    Возвращает ("new"|"dup"|"bad", имя для сообщения или пусто при bad).
+    """
+    defs = _all_defs()
+    if key not in defs:
+        return "bad", ""
+    mp, st = _pets_meta(character)
+    owned = _normalize_owned_list(st.get("owned"))
+    seen: set[str] = set()
+    owned = [x for x in owned if x not in seen and not seen.add(x)]
+    if key in owned:
+        return "dup", defs[key].name_ru
+    owned.append(key)
+    st["owned"] = owned
+    if not str(st.get("active") or "").strip():
+        st["active"] = key
+    mp = dict(mp)
+    st = dict(st)
+    _save_meta(character, mp, st)
+    return "new", defs[key].name_ru
 
 
 def set_active_pet(character: Character, key: str) -> tuple[bool, str]:

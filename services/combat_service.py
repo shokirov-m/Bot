@@ -27,7 +27,10 @@ from config import settings
 from db.models.character import Character
 from db.models.inventory import InventoryItem
 from db.repository import character_repo, floor_progress_repo, inventory_repo
-from game.characters.class_arcs import needs_base_class_choice, needs_subclass_choice
+from game.characters.class_arcs import (
+    combat_blocked_for_missing_base_class,
+    needs_subclass_choice,
+)
 from game.characters.classes import get_class_or_none
 from game.characters.path_ranks import PATH_RANK_BY_KEY
 from game.characters.skills import passive_combat_modifiers_merged, skills_for_class
@@ -46,6 +49,8 @@ from game.balance import (
     MONSTER_FLOOR_DEF_PER_LEVEL,
     MONSTER_FLOOR_POWER_PER_LEVEL,
     MONSTER_FLOOR10_MAJOR_BOSS_MULT,
+    MONSTER_HP_FLOOR12_MULT,
+    MONSTER_HP_FLOOR12_THRESHOLD,
     MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT,
     MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR,
     MONSTER_HP_CURVE_MULT,
@@ -69,6 +74,7 @@ from game.balance import (
 from game.characters import pets as pets_mod
 from game.floors import floor_data
 from game.floors import long_floor as long_floor_mod
+from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawns_for_floor
 from game.economy import sinks as sink_rules
 from game.floors.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
@@ -82,6 +88,7 @@ from services import (
     city_quest_service,
     clan_service,
     daily_service,
+    floor10_pioneer_service,
     game_metrics_service,
     leaderboard_service,
     quest_service,
@@ -270,6 +277,18 @@ def _monster_stat_bundle(
         atk_out = max(1, int(atk_out * m10))
         def_out = max(0, int(def_out * m10))
 
+    if int(floor_number) >= MONSTER_HP_FLOOR12_THRESHOLD:
+        hp_out = max(1, int(hp_out * MONSTER_HP_FLOOR12_MULT))
+
+    # Обычные цели с 10-го этажа: +8 к атаке (не элита и не боссы).
+    if (
+        int(floor_number) >= 10
+        and not spawn.is_elite
+        and not spawn.is_mini_boss
+        and not spawn.is_major_boss
+    ):
+        atk_out = max(1, int(atk_out) + 8)
+
     ail_mult, ail_lab, ail_em = _monster_strike_ailment(floor_number, spawn)
     return {
         "name": spawn.template.name,
@@ -320,11 +339,13 @@ def _apply_weapon_runes_to_state(
         calculate_elemental_bonus,
         parse_weapon_runes,
         rune_combat_extras,
+        total_weapon_rune_flat_elemental_damage,
     )
 
     runes_list = parse_weapon_runes(weapon_item_data)
     mon_el = str(combat_state.get("monster", {}).get("element") or "earth")
     pct = calculate_elemental_bonus(runes_list, mon_el, character.element)
+    combat_state["weapon_rune_flat_elemental"] = int(total_weapon_rune_flat_elemental_damage(runes_list))
     loc_rune = get_locale(character, None)
     if pct >= 30:
         _append_logs(combat_state, [t(loc_rune, "combat_rune_weak_spot", pct=int(pct))])
@@ -397,6 +418,7 @@ def _build_combat_dict(
         "mastery_strike_pending": False,
         "tutorial_phase": 0,
         "weapon_rune_bonus_pct": 0,
+        "weapon_rune_flat_elemental": 0,
         "rune_crit_damage_bonus_percent": 0,
         "rune_armor_mult": 1.0,
         "weapon_rune_payloads": [],
@@ -553,9 +575,10 @@ async def start_combat(
     spawn: FloorMonsterSpawn,
 ) -> bool:
     """Начать бой. True если бой начат."""
-    if needs_base_class_choice(character):
+    if combat_blocked_for_missing_base_class(character):
         await query.answer(
-            "Сначала выбери класс на этом этаже (кнопки «Путь героя»).",
+            "На этом ярусе без класса в бой нельзя. Сходи на 11 этаж к наставнику Эриду "
+            "и выбери путь (кнопки под «Наставник путей»).",
             show_alert=True,
         )
         return False
@@ -589,6 +612,21 @@ async def start_combat(
         await query.answer("Не удалось списать стамину. Попробуй ещё раз.", show_alert=True)
         return False
     await session.refresh(character)
+    if pets_mod.repair_pet_meta_if_needed(character):
+        await session.flush()
+
+    swamp_prefight_logs: list[str] = []
+    if rotten_swamps_mod.is_rotten_swamps_zone(int(character.floor_number)):
+        def_tot = await _equipped_gear_defense_total(session, character.id)
+        if def_tot >= 5:
+            swamp_prefight_logs.append(
+                "🧪 <b>Токсичный туман:</b> яд не пробивает твою броню "
+                f"(защита снаряжения <b>{def_tot}</b> ≥ 5).",
+            )
+        else:
+            character.hp_current = max(1, int(character.hp_current) - 5)
+            swamp_prefight_logs.append("🧪 <b>Токсичный туман:</b> −5 HP до боя.")
+        await session.flush()
 
     if query.from_user is not None:
         await anticheat_service.record_fight_start(
@@ -623,6 +661,26 @@ async def start_combat(
     combat_state["weapon_mastery_mult"] = wmult
     combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
     _apply_weapon_runes_to_state(combat_state, character, w_item)
+
+    if swamp_prefight_logs:
+        _append_logs(combat_state, swamp_prefight_logs)
+
+    leech_tgt = rotten_swamps_mod.get_leech_target_floor(character)
+    if leech_tgt is not None and int(character.floor_number) == leech_tgt:
+        effects.add_effect(
+            "player",
+            combat_state,
+            "Пиявки (заражение)",
+            "poison",
+            4,
+            {"potency_percent": 4},
+        )
+        rotten_swamps_mod.clear_leech_target(character)
+        _append_logs(
+            combat_state,
+            ["🪱 <b>Пиявки:</b> яд с прошлого этажа — бой начинается с <b>ядом</b>."],
+        )
+        await session.flush()
 
     taunt = engine.opening_taunt(combat_state)
     combat_state["battle_taunt_html"] = _taunt_banner_html(taunt)
@@ -714,7 +772,7 @@ async def start_tutorial_combat(
     if not tutorial_battle_pending(character):
         await query.answer("Ты уже прошёл обучение у наставника.", show_alert=True)
         return False
-    if needs_base_class_choice(character) or needs_subclass_choice(character):
+    if combat_blocked_for_missing_base_class(character) or needs_subclass_choice(character):
         await query.answer("Сначала заверши выбор класса / подкласса на этаже.", show_alert=True)
         return False
 
@@ -1034,6 +1092,10 @@ async def _victory_sequence(
     await character_repo.lock_character_row(session, character.id)
 
     spawn = _spawn_from_state(character, combat_state)
+    battle_floor = int(combat_state.get("floor", character.floor_number))
+    rotten_swamps_mod.maybe_roll_leech_infection_after_swamp_win(character, battle_floor)
+    await session.flush()
+
     gross_gold = gold_reward(character.floor_number, spawn)
     xp = experience_reward(character.floor_number, spawn)
     if combat_state.get("night_battle"):
@@ -1176,6 +1238,13 @@ async def _victory_sequence(
             ", ".join(title_service.display_names(new_titles)),
         )
 
+    pioneer_suffix = await floor10_pioneer_service.on_floor10_major_boss_victory(
+        session,
+        character,
+        battle_floor=floor_before,
+        spawn=spawn,
+    )
+
     reward_frames = ("▓░░░░░░░░░", "▓▓▓▓▓░░░░░", "▓▓▓▓▓▓▓▓▓▓")
     fl = int(character.floor_number)
     floor_rows: list[list[InlineKeyboardButton]] = [
@@ -1217,6 +1286,7 @@ async def _victory_sequence(
                     + night_reward_note
                     + star_xp_note
                     + ranker_note
+                    + pioneer_suffix
                 )
             gold_line = f"💰 +{net_gold} золота"
             if gross_gold != net_gold and is_last:
@@ -1292,19 +1362,20 @@ async def _defeat_sequence(
         return
 
     await character_repo.lock_character_row(session, character.id)
+    await session.refresh(character, attribute_names=["gold"])
 
     character.death_count = int(character.death_count) + 1
     title_service.refresh_unlocks(character)
 
     fl = int(character.floor_number)
-    g = int(character.gold)
+    g = max(0, int(character.gold))
     if g <= 0:
         lost_gold = 0
     else:
         pct = 0.18 + min(0.22, fl / 250.0)
         lost_gold = max(1, int(g * pct))
         lost_gold = min(lost_gold, g)
-    character.gold = g - lost_gold
+    character.gold = max(0, g - lost_gold)
 
     weapon = await inventory_repo.get_equipped_weapon(session, character.id)
     enchant_msg = ""
@@ -1352,7 +1423,7 @@ async def _bag_combat_consumables(session: AsyncSession, character_id: int) -> l
     out: list[InventoryItem] = []
     for it in bag:
         data = it.item_data or {}
-        if data.get("use_tag") in consumables.COMBAT_USE_TAGS:
+        if consumables.normalize_combat_use_tag(dict(data)) in consumables.COMBAT_USE_TAGS:
             out.append(it)
     out.sort(key=lambda x: (x.bag_slot is None, x.bag_slot or 0))
     return out
@@ -1368,7 +1439,7 @@ async def _apply_combat_item(
     if item is None or item.is_equipped or item.bag_slot is None:
         return False, "Предмета нет в сумке.", []
     data = dict(item.item_data or {})
-    tag = data.get("use_tag")
+    tag = consumables.normalize_combat_use_tag(data)
     if tag == "stamina_flat":
         return False, "Пайок ешь после боя.", []
     if tag not in consumables.COMBAT_USE_TAGS:

@@ -1,5 +1,5 @@
 """
-Применение золотых sinks в городах (лотерея, ростовщик, пожертвования, банк).
+Применение золотых sinks в городах (лотерея, ростовщик, сейф банка).
 """
 
 from __future__ import annotations
@@ -30,11 +30,12 @@ def economy_hub_intro_html(character: Character) -> str:
     ext = city_locations.get_city_hub_def(int(city.floor))
     ticket = sink_rules.lottery_ticket_cost_gold(int(city.floor))
     debt = sink_rules.moneylender_debt(character)
-    fee_bank = sink_rules.bank_custody_fee(int(city.floor))
+    bal = sink_rules.bank_safe_balance(character)
+    cap = sink_rules.bank_safe_capacity(character)
     lines = [
         "💸 <b>Экономика города</b>",
         f"<i>Билет лотереи: <b>{ticket}</b> 💰 · Долг ростовщику: <b>{debt}</b> 💰</i>",
-        f"<i>Опека сейфа (разово): <b>{fee_bank}</b> 💰</i>",
+        f"<i>Сейф банка: <b>{bal}</b> / <b>{cap}</b> 💰 (при смерти не сгорает).</i>",
         LINE_SEP,
     ]
     if ext:
@@ -42,6 +43,30 @@ def economy_hub_intro_html(character: Character) -> str:
         lines.append(LINE_SEP)
     lines.append("Выбери действие ниже. Золото уходит из экономики башни — так дольше держится баланс.")
     return "\n".join(lines)
+
+
+def bank_safe_intro_html(character: Character) -> str:
+    bal = sink_rules.bank_safe_balance(character)
+    cap = sink_rules.bank_safe_capacity(character)
+    lvl = sink_rules.bank_safe_capacity_level(character)
+    next_cost = sink_rules.bank_safe_upgrade_cost_gold(character)
+    return "\n".join(
+        [
+            "🏦 <b>Сейф гильдии</b>",
+            f"В сейфе: <b>{bal}</b> / <b>{cap}</b> 💰",
+            "<i>Золото в сейфе не списывается при поражении в башне.</i>",
+            LINE_SEP,
+            f"Уровень хранилища: <b>{lvl}</b>. Следующее улучшение: <b>{next_cost}</b> 💰 (+500 к лимиту).",
+            LINE_SEP,
+            "Вноси и снимай кнопками. «Всё влезет» — переносит из кошелька столько, сколько помещается.",
+        ],
+    )
+
+
+def _in_city_hub(character: Character, floor_key: int) -> bool:
+    return int(character.floor_number) == int(floor_key) and floor_data.get_city_for_floor(
+        character.floor_number,
+    ) is not None
 
 
 def try_play_lottery(character: Character, *, floor_key: int) -> tuple[bool, str]:
@@ -97,42 +122,22 @@ def try_repay_moneylender(character: Character, *, floor_key: int) -> tuple[bool
     return True, f"Внесено <b>{pay}</b> 💰.{tail}"
 
 
-def try_tithe(character: Character, *, floor_key: int, tier: int) -> tuple[bool, str]:
-    if int(character.floor_number) != int(floor_key):
-        return False, "Ты не на этом этаже."
-    if floor_data.get_city_for_floor(character.floor_number) is None:
-        return False, "Пожертвования принимают только в хабе."
-    if tier < 0 or tier >= len(sink_rules.TITHE_TIERS_GOLD):
-        return False, "Неверный уровень пожертвования."
-    g = int(sink_rules.TITHE_TIERS_GOLD[tier])
-    if int(character.gold) < g:
-        return False, f"Нужно {g} золота."
-    character.gold = int(character.gold) - g
-    mp = _mp(character)
-    mp[sink_rules.META_TITHE_GOLD_TOTAL] = int(mp.get(sink_rules.META_TITHE_GOLD_TOTAL, 0)) + g
-    _save_mp(character, mp)
-    return True, (
-        f"Благодарность принята: <b>−{g}</b> 💰 в фонд содержания стен и стражи. "
-        "Башня помнит щедрых."
-    )
+def try_bank_safe_deposit(character: Character, *, floor_key: int, amount: int) -> tuple[bool, str]:
+    if not _in_city_hub(character, floor_key):
+        return False, "Сейф только в городе-хабе."
+    return sink_rules.try_bank_safe_deposit(character, amount)
 
 
-def try_buy_bank_custody(character: Character, *, floor_key: int) -> tuple[bool, str]:
-    if int(character.floor_number) != int(floor_key):
-        return False, "Ты не на этом этаже."
-    if floor_data.get_city_for_floor(character.floor_number) is None:
-        return False, "Услуга только в городе."
-    if sink_rules.bank_custody_paid(character):
-        return False, "Опека сейфа уже оформлена навсегда для этого героя."
-    fee = sink_rules.bank_custody_fee(int(floor_key))
-    if int(character.gold) < fee:
-        return False, f"Нужно {fee} золота."
-    character.gold = int(character.gold) - fee
-    sink_rules.set_bank_custody(character, True)
-    return True, (
-        f"Гильдия оформила опеку записей: <b>−{fee}</b> 💰. "
-        "В будущих обновлениях это снизит комиссии обмена и даст метку доверенного клиента."
-    )
+def try_bank_safe_withdraw(character: Character, *, floor_key: int, amount: int) -> tuple[bool, str]:
+    if not _in_city_hub(character, floor_key):
+        return False, "Сейф только в городе-хабе."
+    return sink_rules.try_bank_safe_withdraw(character, amount)
+
+
+def try_bank_safe_upgrade(character: Character, *, floor_key: int) -> tuple[bool, str]:
+    if not _in_city_hub(character, floor_key):
+        return False, "Сейф только в городе-хабе."
+    return sink_rules.try_bank_safe_upgrade(character)
 
 
 async def flush(session: AsyncSession, character: Character) -> None:

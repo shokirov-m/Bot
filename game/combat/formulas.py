@@ -60,23 +60,46 @@ def physical_damage_range(
     return lo, hi
 
 
+def physical_damage_split(
+    strength: int,
+    weapon_attack: int,
+    enemy_defense: int,
+    *,
+    elemental_bonus_percent: int = 0,
+    roll: float | None = None,
+) -> tuple[int, int, int]:
+    """
+    Один бросок 0.85–1.15: (урон со стих. бонусом, урон без него, разница = вклад % рун).
+    """
+    r = float(roll) if roll is not None else random.uniform(0.85, 1.15)
+    raw_base = strength * 2 + weapon_attack
+    base_ne = raw_base
+    base_yes = int(raw_base * (1 + elemental_bonus_percent / 100.0)) if elemental_bonus_percent else raw_base
+    d_ne = max(1, int(base_ne * r) - enemy_defense)
+    d_yes = max(1, int(base_yes * r) - enemy_defense)
+    return d_yes, d_ne, max(0, d_yes - d_ne)
+
+
 def physical_damage(
     strength: int,
     weapon_attack: int,
     enemy_defense: int,
     *,
     elemental_bonus_percent: int = 0,
+    roll: float | None = None,
 ) -> int:
     """
     урон = (СИЛ*2 + оружие + элем_бонус%) * rand(0.85..1.15) - защита_врага
     elemental_bonus_percent — целые проценты (+15 => *1.15 к базе до вычитания защиты).
     """
-    base = strength * 2 + weapon_attack
-    if elemental_bonus_percent:
-        base = int(base * (1 + elemental_bonus_percent / 100.0))
-    rolled = base * random.uniform(0.85, 1.15)
-    dmg = int(rolled) - enemy_defense
-    return max(1, dmg)
+    d_yes, _, _ = physical_damage_split(
+        strength,
+        weapon_attack,
+        enemy_defense,
+        elemental_bonus_percent=elemental_bonus_percent,
+        roll=roll,
+    )
+    return d_yes
 
 
 def magical_damage(

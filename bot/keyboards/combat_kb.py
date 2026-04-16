@@ -34,7 +34,7 @@ def combat_main_keyboard(class_key: str) -> InlineKeyboardMarkup:
 def combat_item_picker_keyboard(bag_items: list[InventoryItem]) -> InlineKeyboardMarkup:
     """Список расходников для боя + отмена."""
     rows: list[list[InlineKeyboardButton]] = []
-    for it in bag_items[:10]:
+    for it in bag_items[:20]:
         data = it.item_data or {}
         name = str(data.get("name", "?"))[:22]
         rows.append(

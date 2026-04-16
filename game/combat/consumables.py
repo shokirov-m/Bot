@@ -14,11 +14,19 @@ COMBAT_USE_TAGS = frozenset(
 )
 
 
+def normalize_combat_use_tag(item_data: dict[str, Any]) -> str:
+    """Единый формат тега (лавка/лут могли сохранить регистр иначе)."""
+    return str(item_data.get("use_tag") or "").strip().lower()
+
+
 def apply_consumable(state: dict[str, Any], item_data: dict[str, Any]) -> list[str]:
     """Изменяет combat state; возвращает строки лога боя."""
-    tag = str(item_data.get("use_tag", ""))
+    tag = normalize_combat_use_tag(item_data)
     val = int(item_data.get("use_value", 0))
     logs: list[str] = []
+
+    if tag not in COMBAT_USE_TAGS:
+        raise ValueError(f"unknown_use_tag:{tag}")
 
     if tag == "heal_hp_pct":
         pct = max(1, min(100, val))
@@ -57,7 +65,5 @@ def apply_consumable(state: dict[str, Any], item_data: dict[str, Any]) -> list[s
             logs.append(f"🧴 {name}: яд снят.")
         else:
             logs.append(f"🧴 {name}: яда не было — зелье выпито впустую.")
-    else:
-        raise ValueError(f"Неизвестный расходник в бою: {tag}")
 
     return logs

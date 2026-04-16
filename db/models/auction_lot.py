@@ -35,6 +35,13 @@ class AuctionLot(Base):
         nullable=True,
         index=True,
     )
+    # Личное предложение: только этот персонаж может купить по фикс. цене start_price (не в общем списке).
+    target_char_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("characters.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # active | sold | expired | cancelled
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active", index=True)

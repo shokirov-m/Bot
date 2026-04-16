@@ -28,6 +28,7 @@ from bot.keyboards.profile_kb import (
 )
 from bot.utils.game_ui import push_game_ui
 from services import character_service, class_arc_service, leaderboard_service, stat_bonus_service, title_service
+from scheduler.tasks import schedule_rest_completion_notification
 from services.rest_service import (
     apply_completed_rest_if_needed,
     format_rest_status_line_html,
@@ -294,6 +295,8 @@ def _build_profile_text(
 
 
 async def build_profile_html_async(session: AsyncSession, char: Character) -> str:
+    if pets_mod.repair_pet_meta_if_needed(char):
+        await session.flush()
     refresh_global_passives(char)
     w_atk = await _weapon_attack_value(session, char)
     weapon = await inventory_repo.get_equipped_weapon(session, char.id)
@@ -321,6 +324,8 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
 
 async def build_profile_full_stats_html_async(session: AsyncSession, char: Character) -> str:
     """Полные боевые и вспомогательные бонусы, передышка, урон/крит/уклонение."""
+    if pets_mod.repair_pet_meta_if_needed(char):
+        await session.flush()
     refresh_global_passives(char)
     w_atk = await _weapon_attack_value(session, char)
     weapon = await inventory_repo.get_equipped_weapon(session, char.id)
@@ -519,6 +524,8 @@ async def on_profile_pet_pick(callback: CallbackQuery, session: AsyncSession, st
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
+        if pets_mod.repair_pet_meta_if_needed(char):
+            await session.flush()
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
         if pet_key not in pets_mod.owned_keys(char):
             await callback.answer("Этого питомца нет.", show_alert=True)
@@ -601,8 +608,15 @@ async def on_profile_rest(callback: CallbackQuery, session: AsyncSession, state:
             return
 
         title_service.refresh_unlocks(char)
-        ok, payload = try_begin_or_claim_rest(char)
+        ok, payload, rest_until = try_begin_or_claim_rest(char)
         await session.flush()
+        if ok and rest_until is not None:
+            schedule_rest_completion_notification(
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                telegram_id=callback.from_user.id,
+                until=rest_until,
+            )
         text_compact = await build_profile_html_async(session, char)
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
         p = portrait_path_for_character(char) if game_images_enabled(char) else None
@@ -637,6 +651,8 @@ async def on_profile_pet_menu(callback: CallbackQuery, session: AsyncSession, st
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
+        if pets_mod.repair_pet_meta_if_needed(char):
+            await session.flush()
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
         own = pets_mod.owned_keys(char)
         if not own:

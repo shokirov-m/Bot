@@ -8,6 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.clan import Clan, ClanMembership
 from db.models.character import Character
 
+# Опыт клана: уровень = 1 + floor(clan_xp / CLAN_XP_PER_LEVEL), не выше CLAN_MAX_LEVEL.
+CLAN_XP_PER_LEVEL = 400
+CLAN_MAX_LEVEL = 99
+
+
+def clan_level_from_total_xp(total_xp: int) -> int:
+    x = max(0, int(total_xp))
+    raw = 1 + x // CLAN_XP_PER_LEVEL
+    return min(CLAN_MAX_LEVEL, max(1, raw))
+
 
 async def get_membership(session: AsyncSession, character_id: int) -> ClanMembership | None:
     result = await session.execute(
@@ -53,5 +63,5 @@ async def add_member(session: AsyncSession, *, clan_id: int, character: Characte
 async def add_clan_xp(session: AsyncSession, clan: Clan, delta: int) -> None:
     nx = max(0, int(clan.clan_xp) + int(delta))
     clan.clan_xp = nx
-    clan.clan_level = max(1, 1 + nx // 400)
+    clan.clan_level = clan_level_from_total_xp(nx)
     await session.flush()

@@ -65,15 +65,22 @@ def rest_seconds_left(character: Character) -> int:
     return max(0, left)
 
 
-def try_begin_or_claim_rest(character: Character) -> tuple[bool, str]:
+def try_begin_or_claim_rest(character: Character) -> tuple[bool, str, float | None]:
     """
     Обработка кнопки «Передышка»:
     - таймер истёк → восстановить HP/MP;
     - таймер идёт → отказ с оставшимся временем;
     - таймера нет → начать новую передышку на REST_DURATION_SEC.
+
+    Третье значение — Unix timestamp окончания новой передышки, если она только что
+    начата; иначе None (для планирования уведомления).
     """
     if apply_completed_rest_if_needed(character):
-        return True, "HP, MP и стамина восстановлены до максимума (бета: полная стамина после передышки)."
+        return (
+            True,
+            "HP, MP и стамина восстановлены до максимума (бета: полная стамина после передышки).",
+            None,
+        )
 
     mp = dict(character.meta_progress or {})
     raw = mp.get(_META_KEY)
@@ -84,13 +91,18 @@ def try_begin_or_claim_rest(character: Character) -> tuple[bool, str]:
         except (TypeError, ValueError):
             until = 0.0
         if now < until:
-            return False, f"Отдых… осталось {int(until - now)} с."
+            return False, f"Отдых… осталось {int(until - now)} с.", None
 
-    mp[_META_KEY] = now + REST_DURATION_SEC
+    until_ts = now + REST_DURATION_SEC
+    mp[_META_KEY] = until_ts
     character.meta_progress = mp
-    return True, (
-        f"Передышка! Через {REST_DURATION_SEC} с HP, MP и стамина станут полными (бета) — "
-        "снова нажми кнопку или открой профиль."
+    return (
+        True,
+        (
+            f"Передышка! Через {REST_DURATION_SEC} с HP, MP и стамина станут полными (бета) — "
+            "снова нажми кнопку или открой профиль."
+        ),
+        until_ts,
     )
 
 

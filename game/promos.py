@@ -28,6 +28,8 @@ PROMO_REWARDS: dict[str, PromoReward] = {
     "WELCOME": PromoReward(gold=80, xp=40, rune_stones=1),
     # Одно использование на аккаунт + броня и амулет в сумку (нужны 2 свободные ячейки).
     "BASEKIT26": PromoReward(gold=30, xp=40, rune_stones=0),
+    # Одно использование: редкий питомец «Осколок пустоты» + немного золота и опыта.
+    "VOIDPROMO26": PromoReward(gold=80, xp=120, rune_stones=1),
 }
 
 
@@ -39,4 +41,11 @@ def bag_payloads_for_code(normalized: str) -> tuple[dict[str, Any], ...] | None:
     """Доп. предметы в сумку по статическому коду (копии для каждой выдачи)."""
     if normalized == "BASEKIT26":
         return promo_starter_armor_amulet_payloads()
+    return None
+
+
+def promo_pet_key_for_code(normalized: str) -> str | None:
+    """Ключ питомца из PET_* по статическому промокоду (не inventory)."""
+    if normalized == "VOIDPROMO26":
+        return "pet_void_wisp"
     return None

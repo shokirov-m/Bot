@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from game.characters.skills import SkillDef, passive_combat_modifiers, skills_for_class
 from game.combat import effects, formulas, monster_ai
-from game.items.runes import ELEMENTS, RuneData
+from game.items.runes import ELEMENTS, RuneData, rune_burn_params_for_rank
 
 Outcome = Literal["continue", "win", "lose"]
 
@@ -55,6 +55,18 @@ def _log_weapon_rune_elemental_once(state: dict[str, Any], elem_bonus: int, logs
 
 
 COMBO_STREAK_TO_TRIGGER = 3
+
+
+def _rune_added_damage_log_line(elem_scaled: int, flat_el: int) -> str | None:
+    """Строка боя: сколько урона дали руны (стихийный % + плоский)."""
+    tot = int(elem_scaled) + int(flat_el)
+    if tot <= 0:
+        return None
+    if elem_scaled <= 0:
+        return f"✳ Руны добавили +{flat_el} урона (плоский урон рун)."
+    if flat_el <= 0:
+        return f"✳ Руны добавили +{elem_scaled} урона (стихийный бонус рун)."
+    return f"✳ Руны добавили +{tot} урона (стихийный бонус +{elem_scaled}, плоский +{flat_el})."
 
 
 def combo_break_on_player_hurt(state: dict[str, Any]) -> None:
@@ -204,6 +216,10 @@ def tick_cooldowns(state: dict[str, Any]) -> None:
 
 
 def player_weapon_attack_value(state: dict[str, Any]) -> int:
+    """
+    Атака из состояния боя: combat_service выставляет weapon_attack через
+    character_service.weapon_attack_value_from_item_data (scaled_weapon_attack_value + заточка).
+    """
     return int(state.get("weapon_attack", 3))
 
 
@@ -264,15 +280,16 @@ def _rune_status_proc_logs(state: dict[str, Any]) -> list[str]:
         meta = ELEMENTS.get(r.element, {})
         se = str(meta.get("status_effect", "burn"))
         if se == "burn":
+            bt, bp = rune_burn_params_for_rank(r.rank)
             effects.add_effect(
                 "monster",
                 state,
                 "Рунный жар",
                 "burn",
-                3,
-                {"potency_percent": 4},
+                bt,
+                {"potency_percent": bp},
             )
-            logs.append("🔥 Руна поджигает врага!")
+            logs.append(f"🔥 Руна поджигает врага на {bt} х.!")
         elif se == "freeze":
             state["monster_skip_next"] = True
             logs.append("❄️ Ледяная руна заледенила врага!")
@@ -303,12 +320,13 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     elem_bonus = int(state.get("weapon_rune_bonus_pct", 0))
     _log_weapon_rune_elemental_once(state, elem_bonus, logs)
 
-    dmg = formulas.physical_damage(
+    d_yes, _d_ne, elem_extra = formulas.physical_damage_split(
         int(st["str"]),
         player_weapon_attack_value(state),
         monster_armor_value(state),
         elemental_bonus_percent=elem_bonus,
     )
+    dmg = d_yes
     crit = formulas.roll_crit(luck, crit_bonus_flat=float(mods.get("crit_bonus", 0.0)))
     if crit:
         dmg = int(dmg * formulas.crit_multiplier())
@@ -317,6 +335,15 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
             dmg = int(dmg * (1.0 + cdm / 100.0))
     dmg = _apply_weapon_mastery_to_damage(state, dmg)
     dmg = combo_apply_outgoing_damage(state, dmg, logs)
+    before_flat = dmg
+    flat_el = int(state.get("weapon_rune_flat_elemental", 0))
+    scaled_elem = (
+        int(round(elem_extra * (before_flat / max(1, d_yes)))) if elem_extra > 0 else 0
+    )
+    dmg += flat_el
+    rline = _rune_added_damage_log_line(scaled_elem, flat_el)
+    if rline:
+        logs.append(rline)
     if crit:
         logs.append(f"→ Ты нанёс 🗡️ {dmg} урона [КРИТ💥]")
     else:
@@ -416,6 +443,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
 
     mdef = monster_armor_value(state)
 
+    elem_skill = 0
     if sk.kind == "mag":
         base = formulas.magical_damage(
             int(st["int"]),
@@ -427,15 +455,26 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     else:
         rb = int(state.get("weapon_rune_bonus_pct", 0))
         _log_weapon_rune_elemental_once(state, rb, logs)
-        base = formulas.physical_damage(
+        d_yes, d_ne, _ = formulas.physical_damage_split(
             int(st["str"]),
             player_weapon_attack_value(state),
             mdef,
             elemental_bonus_percent=rb,
         )
-        base = int(base * formulas.int_skill_phys_tuning_multiplier(int(st["int"])))
+        t_phys = formulas.int_skill_phys_tuning_multiplier(int(st["int"]))
+        base_y = int(d_yes * t_phys)
+        base_n = int(d_ne * t_phys)
+        if sk.power:
+            dmg_y = int(base_y * sk.power)
+            dmg_n = int(base_n * sk.power)
+        else:
+            dmg_y = base_y
+            dmg_n = base_n
+        elem_skill = max(0, dmg_y - dmg_n)
+        base = base_y
 
     dmg = int(base * sk.power) if sk.power else int(base)
+    dmg_start = dmg
 
     mon = _m(state)
     mhp, mmx = int(mon["hp"]), int(mon["max_hp"])
@@ -454,6 +493,16 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
 
     dmg = _apply_weapon_mastery_to_damage(state, dmg)
     dmg = combo_apply_outgoing_damage(state, dmg, logs)
+    before_flat = dmg
+    flat_el = int(state.get("weapon_rune_flat_elemental", 0))
+    scaled_elem = (
+        int(round(elem_skill * (before_flat / max(1, dmg_start)))) if elem_skill > 0 else 0
+    )
+    dmg += flat_el
+    rline = _rune_added_damage_log_line(scaled_elem, flat_el)
+    if rline:
+        logs.append(rline)
+    logs.extend(_rune_status_proc_logs(state))
 
     if sk.effect_key == "burn" and sk.effect_chance > 0 and effects.roll_chance(sk.effect_chance):
         effects.add_effect(

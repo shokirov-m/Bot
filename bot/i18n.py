@@ -17,6 +17,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_class_screen_title": "📜 <b>Класс героя</b>",
         "profile_rest_btn_start": "🛏️ Передышка (1 мин)",
         "profile_rest_btn_wait": "🛏️ ~{sec} с до полного HP/MP",
+        "rest_complete_notify": (
+            "🛏️ <b>Передышка окончена.</b> HP, MP и стамина восстановлены до максимума. "
+            "Открой /profile, если карточка ещё не обновилась."
+        ),
         "menu_floor": "🗺️ Этаж",
         "menu_inv": "🎒 Инвентарь",
         "menu_titles": "🏆 Титулы",
@@ -89,10 +93,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "settings_rename_done": "✅ Имя изменено на: <b>{name}</b>\nСписано <b>{gold}</b> 💰.",
         "settings_rename_no_gold": "Недостаточно золота. Нужно <b>{gold}</b> 💰.",
         "settings_promo_prompt": "Введи промокод <b>одним сообщением</b> (латиница и цифры).",
-        "settings_promo_ok": "🎁 Промокод принят!\n+{gold} 💰 · +{xp} опыта.{rune_part}{level_part}{items_part}",
+        "settings_promo_ok": "🎁 Промокод принят!\n+{gold} 💰 · +{xp} опыта.{rune_part}{level_part}{items_part}{pet_part}",
         "settings_promo_rune": "\n⚗️ +{rune} рунных камней",
         "settings_promo_levels": "\n📈 Новых уровней: <b>{n}</b>",
         "settings_promo_items": "\n🎒 В сумку: <b>{items}</b>",
+        "settings_promo_pet_new": "\n🐾 Питомец добавлен: <b>{name}</b> (смотри статус → «Питомец»).",
+        "settings_promo_pet_dup": "\n🐾 Питомец <b>{name}</b> уже был — повторно не выдаётся; остальные награды начислены.",
         "settings_promo_bag_full": "В сумке нет двух свободных ячеек — освободи место и введи код снова.",
         "settings_promo_bad_format": "Неверный формат кода.",
         "settings_promo_unknown": "Такого промокода нет или он отключён.",
@@ -280,6 +286,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_class_screen_title": "📜 <b>Your class</b>",
         "profile_rest_btn_start": "🛏️ Rest (1 min)",
         "profile_rest_btn_wait": "🛏️ ~{sec}s to full HP/MP",
+        "rest_complete_notify": (
+            "🛏️ <b>Rest finished.</b> HP, MP, and stamina are maxed. "
+            "Open /profile if your status card still looks stale."
+        ),
         "menu_floor": "🗺️ Floor",
         "menu_inv": "🎒 Inventory",
         "menu_titles": "🏆 Titles",
@@ -352,10 +362,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "settings_rename_done": "✅ Name set to: <b>{name}</b>\nCharged <b>{gold}</b> gold.",
         "settings_rename_no_gold": "Not enough gold. Need <b>{gold}</b>.",
         "settings_promo_prompt": "Send the promo code in <b>one message</b>.",
-        "settings_promo_ok": "🎁 Promo accepted!\n+{gold} gold · +{xp} XP.{rune_part}{level_part}{items_part}",
+        "settings_promo_ok": "🎁 Promo accepted!\n+{gold} gold · +{xp} XP.{rune_part}{level_part}{items_part}{pet_part}",
         "settings_promo_rune": "\n⚗️ +{rune} rune stone(s)",
         "settings_promo_levels": "\n📈 Level-ups: <b>{n}</b>",
         "settings_promo_items": "\n🎒 To bag: <b>{items}</b>",
+        "settings_promo_pet_new": "\n🐾 Pet added: <b>{name}</b> (see Status → Pet).",
+        "settings_promo_pet_dup": "\n🐾 You already had <b>{name}</b> — not granted again; other rewards applied.",
         "settings_promo_bag_full": "You need two free bag slots — free some space and enter the code again.",
         "settings_promo_bad_format": "Invalid code format.",
         "settings_promo_unknown": "Unknown or disabled code.",

@@ -49,3 +49,27 @@ def test_escape_then_pop_xp_multiplier() -> None:
     assert abs(s.pop_next_win_xp_multiplier(c) - 0.9) < 1e-6
     assert s.META_NEXT_WIN_XP_MULT not in c.meta_progress
     assert s.pop_next_win_xp_multiplier(c) == 1.0
+
+
+def test_bank_safe_capacity_and_deposit() -> None:
+    c = SimpleNamespace(meta_progress={}, gold=800, floor_number=3)
+    assert s.bank_safe_capacity(c) == 500
+    ok, msg = s.try_bank_safe_deposit(c, 0)
+    assert ok
+    assert s.bank_safe_balance(c) == 500
+    assert c.gold == 300
+    assert "500" in msg
+    ok2, _ = s.try_bank_safe_deposit(c, 100)
+    assert not ok2
+    ok3, _ = s.try_bank_safe_withdraw(c, 200)
+    assert ok3
+    assert s.bank_safe_balance(c) == 300
+
+
+def test_bank_safe_upgrade() -> None:
+    c = SimpleNamespace(meta_progress={}, gold=5000, floor_number=3)
+    cost = s.bank_safe_upgrade_cost_gold(c)
+    ok, _ = s.try_bank_safe_upgrade(c)
+    assert ok
+    assert c.gold == 5000 - cost
+    assert s.bank_safe_capacity(c) == 1000

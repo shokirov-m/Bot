@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 from db.models.character import Character
 from game.characters.path_ranks import PATH_RANK_SPECS, path_rank_key_from_battle
 from game.characters.skills import passive_combat_modifiers_merged
+from game.combat import consumables
 from game.floors import long_floor as lf
 from services import character_service, daily_service
 from services.combat_service import _tutorial_monster_wave2
@@ -112,6 +113,21 @@ def test_weapon_attack_value_matches_unarmed_and_enchant() -> None:
         floor_number=1,
     )
     assert w == 12
+
+
+def test_combat_use_tag_normalizes_case() -> None:
+    assert consumables.normalize_combat_use_tag({"use_tag": "Heal_HP_Pct"}) == "heal_hp_pct"
+    assert consumables.normalize_combat_use_tag({"use_tag": "  heal_mp_flat "}) == "heal_mp_flat"
+
+
+def test_floor_callback_matches_lf_keys_underscore() -> None:
+    import re
+
+    pat = re.compile(r"^fl:(\d+):([a-z0-9_]+)$")
+    m = pat.match("fl:15:lf_keys")
+    assert m is not None
+    assert m.group(1) == "15"
+    assert m.group(2) == "lf_keys"
 
 
 def test_long_floor_spawns_and_phase() -> None:

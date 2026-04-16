@@ -16,6 +16,12 @@ async def get_by_telegram_id(session: AsyncSession, telegram_id: int) -> User | 
     return result.scalar_one_or_none()
 
 
+async def get_by_id(session: AsyncSession, user_id: int) -> User | None:
+    """Пользователь по PK users.id."""
+    result = await session.execute(select(User).where(User.id == int(user_id)))
+    return result.scalar_one_or_none()
+
+
 async def find_by_username_ci(session: AsyncSession, username: str) -> User | None:
     """Поиск по @username без учёта регистра (как в Telegram)."""
     u = username.strip().lstrip("@")

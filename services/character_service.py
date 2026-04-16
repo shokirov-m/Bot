@@ -28,7 +28,7 @@ from utils.profile_portraits import META_PORTRAIT_KEY
 
 def _compute_hp_max(vitality: int, strength: int, cls: ClassDefinition) -> int:
     """Базовый расчёт HP с учётом ВЫН/СИЛ и пассива класса."""
-    base = 40 + vitality * 6 + strength * 2
+    base = 40 + vitality * 6 + strength * 4
     return max(1, int(base * cls.hp_multiplier))
 
 

@@ -1,4 +1,4 @@
-"""Inline-клавиатуры инвентаря (сумка 20 слотов, экипировка)."""
+"""Inline-клавиатуры инвентаря (сумка без лимита слотов, экипировка)."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ def _equip_button_label(it: InventoryItem) -> str:
     data = it.item_data or {}
     r = str(data.get("rarity") or "common").lower()
     em = RARITY_EMOJI.get(r, "⚪")
-    name = str(data.get("name", "?"))[:12]
-    return f"{em} {name}"[:32]
+    name = str(data.get("name", "?"))[:14]
+    return f"{em} {name}"[:30]
 
 
 def bag_category_filter_row(page: int, selected: str) -> list[InlineKeyboardButton]:
@@ -69,14 +69,14 @@ def bag_tab_keyboard(
     for i in range(0, len(chunk), 2):
         row: list[InlineKeyboardButton] = [
             InlineKeyboardButton(
-                text=item_bag_button_label(chunk[i].item_data, chunk[i].bag_slot),
+                text=item_bag_button_label(chunk[i].item_data),
                 callback_data=f"inv:it:{chunk[i].id}:b:{page}:{bag_cat}",
             ),
         ]
         if i + 1 < len(chunk):
             row.append(
                 InlineKeyboardButton(
-                    text=item_bag_button_label(chunk[i + 1].item_data, chunk[i + 1].bag_slot),
+                    text=item_bag_button_label(chunk[i + 1].item_data),
                     callback_data=f"inv:it:{chunk[i + 1].id}:b:{page}:{bag_cat}",
                 ),
             )
@@ -104,9 +104,9 @@ def equipment_tab_keyboard(equipped: list[InventoryItem]) -> InlineKeyboardMarku
         label_base = equip_meta.slot_label_ru(slot)
         it = by_slot.get(slot)
         if it is not None:
-            text = f"{label_base}: {_equip_button_label(it)}"
+            text = f"✓ {label_base}: {_equip_button_label(it)}"
             rows.append(
-                [InlineKeyboardButton(text=text[:32], callback_data=f"inv:it:{it.id}:e:0")],
+                [InlineKeyboardButton(text=text[:40], callback_data=f"inv:it:{it.id}:e:0")],
             )
         else:
             rows.append(

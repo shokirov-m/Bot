@@ -349,6 +349,41 @@ def patch_sqlite_auction_lots_table() -> None:
         logger.exception("Патч SQLite (auction_lots) не удался: {}", p)
 
 
+def patch_sqlite_auction_lots_target_char_id() -> None:
+    """Колонка target_char_id — личные предложения на аукционе."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            row = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='auction_lots'",
+            ).fetchone()
+            if row is None:
+                return
+            cols = {r[1] for r in con.execute("PRAGMA table_info(auction_lots)").fetchall()}
+            if "target_char_id" in cols:
+                return
+            con.execute(
+                "ALTER TABLE auction_lots ADD COLUMN target_char_id INTEGER "
+                "REFERENCES characters(id) ON DELETE SET NULL",
+            )
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS ix_auction_lots_target_char_id ON auction_lots (target_char_id)",
+            )
+            con.commit()
+            logger.info("Патч SQLite: auction_lots.target_char_id")
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (auction_lots.target_char_id) не удался: {}", p)
+
+
 def patch_sqlite_clans_tables() -> None:
     """Таблицы кланов (базовый уровень: создание, участники, XP)."""
     import sqlite3
@@ -374,8 +409,7 @@ def patch_sqlite_clans_tables() -> None:
                     leader_character_id INTEGER NOT NULL,
                     chat_url VARCHAR(256),
                     clan_xp INTEGER NOT NULL DEFAULT 0,
-                    clan_level INTEGER NOT NULL DEFAULT 1,
-                    created_at VARCHAR(40)
+                    clan_level INTEGER NOT NULL DEFAULT 1
                 )
                 """,
             )
@@ -531,6 +565,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_app_global_table()
     patch_sqlite_game_events_table()
     patch_sqlite_auction_lots_table()
+    patch_sqlite_auction_lots_target_char_id()
     patch_sqlite_promo_redemptions_table()
     patch_sqlite_promo_offers_table()
     patch_sqlite_clans_tables()

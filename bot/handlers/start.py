@@ -1,6 +1,6 @@
 """
 /start: лор башни, пол героя, ник, портрет (3 варианта по полу), создание странника.
-Класс — на 17 этаже, подкласс — на 57.
+Класс — с 10 ур. у наставника на 11 этаже, подкласс — на 57.
 """
 
 from __future__ import annotations
@@ -155,7 +155,7 @@ async def _finish_new_character_registration(
     body = (
         f"⚔️ <b>{html.escape(char.display_name)}</b> {cls.emoji} <b>{cls.name_ru}</b>. "
         f"Старт: этаж <b>1</b>, открыто: <b>{char.highest_floor_reached}</b>.\n"
-        f"<i>Класс — на 17 этаже, подкласс на 57. Учебный бой и звание — с 1 этажа.</i>\n"
+        f"<i>С 10 ур. класс у наставника на 11 этаже; подкласс на 57. Учебный бой и звание — с 1 этажа.</i>\n"
         f"<i>Пассив:</i> {passive}\n"
         f"<i>Навыки:</i> {cls.skill_1}, {cls.skill_2}, {cls.skill_3}\n\n"
         f"{format_menu_hub_html(char, locale=loc)}"
@@ -393,4 +393,7 @@ async def on_gender_stale_callback(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("reg:class:"))
 async def on_outdated_class_callback(callback: CallbackQuery) -> None:
     """Старые сообщения с выбором класса при регистрации."""
-    await callback.answer("Регистрация обновлена: нажми /start — класс выбирается на 17 этаже.", show_alert=True)
+    await callback.answer(
+        "Регистрация обновлена: нажми /start — класс с 10 ур. у наставника на 11 этаже.",
+        show_alert=True,
+    )

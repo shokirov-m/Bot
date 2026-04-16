@@ -36,7 +36,7 @@ def scrap_gold_for_item_data(data: dict[str, Any]) -> int:
         base = max(base, 8 + int(data.get("rune_power", 0) or 0) * 2)
     if str(data.get("kind") or "") == "consumable":
         base = max(3, base // 2)
-    return max(1, int(round(base * mul * 0.45)))
+    return max(1, int(round(base * mul * 0.9)))
 
 
 def format_scrap_menu_html(character: Character, items: list[InventoryItem]) -> str:

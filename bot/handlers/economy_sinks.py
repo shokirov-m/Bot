@@ -1,5 +1,5 @@
 """
-Городская экономика: лотерея, ростовщик, пожертвования, банк, заглушка аукциона.
+Городская экономика: лотерея, ростовщик, сейф банка, заглушка аукциона.
 Колбэки ecy:* — только на этаже городского хаба.
 """
 
@@ -13,7 +13,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale
-from bot.keyboards.economy_kb import economy_hub_keyboard
+from bot.keyboards.economy_kb import bank_safe_keyboard, economy_hub_keyboard
 from bot.keyboards.forge_kb import city_hub_keyboard
 from db.repository import character_repo, user_repo
 from game.floors import floor_data
@@ -118,6 +118,21 @@ async def _refresh_economy_screen(query: CallbackQuery, char, floor_key: int) ->
             raise
 
 
+async def _refresh_bank_safe_screen(query: CallbackQuery, char, floor_key: int) -> None:
+    if query.message is None:
+        return
+    text = economy_sink_service.bank_safe_intro_html(char)
+    try:
+        await query.message.edit_text(
+            text,
+            reply_markup=bank_safe_keyboard(floor_key),
+            parse_mode=ParseMode.HTML,
+        )
+    except TelegramBadRequest as e:
+        if not _is_message_not_modified(e):
+            raise
+
+
 @router.callback_query(F.data.startswith("ecy:lot:"))
 async def economy_lottery(query: CallbackQuery, session: AsyncSession) -> None:
     try:
@@ -187,33 +202,88 @@ async def economy_repay(query: CallbackQuery, session: AsyncSession) -> None:
         await query.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("ecy:tit:"))
-async def economy_tithe(query: CallbackQuery, session: AsyncSession) -> None:
+@router.callback_query(F.data.startswith("ecy:sfv:"))
+async def economy_safe_view(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key or floor_data.get_city_for_floor(char.floor_number) is None:
+            await query.answer("Город недоступен здесь. Обнови этаж.", show_alert=True)
+            return
+        text = economy_sink_service.bank_safe_intro_html(char)
+        try:
+            await query.message.edit_text(
+                text,
+                reply_markup=bank_safe_keyboard(floor_key),
+                parse_mode=ParseMode.HTML,
+            )
+        except TelegramBadRequest as e:
+            if not _is_message_not_modified(e):
+                raise
+        await query.answer()
+    except Exception:
+        logger.exception("ecy:sfv")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("ecy:sfd:"))
+async def economy_safe_deposit(query: CallbackQuery, session: AsyncSession) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
             return
         parts = query.data.split(":")
         floor_key = int(parts[2])
-        tier = int(parts[3])
+        amount = int(parts[3])
         char = await _load_char_for_mutation(session, query.from_user.id)
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        ok, msg = economy_sink_service.try_tithe(char, floor_key=floor_key, tier=tier)
+        ok, msg = economy_sink_service.try_bank_safe_deposit(char, floor_key=floor_key, amount=amount)
         if not ok:
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_economy_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
-        logger.exception("ecy:tit")
+        logger.exception("ecy:sfd")
         await query.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("ecy:bnk:"))
-async def economy_bank(query: CallbackQuery, session: AsyncSession) -> None:
+@router.callback_query(F.data.startswith("ecy:sfw:"))
+async def economy_safe_withdraw(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[2])
+        amount = int(parts[3])
+        char = await _load_char_for_mutation(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        ok, msg = economy_sink_service.try_bank_safe_withdraw(char, floor_key=floor_key, amount=amount)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await economy_sink_service.flush(session, char)
+        await _refresh_bank_safe_screen(query, char, floor_key)
+        await query.answer(msg[:180], show_alert=True)
+    except Exception:
+        logger.exception("ecy:sfw")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("ecy:sfu:"))
+async def economy_safe_upgrade(query: CallbackQuery, session: AsyncSession) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -223,15 +293,15 @@ async def economy_bank(query: CallbackQuery, session: AsyncSession) -> None:
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        ok, msg = economy_sink_service.try_buy_bank_custody(char, floor_key=floor_key)
+        ok, msg = economy_sink_service.try_bank_safe_upgrade(char, floor_key=floor_key)
         if not ok:
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_economy_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
-        logger.exception("ecy:bnk")
+        logger.exception("ecy:sfu")
         await query.answer("Ошибка.", show_alert=True)
 
 

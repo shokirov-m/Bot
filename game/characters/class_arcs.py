@@ -1,5 +1,5 @@
 """
-Ветки класса: 4 базовых по доминирующему стату на 17 этаже, подклассы на 57 (×2 к статам),
+Ветки класса: 4 базовых по доминанту на 11 этаже (с 10 ур.), подклассы на 57 (×2 к статам),
 скрытые классы при особых условиях.
 """
 
@@ -51,7 +51,7 @@ def dominant_base_class_keys(character: Character) -> list[str]:
 
 
 def secret_base_class_keys(character: Character) -> list[str]:
-    """Скрытые классы на 17 этаже (достижимы без внешней прокачки статов)."""
+    """Скрытые классы у наставника (достижимы без внешней прокачки статов)."""
     out: list[str] = []
     luck = int(character.stat_luck)
     kills = int(character.total_kills)
@@ -85,11 +85,22 @@ def subclass_keys_for_character(character: Character) -> list[str]:
 
 
 def needs_base_class_choice(character: Character) -> bool:
+    """Странник 10+ уровня ещё без базового класса (выбор у наставника на 11 этаже)."""
     return (
         character.class_key == "wanderer"
         and int(character.class_tier) == 0
-        and int(character.floor_number) >= 17
+        and int(character.level) >= 10
     )
+
+
+def can_pick_base_class_on_current_floor(character: Character) -> bool:
+    """Кнопки выбора класса и наставник — только на 11 ярусе."""
+    return needs_base_class_choice(character) and int(character.floor_number) == 11
+
+
+def combat_blocked_for_missing_base_class(character: Character) -> bool:
+    """С 11 яруса без класса в бой нельзя (до выбора можно сражаться ниже 11)."""
+    return needs_base_class_choice(character) and int(character.floor_number) >= 11
 
 
 def needs_subclass_choice(character: Character) -> bool:

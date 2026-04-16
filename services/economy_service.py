@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.auction_lot import AuctionLot
 from db.models.character import Character
 from db.repository import auction_repo
 from game.economy import market
@@ -23,6 +24,25 @@ async def auction_create_lot(
             f"Не больше {market.MAX_ACTIVE_LOTS_PER_SELLER} активных лотов. Дождись окончания или снимай предмет после истечения.",
         )
     return await market.create_lot(session, char, bag_slot, price)
+
+
+async def auction_create_direct_offer_lot(
+    session: AsyncSession,
+    seller: Character,
+    bag_slot: int,
+    price: int,
+    target: Character,
+) -> tuple[bool, str, AuctionLot | None]:
+    """Личное предложение конкретному герою; возвращает лот при успехе (для уведомления)."""
+    n = await auction_repo.count_active_by_seller(session, int(seller.id))
+    if n >= market.MAX_ACTIVE_LOTS_PER_SELLER:
+        return (
+            False,
+            f"Не больше {market.MAX_ACTIVE_LOTS_PER_SELLER} активных лотов. Дождись окончания или снимай предмет после истечения.",
+            None,
+        )
+    ok, msg, lot = await market.create_direct_offered_lot(session, seller, bag_slot, price, target)
+    return ok, msg, lot
 
 
 async def auction_place_bid(
@@ -60,3 +80,19 @@ async def auction_seller_reprice_lot(
     new_price: int,
 ) -> tuple[bool, str]:
     return await market.seller_reprice_lot(session, char, lot_id, new_price)
+
+
+async def auction_accept_direct_offer(
+    session: AsyncSession,
+    char: Character,
+    lot_id: int,
+) -> tuple[bool, str]:
+    return await market.accept_direct_offer(session, char, lot_id)
+
+
+async def auction_decline_direct_offer(
+    session: AsyncSession,
+    char: Character,
+    lot_id: int,
+) -> tuple[bool, str]:
+    return await market.decline_direct_offer(session, char, lot_id)

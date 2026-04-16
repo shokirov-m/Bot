@@ -1,5 +1,5 @@
 """
-Inline-клавиатура действий на этаже: класс (17/57), монстры, вход в город, навигация по этажам.
+Inline-клавиатура действий на этаже: класс (11 яр. / 57), монстры, вход в город, навигация по этажам.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
 from game.characters.class_arcs import (
     SUBCLASS_NAME_RU,
-    needs_base_class_choice,
+    can_pick_base_class_on_current_floor,
     needs_subclass_choice,
     offered_base_class_keys,
     subclass_keys_for_character,
@@ -20,6 +20,7 @@ from game.characters import pets as pets_mod
 from game.floors import floor_data
 from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import long_floor as long_floor_mod
+from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors.monsters import FloorMonsterSpawn
 from game.floors.tower_ascent import tower_next_floor_pending
 from services.tutorial_battle_service import tutorial_battle_pending
@@ -47,7 +48,16 @@ def _pet_rows(character: Character, floor_number: int) -> list[list[InlineKeyboa
 
 def _class_arc_rows(character: Character) -> list[list[InlineKeyboardButton]]:
     rows: list[list[InlineKeyboardButton]] = []
-    if needs_base_class_choice(character):
+    fn = int(character.floor_number)
+    if can_pick_base_class_on_current_floor(character):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🎓 Наставник Эрид",
+                    callback_data=_cb(fn, "classtalk"),
+                ),
+            ],
+        )
         row_buf: list[InlineKeyboardButton] = []
         for key in offered_base_class_keys(character):
             cls = get_class_or_none(key)
@@ -132,6 +142,21 @@ def floor_screen_keyboard(
             ],
         )
 
+    if rotten_swamps_mod.is_rotten_swamps_zone(floor_number) and not long_floor_mod.is_long_floor_active(
+        character,
+    ):
+        sc_lbl = "🏚️ Заброшенный лагерь"
+        if rotten_swamps_mod.abandoned_camp_used(character):
+            sc_lbl = "🏚️ Лагерь (обыскан)"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=sc_lbl,
+                    callback_data=f"flf:swcamp:{floor_number}",
+                ),
+            ],
+        )
+
     buffer: list[InlineKeyboardButton] = []
 
     def flush() -> None:
@@ -142,6 +167,13 @@ def floor_screen_keyboard(
 
     for sp in spawns:
         base = sp.display_name
+        if (
+            rotten_swamps_mod.is_rotten_swamps_zone(floor_number)
+            and not long_floor_mod.is_long_floor_active(character)
+            and rotten_swamps_mod.dense_fog_hides_spawn_on_map(sp)
+            and sp.slot_code not in beaten
+        ):
+            base = rotten_swamps_mod.mystery_spawn_label()
         if sp.slot_code in beaten:
             suffix = " ✅"
             avail = 36 - len(suffix)
@@ -242,6 +274,21 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=camp_lbl,
                     callback_data=f"flf:camp:{floor_number}",
+                ),
+            ],
+        )
+
+    if rotten_swamps_mod.is_rotten_swamps_zone(floor_number) and not long_floor_mod.is_long_floor_active(
+        character,
+    ):
+        sc_lbl = "🏚️ Заброшенный лагерь"
+        if rotten_swamps_mod.abandoned_camp_used(character):
+            sc_lbl = "🏚️ Лагерь (обыскан)"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=sc_lbl,
+                    callback_data=f"flf:swcamp:{floor_number}",
                 ),
             ],
         )

@@ -1,5 +1,5 @@
 """
-Поглотители золота в городах-хабах: лотерея, ростовщик, пожертвования, банковская опека.
+Поглотители золота в городах-хабах: лотерея, ростовщик, сейф банка.
 Аукцион — заготовка под будущие лоты (без БД лотов в этой версии).
 
 Баланс (подкрутка v2): лотерея слегка «жёстче», билет дороже на высоких хабах;
@@ -15,9 +15,9 @@ from typing import Any
 
 # --- Ключи meta_progress ---
 META_ML_DEBT = "sink_moneylender_debt"
-META_TITHE_GOLD_TOTAL = "sink_tithe_gold_total"
-META_BANK_CUSTODY = "sink_bank_custody_paid"
 META_LOTTERY_SPENT = "sink_lottery_gold_spent"
+META_BANK_SAFE_BALANCE = "bank_safe_balance"
+META_BANK_SAFE_LEVEL = "bank_safe_capacity_level"
 META_AUCTION_STUB_SEEN = "sink_auction_info_seen"
 META_NEXT_WIN_XP_MULT = "next_win_xp_mult"  # после успешного побега: −10% к опыту со след. победы
 
@@ -109,9 +109,6 @@ def debt_for_borrow(principal: int) -> int:
 # Доля награды за бой, уходящая в погашение долга (не в кошелёк), пока долг > 0.
 VICTORY_GOLD_DEBT_FRACTION = 0.18
 
-TITHE_TIERS_GOLD: tuple[int, ...] = (45, 130, 380)
-
-
 def garnish_victory_gold_for_debt(character: Any, gross_gold: int) -> tuple[int, str]:
     """
     С победы в башне: часть золота автоматически гасит долг ростовщика.
@@ -134,23 +131,86 @@ def garnish_victory_gold_for_debt(character: Any, gross_gold: int) -> tuple[int,
     return net, tail
 
 
-def bank_custody_fee(floor_number: int) -> int:
-    """Разовый платёж «опека сейфа» — чистый sink."""
-    f = max(3, min(100, int(floor_number)))
-    return 180 + (f // 10) * 15
+def bank_safe_balance(character: Any) -> int:
+    return max(0, int(_meta(character).get(META_BANK_SAFE_BALANCE, 0)))
 
 
-def bank_custody_paid(character: Any) -> bool:
-    return bool(_meta(character).get(META_BANK_CUSTODY))
+def bank_safe_capacity_level(character: Any) -> int:
+    return max(0, int(_meta(character).get(META_BANK_SAFE_LEVEL, 0)))
 
 
-def set_bank_custody(character: Any, paid: bool) -> None:
-    mp = _meta(character)
-    if paid:
-        mp[META_BANK_CUSTODY] = 1
+def bank_safe_capacity(character: Any) -> int:
+    """Макс. золота в сейфе: база 500 + уровни улучшения."""
+    lv = bank_safe_capacity_level(character)
+    return 500 + lv * 500
+
+
+def bank_safe_space_left(character: Any) -> int:
+    return max(0, bank_safe_capacity(character) - bank_safe_balance(character))
+
+
+def bank_safe_upgrade_cost_gold(character: Any) -> int:
+    """Стоимость следующего уровня вместимости."""
+    lv = bank_safe_capacity_level(character)
+    return 320 + lv * 180
+
+
+def try_bank_safe_deposit(character: Any, amount: int) -> tuple[bool, str]:
+    """
+    amount > 0 — внести столько, сколько есть и влезает;
+    amount == 0 — внести максимум (всё влезшее из кошелька).
+    """
+    cap = bank_safe_capacity(character)
+    bal = bank_safe_balance(character)
+    space = cap - bal
+    if space <= 0:
+        return False, "Сейф полон. Улучши хранилище."
+    g = max(0, int(character.gold))
+    if g <= 0:
+        return False, "Нет золота в кошельке."
+    if amount == 0:
+        move = min(g, space)
     else:
-        mp.pop(META_BANK_CUSTODY, None)
+        move = min(g, space, max(1, int(amount)))
+    if move <= 0:
+        return False, "Нечего вносить."
+    mp = _meta(character)
+    mp[META_BANK_SAFE_BALANCE] = bal + move
+    character.gold = g - move
     _set_meta(character, mp)
+    return True, f"В сейф положено <b>{move}</b> 💰. В сейфе: <b>{bal + move}</b> / {cap}."
+
+
+def try_bank_safe_withdraw(character: Any, amount: int) -> tuple[bool, str]:
+    """amount == 0 — снять всё из сейфа."""
+    bal = bank_safe_balance(character)
+    if bal <= 0:
+        return False, "В сейфе пусто."
+    if amount == 0:
+        move = bal
+    else:
+        move = min(bal, max(1, int(amount)))
+    mp = _meta(character)
+    mp[META_BANK_SAFE_BALANCE] = bal - move
+    character.gold = int(character.gold) + move
+    _set_meta(character, mp)
+    cap = bank_safe_capacity(character)
+    return True, f"Снято <b>{move}</b> 💰. В сейфе: <b>{bal - move}</b> / {cap}."
+
+
+def try_bank_safe_upgrade(character: Any) -> tuple[bool, str]:
+    """Платёж из кошелька; +500 к вместимости за уровень."""
+    cost = bank_safe_upgrade_cost_gold(character)
+    g = int(character.gold)
+    if g < cost:
+        return False, f"Нужно {cost} 💰 для улучшения."
+    mp = _meta(character)
+    lv = bank_safe_capacity_level(character)
+    mp[META_BANK_SAFE_LEVEL] = lv + 1
+    character.gold = g - cost
+    _set_meta(character, mp)
+    new_cap = bank_safe_capacity(character)
+    return True, f"Хранилище <b>+1</b> уровень (−{cost} 💰). Вместимость: <b>{new_cap}</b> 💰."
 
 
 def auction_public_status_ru() -> str:

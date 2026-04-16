@@ -7,7 +7,13 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from game.items import enchant as enchant_rules
 from game.items.equipment import RARITY_EMOJI, RARITY_NAME_RU, SLOT_LABEL_RU, equip_slot_for_kind
+from game.items.rarity_scaling import (
+    armor_enchant_defensive_bonus,
+    scaled_armor_defense_value,
+    scaled_weapon_attack_value,
+)
 from game.items.stat_bonuses import format_item_stat_bonus_line
 
 # Базовый разделитель (совместимость со старыми экранами).
@@ -113,13 +119,16 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
         lines.append(f"📌 Тип: {SLOT_LABEL_RU[slot]}")
     elif kind:
         lines.append(f"📌 Тип: {html.escape(str(kind))}")
+    ench = enchant_rules.current_enchant_level(data)
     atk = data.get("attack", data.get("atk"))
     if atk is not None:
-        lines.append(f"⚔️ Атака: <b>{int(atk)}</b>")
+        eff_atk = scaled_weapon_attack_value(int(atk), data) + ench
+        lines.append(f"⚔️ Атака: <b>{eff_atk}</b>")
     defense = data.get("defense", data.get("armor"))
     if defense is not None:
-        lines.append(f"🛡️ Защита: <b>{int(defense)}</b>")
-    ench = int(data.get("enchant", data.get("plus", 0)) or 0)
+        bd = int(defense)
+        eff_def = scaled_armor_defense_value(bd, data) + armor_enchant_defensive_bonus(ench, data)
+        lines.append(f"🛡️ Защита: <b>{eff_def}</b>")
     if ench > 0:
         lines.append(f"✨ Заточка: {html.escape(render_enchant_stars(ench))}")
     st_line = format_item_stat_bonus_line(data)
@@ -138,18 +147,17 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
-def item_bag_button_label(data: dict[str, Any] | None, bag_slot: int | None) -> str:
-    """Короткая подпись для inline-кнопки (лимит ~30 символов)."""
+def item_bag_button_label(data: dict[str, Any] | None, _bag_slot: int | None = None) -> str:
+    """Короткая подпись для inline-кнопки сумки/аукциона (лимит Telegram; без номера ячейки)."""
     data = data or {}
-    slot = bag_slot if bag_slot is not None else "?"
     r = str(data.get("rarity") or "common").lower()
     em = RARITY_EMOJI.get(r, "⚪")
-    name = str(data.get("name", "?"))[:11]
+    name = str(data.get("name", "?"))[:16]
     atk = data.get("attack", data.get("atk"))
     if atk is not None:
-        s = f"{em}[{slot}] {name} ({atk})"
+        s = f"{em} {name} ({atk})"
     else:
-        s = f"{em}[{slot}] {name}"
+        s = f"{em} {name}"
     return s[:30]
 
 

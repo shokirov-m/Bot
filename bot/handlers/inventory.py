@@ -35,7 +35,7 @@ INV_HEADER = "🧰 <b>Инвентарь</b>\n"
 def _bag_intro(count: int) -> str:
     return (
         f"{INV_HEADER}🎒 <b>Сумка</b> — <b>{count}</b> предметов.\n"
-        "<i>Сначала редкие предметы; в ряд по две кнопки — открой карточку.</i>\n"
+        "<i>Сначала редкие; по две кнопки в ряд — открой карточку. Номера ячеек не показываем.</i>\n"
         "Выбери предмет:"
     )
 
@@ -204,9 +204,10 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             and item.bag_slot is not None
             and utag == "heal_hp_flat"
         )
-        status = "надето" if item.is_equipped else "в сумке"
-        if item.bag_slot is not None and not item.is_equipped:
-            status = f"сумка, ячейка {item.bag_slot}"
+        if item.is_equipped:
+            status = "✓ Надето"
+        else:
+            status = "в сумке"
         text = (
             f"{INV_HEADER}"
             f"{format_inventory_item_html(data)}\n\n"
@@ -366,7 +367,7 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
         text = (
             f"{INV_HEADER}"
             f"{format_inventory_item_html(data)}\n\n"
-            "<b>Статус:</b> надето"
+            "<b>Статус:</b> ✓ Надето"
         )
         kb = item_detail_keyboard(
             item.id,
@@ -414,11 +415,10 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
         data = item.item_data or {}
         can_equip = equip_meta.equip_slot_for_kind(data.get("kind")) is not None
         utag = (item.item_data or {}).get("use_tag")
-        slot_note = f"ячейка {item.bag_slot}" if item.bag_slot is not None else "сумка"
         text = (
             f"{INV_HEADER}"
             f"{format_inventory_item_html(data)}\n\n"
-            f"<b>Статус:</b> {html.escape(slot_note)}"
+            f"<b>Статус:</b> в сумке"
         )
         kb = item_detail_keyboard(
             item.id,

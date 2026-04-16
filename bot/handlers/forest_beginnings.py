@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html
+import random
 import re
 
 from aiogram import F, Router
@@ -11,8 +13,11 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.states.combat_states import CombatStates
-from db.repository import character_repo, user_repo
+from db.repository import character_repo, inventory_repo, user_repo
 from game.floors import forest_beginnings as fb
+from game.floors import rotten_swamps as rs
+from game.floors.monsters import build_spawns_for_floor
+from game.items import loot as loot_tables
 from services import anticheat_service, character_service
 from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui
 from utils.ui import LINE_SEP
@@ -22,6 +27,94 @@ router = Router(name="forest_beginnings")
 _CAMP = re.compile(r"^flf:camp:(\d+)$")
 _GMS = re.compile(r"^flf:gms:(\d+):([a-z0-9]+):(eat|poi)$")
 _SPL = re.compile(r"^flf:spl:(\d+):([a-z0-9]+):([0-2])$")
+
+
+@router.callback_query(F.data.regexp(r"^flf:swcamp:(\d+)$"))
+async def on_swamp_abandoned_camp(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Заброшенный лагерь на 11–20: предмет или ловушка (1× за проход зоны)."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        parts = str(query.data).split(":")
+        if len(parts) != 3 or parts[0] != "flf" or parts[1] != "swcamp":
+            await query.answer()
+            return
+        fl = int(parts[2])
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+        if fl != int(char.floor_number):
+            await query.answer("Этаж устарел.", show_alert=True)
+            return
+        if not rs.is_rotten_swamps_zone(fl):
+            await query.answer("Лагерь только на болотах 11–20.", show_alert=True)
+            return
+        if rs.abandoned_camp_used(char):
+            await query.answer("Ты уже обыскал этот лагерь на этом проходе зоны.", show_alert=True)
+            return
+
+        rs.set_abandoned_camp_used(char)
+        spawns = build_spawns_for_floor(fl)
+        ref = next((s for s in spawns if not s.is_elite and not s.is_mini_boss and not s.is_major_boss), None)
+        if ref is None and spawns:
+            ref = spawns[0]
+
+        slot_b = await inventory_repo.first_free_bag_slot(session, char.id)
+        want_loot = random.random() < 0.5
+
+        if want_loot and ref is not None and slot_b is not None:
+            payload = loot_tables.roll_victory_item_payload(fl, ref)
+            await inventory_repo.add_bag_item(
+                session,
+                char.id,
+                payload,
+                bag_slot=slot_b,
+            )
+            nm = html.escape(str(payload.get("name", "Предмет")))
+            note = f"\n{LINE_SEP}\n🏚️ <b>Заброшенный лагерь:</b> удача — <b>{nm}</b> в сумку."
+        elif want_loot:
+            note = (
+                f"\n{LINE_SEP}\n"
+                "🏚️ <b>Заброшенный лагерь:</b> в ящике что-то блестит, "
+                "но <b>сумка полна</b> — не унести."
+            )
+        else:
+            dmg = max(5, int(char.hp_max) * random.randint(10, 18) // 100)
+            char.hp_current = max(1, int(char.hp_current) - dmg)
+            note = (
+                f"\n{LINE_SEP}\n"
+                f"🏚️ <b>Заброшенный лагерь — ловушка:</b> натянутая сеть и гвозди — "
+                f"<b>−{dmg} HP</b>."
+            )
+
+        await session.flush()
+        await push_floor_screen_ui(
+            session,
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            character=char,
+            reply_markup=await floor_keyboard_for_character(session, char),
+            target_message=query.message,
+            text_suffix=note,
+        )
+        await query.answer("Лагерь.")
+    except Exception:
+        logger.exception("flf:swcamp")
+        await query.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data.regexp(r"^flf:camp:(\d+)$"))
