@@ -7,21 +7,54 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.inventory import InventoryItem
 from game.items import equipment as equip_meta
+from game.items.equipment import RARITY_EMOJI
 from utils.ui import item_bag_button_label
 
-BAG_PAGE_SIZE = 8
+BAG_PAGE_SIZE = 10
+
+# Сортировка сумки: редкость (легендарные сверху), затем номер ячейки.
+_RARITY_SORT: dict[str, int] = {
+    "legendary": 0,
+    "epic": 1,
+    "rare": 2,
+    "uncommon": 3,
+    "common": 4,
+}
+
+
+def _bag_sort_key(it: InventoryItem) -> tuple[int, int]:
+    r = str((it.item_data or {}).get("rarity") or "common").lower()
+    return (_RARITY_SORT.get(r, 99), it.bag_slot or 0)
+
+
+def _equip_button_label(it: InventoryItem) -> str:
+    data = it.item_data or {}
+    r = str(data.get("rarity") or "common").lower()
+    em = RARITY_EMOJI.get(r, "⚪")
+    name = str(data.get("name", "?"))[:12]
+    return f"{em} {name}"[:32]
 
 
 def bag_tab_keyboard(items: list[InventoryItem], page: int) -> InlineKeyboardMarkup:
-    sorted_items = sorted(items, key=lambda x: (x.bag_slot is None, x.bag_slot or 0))
+    sorted_items = sorted(items, key=_bag_sort_key)
     start = page * BAG_PAGE_SIZE
     chunk = sorted_items[start : start + BAG_PAGE_SIZE]
     rows: list[list[InlineKeyboardButton]] = []
-    for it in chunk:
-        label = item_bag_button_label(it.item_data, it.bag_slot)[:30]
-        rows.append(
-            [InlineKeyboardButton(text=label, callback_data=f"inv:it:{it.id}:b:{page}")],
-        )
+    for i in range(0, len(chunk), 2):
+        row: list[InlineKeyboardButton] = [
+            InlineKeyboardButton(
+                text=item_bag_button_label(chunk[i].item_data, chunk[i].bag_slot),
+                callback_data=f"inv:it:{chunk[i].id}:b:{page}",
+            ),
+        ]
+        if i + 1 < len(chunk):
+            row.append(
+                InlineKeyboardButton(
+                    text=item_bag_button_label(chunk[i + 1].item_data, chunk[i + 1].bag_slot),
+                    callback_data=f"inv:it:{chunk[i + 1].id}:b:{page}",
+                ),
+            )
+        rows.append(row)
     nav: list[InlineKeyboardButton] = []
     if start > 0:
         nav.append(InlineKeyboardButton(text="◀️", callback_data=f"inv:tab:bag:{page - 1}"))
@@ -45,8 +78,7 @@ def equipment_tab_keyboard(equipped: list[InventoryItem]) -> InlineKeyboardMarku
         label_base = equip_meta.slot_label_ru(slot)
         it = by_slot.get(slot)
         if it is not None:
-            name = str((it.item_data or {}).get("name", "?"))[:14]
-            text = f"{label_base}: {name}"
+            text = f"{label_base}: {_equip_button_label(it)}"
             rows.append(
                 [InlineKeyboardButton(text=text[:32], callback_data=f"inv:it:{it.id}:e:0")],
             )

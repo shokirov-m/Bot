@@ -45,6 +45,7 @@ from game.balance import (
     MONSTER_DEF_DIV_FLOOR,
     MONSTER_FLOOR_DEF_PER_LEVEL,
     MONSTER_FLOOR_POWER_PER_LEVEL,
+    MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT,
     MONSTER_HP_CURVE_MULT,
     MONSTER_HP_RAW_BASE,
     MONSTER_HP_RAW_PER_FLOOR,
@@ -61,6 +62,7 @@ from game.balance import (
     MONSTER_PLAYER_LEVEL_DEF_PER_LEVEL,
     MONSTER_PLAYER_LEVEL_HP_PER_LEVEL,
     PLAYER_DEFENSE_BONUS_PER_LEVEL,
+    monster_tower_floor_strength_multiplier,
 )
 from game.characters import pets as pets_mod
 from game.floors import floor_data
@@ -210,14 +212,21 @@ def _monster_stat_bundle(
     pl_atk = 1.0 + plv * MONSTER_PLAYER_LEVEL_ATK_PER_LEVEL
     pl_def = 1.0 + plv * MONSTER_PLAYER_LEVEL_DEF_PER_LEVEL
 
+    tower_m = monster_tower_floor_strength_multiplier(floor_number)
+    if floor_number == 5 and spawn.is_mini_boss:
+        tower_m *= MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT
+
+    hp_out = max(1, int(hp * mult_hp * pwr * pl_hp * tower_m))
+    atk_out = max(1, int(atk_final * pwr * pl_atk * tower_m))
+    def_out = max(0, int(defense * dfn * pl_def * tower_m))
     return {
         "name": spawn.template.name,
         "emoji": spawn.template.emoji,
         "template_key": spawn.template.key,
-        "hp": max(1, int(hp * mult_hp * pwr * pl_hp)),
-        "max_hp": max(1, int(hp * mult_hp * pwr * pl_hp)),
-        "atk": max(1, int(atk_final * pwr * pl_atk)),
-        "defense": max(0, int(defense * dfn * pl_def)),
+        "hp": hp_out,
+        "max_hp": hp_out,
+        "atk": atk_out,
+        "defense": def_out,
         "element": spawn.template.element or "earth",
     }
 

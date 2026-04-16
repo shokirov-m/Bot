@@ -97,21 +97,16 @@ def render_enchant_stars(level: int) -> str:
     return f"+{level} ⭐⭐"
 
 
-def _rarity_header_html(data: dict[str, Any]) -> str:
-    r = str(data.get("rarity") or "common").lower()
-    em = RARITY_EMOJI.get(r, "⚪")
-    ru = RARITY_NAME_RU.get(r, html.escape(r))
-    return f"{em} <b>{html.escape(ru)}</b>"
-
-
 def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     """Карточка предмета: русский тип слота, редкость с эмодзи, статы, набор."""
     if not data:
         return "<i>Нет данных</i>"
     lines: list[str] = []
     name = html.escape(str(data.get("name", "Предмет")))
-    lines.append(f"📦 <b>{name}</b>")
-    lines.append(_rarity_header_html(data))
+    r = str(data.get("rarity") or "common").lower()
+    em = RARITY_EMOJI.get(r, "⚪")
+    ru = RARITY_NAME_RU.get(r, html.escape(r))
+    lines.append(f"{em} 📦 <b>{name}</b> · <i>{html.escape(ru)}</i>")
     kind = data.get("kind")
     slot = equip_slot_for_kind(str(kind) if kind else "")
     if slot and slot in SLOT_LABEL_RU:
@@ -147,11 +142,15 @@ def item_bag_button_label(data: dict[str, Any] | None, bag_slot: int | None) -> 
     """Короткая подпись для inline-кнопки (лимит ~30 символов)."""
     data = data or {}
     slot = bag_slot if bag_slot is not None else "?"
-    name = str(data.get("name", "?"))[:16]
+    r = str(data.get("rarity") or "common").lower()
+    em = RARITY_EMOJI.get(r, "⚪")
+    name = str(data.get("name", "?"))[:11]
     atk = data.get("attack", data.get("atk"))
     if atk is not None:
-        return f"[{slot}] {name} ({atk})"
-    return f"[{slot}] {name}"
+        s = f"{em}[{slot}] {name} ({atk})"
+    else:
+        s = f"{em}[{slot}] {name}"
+    return s[:30]
 
 
 def render_item_card(item: Any) -> str:

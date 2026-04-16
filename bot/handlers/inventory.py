@@ -32,11 +32,18 @@ INV_HEADER = "🧰 <b>Инвентарь</b>\n"
 
 
 def _bag_intro(count: int) -> str:
-    return f"{INV_HEADER}🎒 <b>Сумка</b> — занято <b>{count}</b> из 20 ячеек.\nВыбери предмет:"
+    return (
+        f"{INV_HEADER}🎒 <b>Сумка</b> — <b>{count}</b>/20 ячеек.\n"
+        "<i>Сначала редкие предметы; в ряд по две кнопки — открой карточку.</i>\n"
+        "Выбери предмет:"
+    )
 
 
 def _eq_intro() -> str:
-    return f"{INV_HEADER}⚔️ <b>Экипировка</b>\nНажми на предмет, чтобы снять или посмотреть детали."
+    return (
+        f"{INV_HEADER}⚔️ <b>Экипировка</b>\n"
+        "<i>Цветной маркер — редкость.</i> Нажми слот, чтобы снять или открыть карточку."
+    )
 
 
 async def _load_character(session: AsyncSession, telegram_id: int):

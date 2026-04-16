@@ -77,6 +77,20 @@ MONSTER_LATE_ATK_MULT = 1.1
 MONSTER_FLOOR_POWER_PER_LEVEL = 0.0075
 MONSTER_FLOOR_DEF_PER_LEVEL = 0.0045
 
+# Сверх базовых кривых: рост с этажом ~×1,4 к ~10 этажу (1.035^9 ≈ 1.36), с потолком на высоких ярусах.
+MONSTER_TOWER_SCALING_BASE = 1.035
+MONSTER_TOWER_SCALING_CAP = 5.0
+
+# Мини-босс на 5 этаже — дополнительно ×2,2 к HP/атаке/защите (поверх множителя этажа).
+MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT = 2.2
+
+
+def monster_tower_floor_strength_multiplier(floor_number: int) -> float:
+    """Множитель силы врага от номера этажа (этаж 1 → 1.0)."""
+    f = max(0, int(floor_number) - 1)
+    raw = MONSTER_TOWER_SCALING_BASE**f
+    return float(min(raw, MONSTER_TOWER_SCALING_CAP))
+
 MONSTER_ATK_FLAT_NORMAL = 20
 MONSTER_ATK_FLAT_ELITE = 30
 
