@@ -6,11 +6,13 @@ import html
 import re
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.i18n import get_locale
 from bot.keyboards.city_quest_kb import city_quest_hub_only_keyboard, city_quest_offer_keyboard
 from bot.keyboards.forge_kb import city_hub_keyboard
 from bot.states.combat_states import CombatStates
@@ -25,7 +27,7 @@ router = Router(name="city_quests")
 _CTY = re.compile(r"^cty:(\d+):(view|acc|hub)$")
 
 
-@router.callback_query(F.data.startswith("cty:"))
+@router.callback_query(F.data.regexp(r"^cty:(\d+):(view|acc|hub)$"))
 async def on_city_quest_callback(
     query: CallbackQuery,
     session: AsyncSession,
@@ -71,10 +73,12 @@ async def on_city_quest_callback(
             await query.answer("Нет поручения.", show_alert=True)
             return
 
+        loc = get_locale(char, query.from_user.language_code)
         if code == "hub":
             await query.message.edit_text(
                 format_city_hub_message(char),
-                reply_markup=city_hub_keyboard(char.floor_number),
+                reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+                parse_mode=ParseMode.HTML,
             )
             await query.answer()
             return
@@ -118,7 +122,8 @@ async def on_city_quest_callback(
                 return
             await query.message.edit_text(
                 msg,
-                reply_markup=city_hub_keyboard(char.floor_number),
+                reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+                parse_mode=ParseMode.HTML,
             )
             await query.answer("Поручение записано.")
             return

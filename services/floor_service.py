@@ -120,7 +120,7 @@ def format_floor_message(character: Character) -> str:
     if floor_data.has_quest_npc(n):
         tags.append("📜 Квесты")
     if floor_data.has_trader(n):
-        tags.append("🏪 Лавка")
+        tags.append("🏪 Лавка — в городе")
     if floor_data.is_mini_boss_floor(n):
         tags.append("⚔️ Мини-босс")
     if floor_data.is_major_boss_floor(n):
@@ -138,13 +138,8 @@ def format_floor_message(character: Character) -> str:
         sec += f", экип ~{int(SECRET_GEAR_DROP_CHANCE * 100)}%"
     lines.append(sec + ".")
 
-    if pets_mod.is_pet_gacha_floor(n):
-        if n == pets_mod.GACHA_FLOOR_EARLY:
-            lines.append(f"🐾 Гача питомцев за 💰 — <b>{pets_mod.GACHA_COST_EARLY}</b> зол.")
-        elif n == pets_mod.GACHA_FLOOR_BASIC:
-            lines.append(f"🐾 Гача питомцев — <b>{pets_mod.GACHA_COST_BASIC}</b> зол.")
-        elif n == pets_mod.GACHA_FLOOR_RARE:
-            lines.append(f"🐾 Редкая гача — <b>{pets_mod.GACHA_COST_RARE}</b> зол.")
+    if n in pets_mod.pet_gacha_floors_for_pet_switch():
+        lines.append("🐾 <b>Призыв питомца</b> — в разделе «Город» (лавка хаба).")
 
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️ · при входе цели сбрасываются.")
@@ -187,7 +182,7 @@ def format_floor_message_photo_caption(character: Character) -> str:
     if floor_data.has_quest_npc(n):
         tags.append("📜 Квесты")
     if floor_data.has_trader(n):
-        tags.append("🏪 Лавка")
+        tags.append("🏪 Лавка — в городе")
     if floor_data.is_mini_boss_floor(n):
         tags.append("⚔️ Мини-босс")
     if floor_data.is_major_boss_floor(n):
@@ -202,13 +197,8 @@ def format_floor_message_photo_caption(character: Character) -> str:
     else:
         sec += f", экип ~{int(SECRET_GEAR_DROP_CHANCE * 100)}%"
     lines.append(sec)
-    if pets_mod.is_pet_gacha_floor(n):
-        if n == pets_mod.GACHA_FLOOR_EARLY:
-            lines.append(f"🐾 Гача 💰 <b>{pets_mod.GACHA_COST_EARLY}</b>")
-        elif n == pets_mod.GACHA_FLOOR_BASIC:
-            lines.append(f"🐾 Гача <b>{pets_mod.GACHA_COST_BASIC}</b>")
-        elif n == pets_mod.GACHA_FLOOR_RARE:
-            lines.append(f"🐾 Гача <b>{pets_mod.GACHA_COST_RARE}</b>")
+    if n in pets_mod.pet_gacha_floors_for_pet_switch():
+        lines.append("🐾 Призыв — в «Город»")
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 1–{hi} · ⬆️⬇️ · цели сбрасываются при входе")
     if needs_base_class_choice(character):

@@ -17,6 +17,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_inv": "🎒 Инвентарь",
         "menu_titles": "🏆 Титулы",
         "menu_top": "📊 Топ игроков",
+        "menu_city": "🏙️ Город",
+        "menu_city_unavailable": "Город только на городских этажах. Открой этаж с хабом или спустись к нему.",
+        "city_pet_summon_1": "🐾 Призыв ×1 ({cost}💰)",
+        "city_pet_summon_3": "🐾 Призыв ×3 ({cost}💰)",
         "menu_daily": "📅 Ежедневка",
         "menu_arena": "⚔️ Арена",
         "menu_quests": "📋 Задания",
@@ -131,6 +135,17 @@ STRINGS: dict[str, dict[str, str]] = {
         "arena_no_char": "Сначала создай героя через /start.",
         "arena_result_win": "🏆 <b>Победа!</b> Твой билд сильнее.\n+{gold} 💰",
         "arena_result_lose": "💀 <b>Поражение.</b> У соперника билд жёстче. Попробуй позже.",
+        "arena_result_lose_penalty": "💀 <b>Поражение.</b> У соперника билд жёстче.\nШтраф: <b>-{gold}</b> 💰",
+        "arena_result_lose_no_gold": (
+            "💀 <b>Поражение.</b> У соперника билд жёстче.\n"
+            "<i>Штраф в золоте не списан — у героя не было чего удержать.</i>"
+        ),
+        "arena_daily_limit": "⚔️ Лимит арены: {limit} поединков за календарный день (UTC). Завтра снова.",
+        "arena_menu_limits": (
+            "<i>Лимит: <b>{limit}</b> поединков в сутки (UTC). За поражение — штраф в золоте "
+            "(≈40% от базовой награды арены, не больше текущего баланса). "
+            "Сегодня осталось: <b>{left}</b>.</i>"
+        ),
         "arena_busy": "Сначала заверши текущий бой.",
         "arena_draw": "🤝 <b>Ничья.</b> Никто не получил награду.",
         "arena_help": (
@@ -138,7 +153,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "• <code>/arena 5</code> — поединок с героем с <b>игровым ID 5</b> (см. «Статус»).\n"
             "• <code>/arena</code> — случайный соперник (как кнопка в меню арены).\n"
             "• <code>/arena 123456789</code> — по <b>Telegram ID</b>, если нет героя с таким игровым ID.\n"
-            "• <code>/arena @ник</code> / ник — по username; ответ на сообщение — тоже вызов.\n\n"
+            "• <code>/arena @ник</code> / ник — по username; ответ на сообщение — тоже вызов.\n"
+            "• Не больше <b>10</b> поединков в сутки (UTC); за поражение списывается золото.\n\n"
             "<i>Три раунда по силе билда (статы + оружие).</i>"
         ),
         "arena_err_self": "Нельзя вызвать самого себя.",
@@ -163,6 +179,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_inv": "🎒 Inventory",
         "menu_titles": "🏆 Titles",
         "menu_top": "📊 Leaderboard",
+        "menu_city": "🏙️ City",
+        "menu_city_unavailable": "City hub is only on certain floors. Go to a city floor (or travel there).",
+        "city_pet_summon_1": "🐾 Summon ×1 ({cost}💰)",
+        "city_pet_summon_3": "🐾 Summon ×3 ({cost}💰)",
         "menu_daily": "📅 Daily",
         "menu_arena": "⚔️ Arena",
         "menu_quests": "📋 Quests",
@@ -277,6 +297,17 @@ STRINGS: dict[str, dict[str, str]] = {
         "arena_no_char": "Create a hero with /start first.",
         "arena_result_win": "🏆 <b>Victory!</b> Your build won.\n+{gold} 💰",
         "arena_result_lose": "💀 <b>Defeat.</b> The opponent's build was stronger. Try again later.",
+        "arena_result_lose_penalty": "💀 <b>Defeat.</b> The opponent's build was stronger.\nPenalty: <b>-{gold}</b> 💰",
+        "arena_result_lose_no_gold": (
+            "💀 <b>Defeat.</b> The opponent's build was stronger.\n"
+            "<i>No gold penalty — your balance was already empty.</i>"
+        ),
+        "arena_daily_limit": "⚔️ Arena limit: {limit} matches per calendar day (UTC). Come back tomorrow.",
+        "arena_menu_limits": (
+            "<i>Limit: <b>{limit}</b> matches per day (UTC). Defeat costs gold "
+            "(~40% of the arena base reward, up to your current balance). "
+            "Remaining today: <b>{left}</b>.</i>"
+        ),
         "arena_busy": "Finish your current battle first.",
         "arena_draw": "🤝 <b>Draw.</b> No reward.",
         "arena_help": (
@@ -284,7 +315,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "• <code>/arena 5</code> — duel the hero with <b>game ID 5</b> (see «Status»).\n"
             "• <code>/arena</code> — same as «Random duel» in the Arena menu.\n"
             "• <code>/arena 123456789</code> — by <b>Telegram ID</b> if no hero has that game ID.\n"
-            "• <code>/arena @nick</code> / nick — by username; reply with <code>/arena</code> to a message.\n\n"
+            "• <code>/arena @nick</code> / nick — by username; reply with <code>/arena</code> to a message.\n"
+            "• Up to <b>10</b> matches per day (UTC); defeats cost gold.\n\n"
             "<i>Three rounds by build power (stats + weapon).</i>"
         ),
         "arena_err_self": "You cannot challenge yourself.",

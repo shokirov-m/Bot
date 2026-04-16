@@ -82,7 +82,7 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
                 InlineKeyboardButton(text=t(loc, "menu_inv"), callback_data="mnu:inv"),
 
-                InlineKeyboardButton(text=t(loc, "menu_titles"), callback_data="mnu:ttl"),
+                InlineKeyboardButton(text=t(loc, "menu_city"), callback_data="mnu:cty"),
 
             ],
 

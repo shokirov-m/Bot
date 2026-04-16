@@ -91,6 +91,18 @@ async def _run_arena_for_user(
 
     loc = get_locale(char, (callback.from_user if callback else message.from_user).language_code)
 
+    if arena_service.arena_daily_limit_reached(char):
+        msg = t(
+            loc,
+            "arena_daily_limit",
+            limit=arena_service.ARENA_MATCHES_PER_DAY,
+        )
+        if callback:
+            await callback.answer(msg, show_alert=True)
+        elif message:
+            await message.answer(msg)
+        return
+
     resolved_fixed: Character | None = fixed_opponent
     if message is not None and command is not None:
         tid, uname, digit_tok, need_help = _parse_arena_target(message, command)
@@ -111,14 +123,21 @@ async def _run_arena_for_user(
             return
         resolved_fixed = opp
 
-    report, gold, outcome = await arena_service.run_shadow_match(session, char, fixed_opponent=resolved_fixed)
+    report, gold_delta, outcome = await arena_service.run_shadow_match(
+        session,
+        char,
+        fixed_opponent=resolved_fixed,
+    )
     await session.commit()
 
     header = t(loc, "arena_title")
     if outcome == "win":
-        footer = t(loc, "arena_result_win", gold=gold)
+        footer = t(loc, "arena_result_win", gold=gold_delta)
     elif outcome == "lose":
-        footer = t(loc, "arena_result_lose")
+        if gold_delta < 0:
+            footer = t(loc, "arena_result_lose_penalty", gold=abs(gold_delta))
+        else:
+            footer = t(loc, "arena_result_lose_no_gold")
     else:
         footer = t(loc, "arena_draw")
     full = f"{header}\n\n{report}\n\n{footer}"
@@ -164,6 +183,14 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
             await callback.answer(t(loc, "arena_no_char"), show_alert=True)
             return
         loc = get_locale(char, callback.from_user.language_code)
+        left = arena_service.arena_matches_remaining_today(char)
+        intro = t(loc, "arena_menu_intro")
+        limits = t(
+            loc,
+            "arena_menu_limits",
+            limit=arena_service.ARENA_MATCHES_PER_DAY,
+            left=left,
+        )
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -178,7 +205,7 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
-            text=t(loc, "arena_menu_intro"),
+            text=f"{intro}\n\n{limits}",
             reply_markup=kb,
             target_message=callback.message,
             photo_path=None,

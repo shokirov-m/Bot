@@ -30,33 +30,6 @@ def _cb(floor_number: int, code: str) -> str:
 
 def _pet_rows(character: Character, floor_number: int) -> list[list[InlineKeyboardButton]]:
     rows: list[list[InlineKeyboardButton]] = []
-    if floor_number == pets_mod.GACHA_FLOOR_EARLY:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"🎲 Гача питомца ({pets_mod.GACHA_COST_EARLY}💰)",
-                    callback_data=_cb(floor_number, "petg"),
-                ),
-            ],
-        )
-    if floor_number == pets_mod.GACHA_FLOOR_BASIC:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"🎲 Питомец ({pets_mod.GACHA_COST_BASIC}💰)",
-                    callback_data=_cb(floor_number, "petg"),
-                ),
-            ],
-        )
-    if floor_number == pets_mod.GACHA_FLOOR_RARE:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"✨ Редкие (2 экскл.) ({pets_mod.GACHA_COST_RARE}💰)",
-                    callback_data=_cb(floor_number, "petr"),
-                ),
-            ],
-        )
     if floor_number in pets_mod.pet_gacha_floors_for_pet_switch():
         if len(pets_mod.owned_keys(character)) > 1:
             rows.append(
@@ -166,16 +139,6 @@ def floor_screen_keyboard(
 
     flush()
 
-    if floor_data.has_trader(floor_number):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="🏪 Лавка",
-                    callback_data=f"shp:main:{floor_number}:f",
-                ),
-            ],
-        )
-
     if floor_data.get_city_for_floor(floor_number):
         rows.append(
             [
@@ -272,16 +235,6 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="👑 Владыка топи",
                     callback_data=_cb(floor_number, "lf_boss"),
-                ),
-            ],
-        )
-
-    if floor_data.has_trader(floor_number):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="🏪 Лавка",
-                    callback_data=f"shp:main:{floor_number}:f",
                 ),
             ],
         )

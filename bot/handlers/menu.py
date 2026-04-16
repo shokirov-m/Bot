@@ -1,5 +1,5 @@
 """
-Главное меню: колбэки mnu:* вместо /profile, /floor, /inv, /titles.
+Главное меню: колбэки mnu:* вместо /profile, /floor, /inv (титулы — /titles и статус).
 """
 
 from __future__ import annotations

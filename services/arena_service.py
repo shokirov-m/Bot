@@ -8,12 +8,49 @@ from __future__ import annotations
 
 import html
 import random
+from datetime import UTC, datetime
 from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
+
+ARENA_MATCHES_PER_DAY = 10
+META_ARENA_DAILY = "arena_daily_v1"
+
+
+def _utc_today_iso() -> str:
+    return datetime.now(UTC).date().isoformat()
+
+
+def arena_matches_used_today(character: Character) -> int:
+    meta = dict(character.meta_progress or {})
+    raw = meta.get(META_ARENA_DAILY)
+    if not isinstance(raw, dict):
+        return 0
+    if raw.get("d") != _utc_today_iso():
+        return 0
+    return int(raw.get("n", 0))
+
+
+def arena_matches_remaining_today(character: Character) -> int:
+    return max(0, ARENA_MATCHES_PER_DAY - arena_matches_used_today(character))
+
+
+def _record_arena_match(character: Character) -> None:
+    meta = dict(character.meta_progress or {})
+    today = _utc_today_iso()
+    raw = meta.get(META_ARENA_DAILY)
+    if not isinstance(raw, dict) or raw.get("d") != today:
+        meta[META_ARENA_DAILY] = {"d": today, "n": 1}
+    else:
+        meta[META_ARENA_DAILY] = {"d": today, "n": int(raw.get("n", 0)) + 1}
+    character.meta_progress = meta
+
+
+def arena_daily_limit_reached(character: Character) -> bool:
+    return arena_matches_used_today(character) >= ARENA_MATCHES_PER_DAY
 
 
 def _arena_power(
@@ -110,6 +147,16 @@ async def resolve_opponent_digit_token(
 Outcome = Literal["win", "lose", "draw"]
 
 
+def _finish_match(
+    character: Character,
+    report: str,
+    gold_delta: int,
+    outcome: Outcome,
+) -> tuple[str, int, Outcome]:
+    _record_arena_match(character)
+    return (report, gold_delta, outcome)
+
+
 async def run_shadow_match(
     session: AsyncSession,
     character: Character,
@@ -120,6 +167,9 @@ async def run_shadow_match(
     Три раунда «теневого» столкновения по мощи.
     fixed_opponent: дуэль с конкретным героем из БД; иначе случайный игрок или NPC.
     """
+    if arena_daily_limit_reached(character):
+        raise RuntimeError("arena: daily limit reached but run_shadow_match was called")
+
     p_pow = await character_arena_power(session, character)
 
     if fixed_opponent is not None:
@@ -164,7 +214,8 @@ async def run_shadow_match(
     if wins >= 2:
         gold = base_gold + (0 if is_npc else win_bonus)
         character.gold = int(character.gold) + gold
-        return (
+        return _finish_match(
+            character,
             f"{banner}"
             f"Противник: <b>{o_name}</b>\n"
             f"Счёт раундов: <b>{wins}</b>–<b>{losses}</b>.",
@@ -172,14 +223,22 @@ async def run_shadow_match(
             "win",
         )
     if losses >= 2:
-        return (
+        raw_penalty = max(8, int(base_gold * 0.4))
+        cur = int(character.gold)
+        penalty = min(raw_penalty, cur)
+        if penalty > 0:
+            character.gold = cur - penalty
+        gold_delta = -penalty
+        return _finish_match(
+            character,
             f"{banner}"
             f"Противник: <b>{o_name}</b>\n"
             f"Счёт: <b>{wins}</b>–<b>{losses}</b>.",
-            0,
+            gold_delta,
             "lose",
         )
-    return (
+    return _finish_match(
+        character,
         f"{banner}"
         f"Противник: <b>{o_name}</b>\n"
         f"Счёт: <b>{wins}</b>–<b>{losses}</b>.",

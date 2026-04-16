@@ -20,6 +20,14 @@ class MonsterTemplate:
     blurb: str
 
 
+def _short_monster_name(name: str, max_len: int = 15) -> str:
+    """Короткая подпись для кнопок этажа и телефонов."""
+    n = (name or "").strip()
+    if len(n) <= max_len:
+        return n
+    return n[: max_len - 1] + "…"
+
+
 @dataclass(frozen=True, slots=True)
 class FloorMonsterSpawn:
     """Вариант на экране этажа."""
@@ -32,13 +40,14 @@ class FloorMonsterSpawn:
 
     @property
     def display_name(self) -> str:
+        short = _short_monster_name(self.template.name)
         if self.is_major_boss:
-            return f"👑 {self.template.name}"
+            return f"👑 {short}"
         if self.is_mini_boss:
-            return f"⚔️ {self.template.name}"
+            return f"⚔️ {short}"
         if self.is_elite:
-            return f"⭐ Элитный {self.template.name}"
-        return f"{self.template.emoji} {self.template.name}"
+            return f"⭐ {short}"
+        return f"{self.template.emoji} {short}"
 
 
 def zone_monster_templates(zone_key: str) -> tuple[MonsterTemplate, ...]:
@@ -51,20 +60,20 @@ def _pool(zone_key: str) -> tuple[MonsterTemplate, ...]:
         "forest_beginnings": (
             MonsterTemplate("wolf", "Серый волк", "🐺", "earth", "Стая уверена в своей силе."),
             MonsterTemplate("spider", "Паук-ткач", "🕷️", "earth", "Ловит в нити слепых."),
-            MonsterTemplate("goblin", "Гоблин-разведчик", "👺", "earth", "Бросается камнями из кустов."),
+            MonsterTemplate("goblin", "Гоблин", "👺", "earth", "Бросается камнями из кустов."),
             MonsterTemplate("boar", "Кабан", "🐗", "earth", "Рывок и клыки."),
             MonsterTemplate("sprite", "Лесной спрайт", "✨", "light", "Слепит вспышками."),
             MonsterTemplate("bandit", "Лесной разбойник", "🗡️", "earth", "Знает тропы и слабые места."),
-            MonsterTemplate("thorn_lurker", "Тернистый прыгун", "🌵", "earth", "Выскакивает из зарослей."),
+            MonsterTemplate("thorn_lurker", "Терн. прыгун", "🌵", "earth", "Выскакивает из зарослей."),
         ),
         "rotten_swamps": (
             MonsterTemplate("zombie", "Болотный зомби", "🧟", "dark", "Тянет к холодной воде."),
             MonsterTemplate("slime", "Кислотный слизень", "🫧", "earth", "Разъедает броню."),
-            MonsterTemplate("wyvern", "Молодая виверна", "🐉", "fire", "Бьётся крыльями и ядом."),
+            MonsterTemplate("wyvern", "Виверна", "🐉", "fire", "Бьётся крыльями и ядом."),
             MonsterTemplate("witch", "Топи-ведьма", "🧙‍♀️", "dark", "Проклятия из тумана."),
             MonsterTemplate("leech", "Пиявка-гигант", "🪱", "earth", "Высасывает силы."),
             MonsterTemplate("gas_frog", "Газовая жаба", "🐸", "dark", "Выдыхает едкий туман."),
-            MonsterTemplate("bog_mosquito", "Болотный рой", "🦟", "earth", "Жужжит и высасывает кровь."),
+            MonsterTemplate("bog_mosquito", "Рой комаров", "🦟", "earth", "Жужжит и высасывает кровь."),
         ),
         "shadow_caves": (
             MonsterTemplate("bat_swarm", "Рой летучих", "🦇", "dark", "Заслоняет свет."),
@@ -105,7 +114,7 @@ def _pool(zone_key: str) -> tuple[MonsterTemplate, ...]:
         "sky_citadel": (
             MonsterTemplate("griffon", "Бешеный грифон", "🦅", "earth", "Бьётся когтями сверху."),
             MonsterTemplate("fallen", "Ангел хаоса", "😇", "light", "Крылья режут воздух."),
-            MonsterTemplate("storm_elem", "Элементаль бури", "⛈️", "lightning", "Бьёт цепями."),
+            MonsterTemplate("storm_elem", "Эл. бури", "⛈️", "lightning", "Бьёт цепями."),
             MonsterTemplate("sky_serpent", "Небесный змей", "🐍", "lightning", "Прячется в облаке."),
             MonsterTemplate("valkyrie", "Падшая валькирия", "⚔️", "light", "Бросает копья молний."),
             MonsterTemplate("cloud_stalker", "Охотник в облаках", "☁️", "light", "Бьёт из невидимости."),
@@ -113,7 +122,7 @@ def _pool(zone_key: str) -> tuple[MonsterTemplate, ...]:
         ),
         "chaos_abyss": (
             MonsterTemplate("demon_imp", "Бес бездны", "😈", "dark", "Насмехается и режет."),
-            MonsterTemplate("chaos_spawn", "Порождение хаоса", "🌀", "dark", "Меняет форму."),
+            MonsterTemplate("chaos_spawn", "Порожд. хаоса", "🌀", "dark", "Меняет форму."),
             MonsterTemplate("void_ling", "Дух пустоты", "🕳️", "dark", "Пожирает звук."),
             MonsterTemplate("corruptor", "Искажатель", "🧬", "dark", "Ломает баланс стихий."),
             MonsterTemplate("mad_cultist", "Безумный культист", "🧿", "dark", "Призывает углы реальности."),
@@ -121,18 +130,18 @@ def _pool(zone_key: str) -> tuple[MonsterTemplate, ...]:
             MonsterTemplate("entropy_mite", "Клещ энтропии", "🪲", "dark", "Грызёт порядок."),
         ),
         "eternity_hall": (
-            MonsterTemplate("archdemon", "Архидемон-заступник", "👹", "dark", "Говорит заклинаниями боли."),
+            MonsterTemplate("archdemon", "Архидемон", "👹", "dark", "Говорит заклинаниями боли."),
             MonsterTemplate("eternity_warden", "Страж вечности", "⚡", "light", "Щит из остановленного времени."),
             MonsterTemplate("time_phantom", "Фантом часов", "⏳", "lightning", "Ускоряет и замедляет."),
             MonsterTemplate("seraph_dark", "Серафим тьмы", "🪽", "dark", "Перья как клинки."),
             MonsterTemplate("rune_golem", "Рунный колосс", "🗿", "earth", "Каждый шаг — удар."),
             MonsterTemplate("chrono_wraith", "Призрак хроноса", "⌛", "light", "Рвет шкалу времени."),
-            MonsterTemplate("seal_breaker", "Разрушитель печатей", "📜", "dark", "Гасит защитные руны."),
+            MonsterTemplate("seal_breaker", "Разруш. печатей", "📜", "dark", "Гасит защитные руны."),
         ),
         floor_data.ZONE_FINAL_KEY: (
             MonsterTemplate(
                 "tower_warden",
-                "Око Башни",
+                "Око башни",
                 "👁️",
                 "dark",
                 "Три фазы. Требует легендарное оружие и три ключа.",
@@ -242,7 +251,7 @@ def major_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> Monster
     if floor_number >= 100:
         return MonsterTemplate(
             "boss_tower_core",
-            "Страж Башни (3 фазы)",
+            "Страж (×3)",
             "👁️",
             "dark",
             "Легендарный лут. Особое поведение ИИ.",

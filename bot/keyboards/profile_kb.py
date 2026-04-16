@@ -16,7 +16,6 @@ def profile_view_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text=t(loc, "menu_floor"), callback_data="mnu:flr"),
                 InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),
-                InlineKeyboardButton(text=t(loc, "menu_titles"), callback_data="mnu:ttl"),
             ],
             [InlineKeyboardButton(text="📊 Полные характеристики", callback_data="prf:full")],
         ],
@@ -33,7 +32,6 @@ def profile_full_stats_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text=t(loc, "menu_floor"), callback_data="mnu:flr"),
                 InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),
-                InlineKeyboardButton(text=t(loc, "menu_titles"), callback_data="mnu:ttl"),
             ],
         ],
     )

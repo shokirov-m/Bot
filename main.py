@@ -140,9 +140,9 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(tavern_router)
     dp.include_router(shop_router)
     dp.include_router(quests_router)
+    dp.include_router(city_router)
     dp.include_router(city_quests_router)
     dp.include_router(class_arc_router)
-    dp.include_router(city_router)
     dp.include_router(floor_router)
     dp.include_router(daily_router)
 

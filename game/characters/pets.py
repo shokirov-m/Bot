@@ -1,5 +1,5 @@
 """
-Питомцы: гача за золото на этажах 8 (обычный пул) и 48 (два редких + общий пул).
+Питомцы: призыв за золото (лавка городского хаба; редкий пул после открытия 48 этажа).
 Бонусы суммируются через passive_combat_modifiers_merged (как глобальные пассивы).
 """
 
@@ -12,17 +12,19 @@ from typing import Any
 from db.models.character import Character
 META_KEY = "pets_v1"
 
-# Бета: стоимость и шансы (всё за золото)
-GACHA_FLOOR_EARLY = 3  # ранняя гача — тот же пул, дешевле
+# Стоимость и шансы (золото). Призыв с этажа отключён — только город (см. try_city_pet_summon).
 GACHA_FLOOR_BASIC = 8
 GACHA_FLOOR_RARE = 48
-GACHA_COST_EARLY = 70
 GACHA_COST_BASIC = 100
 GACHA_COST_RARE = 350
+# Три призыва подряд: дороже трёх отдельных базовых (3×100), чтобы не было выгодного абуза.
+CITY_SUMMON_COST_X3_BASIC = 340
+# После открытия 48 этажа — редкий пул; ×3 тоже с наценкой к сумме трёх одиночных.
+CITY_SUMMON_COST_X3_RARE = 1225
 DUPLICATE_REFUND_RATIO = 0.25  # доля от стоимости броска при дубликате
 
+# Оставлено для смены активного питомца на этажах с «алтарём» (8 и 48).
 _PET_GACHA_FLOORS: dict[int, tuple[int, bool]] = {
-    GACHA_FLOOR_EARLY: (GACHA_COST_EARLY, False),
     GACHA_FLOOR_BASIC: (GACHA_COST_BASIC, False),
     GACHA_FLOOR_RARE: (GACHA_COST_RARE, True),
 }
@@ -84,7 +86,7 @@ PET_BASIC_POOL: tuple[PetDef, ...] = (
     ),
 )
 
-# Два редких — только в гаче на 48 (добавляются к базовому пулу при броске)
+# Два редких — в пуле после открытия 48 этажа (добавляются к базовому пулу при броске)
 PET_RARE_EXCLUSIVE: tuple[PetDef, ...] = (
     PetDef(
         "pet_void_wisp",
@@ -162,7 +164,7 @@ def set_active_pet(character: Character, key: str) -> tuple[bool, str]:
         return False, "Неизвестный питомец."
     owned = set(owned_keys(character))
     if key not in owned:
-        return False, "Сначала выбей питомца в гаче."
+        return False, "Сначала получи питомца в призыве (город)."
     mp, st = _pets_meta(character)
     st["active"] = key
     _save_meta(character, mp, st)
@@ -187,18 +189,7 @@ def cycle_active_pet(character: Character) -> str | None:
     return active_pet_display(character)
 
 
-def try_gacha_pull(character: Character, *, floor_number: int) -> tuple[bool, str]:
-    """
-    Списывает золото, добавляет питомца или возврат при дубликате.
-    floor_number: 3 (ранняя), 8 (обычная), 48 (редкие в пуле).
-    """
-    spec = _PET_GACHA_FLOORS.get(int(floor_number))
-    if spec is None:
-        return False, "Здесь нет гачи питомцев."
-    cost, rare_exclusive = spec
-    if int(character.gold) < cost:
-        return False, f"Нужно {cost} золота."
-
+def _roll_pet_choice(*, rare_exclusive: bool) -> PetDef:
     pool = list(PET_BASIC_POOL)
     weights = [1.0] * len(pool)
     if rare_exclusive:
@@ -213,21 +204,25 @@ def try_gacha_pull(character: Character, *, floor_number: int) -> tuple[bool, st
         if r <= acc:
             chosen = p
             break
-    if chosen is None:
-        chosen = pool[-1]
+    return chosen if chosen is not None else pool[-1]
 
+
+def _apply_pet_pull_after_payment(
+    character: Character,
+    chosen: PetDef,
+    *,
+    cost_for_refund: int,
+) -> str:
     mp, st = _pets_meta(character)
     owned = list(st.get("owned") or [])
     if not isinstance(owned, list):
         owned = []
     owned_set = {str(x) for x in owned}
 
-    character.gold = int(character.gold) - cost
-
     if chosen.key in owned_set:
-        refund = max(1, int(cost * DUPLICATE_REFUND_RATIO))
+        refund = max(1, int(cost_for_refund * DUPLICATE_REFUND_RATIO))
         character.gold = int(character.gold) + refund
-        return True, (
+        return (
             f"Повтор: <b>{chosen.emoji} {chosen.name_ru}</b> уже с тобой. "
             f"Возврат <b>{refund}</b> золота."
         )
@@ -237,7 +232,44 @@ def try_gacha_pull(character: Character, *, floor_number: int) -> tuple[bool, st
     if not st.get("active"):
         st["active"] = chosen.key
     _save_meta(character, mp, st)
-    return True, (
-        f"Новый питомец: <b>{chosen.emoji} {chosen.name_ru}</b>\n"
-        f"<i>{chosen.blurb}</i>"
-    )
+    return f"Новый питомец: <b>{chosen.emoji} {chosen.name_ru}</b>\n<i>{chosen.blurb}</i>"
+
+
+def city_summon_price_band(character: Character) -> tuple[int, int, bool]:
+    """
+    (цена ×1, цена ×3, редкий_пул).
+    Редкий пул — если когда-либо открыт 48-й этаж (highest_floor_reached).
+    """
+    hi = int(character.highest_floor_reached)
+    if hi >= GACHA_FLOOR_RARE:
+        return GACHA_COST_RARE, CITY_SUMMON_COST_X3_RARE, True
+    return GACHA_COST_BASIC, CITY_SUMMON_COST_X3_BASIC, False
+
+
+def try_city_pet_summon(character: Character, *, pulls: int) -> tuple[bool, str]:
+    """Призыв из городского хаба: 1 или 3 броска одной оплатой."""
+    if pulls not in (1, 3):
+        return False, "Неверный запрос."
+    c1, c3, rare = city_summon_price_band(character)
+    total = c1 if pulls == 1 else c3
+    if int(character.gold) < total:
+        return False, f"Нужно {total} золота."
+    character.gold = int(character.gold) - total
+    per_refund = max(1, total // pulls)
+    parts = [_apply_pet_pull_after_payment(character, _roll_pet_choice(rare_exclusive=rare), cost_for_refund=per_refund) for _ in range(pulls)]
+    return True, "\n\n".join(parts)
+
+
+def try_gacha_pull(character: Character, *, floor_number: int) -> tuple[bool, str]:
+    """
+    Совместимость: призыв с этажа (если остались старые кнопки) — перенаправляет логику на этажные цены.
+    """
+    spec = _PET_GACHA_FLOORS.get(int(floor_number))
+    if spec is None:
+        return False, "Призыв питомцев — в городе (лавка хаба)."
+    cost, rare_exclusive = spec
+    if int(character.gold) < cost:
+        return False, f"Нужно {cost} золота."
+    chosen = _roll_pet_choice(rare_exclusive=rare_exclusive)
+    character.gold = int(character.gold) - cost
+    return True, _apply_pet_pull_after_payment(character, chosen, cost_for_refund=cost)

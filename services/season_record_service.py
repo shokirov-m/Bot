@@ -45,6 +45,7 @@ async def notify_if_first_to_floor_milestone_this_season(
     root[season] = month_map
     payload["season_floor_first"] = root
     row.payload = payload
+    character.unspent_stat_points = int(getattr(character, "unspent_stat_points", 0) or 0) + 2
     await session.flush()
 
     user = await session.get(User, int(character.user_id))
@@ -54,7 +55,8 @@ async def notify_if_first_to_floor_milestone_this_season(
         await bot.send_message(
             int(user.telegram_id),
             f"🎉 <b>Рекорд сезона!</b>\n"
-            f"Ты первый на этаже <b>{new_highest}</b> этого сезона (<b>{season}</b>, UTC)!",
+            f"Ты первый на этаже <b>{new_highest}</b> этого сезона (<b>{season}</b>, UTC)!\n"
+            f"🎁 <b>+2</b> свободных очка характеристик — потрать в /stats.",
             parse_mode=ParseMode.HTML,
         )
     except Exception:

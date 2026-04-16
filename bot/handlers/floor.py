@@ -172,16 +172,12 @@ async def on_floor_callback(
             if query.message is None:
                 await query.answer()
                 return
-            if code == "petg":
-                if not pets_mod.is_pet_gacha_floor(int(char.floor_number)):
-                    await query.answer("Гача питомцев за золото — на 3, 8 и 48 этажах.", show_alert=True)
-                    return
-                ok, msg = pets_mod.try_gacha_pull(char, floor_number=int(char.floor_number))
-            elif code == "petr":
-                if int(char.floor_number) != pets_mod.GACHA_FLOOR_RARE:
-                    await query.answer("Редкая гача только на 48 этаже.", show_alert=True)
-                    return
-                ok, msg = pets_mod.try_gacha_pull(char, floor_number=int(char.floor_number))
+            if code in ("petg", "petr"):
+                await query.answer(
+                    "Призыв питомца — в разделе «Город» (лавка хаба).",
+                    show_alert=True,
+                )
+                return
             else:
                 if int(char.floor_number) not in pets_mod.pet_gacha_floors_for_pet_switch():
                     await query.answer()

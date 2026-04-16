@@ -12,6 +12,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.i18n import get_locale
 from bot.keyboards.economy_kb import economy_hub_keyboard
 from bot.keyboards.forge_kb import city_hub_keyboard
 from db.repository import character_repo, user_repo
@@ -86,10 +87,11 @@ async def economy_back_city(query: CallbackQuery, session: AsyncSession) -> None
             return
         from services.floor_service import format_city_hub_message
 
+        loc = get_locale(char, query.from_user.language_code)
         try:
             await query.message.edit_text(
                 format_city_hub_message(char),
-                reply_markup=city_hub_keyboard(char.floor_number),
+                reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
                 parse_mode=ParseMode.HTML,
             )
         except TelegramBadRequest as e:

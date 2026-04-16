@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.i18n import get_locale
 from bot.keyboards.forge_kb import (
     city_hub_keyboard,
     forge_actions_keyboard,
@@ -199,7 +200,12 @@ async def forge_back_city(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer()
             return
         text = format_city_hub_message(char)
-        await query.message.edit_text(text, reply_markup=city_hub_keyboard(char.floor_number))
+        loc = get_locale(char, query.from_user.language_code)
+        await query.message.edit_text(
+            text,
+            reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+            parse_mode=ParseMode.HTML,
+        )
         await query.answer()
     except Exception:
         logger.exception("frg:city")

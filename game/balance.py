@@ -77,8 +77,8 @@ MONSTER_LATE_ATK_MULT = 1.1
 MONSTER_FLOOR_POWER_PER_LEVEL = 0.0075
 MONSTER_FLOOR_DEF_PER_LEVEL = 0.0045
 
-MONSTER_ATK_FLAT_NORMAL = 10
-MONSTER_ATK_FLAT_ELITE = 15
+MONSTER_ATK_FLAT_NORMAL = 20
+MONSTER_ATK_FLAT_ELITE = 30
 
 # --- Масштаб монстров от уровня персонажа (кроме учебного боя) ---
 # На каждый уровень героя выше 1-го: чуть больше HP / атака / защита врага.
