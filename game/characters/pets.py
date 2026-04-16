@@ -219,8 +219,8 @@ def format_pet_profile_block_html(character: Character, *, locale: str) -> str:
     passive_html = html.escape(passive) if passive else ""
     if loc == "en":
         switch = (
-            "<i>Switch the active pet from <b>Status</b> or on <b>floors 8 / 48</b> "
-            "(cycles if you have several).</i>"
+            "<i>Use the <b>Pet</b> button in <b>Status</b> to open the list and equip one; "
+            "or floors <b>8 / 48</b> when unlocked.</i>"
         )
         body = (
             f"🐾 <b>Active in combat:</b> {html.escape(disp)}"
@@ -230,8 +230,8 @@ def format_pet_profile_block_html(character: Character, *, locale: str) -> str:
         )
         return body
     switch_ru = (
-        "<i>Сменить активного: кнопка в <b>статусе</b> или этажи <b>8 и 48</b> "
-        "(если питомцев несколько — переключение по кругу).</i>"
+        "<i>Сменить активного: кнопка «Питомец» в <b>статусе</b> — откроется список; "
+        "или этажи <b>8 и 48</b>, когда доступны.</i>"
     )
     return (
         f"🐾 <b>В бою сейчас:</b> {html.escape(disp)}"
@@ -251,6 +251,50 @@ def format_pet_battle_line_html(character: Character, *, locale: str) -> str:
     return f"🐾 <b>{html.escape(disp)}</b>{passive_html}"
 
 
+def pet_choice_button_caption(key: str, *, locale: str, is_active: bool) -> str:
+    """Подпись кнопки выбора питомца (лимит длины для Telegram)."""
+    d = _all_defs().get(key)
+    if d is None:
+        return str(key)[:64]
+    loc = "en" if str(locale).lower().startswith("en") else "ru"
+    label = f"{d.emoji} {d.name_ru}"
+    if is_active:
+        label += " ✓" if loc == "ru" else " ✓"
+    return label[:64]
+
+
+def build_pet_picker_html(character: Character, *, locale: str) -> str:
+    """Экран выбора: все открытые питомцы и пассивки."""
+    from utils.ui import LINE_SEP
+
+    loc = locale if locale in ("ru", "en") else "ru"
+    own = owned_keys(character)
+    act = active_pet_key(character)
+    lines: list[str] = [
+        t(loc, "profile_pets_pick_header"),
+        LINE_SEP,
+    ]
+    for key in own:
+        d = _all_defs().get(key)
+        if d is None:
+            continue
+        passive_plain = format_pet_passive_plain(d.passive, locale=loc)
+        passive_html = html.escape(passive_plain)
+        nm = html.escape(d.name_ru)
+        blur = html.escape(d.blurb) if d.blurb else ""
+        mark = f" {t(loc, 'profile_pet_active_mark')}" if act == key else ""
+        lines.append(f"{d.emoji} <b>{nm}</b>{mark}")
+        if blur:
+            lines.append(f"<i>{blur}</i>")
+        lines.append(f"<b>{t(loc, 'profile_pet_passive_label')}</b> <i>{passive_html}</i>")
+        lines.append("")
+    while lines and lines[-1] == "":
+        lines.pop()
+    lines.append(LINE_SEP)
+    lines.append(f"<i>{html.escape(t(loc, 'profile_pets_pick_footer'))}</i>")
+    return "\n".join(lines)
+
+
 def format_city_hub_pets_hint_html(*, locale: str) -> str:
     """Абзац для экрана города про призыв и выбор питомца."""
     loc = "en" if str(locale).lower().startswith("en") else "ru"
@@ -258,12 +302,12 @@ def format_city_hub_pets_hint_html(*, locale: str) -> str:
         return (
             "🐾 <b>Pets:</b> summon below for gold (max <b>3 pulls</b> per UTC day; ×3 uses three). "
             "Each pet adds a <b>passive</b> in combat — <b>only one</b> is active; "
-            "change it in <b>Status</b> or on <b>floors 8 / 48</b>."
+            "pick the active one from <b>Status</b> (Pet button → list) or on <b>floors 8 / 48</b>."
         )
     return (
         "🐾 <b>Питомцы:</b> призыв ниже за золото (не больше <b>3 бросков</b> за сутки UTC; ×3 = три броска). "
         "Каждый даёт <b>пассивный</b> бонус в бою — в бою действует только <b>один</b>; "
-        "сменить активного: <b>статус</b> (кнопка) или этажи <b>8 и 48</b>."
+        "выбрать активного: <b>статус</b> (кнопка «Питомец» → список) или этажи <b>8 и 48</b>."
     )
 
 

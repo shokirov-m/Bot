@@ -10,34 +10,34 @@ _VALID_RARITY = frozenset({"common", "uncommon", "rare", "epic", "legendary"})
 
 _WEAPON_ATK_FLAT: dict[str, int] = {
     "common": 0,
-    "uncommon": 1,
-    "rare": 2,
-    "epic": 4,
-    "legendary": 7,
+    "uncommon": 3,
+    "rare": 7,
+    "epic": 11,
+    "legendary": 16,
 }
 
 _WEAPON_ATK_MULT: dict[str, float] = {
     "common": 1.0,
-    "uncommon": 1.05,
-    "rare": 1.1,
-    "epic": 1.16,
-    "legendary": 1.24,
+    "uncommon": 1.07,
+    "rare": 1.17,
+    "epic": 1.25,
+    "legendary": 1.37,
 }
 
 _ARMOR_DEF_FLAT: dict[str, int] = {
     "common": 0,
-    "uncommon": 1,
-    "rare": 2,
-    "epic": 4,
-    "legendary": 6,
+    "uncommon": 3,
+    "rare": 7,
+    "epic": 10,
+    "legendary": 15,
 }
 
 _ARMOR_DEF_MULT: dict[str, float] = {
     "common": 1.0,
-    "uncommon": 1.04,
-    "rare": 1.08,
-    "epic": 1.12,
-    "legendary": 1.18,
+    "uncommon": 1.05,
+    "rare": 1.14,
+    "epic": 1.20,
+    "legendary": 1.29,
 }
 
 
@@ -73,9 +73,9 @@ def extra_stat_points_for_rarity_on_item(item_data: dict[str, Any] | None) -> in
     return int(
         {
             "common": 0,
-            "uncommon": 1,
-            "rare": 2,
-            "epic": 3,
-            "legendary": 4,
+            "uncommon": 3,
+            "rare": 6,
+            "epic": 9,
+            "legendary": 12,
         }.get(_norm_rarity(item_data), 0),
     )

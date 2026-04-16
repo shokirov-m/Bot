@@ -5,6 +5,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.i18n import t
+from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
 from game.characters import pets as pets_mod
 from services.rest_service import apply_completed_rest_if_needed, rest_seconds_left
@@ -36,13 +37,14 @@ def profile_view_keyboard(character: Character | None = None, *, locale: str = "
     ]
     if character is not None:
         owned = pets_mod.owned_keys(character)
-        if owned:
-            pet_txt = (
-                t(loc, "profile_pet_switch_btn") if len(owned) >= 2 else t(loc, "profile_pet_btn")
-            )
-            rows.append(
-                [InlineKeyboardButton(text=pet_txt, callback_data="prf:pet")],
-            )
+        pet_txt = (
+            t(loc, "profile_pet_switch_btn")
+            if len(owned) >= 2
+            else t(loc, "profile_pet_btn")
+        )
+        rows.append(
+            [InlineKeyboardButton(text=pet_txt, callback_data="prf:pet")],
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -51,6 +53,7 @@ def profile_full_stats_keyboard(character: Character | None = None, *, locale: s
     loc = locale if locale in ("ru", "en") else "ru"
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text=t(loc, "profile_back_compact"), callback_data="prf:back")],
+        [InlineKeyboardButton(text=t(loc, "profile_class_btn"), callback_data="prf:class")],
         [
             InlineKeyboardButton(text=t(loc, "menu_floor"), callback_data="mnu:flr"),
             InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),
@@ -59,11 +62,22 @@ def profile_full_stats_keyboard(character: Character | None = None, *, locale: s
     ]
     if character is not None:
         owned = pets_mod.owned_keys(character)
-        if owned:
-            pet_txt = (
-                t(loc, "profile_pet_switch_btn") if len(owned) >= 2 else t(loc, "profile_pet_btn")
-            )
+        pet_txt = (
+            t(loc, "profile_pet_switch_btn") if len(owned) >= 2 else t(loc, "profile_pet_btn")
+        )
             rows.append([InlineKeyboardButton(text=pet_txt, callback_data="prf:pet")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def profile_pet_picker_keyboard(owned: list[str], *, locale: str, active_key: str | None) -> InlineKeyboardMarkup:
+    """По одному ряду на питомца + назад + меню."""
+    loc = locale if locale in ("ru", "en") else "ru"
+    rows: list[list[InlineKeyboardButton]] = []
+    for k in owned:
+        cap = pets_mod.pet_choice_button_caption(k, locale=loc, is_active=(k == active_key))
+        rows.append([InlineKeyboardButton(text=cap, callback_data=f"prf:petpick:{k}")])
+    rows.append([InlineKeyboardButton(text=t(loc, "profile_pet_pick_back"), callback_data="prf:petback")])
+    rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -78,9 +92,8 @@ def profile_class_detail_keyboard(character: Character | None = None, *, locale:
     ]
     if character is not None:
         owned = pets_mod.owned_keys(character)
-        if owned:
-            pet_txt = (
-                t(loc, "profile_pet_switch_btn") if len(owned) >= 2 else t(loc, "profile_pet_btn")
-            )
-            rows.append([InlineKeyboardButton(text=pet_txt, callback_data="prf:pet")])
+        pet_txt = (
+            t(loc, "profile_pet_switch_btn") if len(owned) >= 2 else t(loc, "profile_pet_btn")
+        )
+        rows.append([InlineKeyboardButton(text=pet_txt, callback_data="prf:pet")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

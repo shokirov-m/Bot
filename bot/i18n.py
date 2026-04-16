@@ -200,6 +200,15 @@ STRINGS: dict[str, dict[str, str]] = {
             "Один питомец уже даёт пассив в бою. Второго можно призвать в городе; "
             "смена активного — в статусе (кнопка ниже), на полном экране характеристик или на этажах 8/48."
         ),
+        "profile_pet_none_hint": (
+            "Питомцев пока нет. Призыв — в разделе «Город» (лавка хаба), когда этаж с городом доступен."
+        ),
+        "profile_pets_pick_header": "🐾 <b>Твои питомцы</b>",
+        "profile_pets_pick_footer": "Нажми кнопку с именем — этот питомец станет активным в бою.",
+        "profile_pet_active_mark": "(активен)",
+        "profile_pet_passive_label": "Пассив:",
+        "profile_pet_pick_back": "⬅️ К статусу",
+        "profile_pet_set_ok": "Активен: {name}",
         "arena_no_char": "Сначала создай героя через /start.",
         "arena_result_win": "🏆 <b>Победа!</b> Твой билд сильнее.\n+{gold} 💰",
         "arena_result_lose": "💀 <b>Поражение.</b> У соперника билд жёстче. Попробуй позже.",
@@ -428,6 +437,15 @@ STRINGS: dict[str, dict[str, str]] = {
             "One pet already gives a combat passive. Summon more in the City; "
             "switch the active pet in Status, on the full stats screen, or on floors 8/48."
         ),
+        "profile_pet_none_hint": (
+            "No pets yet. Summon them in City (hub shop) when a city floor is available."
+        ),
+        "profile_pets_pick_header": "🐾 <b>Your pets</b>",
+        "profile_pets_pick_footer": "Tap a button below to set that pet as active in combat.",
+        "profile_pet_active_mark": "(active)",
+        "profile_pet_passive_label": "Passive:",
+        "profile_pet_pick_back": "⬅️ Back to status",
+        "profile_pet_set_ok": "Active: {name}",
         "arena_no_char": "Create a hero with /start first.",
         "arena_result_win": "🏆 <b>Victory!</b> Your build won.\n+{gold} 💰",
         "arena_result_lose": "💀 <b>Defeat.</b> The opponent's build was stronger. Try again later.",

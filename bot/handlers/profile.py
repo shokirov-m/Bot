@@ -23,6 +23,7 @@ from bot.keyboards.menu_kb import main_menu_keyboard
 from bot.keyboards.profile_kb import (
     profile_class_detail_keyboard,
     profile_full_stats_keyboard,
+    profile_pet_picker_keyboard,
     profile_view_keyboard,
 )
 from bot.utils.game_ui import push_game_ui
@@ -495,6 +496,94 @@ async def on_profile_class_info(callback: CallbackQuery, session: AsyncSession, 
         await callback.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data.startswith("prf:petpick:"))
+async def on_profile_pet_pick(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None or callback.data is None:
+            await callback.answer()
+            return
+        parts = callback.data.split(":", 2)
+        if len(parts) < 3:
+            await callback.answer()
+            return
+        pet_key = parts[2].strip()
+        if not pet_key:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        if pet_key not in pets_mod.owned_keys(char):
+            await callback.answer("Этого питомца нет.", show_alert=True)
+            return
+        ok, msg = pets_mod.set_active_pet(char, pet_key)
+        if not ok:
+            await callback.answer(msg[:200], show_alert=True)
+            return
+        await session.flush()
+        title_service.refresh_unlocks(char)
+        apply_completed_rest_if_needed(char)
+        await session.flush()
+        text_compact = await build_profile_html_async(session, char)
+        p = portrait_path_for_character(char) if game_images_enabled(char) else None
+        cap = clamp_profile_caption_for_photo(text_compact) if p is not None else text_compact
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=cap,
+            reply_markup=profile_view_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=p,
+        )
+        await callback.answer(t(loc, "profile_pet_set_ok", name=msg)[:200], show_alert=False)
+    except Exception:
+        logger.exception("prf:petpick")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:petback")
+async def on_profile_pet_back(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        title_service.refresh_unlocks(char)
+        apply_completed_rest_if_needed(char)
+        await session.flush()
+        text_compact = await build_profile_html_async(session, char)
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        p = portrait_path_for_character(char) if game_images_enabled(char) else None
+        cap = clamp_profile_caption_for_photo(text_compact) if p is not None else text_compact
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=cap,
+            reply_markup=profile_view_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=p,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:petback")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data == "prf:rest")
 async def on_profile_rest(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -533,8 +622,8 @@ async def on_profile_rest(callback: CallbackQuery, session: AsyncSession, state:
 
 
 @router.callback_query(F.data == "prf:pet")
-async def on_profile_pet_cycle(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    """Смена активного питомца из статуса (если открыто больше одного)."""
+async def on_profile_pet_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Список питомцев и выбор активного."""
     try:
         if callback.from_user is None or callback.message is None or callback.bot is None:
             await callback.answer()
@@ -547,36 +636,30 @@ async def on_profile_pet_cycle(callback: CallbackQuery, session: AsyncSession, s
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
         own = pets_mod.owned_keys(char)
         if not own:
-            await callback.answer()
+            await callback.answer(t(loc, "profile_pet_none_hint"), show_alert=True)
             return
-        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        if len(own) < 2:
-            disp = pets_mod.active_pet_display(char)
-            await callback.answer(
-                (disp or t(loc, "profile_pet_single_hint"))[:200],
-                show_alert=True,
-            )
-            return
-        disp = pets_mod.cycle_active_pet(char)
-        await session.flush()
         title_service.refresh_unlocks(char)
         apply_completed_rest_if_needed(char)
         await session.flush()
-        text_compact = await build_profile_html_async(session, char)
-        p = portrait_path_for_character(char) if game_images_enabled(char) else None
-        cap = clamp_profile_caption_for_photo(text_compact) if p is not None else text_compact
+        body = pets_mod.build_pet_picker_html(char, locale=loc)
+        kb = profile_pet_picker_keyboard(
+            own,
+            locale=loc,
+            active_key=pets_mod.active_pet_key(char),
+        )
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
-            text=cap,
-            reply_markup=profile_view_keyboard(char, locale=loc),
+            text=body,
+            reply_markup=kb,
             target_message=callback.message,
-            photo_path=p,
+            photo_path=None,
         )
-        await callback.answer((disp or "🐾")[:180], show_alert=False)
+        await callback.answer()
     except Exception:
         logger.exception("prf:pet")
         await callback.answer("Ошибка.", show_alert=True)
