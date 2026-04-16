@@ -55,6 +55,26 @@ async def count_characters(session: AsyncSession) -> int:
     return int(r.scalar_one() or 0)
 
 
+async def get_by_game_id(session: AsyncSession, game_id: int) -> Character | None:
+    """Персонаж по публичному игровому ID (не забаненный пользователь)."""
+    stmt = (
+        select(Character)
+        .join(User, Character.user_id == User.id)
+        .where(Character.game_id == int(game_id), User.is_banned.is_(False))
+    )
+    result = await session.execute(stmt)
+    char = result.scalar_one_or_none()
+    if char is not None:
+        apply_legacy_title_rank_migration(char)
+    return char
+
+
+async def allocate_next_game_id(session: AsyncSession) -> int:
+    """Следующий свободный game_id (max+1)."""
+    r = await session.execute(select(func.coalesce(func.max(Character.game_id), 0)))
+    return int(r.scalar_one() or 0) + 1
+
+
 async def lock_character_row(session: AsyncSession, character_id: int) -> None:
     """
     Блокировка строки персонажа до конца транзакции (PostgreSQL: FOR UPDATE).

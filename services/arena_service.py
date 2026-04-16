@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import html
 import random
 from typing import Literal
 
@@ -92,6 +93,20 @@ async def resolve_opponent(
     return opp, None
 
 
+async def resolve_opponent_digit_token(
+    session: AsyncSession,
+    actor: Character,
+    value: int,
+) -> tuple[Character | None, str | None]:
+    """Число из команды: сначала как игровой ID героя, иначе как Telegram ID пользователя."""
+    opp = await character_repo.get_by_game_id(session, int(value))
+    if opp is not None:
+        if opp.id == actor.id:
+            return None, "arena_err_self"
+        return opp, None
+    return await resolve_opponent(session, actor, telegram_id=int(value), username=None)
+
+
 Outcome = Literal["win", "lose", "draw"]
 
 
@@ -109,7 +124,12 @@ async def run_shadow_match(
 
     if fixed_opponent is not None:
         o_pow, o_name = await _power_label(session, fixed_opponent)
-        banner = "<i>⚔️ Вызов: билд соперника из базы (статы + надетое оружие).</i>\n\n"
+        gid = int(fixed_opponent.game_id) if fixed_opponent.game_id is not None else 0
+        banner = (
+            "<i>⚔️ Поединок 1×1 с реальным игроком: <b>"
+            f"{html.escape(o_name)}</b> · игровой ID <b>{gid}</b> "
+            "(статы и оружие из базы).</i>\n\n"
+        )
         win_bonus = 12
         is_npc = False
     else:
@@ -121,7 +141,7 @@ async def run_shadow_match(
             is_npc = True
         else:
             o_pow, o_name = await _power_label(session, opp)
-            banner = "<i>Случайный соперник — реальный герой из БД.</i>\n\n"
+            banner = "<i>Случайный соперник — реальный герой из базы (билд 1×1).</i>\n\n"
             win_bonus = 6
             is_npc = False
 

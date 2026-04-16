@@ -49,6 +49,48 @@ def patch_sqlite_characters_columns() -> None:
         logger.exception("Патч SQLite (characters) не удался: {}", p)
 
 
+def patch_sqlite_character_game_id() -> None:
+    """Публичный game_id у персонажей: порядковый номер для арены и UI."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            row = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='characters'",
+            ).fetchone()
+            if row is None:
+                return
+            cols = {r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall()}
+            if "game_id" not in cols:
+                con.execute("ALTER TABLE characters ADD COLUMN game_id INTEGER")
+                con.commit()
+                logger.info("Патч SQLite: добавлена колонка characters.game_id")
+            needs_fill = con.execute(
+                "SELECT 1 FROM characters WHERE game_id IS NULL LIMIT 1",
+            ).fetchone()
+            if needs_fill:
+                rows = con.execute("SELECT id FROM characters ORDER BY id").fetchall()
+                for i, (cid,) in enumerate(rows, start=1):
+                    con.execute("UPDATE characters SET game_id = ? WHERE id = ?", (i, cid))
+                con.commit()
+                logger.info("Патч SQLite: заполнен game_id для {} персонажей", len(rows))
+            try:
+                con.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_characters_game_id ON characters (game_id)")
+                con.commit()
+            except sqlite3.Error:
+                logger.debug("Индекс game_id: пропуск ({})", p)
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (character game_id) не удался: {}", p)
+
+
 def patch_sqlite_users_referral_columns() -> None:
     """Колонки рефералки в users (старые БД без alembic upgrade)."""
     import sqlite3
@@ -348,6 +390,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     p = resolve_db_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     patch_sqlite_characters_columns()
+    patch_sqlite_character_game_id()
     patch_sqlite_users_referral_columns()
     patch_sqlite_app_global_table()
     patch_sqlite_game_events_table()

@@ -15,8 +15,10 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from loguru import logger
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.i18n import get_locale, t
 from bot.keyboards.combat_kb import combat_item_picker_keyboard, combat_main_keyboard
 from bot.keyboards.menu_kb import menu_nav_button_row
 from bot.states.combat_states import CombatStates
@@ -75,6 +77,7 @@ from services import (
     city_quest_service,
     daily_service,
     game_metrics_service,
+    leaderboard_service,
     quest_service,
     rest_service,
     season_record_service,
@@ -567,6 +570,13 @@ async def start_combat(
     kb = combat_main_keyboard(character.class_key)
 
     if query.message is None:
+        await state.clear()
+        await session.execute(
+            update(Character)
+            .where(Character.id == int(character.id))
+            .values(stamina=Character.stamina + 1),
+        )
+        await session.refresh(character)
         await query.answer()
         return False
 
@@ -575,28 +585,46 @@ async def start_combat(
     except TelegramBadRequest:
         logger.warning("Не удалось отредактировать сообщение этажа — замена через якорь UI.")
         ok = False
-    if ok:
-        await state.update_data(
-            combat_message_id=query.message.message_id,
-            combat_chat_id=query.message.chat.id,
+    try:
+        if ok:
+            await state.update_data(
+                combat_message_id=query.message.message_id,
+                combat_chat_id=query.message.chat.id,
+            )
+        else:
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=query.message,
+                photo_path=None,
+            )
+            data = await state.get_data()
+            mid = data.get(GAME_UI_MESSAGE_ID)
+            cid = data.get(GAME_UI_CHAT_ID)
+            if mid is not None and cid is not None:
+                await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
+        await query.answer("Бой!")
+        return True
+    except Exception:
+        logger.exception("start_combat: UI после входа в бой")
+        await state.clear()
+        await session.execute(
+            update(Character)
+            .where(Character.id == int(character.id))
+            .values(stamina=Character.stamina + 1),
         )
-    else:
-        await push_game_ui(
-            state,
-            query.bot,
-            chat_id=query.message.chat.id,
-            text=text,
-            reply_markup=kb,
-            target_message=query.message,
-            photo_path=None,
-        )
-        data = await state.get_data()
-        mid = data.get(GAME_UI_MESSAGE_ID)
-        cid = data.get(GAME_UI_CHAT_ID)
-        if mid is not None and cid is not None:
-            await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
-    await query.answer("Бой!")
-    return True
+        await session.refresh(character)
+        try:
+            await query.answer(
+                "Не удалось открыть экран боя. Стамина возвращена — открой этаж снова.",
+                show_alert=True,
+            )
+        except Exception:
+            pass
+        return False
 
 
 async def start_tutorial_combat(
@@ -661,6 +689,7 @@ async def start_tutorial_combat(
     kb = combat_main_keyboard(character.class_key)
 
     if query.message is None:
+        await state.clear()
         await query.answer()
         return False
 
@@ -669,28 +698,40 @@ async def start_tutorial_combat(
     except TelegramBadRequest:
         logger.warning("Не удалось отредактировать сообщение (учебный бой) — замена через якорь UI.")
         ok = False
-    if ok:
-        await state.update_data(
-            combat_message_id=query.message.message_id,
-            combat_chat_id=query.message.chat.id,
-        )
-    else:
-        await push_game_ui(
-            state,
-            query.bot,
-            chat_id=query.message.chat.id,
-            text=text,
-            reply_markup=kb,
-            target_message=query.message,
-            photo_path=None,
-        )
-        data = await state.get_data()
-        mid = data.get(GAME_UI_MESSAGE_ID)
-        cid = data.get(GAME_UI_CHAT_ID)
-        if mid is not None and cid is not None:
-            await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
-    await query.answer("Учебный бой!")
-    return True
+    try:
+        if ok:
+            await state.update_data(
+                combat_message_id=query.message.message_id,
+                combat_chat_id=query.message.chat.id,
+            )
+        else:
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=query.message,
+                photo_path=None,
+            )
+            data = await state.get_data()
+            mid = data.get(GAME_UI_MESSAGE_ID)
+            cid = data.get(GAME_UI_CHAT_ID)
+            if mid is not None and cid is not None:
+                await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
+        await query.answer("Учебный бой!")
+        return True
+    except Exception:
+        logger.exception("start_tutorial_combat: UI после входа в учебный бой")
+        await state.clear()
+        try:
+            await query.answer(
+                "Не удалось начать учебный бой. Открой этаж снова (/floor).",
+                show_alert=True,
+            )
+        except Exception:
+            pass
+        return False
 
 
 async def _apply_tower_progress_after_victory(
@@ -890,6 +931,11 @@ async def _victory_sequence(
     star_xp_mult = float(mp_xp.pop("next_battle_xp_mult", 1.0) or 1.0)
     character.meta_progress = mp_xp
     gross_gold = int(gross_gold * gm)
+    loc_victory = get_locale(character, message.from_user.language_code if message.from_user else None)
+    ranker_note = ""
+    if await leaderboard_service.character_has_ranker_gold_bonus(session, character):
+        gross_gold = int(round(gross_gold * leaderboard_service.RANKER_GOLD_MULT))
+        ranker_note = "\n" + t(loc_victory, "combat_ranker_gold_bonus")
     xp = int(xp * xm * esc_m * max(0.1, star_xp_mult))
     escape_xp_note = ""
     if esc_m < 0.999:
@@ -1058,6 +1104,7 @@ async def _victory_sequence(
                     + escape_xp_note
                     + night_reward_note
                     + star_xp_note
+                    + ranker_note
                 )
             gold_line = f"💰 +{net_gold} золота"
             if gross_gold != net_gold and is_last:
@@ -1107,13 +1154,26 @@ async def _defeat_sequence(
     if combat_state and combat_state.get("is_tutorial"):
         character.hp_current = int(character.hp_max)
         character.mp_current = int(character.mp_max)
+        loc = get_locale(character, None)
+        fl_tut = 1
+        revive_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=t(loc, "combat_revive_btn"),
+                        callback_data=f"fl:{fl_tut}:return",
+                    ),
+                ],
+                menu_nav_button_row(),
+            ],
+        )
         try:
             await _safe_edit_combat_message_text(
                 message,
                 "💠 <b>Учебный манекен</b> одержал верх — так и задумано.\n"
-                "HP и MP восстановлены. Открой этаж и попробуй снова "
-                "<b>«Учебный бой наставника»</b>.",
-                reply_markup=None,
+                "HP и MP восстановлены. Нажми кнопку ниже или снова открой "
+                "<b>«Учебный бой наставника»</b> на этаже.",
+                reply_markup=revive_kb,
             )
         finally:
             await state.clear()
@@ -1157,8 +1217,19 @@ async def _defeat_sequence(
         f"{gold_line}"
         f"{enchant_msg}"
     )
+    loc = get_locale(character, None)
+    defeat_rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=t(loc, "combat_revive_btn"),
+                callback_data=f"fl:{fl}:return",
+            ),
+        ],
+        menu_nav_button_row(),
+    ]
+    defeat_kb = InlineKeyboardMarkup(inline_keyboard=defeat_rows)
     try:
-        await _safe_edit_combat_message_text(message, text, reply_markup=None)
+        await _safe_edit_combat_message_text(message, text, reply_markup=defeat_kb)
     finally:
         await state.clear()
 

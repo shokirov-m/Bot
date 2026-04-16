@@ -1,5 +1,5 @@
 """
-/titles — список открытых титулов и смена отображаемого в профиле.
+/titles — список открытых титулов и смена отображаемого в статусе.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _screen_html(character) -> str:  # noqa: ANN001
         return (
             "🏆 <b>Титулы</b>\n"
             f"{LINE_SEP}\n"
-            f"Сейчас в профиле: <b>{current}</b>\n\n"
+            f"Сейчас в статусе: <b>{current}</b>\n\n"
             "<i>Пока ни одного. Побеждай в боях, поднимайся по башне, "
             "завершай поручения странников, навещай таверну и кузницу.</i>"
         )
@@ -43,7 +43,7 @@ def _screen_html(character) -> str:  # noqa: ANN001
     lines = [
         "🏆 <b>Титулы</b>",
         LINE_SEP,
-        f"Сейчас в профиле: <b>{current}</b>",
+        f"Сейчас в статусе: <b>{current}</b>",
         "",
         "<b>Твои открытые:</b>",
     ]
@@ -54,7 +54,7 @@ def _screen_html(character) -> str:  # noqa: ANN001
             f"  <i>Бонус:</i> {html.escape(format_title_bonus_line(t))}",
         )
     lines.append("")
-    lines.append("Нажми титул ниже, чтобы показать его в профиле и включить бонус.")
+    lines.append("Нажми титул ниже, чтобы показать его в статусе и включить бонус.")
     return "\n".join(lines)
 
 

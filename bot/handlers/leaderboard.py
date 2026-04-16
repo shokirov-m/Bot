@@ -10,8 +10,9 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.i18n import get_locale
 from bot.keyboards.leaderboard_kb import leaderboard_categories_keyboard
-from db.repository import leaderboard_repo
+from db.repository import character_repo, leaderboard_repo, user_repo
 from services import leaderboard_service
 
 router = Router(name="leaderboard")
@@ -59,7 +60,12 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer()
             return
         rows = await _rows_for_category(session, cat)
-        text = leaderboard_service.format_leaderboard_html(cat, rows)
+        loc = "ru"
+        if query.from_user is not None:
+            user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+            ch = await character_repo.get_by_user_id(session, user.id) if user else None
+            loc = get_locale(ch, query.from_user.language_code)
+        text = leaderboard_service.format_leaderboard_html(cat, rows, locale=loc)
         kb = leaderboard_categories_keyboard()
         await query.message.edit_text(text, reply_markup=kb)
         await query.answer()

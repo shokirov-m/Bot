@@ -78,4 +78,11 @@ async def on_combat_callback(
         )
     except Exception:
         logger.exception("Ошибка в боевом callback")
-        await query.answer("Ошибка боя.", show_alert=True)
+        try:
+            await state.clear()
+        except Exception:
+            logger.debug("combat callback: state.clear после ошибки")
+        try:
+            await query.answer("Ошибка боя: состояние сброшено. Открой этаж заново.", show_alert=True)
+        except Exception:
+            pass

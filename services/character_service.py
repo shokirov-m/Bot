@@ -18,7 +18,7 @@ from db.models.floor_progress import FloorProgress
 from db.models.inventory import InventoryItem
 from db.models.quest import QuestProgress
 from db.models.user import User
-from db.repository import inventory_repo
+from db.repository import character_repo, inventory_repo
 from game.characters.classes import ClassDefinition, get_class_or_none
 from game.characters.progression import experience_needed_for_next_level
 from game.items.equipment import starter_bread_payload, starter_weapon_payload
@@ -90,6 +90,8 @@ async def create_character_for_user(
         meta_progress=meta,
     )
     session.add(char)
+    await session.flush()
+    char.game_id = await character_repo.allocate_next_game_id(session)
     await session.flush()
     await inventory_repo.add_starter_equipped_weapon(
         session,

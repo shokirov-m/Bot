@@ -1,5 +1,5 @@
 """
-/profile — карточка персонажа с полосками UI (ТЗ 1.2).
+/status (и /profile) — карточка героя: статы, полоски UI.
 """
 
 from __future__ import annotations
@@ -22,13 +22,10 @@ from db.repository import character_repo, inventory_repo, user_repo
 from bot.keyboards.menu_kb import main_menu_keyboard
 from bot.keyboards.profile_kb import (
     profile_full_stats_keyboard,
-    profile_referral_done_keyboard,
     profile_view_keyboard,
 )
-from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import push_game_ui
-from services import character_service, class_arc_service, stat_bonus_service, title_service
-from services.referral_service import referral_bot_link, resolve_bot_username_for_referral
+from services import character_service, class_arc_service, leaderboard_service, stat_bonus_service, title_service
 from services.rest_service import (
     apply_completed_rest_if_needed,
     format_rest_status_line_html,
@@ -43,7 +40,7 @@ from game.characters.titles import TITLE_BY_KEY, format_title_bonus_line
 from game.characters.weapon_mastery import mastery_summary_line, weapon_type_from_item_data
 from game.combat import formulas
 from utils.game_images_prefs import game_images_enabled
-from utils.profile_portraits import META_PORTRAIT_KEY, portrait_label_ru, portrait_path_for_character
+from utils.profile_portraits import portrait_path_for_character
 from utils.ui import (
     LINE_SEP,
     element_profile_line,
@@ -107,6 +104,7 @@ def _build_profile_text(
     gear_stat_bonus: dict[str, int] | None = None,
     title_stat_bonus: dict[str, int] | None = None,
     effective_stats: dict[str, int] | None = None,
+    ranker_line: str = "",
 ) -> str:
     cls = get_class_or_none(char.class_key)
     if cls:
@@ -163,25 +161,16 @@ def _build_profile_text(
 
     gp_show = html.escape(global_passives_line) if global_passives_line.strip() else "—"
 
-    mp = char.meta_progress or {}
-    pk_raw = mp.get(META_PORTRAIT_KEY)
-    portrait_line: str | None = None
-    if isinstance(pk_raw, str) and pk_raw.strip():
-        portrait_line = f"🖼 Облик: <b>{html.escape(portrait_label_ru(pk_raw.strip()))}</b>"
-
+    gid_s = html.escape(str(int(char.game_id))) if char.game_id is not None else "—"
     lines = [
         LINE_SEP,
-        f"🗡️ {html.escape(char.display_name)} • {class_title} • Ур.{char.level}",
+        f"🗡️ {html.escape(char.display_name)} · 🎮 <b>ID {gid_s}</b> • {class_title} • Ур.{char.level}",
         f"🎖️ Звание: <b>{rank_s}</b>",
     ]
-    if portrait_line:
-        lines.append(portrait_line)
-    lines.extend(
-        [
-            f"🏆 Титул: {title}{title_bonus}",
-            f"🌐 Глобальные бонусы: <i>{gp_show}</i>",
-        ],
-    )
+    lines.append(f"🏆 Титул: {title}{title_bonus}")
+    if ranker_line:
+        lines.append(ranker_line)
+    lines.append(f"🌐 Глобальные бонусы: <i>{gp_show}</i>")
     if not compact and mastery_html:
         lines.append(mastery_html)
     lines.append(LINE_SEP)
@@ -252,6 +241,10 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
     gp = format_unlocked_global_passives_ru(char)
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
+    loc = get_locale(char, None)
+    rk = ""
+    if await leaderboard_service.character_has_ranker_gold_bonus(session, char):
+        rk = t(loc, "profile_ranker_line")
     return _build_profile_text(
         char,
         compact=True,
@@ -261,6 +254,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
         effective_stats=eff,
+        ranker_line=rk,
     )
 
 
@@ -274,6 +268,10 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     gp = format_unlocked_global_passives_ru(char)
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
+    loc = get_locale(char, None)
+    rk = ""
+    if await leaderboard_service.character_has_ranker_gold_bonus(session, char):
+        rk = t(loc, "profile_ranker_line")
     return _build_profile_text(
         char,
         compact=False,
@@ -283,13 +281,13 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
         effective_stats=eff,
+        ranker_line=rk,
     )
 
 
-@router.message(Command("profile"))
-@router.message(Command("профиль"))
+@router.message(Command("profile", "status", "профиль", "статус"))
 async def cmd_profile(message: Message, session: AsyncSession, state: FSMContext) -> None:
-    """Показать профиль или попросить пройти регистрацию."""
+    """Показать статус героя или попросить пройти регистрацию."""
     try:
         if message.from_user is None:
             return
@@ -322,61 +320,15 @@ async def cmd_profile(message: Message, session: AsyncSession, state: FSMContext
             photo_path=p,
         )
     except Exception:
-        logger.exception("Ошибка в /profile")
+        logger.exception("Ошибка в /status")
         try:
             await message.answer(
-                "Не удалось открыть профиль. Если недавно обновлял бота — "
+                "Не удалось открыть статус. Если недавно обновлял бота — "
                 "перезапусти его; при повторении напиши админу.",
                 parse_mode=ParseMode.HTML,
             )
         except Exception:
-            logger.exception("Не удалось отправить сообщение об ошибке профиля")
-
-
-@router.callback_query(F.data == "prf:invite")
-async def on_profile_invite(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.message is None or callback.from_user is None or callback.bot is None:
-            await callback.answer()
-            return
-        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
-        if user is None or user.is_banned:
-            await callback.answer("Нет доступа.", show_alert=True)
-            return
-        char = await character_repo.get_by_user_id(session, user.id)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-        loc = get_locale(char, callback.from_user.language_code)
-        if await state.get_state() == CombatStates.in_battle.state:
-            await callback.answer(t(loc, "settings_combat_block"), show_alert=True)
-            return
-        un = await resolve_bot_username_for_referral(callback.bot)
-        if not un:
-            await callback.answer(t(loc, "settings_referral_no_username"), show_alert=True)
-            return
-        link = referral_bot_link(bot_username=un, telegram_id=int(callback.from_user.id))
-        link_esc = html.escape(link)
-        href_esc = html.escape(link, quote=True)
-        cta = "👉 Открыть приглашение в Telegram" if loc == "ru" else "👉 Open invite in Telegram"
-        body = (
-            f"{t(loc, 'settings_referral_title')}\n{LINE_SEP}\n"
-            f"{t(loc, 'settings_referral_body', link=link_esc)}\n\n"
-            f"<a href=\"{href_esc}\">{html.escape(cta)}</a>"
-        )
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=body,
-            reply_markup=profile_referral_done_keyboard(locale=loc),
-            target_message=callback.message,
-            photo_path=None,
-        )
-        await callback.answer()
-    except Exception:
-        logger.exception("prf:invite")
-        await callback.answer("Ошибка.", show_alert=True)
+            logger.exception("Не удалось отправить сообщение об ошибке статуса")
 
 
 @router.callback_query(F.data == "prf:full")

@@ -34,6 +34,9 @@ class Character(Base):
         index=True,
     )
 
+    # Публичный номер игрока (1, 2, 3… по порядку регистрации героев) — для арены и отображения.
+    game_id: Mapped[int | None] = mapped_column(Integer, nullable=True, unique=True, index=True)
+
     display_name: Mapped[str] = mapped_column(String(64), nullable=False)
     class_key: Mapped[str] = mapped_column(String(32), nullable=False)
 

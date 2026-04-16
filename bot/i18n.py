@@ -11,9 +11,8 @@ LOCALE_KEY = "locale"  # в character.meta_progress
 
 STRINGS: dict[str, dict[str, str]] = {
     "ru": {
-        "menu_profile": "🗡️ Профиль",
-        "profile_invite_btn": "🔗 Пригласить друга",
-        "profile_referral_back": "⬅️ К профилю",
+        "menu_profile": "🗡️ Статус",
+        "profile_back_compact": "⬅️ К статусу",
         "menu_floor": "🗺️ Этаж",
         "menu_inv": "🎒 Инвентарь",
         "menu_titles": "🏆 Титулы",
@@ -77,12 +76,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "settings_name_chars": "Допустимы буквы (RU/EN), цифры, пробел, дефис, точка посередине.",
         "settings_cancel_btn": "✖️ Отмена",
         "settings_fsm_cancelled": "Отменено.",
-        "settings_my_id": "Твой <b>Telegram ID</b> (для вызова на арене и т.п.):\n<code>{tid}</code>",
+        "settings_my_id": "Твой <b>Telegram ID</b>:\n<code>{tid}</code>\n\n<i>Для вызова на арене используй <b>игровой ID</b> из раздела «Статус».</i>",
         "settings_tips_body": (
             "💡 <b>Подсказки</b>\n"
             "• Стамина тратится на бои на этаже; восстанавливается со временем.\n"
             "• Ежедневка — после побед и подписки на канал.\n"
-            "• Арена: можно вызвать игрока по его Telegram ID (раздел «Мой ID»).\n"
+            "• Арена: вызов по <b>игровому ID</b> из статуса — <code>/arena 5</code>; случайный поединок — кнопка в разделе «Арена».\n"
             "• Команда <code>/lang ru</code> или <code>/lang en</code> — то же, что кнопка языка.\n"
             "• Промокод каждый можно ввести только один раз."
         ),
@@ -92,7 +91,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "welcome_back": (
             "С возвращением в <b>Башня Испытаний</b>.\n"
             "Выбери раздел кнопками ниже. Настройки, имя и промокоды — <b>⚙️ Настройки</b> или <code>/settings</code>.\n"
-            "Команды /profile, /floor, /inv, /titles, /top тоже работают."
+            "Команды /status, /floor, /inv, /titles, /top тоже работают."
         ),
         "lang_usage": "Использование: <code>/lang ru</code> или <code>/lang en</code>",
         "lang_set": "Язык интерфейса (меню): <b>{lang}</b>",
@@ -120,29 +119,46 @@ STRINGS: dict[str, dict[str, str]] = {
             "Попроси владельца добавить бота в канал как администратора (или проверь имя канала в настройках бота)."
         ),
         "sub_err_generic": "⚠️ Не удалось проверить подписку через Telegram. Попробуй позже или напиши администратору.",
-        "arena_title": "⚔️ <b>Арена теней</b>",
+        "arena_title": "⚔️ <b>Арена</b>",
+        "arena_menu_intro": (
+            "⚔️ <b>Арена</b>\n\n"
+            "• <b>Поединок 1×1</b> с реальным героем по <b>игровому ID</b> (см. в «Статус»):\n"
+            "<code>/arena 3</code> — вызов игрока с ID 3.\n"
+            "• Случайный соперник из базы (или тень башни, если вы один) — кнопка ниже.\n\n"
+            "<i>Бой считается по силе билда (статы + оружие), без пошагового боя в чате.</i>"
+        ),
+        "arena_random_btn": "🎲 Случайный поединок",
         "arena_no_char": "Сначала создай героя через /start.",
-        "arena_result_win": "🏆 <b>Победа!</b> Твоя тень сильнее.\n+{gold} 💰",
-        "arena_result_lose": "💀 <b>Поражение.</b> Тень оказалась жёстче. Попробуй позже.",
+        "arena_result_win": "🏆 <b>Победа!</b> Твой билд сильнее.\n+{gold} 💰",
+        "arena_result_lose": "💀 <b>Поражение.</b> У соперника билд жёстче. Попробуй позже.",
         "arena_busy": "Сначала заверши текущий бой.",
         "arena_draw": "🤝 <b>Ничья.</b> Никто не получил награду.",
         "arena_help": (
-            "<b>Арена</b> — дуэль «теней» по <b>реальному билду</b> из базы (статы + надетое оружие).\n\n"
-            "• <code>/arena</code> — случайный живой игрок или тень башни, если вы один.\n"
-            "• <code>/arena 123456789</code> — вызов по <b>Telegram ID</b> игрока.\n"
-            "• <code>/arena @ник</code> или <code>/arena ник</code> — по <b>username</b> в Telegram.\n"
-            "• Ответьте <code>/arena</code> на <b>сообщение</b> соперника в этом чате.\n\n"
-            "<i>Соперник не должен быть в бою; это не заменяет PvP в реальном времени.</i>"
+            "<b>Арена</b>\n\n"
+            "• <code>/arena 5</code> — поединок с героем с <b>игровым ID 5</b> (см. «Статус»).\n"
+            "• <code>/arena</code> — случайный соперник (как кнопка в меню арены).\n"
+            "• <code>/arena 123456789</code> — по <b>Telegram ID</b>, если нет героя с таким игровым ID.\n"
+            "• <code>/arena @ник</code> / ник — по username; ответ на сообщение — тоже вызов.\n\n"
+            "<i>Три раунда по силе билда (статы + оружие).</i>"
         ),
         "arena_err_self": "Нельзя вызвать самого себя.",
         "arena_err_not_found": "Пользователь не найден в башне (не писал боту или неверный ник).",
         "arena_err_no_hero_target": "У этого игрока ещё нет героя.",
         "arena_err_target_banned": "Этот аккаунт заблокирован.",
+        "combat_revive_btn": "✨ Возродиться — на этаж",
+        "top_ranker_badge": "· 🏅 <i>Ранкер</i>",
+        "top_ranker_rule_hint": (
+            "<i>Метка «Ранкер» у первых пяти в каждой категории. "
+            "Если ты в топ-5 хотя бы в одной — +5% золота с монстров (отдельно от выбранного титула).</i>"
+        ),
+        "combat_ranker_gold_bonus": "<i>🏅 Ранкер (топ рейтинга): золото с монстра +5%.</i>",
+        "profile_ranker_line": (
+            "🏅 <b>Ранкер</b> <i>(топ-5 рейтинга: +5% золота с монстров; не титул, вешается само)</i>"
+        ),
     },
     "en": {
-        "menu_profile": "🗡️ Profile",
-        "profile_invite_btn": "🔗 Invite a friend",
-        "profile_referral_back": "⬅️ Back to profile",
+        "menu_profile": "🗡️ Status",
+        "profile_back_compact": "⬅️ Back to status",
         "menu_floor": "🗺️ Floor",
         "menu_inv": "🎒 Inventory",
         "menu_titles": "🏆 Titles",
@@ -206,12 +222,12 @@ STRINGS: dict[str, dict[str, str]] = {
         "settings_name_chars": "Use letters (RU/EN), digits, space, hyphen, middle dot.",
         "settings_cancel_btn": "✖️ Cancel",
         "settings_fsm_cancelled": "Cancelled.",
-        "settings_my_id": "Your <b>Telegram ID</b> (for arena challenges, etc.):\n<code>{tid}</code>",
+        "settings_my_id": "Your <b>Telegram ID</b>:\n<code>{tid}</code>\n\n<i>For arena, use the <b>game ID</b> from «Status».</i>",
         "settings_tips_body": (
             "💡 <b>Tips</b>\n"
             "• Stamina is spent on floor battles; it regenerates over time.\n"
             "• Daily reward: wins + channel subscription.\n"
-            "• Arena: challenge others by Telegram ID (see «My ID»).\n"
+            "• Arena: duel by <b>game ID</b> from Status — <code>/arena 5</code>; random match — Arena menu button.\n"
             "• <code>/lang ru</code> or <code>/lang en</code> — same as the language button.\n"
             "• Each promo code works once per account."
         ),
@@ -221,7 +237,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "welcome_back": (
             "Welcome back to <b>Tower of Trials</b>.\n"
             "Use the buttons below. Settings, name & promos: <b>⚙️ Settings</b> or <code>/settings</code>.\n"
-            "Commands /profile, /floor, /inv, /titles, /top also work."
+            "Commands /status, /floor, /inv, /titles, /top also work."
         ),
         "lang_usage": "Usage: <code>/lang ru</code> or <code>/lang en</code>",
         "lang_set": "Menu language: <b>{lang}</b>",
@@ -249,24 +265,42 @@ STRINGS: dict[str, dict[str, str]] = {
             "Ask the owner to add the bot as an admin (or check the channel username in bot settings)."
         ),
         "sub_err_generic": "⚠️ Telegram could not verify subscription. Try again later or contact an admin.",
-        "arena_title": "⚔️ <b>Shadow arena</b>",
+        "arena_title": "⚔️ <b>Arena</b>",
+        "arena_menu_intro": (
+            "⚔️ <b>Arena</b>\n\n"
+            "• <b>1×1 duel</b> with a real hero by <b>game ID</b> (see «Status»):\n"
+            "<code>/arena 3</code> — challenge player with ID 3.\n"
+            "• Random opponent from the DB (or tower shadow if you are alone) — button below.\n\n"
+            "<i>Three rounds by build power (stats + weapon). Not turn-by-turn chat PvP.</i>"
+        ),
+        "arena_random_btn": "🎲 Random duel",
         "arena_no_char": "Create a hero with /start first.",
-        "arena_result_win": "🏆 <b>Victory!</b> Your shadow was stronger.\n+{gold} 💰",
-        "arena_result_lose": "💀 <b>Defeat.</b> The shadow was tougher. Try again later.",
+        "arena_result_win": "🏆 <b>Victory!</b> Your build won.\n+{gold} 💰",
+        "arena_result_lose": "💀 <b>Defeat.</b> The opponent's build was stronger. Try again later.",
         "arena_busy": "Finish your current battle first.",
         "arena_draw": "🤝 <b>Draw.</b> No reward.",
         "arena_help": (
-            "<b>Arena</b> — shadow duel using <b>real builds</b> from the DB (stats + equipped weapon).\n\n"
-            "• <code>/arena</code> — random player, or tower shadow if you are alone.\n"
-            "• <code>/arena 123456789</code> — challenge by <b>Telegram user ID</b>.\n"
-            "• <code>/arena @nick</code> or <code>/arena nick</code> — by Telegram <b>username</b>.\n"
-            "• Reply with <code>/arena</code> to someone's <b>message</b> in this chat.\n\n"
-            "<i>Not real-time PvP; the opponent is not notified.</i>"
+            "<b>Arena</b>\n\n"
+            "• <code>/arena 5</code> — duel the hero with <b>game ID 5</b> (see «Status»).\n"
+            "• <code>/arena</code> — same as «Random duel» in the Arena menu.\n"
+            "• <code>/arena 123456789</code> — by <b>Telegram ID</b> if no hero has that game ID.\n"
+            "• <code>/arena @nick</code> / nick — by username; reply with <code>/arena</code> to a message.\n\n"
+            "<i>Three rounds by build power (stats + weapon).</i>"
         ),
         "arena_err_self": "You cannot challenge yourself.",
         "arena_err_not_found": "User not in the tower DB (never /start or wrong username).",
         "arena_err_no_hero_target": "That player has no hero yet.",
         "arena_err_target_banned": "That account is banned.",
+        "combat_revive_btn": "✨ Revive — back to floor",
+        "top_ranker_badge": "· 🏅 <i>Ranker</i>",
+        "top_ranker_rule_hint": (
+            "<i>«Ranker» tag for the top five in each category. "
+            "If you are top five in any category — +5% monster gold (separate from your equipped title).</i>"
+        ),
+        "combat_ranker_gold_bonus": "<i>🏅 Ranker (leaderboard top): +5% monster gold.</i>",
+        "profile_ranker_line": (
+            "🏅 <b>Ranker</b> <i>(top 5 in any leaderboard: +5% monster gold; not a title, applied automatically)</i>"
+        ),
     },
 }
 
