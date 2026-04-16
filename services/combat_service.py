@@ -13,7 +13,7 @@ from typing import Any
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, Chat, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from loguru import logger
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +26,7 @@ from bot.utils.game_ui import GAME_UI_CHAT_ID, GAME_UI_MESSAGE_ID, push_game_ui
 from config import settings
 from db.models.character import Character
 from db.models.inventory import InventoryItem
-from db.repository import character_repo, floor_progress_repo, inventory_repo
+from db.repository import character_repo, floor_progress_repo, inventory_repo, user_repo
 from game.characters.class_arcs import (
     combat_blocked_for_missing_base_class,
     needs_subclass_choice,
@@ -87,6 +87,7 @@ from services import (
     character_service,
     city_quest_service,
     clan_service,
+    combat_idle_service,
     daily_service,
     floor10_pioneer_service,
     game_metrics_service,
@@ -708,6 +709,8 @@ async def start_combat(
             .values(stamina=Character.stamina + 1),
         )
         await session.refresh(character)
+        if query.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
         await query.answer()
         return False
 
@@ -737,6 +740,12 @@ async def start_combat(
             cid = data.get(GAME_UI_CHAT_ID)
             if mid is not None and cid is not None:
                 await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
+        if query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
         await query.answer("Бой!")
         return True
     except Exception:
@@ -748,6 +757,8 @@ async def start_combat(
             .values(stamina=Character.stamina + 1),
         )
         await session.refresh(character)
+        if query.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
         try:
             await query.answer(
                 "Не удалось открыть экран боя. Стамина возвращена — открой этаж снова.",
@@ -822,6 +833,8 @@ async def start_tutorial_combat(
 
     if query.message is None:
         await state.clear()
+        if query.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
         await query.answer()
         return False
 
@@ -851,11 +864,19 @@ async def start_tutorial_combat(
             cid = data.get(GAME_UI_CHAT_ID)
             if mid is not None and cid is not None:
                 await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
+        if query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
         await query.answer("Учебный бой!")
         return True
     except Exception:
         logger.exception("start_tutorial_combat: UI после входа в учебный бой")
         await state.clear()
+        if query.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
         try:
             await query.answer(
                 "Не удалось начать учебный бой. Открой этаж снова (/floor).",
@@ -1086,6 +1107,8 @@ async def _victory_sequence(
                 reply_markup=victory_kb,
             )
         finally:
+            if message.from_user is not None:
+                combat_idle_service.cancel_combat_idle_timer(int(message.from_user.id))
             await state.clear()
         return
 
@@ -1305,6 +1328,8 @@ async def _victory_sequence(
     finally:
         character.hp_current = int(combat_state["player_hp"])
         character.mp_current = int(combat_state["player_mp"])
+        if message.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(message.from_user.id))
         await state.clear()
 
 
@@ -1331,8 +1356,16 @@ async def _defeat_sequence(
     session: AsyncSession,
     character: Character,
     combat_state: dict[str, Any] | None = None,
+    banner_html: str = "",
 ) -> None:
-    """Смерть: предмет, зачарование, счётчик."""
+    """Смерть: предмет, зачарование, счётчик. banner_html — префикс (AFK, фикс и т.п.)."""
+    try:
+        sk = state.key
+        if sk is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(sk.user_id))
+    except Exception:
+        pass
+
     if combat_state and combat_state.get("is_tutorial"):
         character.hp_current = int(character.hp_max)
         character.mp_current = int(character.mp_max)
@@ -1349,12 +1382,17 @@ async def _defeat_sequence(
                 menu_nav_button_row(),
             ],
         )
+        tut_body = (
+            (banner_html + "\n") if banner_html else ""
+        ) + (
+            "💠 <b>Учебный манекен</b> одержал верх — так и задумано.\n"
+            "HP и MP восстановлены. Нажми кнопку ниже или снова открой "
+            "<b>«Учебный бой наставника»</b> на этаже."
+        )
         try:
             await _safe_edit_combat_message_text(
                 message,
-                "💠 <b>Учебный манекен</b> одержал верх — так и задумано.\n"
-                "HP и MP восстановлены. Нажми кнопку ниже или снова открой "
-                "<b>«Учебный бой наставника»</b> на этаже.",
+                tut_body,
                 reply_markup=revive_kb,
             )
         finally:
@@ -1395,7 +1433,9 @@ async def _defeat_sequence(
         if lost_gold > 0
         else "Золота не было — штраф только по HP/MP."
     )
+    head = (banner_html + "\n") if banner_html else ""
     text = (
+        f"{head}"
         "💀 Ты пал… Сброс на начало текущего этажа.\n"
         f"{gold_line}"
         f"{enchant_msg}"
@@ -1469,6 +1509,8 @@ async def handle_combat_callback(
     if combat_state is None:
         await query.answer("Нет активного боя.", show_alert=True)
         await state.clear()
+        if query.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
         return
 
     if query.message is None:
@@ -1480,6 +1522,12 @@ async def handle_combat_callback(
 
     if action == "ret":
         await query.message.edit_reply_markup(reply_markup=combat_main_keyboard(character.class_key))
+        if query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
         await query.answer()
         return
 
@@ -1487,8 +1535,20 @@ async def handle_combat_callback(
         usable = await _bag_combat_consumables(session, character.id)
         if not usable:
             await query.answer("В сумке нет зелий для боя. Купи в лавке (этажи ×5 или город).", show_alert=True)
+            if query.from_user is not None:
+                await combat_idle_service.arm_combat_idle_after_player_turn(
+                    bot=query.bot,
+                    state=state,
+                    telegram_user_id=int(query.from_user.id),
+                )
             return
         await query.message.edit_reply_markup(reply_markup=combat_item_picker_keyboard(usable))
+        if query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
         await query.answer("Выбери предмет")
         return
 
@@ -1559,12 +1619,24 @@ async def handle_combat_callback(
         ok, err, item_logs = await _apply_combat_item(session, character, combat_state, item_id)
         if not ok:
             await query.answer(err or "Нельзя.", show_alert=True)
+            if query.from_user is not None:
+                await combat_idle_service.arm_combat_idle_after_player_turn(
+                    bot=query.bot,
+                    state=state,
+                    telegram_user_id=int(query.from_user.id),
+                )
             return
         lines.extend(item_logs)
         outcome = "continue"
     elif action == "run":
         if combat_state.get("is_tutorial"):
             await query.answer("В учебном бою побег недоступен.", show_alert=True)
+            if query.from_user is not None:
+                await combat_idle_service.arm_combat_idle_after_player_turn(
+                    bot=query.bot,
+                    state=state,
+                    telegram_user_id=int(query.from_user.id),
+                )
             return
         if random.random() < formulas.escape_chance(int(combat_state["stats"]["dex"])):
             sink_rules.set_escape_success_xp_penalty(character)
@@ -1576,6 +1648,8 @@ async def handle_combat_callback(
                     reply_markup=None,
                 )
             finally:
+                if query.from_user is not None:
+                    combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
                 character.hp_current = int(combat_state["player_hp"])
                 character.mp_current = int(combat_state["player_mp"])
                 await state.clear()
@@ -1606,7 +1680,13 @@ async def handle_combat_callback(
             combat_state=combat_state,
             class_ru=class_ru,
         )
-        if not continued:
+        if continued and query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
+        elif not continued:
             await query.answer()
         return
 
@@ -1632,7 +1712,13 @@ async def handle_combat_callback(
             combat_state=combat_state,
             class_ru=class_ru,
         )
-        if not continued:
+        if continued and query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
+        elif not continued:
             await query.answer()
         return
 
@@ -1670,7 +1756,13 @@ async def handle_combat_callback(
             combat_state=combat_state,
             class_ru=class_ru,
         )
-        if not continued:
+        if continued and query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
+        elif not continued:
             await query.answer()
         return
 
@@ -1685,4 +1777,92 @@ async def handle_combat_callback(
     except Exception:
         logger.exception("Не удалось обновить сообщение боя")
     await state.update_data(combat=combat_state)
+    if query.from_user is not None:
+        await combat_idle_service.arm_combat_idle_after_player_turn(
+            bot=query.bot,
+            state=state,
+            telegram_user_id=int(query.from_user.id),
+        )
     await query.answer()
+
+
+async def defeat_from_afk_or_stuck(
+    *,
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    character: Character,
+    combat_state: dict[str, Any],
+    banner_html: str,
+) -> None:
+    """Поражение из фона (AFK) или через /fixbattle — общая логика _defeat_sequence."""
+    await _defeat_sequence(
+        message=message,
+        state=state,
+        session=session,
+        character=character,
+        combat_state=combat_state,
+        banner_html=banner_html,
+    )
+
+
+async def user_fixbattle_command(
+    *,
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+) -> str:
+    """
+    Сброс застрявшего FSM боя. Если есть данные боя — засчитывается поражение (как обычный слив).
+    Возвращает текст ответа пользователю.
+    """
+    if message.from_user is None:
+        return "Нет пользователя."
+    tid = int(message.from_user.id)
+    combat_idle_service.cancel_combat_idle_timer(tid)
+    cur = await state.get_state()
+    data = await state.get_data()
+    combat_state = data.get("combat")
+    if cur != CombatStates.in_battle.state:
+        return "Активного боя нет — можно начинать новый на /floor."
+    if not isinstance(combat_state, dict):
+        await state.clear()
+        return "Состояние боя сброшено. Открой /floor."
+
+    user = await user_repo.get_by_telegram_id(session, tid)
+    if user is None or user.is_banned:
+        await state.clear()
+        return "Нет доступа."
+    char = await character_repo.get_by_user_id(session, user.id)
+    if char is None:
+        await state.clear()
+        return "Нет персонажа."
+
+    mid = data.get("combat_message_id")
+    cid = data.get("combat_chat_id")
+    if mid is not None and cid is not None and message.bot is not None:
+        from datetime import UTC, datetime
+
+        ctype = "private" if int(cid) > 0 else "supergroup"
+        edit_msg = Message(
+            message_id=int(mid),
+            chat=Chat(id=int(cid), type=ctype),
+            date=datetime.now(UTC),
+            bot=message.bot,
+        )
+    else:
+        edit_msg = message
+
+    await _defeat_sequence(
+        message=edit_msg,
+        state=state,
+        session=session,
+        character=char,
+        combat_state=combat_state,
+        banner_html="🔧 <b>Фикс боя:</b> застрявший бой закрыт как <b>поражение</b>. "
+        "Стамина за начатый бой не возвращается.",
+    )
+    return (
+        "Готово. Если бой реально шёл — засчитано поражение. Открой <b>/floor</b> и начни новый бой.\n"
+        "<i>Команда только при зависании интерфейса.</i>"
+    )

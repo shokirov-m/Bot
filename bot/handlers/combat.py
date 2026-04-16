@@ -5,16 +5,35 @@ Callback-и боя: атака, скиллы, побег, предмет-заг�
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.states.combat_states import CombatStates
 from db.repository import character_repo, user_repo
-from services import combat_service
+from services import combat_idle_service, combat_service
 
 router = Router(name="combat")
+
+
+@router.message(Command("fixbattle"), Command("fix_battle"), Command("фиксбой"))
+async def cmd_fixbattle(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    """Сброс застрявшего FSM боя (при наличии данных боя — поражение)."""
+    try:
+        if message.from_user is None:
+            return
+        text = await combat_service.user_fixbattle_command(
+            message=message,
+            session=session,
+            state=state,
+        )
+        await message.answer(text, parse_mode=ParseMode.HTML)
+    except Exception:
+        logger.exception("fixbattle")
+        await message.answer("Ошибка. Попробуй ещё раз или напиши админу.")
 
 
 @router.callback_query(F.data.startswith("cb:"))
@@ -36,12 +55,14 @@ async def on_combat_callback(
         user = await user_repo.get_by_telegram_id(session, query.from_user.id)
         if user is None or user.is_banned:
             await query.answer("Нет доступа.", show_alert=True)
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
             await state.clear()
             return
 
         char = await character_repo.get_by_user_id(session, user.id)
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
             await state.clear()
             return
 
@@ -79,6 +100,8 @@ async def on_combat_callback(
     except Exception:
         logger.exception("Ошибка в боевом callback")
         try:
+            if query.from_user is not None:
+                combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
             await state.clear()
         except Exception:
             logger.debug("combat callback: state.clear после ошибки")
