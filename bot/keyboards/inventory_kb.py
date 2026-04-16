@@ -141,7 +141,7 @@ def item_detail_keyboard(
     )
     rows: list[list[InlineKeyboardButton]] = []
     if is_equipped:
-        rows.append([InlineKeyboardButton(text="📥 Снять", callback_data=f"inv:uneq:{item_id}")])
+        rows.append([InlineKeyboardButton(text="✓ Снять в сумку", callback_data=f"inv:uneq:{item_id}")])
     elif can_equip:
         rows.append([InlineKeyboardButton(text="📤 Надеть", callback_data=f"inv:eq:{item_id}")])
     if show_ration_eat:

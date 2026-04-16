@@ -38,6 +38,7 @@ from game.characters.weapon_mastery import damage_multiplier_for_type, record_st
 from game.combat import consumables, effects, engine, formulas, monster_ai, night_mode as combat_night
 from game.items import runes as rune_items
 from game.balance import (
+    DEATH_GOLD_LOSS_FRACTION,
     MONSTER_ATK_CURVE_MULT,
     MONSTER_ATK_FLAT_ELITE,
     MONSTER_ATK_FLAT_NORMAL,
@@ -1179,7 +1180,7 @@ async def _victory_sequence(
 
     dropped = False
     drop_label = ""
-    if roll_item_drop(spawn):
+    if roll_item_drop(spawn, int(character.floor_number)):
         slot = await inventory_repo.first_free_bag_slot(session, character.id)
         if slot is not None:
             item_payload = loot_tables.roll_victory_item_payload(character.floor_number, spawn)
@@ -1410,7 +1411,7 @@ async def _defeat_sequence(
     if g <= 0:
         lost_gold = 0
     else:
-        pct = 0.18 + min(0.22, fl / 250.0)
+        pct = float(DEATH_GOLD_LOSS_FRACTION)
         lost_gold = max(1, int(g * pct))
         lost_gold = min(lost_gold, g)
     character.gold = max(0, g - lost_gold)

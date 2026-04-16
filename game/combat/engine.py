@@ -8,6 +8,11 @@ from __future__ import annotations
 import random
 from typing import Any, Literal
 
+from game.balance import (
+    MONSTER_ARMOR_PENETRATION,
+    MONSTER_ARMOR_PENETRATION_MAJOR_BOSS,
+    MONSTER_DAMAGE_DEALT_MULT,
+)
 from game.characters.skills import SkillDef, passive_combat_modifiers, skills_for_class
 from game.combat import effects, formulas, monster_ai
 from game.items.runes import ELEMENTS, RuneData, rune_burn_params_for_rank
@@ -621,7 +626,15 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     atk = int(m["atk"])
     out_m = float(state.get("monster_outgoing_mult", 1.0))
     base = int(atk * random.uniform(0.9, 1.1) * mult * out_m)
+    base = max(1, int(base * float(MONSTER_DAMAGE_DEALT_MULT)))
     defense = player_defense_value(state)
+    pen = (
+        float(MONSTER_ARMOR_PENETRATION_MAJOR_BOSS)
+        if bool(m.get("is_major_boss")) or bool(m.get("is_mini_boss"))
+        else float(MONSTER_ARMOR_PENETRATION)
+    )
+    pen = max(0.0, min(0.95, pen))
+    eff_defense = int(defense * (1.0 - pen))
 
     cd = int(state.get("monster_special_cd", 0))
     is_special = action == "special" and cd == 0
@@ -642,7 +655,7 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
             return logs, "win"
 
-    dmg = max(1, base - defense)
+    dmg = max(1, base - eff_defense)
     extra_mult = float(m.get("strike_ailment_mult") or 0.0)
     if extra_mult > 0:
         extra = max(0, int(base * extra_mult))

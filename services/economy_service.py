@@ -1,4 +1,4 @@
-"""Обёртки экономики: аукцион с проверками (золото, лимит лотов)."""
+"""Обёртки экономики: магазин лотов с проверками (золото, лимит лотов)."""
 
 from __future__ import annotations
 
@@ -51,13 +51,24 @@ async def auction_place_bid(
     lot_id: int,
     amount: int,
 ) -> tuple[bool, str]:
-    """Ставка с проверкой баланса до вызова ядра (ядро перепроверяет при торгах)."""
+    """Устаревшие торги (ставки); в UI используется мгновенная покупка."""
     amt = int(amount)
     if amt < 1:
         return False, "Сумма ставки должна быть положительной."
     if int(char.gold) < amt:
         return False, "Недостаточно золота."
     return await market.place_bid(session, char, lot_id, amt)
+
+
+async def auction_buy_lot_now(session: AsyncSession, char: Character, lot_id: int) -> tuple[bool, str]:
+    """Публичный лот: купить сразу по указанной цене."""
+    lot = await auction_repo.get_by_id(session, lot_id)
+    if lot is None:
+        return False, "Лот не найден."
+    price = int(lot.start_price)
+    if int(char.gold) < price:
+        return False, "Недостаточно золота."
+    return await market.buy_lot_now(session, char, lot_id)
 
 
 async def auction_finalize_lots(session: AsyncSession) -> int:

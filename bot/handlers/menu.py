@@ -12,7 +12,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.handlers.inventory import _bag_intro
-from bot.handlers.auction import _auction_intro_html, _clear_auction_fsm_only
+from bot.handlers.auction import _clear_auction_fsm_only, _shop_intro_html
 from bot.handlers.leaderboard import INTRO_HTML as TOP_INTRO_HTML
 from bot.handlers.profile import build_profile_html_async, clamp_profile_caption_for_photo
 from bot.handlers.titles import _screen_html as titles_screen_html
@@ -272,7 +272,7 @@ async def menu_auction(callback: CallbackQuery, session: AsyncSession, state: FS
         await _edit_same_message(
             callback,
             state,
-            _auction_intro_html(),
+            _shop_intro_html(),
             auction_hub_keyboard(),
         )
         await callback.answer()

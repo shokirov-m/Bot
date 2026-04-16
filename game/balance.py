@@ -44,10 +44,18 @@ RUNE_CHANCE_ELITE = 0.12
 RUNE_CHANCE_MINI = 0.22
 RUNE_CHANCE_MAJOR = 0.45
 
+# Доля золота, теряемая при смерти на этаже (после боя; не учебный бой).
+DEATH_GOLD_LOSS_FRACTION = 0.10
+
 DROP_CHANCE_NORMAL = 0.15
 DROP_CHANCE_ELITE = 0.28
 DROP_CHANCE_MINI = 0.40
 DROP_CHANCE_MAJOR = 0.65
+
+# Дроп предмета в сумку: этажи 1–5 слабее, с 6-го сильнее (множитель к базовому шансу типа цели).
+DROP_CHANCE_FLOOR_LOW_MAX = 5
+DROP_CHANCE_MULT_FLOORS_1_TO_5 = 0.50
+DROP_CHANCE_MULT_FLOOR_6_PLUS = 1.22
 
 # --- Базовые статы монстра (до множителей типа элита/босс) ---
 MONSTER_HP_RAW_BASE = 36
@@ -106,6 +114,14 @@ def monster_tower_floor_strength_multiplier(floor_number: int) -> float:
 
 MONSTER_ATK_FLAT_NORMAL = 20
 MONSTER_ATK_FLAT_ELITE = 30
+
+# Итоговый урон монстра по игроку в бою: множатель к «base» до вычитания брони.
+MONSTER_DAMAGE_DEALT_MULT = 1.12
+
+# Доля брони игрока, которую удар монстра игнорирует (остальное вычитается из урона как раньше).
+MONSTER_ARMOR_PENETRATION = 0.20
+# Мини-босс и главный босс (в бою оба помечены is_mini_boss / is_major_boss).
+MONSTER_ARMOR_PENETRATION_MAJOR_BOSS = 0.25
 
 # --- Масштаб монстров от уровня персонажа (кроме учебного боя) ---
 # На каждый уровень героя выше 1-го: чуть больше HP / атака / защита врага.

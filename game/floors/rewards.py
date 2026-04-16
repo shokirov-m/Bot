@@ -8,8 +8,11 @@ import random
 
 from game.balance import (
     DROP_CHANCE_ELITE,
+    DROP_CHANCE_FLOOR_LOW_MAX,
     DROP_CHANCE_MAJOR,
     DROP_CHANCE_MINI,
+    DROP_CHANCE_MULT_FLOOR_6_PLUS,
+    DROP_CHANCE_MULT_FLOORS_1_TO_5,
     DROP_CHANCE_NORMAL,
     GOLD_BASE_OFFSET,
     GOLD_ELITE_EXTRA_RANGE,
@@ -70,7 +73,16 @@ def roll_rune_stone(spawn: FloorMonsterSpawn) -> bool:
     return random.random() < chance
 
 
-def roll_item_drop(spawn: FloorMonsterSpawn) -> bool:
+def _scale_item_drop_chance_for_floor(base: float, floor_number: int) -> float:
+    f = int(floor_number)
+    if f <= int(DROP_CHANCE_FLOOR_LOW_MAX):
+        return min(0.95, float(base) * float(DROP_CHANCE_MULT_FLOORS_1_TO_5))
+    if f >= 6:
+        return min(0.95, float(base) * float(DROP_CHANCE_MULT_FLOOR_6_PLUS))
+    return min(0.95, float(base))
+
+
+def roll_item_drop(spawn: FloorMonsterSpawn, floor_number: int) -> bool:
     chance = DROP_CHANCE_NORMAL
     if spawn.is_elite:
         chance = DROP_CHANCE_ELITE
@@ -78,4 +90,5 @@ def roll_item_drop(spawn: FloorMonsterSpawn) -> bool:
         chance = DROP_CHANCE_MINI
     if spawn.is_major_boss:
         chance = DROP_CHANCE_MAJOR
+    chance = _scale_item_drop_chance_for_floor(chance, floor_number)
     return random.random() < chance

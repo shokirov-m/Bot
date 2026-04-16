@@ -1,5 +1,5 @@
 """
-Аукцион: выставление лота, ставки, финализация (комиссия 5 % с выручки продавца).
+Игровой магазин (лоты): выставление, покупка по цене, личные предложения, финализация (комиссия 5 %).
 """
 
 from __future__ import annotations
@@ -19,6 +19,14 @@ MAX_ACTIVE_LOTS_PER_SELLER = 5
 LOT_DURATION_DAYS = 3
 COMMISSION_RATE = 0.05
 MAX_GOLD_BID = 9_999_999_999_999
+
+
+def _expires_at_utc(expires_at: datetime) -> datetime:
+    """SQLite/драйверы иногда отдают naive datetime — сравнение с UTC ломается."""
+    dt = expires_at
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def min_next_bid_for_lot(lot: AuctionLot) -> int:
@@ -61,7 +69,7 @@ async def create_lot(
     )
     session.add(lot)
     await session.flush()
-    return True, f"Лот #{lot.id} · {LOT_DURATION_DAYS} дн. · старт {p} зол."
+    return True, f"Лот #{lot.id} · {LOT_DURATION_DAYS} дн. · цена {p} зол."
 
 
 async def create_direct_offered_lot(
@@ -130,7 +138,7 @@ async def place_bid(
         return False, "Лот не найден или уже закрыт."
     if lot.target_char_id is not None:
         return False, "Это личное предложение — купи или откажись через кнопки в уведомлении."
-    if datetime.now(UTC) >= lot.expires_at:
+    if datetime.now(UTC) >= _expires_at_utc(lot.expires_at):
         return False, "Время торгов по лоту истекло."
     if int(lot.seller_char_id) == int(char.id):
         return False, "Нельзя ставить на свой лот."
@@ -154,6 +162,46 @@ async def place_bid(
     return True, f"Ставка {amt} зол. · лот #{lot.id}."
 
 
+async def buy_lot_now(
+    session: AsyncSession,
+    buyer: Character,
+    lot_id: int,
+) -> tuple[bool, str]:
+    """Публичный лот: мгновенная покупка по цене start_price (без торгов)."""
+    lot = await auction_repo.get_by_id(session, lot_id)
+    if lot is None or lot.status != "active":
+        return False, "Лот не найден или уже закрыт."
+    if lot.target_char_id is not None:
+        return False, "Это личное предложение — открой кнопки в личном сообщении."
+    if datetime.now(UTC) >= _expires_at_utc(lot.expires_at):
+        return False, "Лот истёк."
+    if int(lot.seller_char_id) == int(buyer.id):
+        return False, "Нельзя купить свой лот."
+    price = int(lot.start_price)
+    if int(buyer.gold) < price:
+        return False, "Недостаточно золота."
+    seller = await character_repo.get_by_id(session, int(lot.seller_char_id))
+    if seller is None:
+        return False, "Продавец не найден."
+    free_b = await inventory_repo.first_free_bag_slot(session, int(buyer.id))
+    if free_b is None:
+        return False, "Освободи хотя бы одну ячейку сумки."
+    buyer.gold = int(buyer.gold) - price
+    payout = int(price * (1.0 - COMMISSION_RATE))
+    seller.gold = int(seller.gold) + payout
+    await inventory_repo.add_bag_item(
+        session,
+        int(buyer.id),
+        copy.deepcopy(lot.item_data or {}),
+        bag_slot=free_b,
+    )
+    lot.status = "sold"
+    lot.current_bid = price
+    lot.buyer_char_id = int(buyer.id)
+    await session.flush()
+    return True, f"Куплено за {price} зол. · лот #{lot.id}."
+
+
 async def seller_cancel_lot(
     session: AsyncSession,
     char: Character,
@@ -165,10 +213,10 @@ async def seller_cancel_lot(
         return False, "Лот не найден или уже закрыт."
     if int(lot.seller_char_id) != int(char.id):
         return False, "Это не твой лот."
-    if datetime.now(UTC) >= lot.expires_at:
+    if datetime.now(UTC) >= _expires_at_utc(lot.expires_at):
         return False, "Срок лота истёк — дождись итога или обнови экран."
     if int(lot.current_bid) > 0 or lot.buyer_char_id is not None:
-        return False, "Уже есть ставка — снять лот нельзя. Дождись окончания торгов."
+        return False, "Лот уже куплен или зарезервирован — снять нельзя."
 
     free = await inventory_repo.first_free_bag_slot(session, int(char.id))
     if free is None:
@@ -197,10 +245,10 @@ async def seller_reprice_lot(
         return False, "Лот не найден или уже закрыт."
     if int(lot.seller_char_id) != int(char.id):
         return False, "Это не твой лот."
-    if datetime.now(UTC) >= lot.expires_at:
+    if datetime.now(UTC) >= _expires_at_utc(lot.expires_at):
         return False, "Срок лота истёк."
     if int(lot.current_bid) > 0 or lot.buyer_char_id is not None:
-        return False, "Уже есть ставка — цену менять нельзя."
+        return False, "Лот уже куплен или зарезервирован — цену менять нельзя."
 
     p = int(new_price)
     if p < 1:
@@ -210,7 +258,7 @@ async def seller_reprice_lot(
 
     lot.start_price = p
     await session.flush()
-    return True, f"Лот #{lot.id}: новая стартовая цена {p} зол."
+    return True, f"Лот #{lot.id}: новая цена {p} зол."
 
 
 async def accept_direct_offer(
@@ -226,7 +274,7 @@ async def accept_direct_offer(
         return False, "Это не личное предложение."
     if int(lot.target_char_id) != int(buyer.id):
         return False, "Это предложение адресовано не тебе."
-    if datetime.now(UTC) >= lot.expires_at:
+    if datetime.now(UTC) >= _expires_at_utc(lot.expires_at):
         return False, "Срок предложения истёк."
     price = int(lot.start_price)
     if int(buyer.gold) < price:

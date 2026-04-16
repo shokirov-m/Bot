@@ -16,7 +16,7 @@ def economy_hub_keyboard(floor_number: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📉 Платёж", callback_data=f"ecy:mlr:{f}"),
         ],
         [InlineKeyboardButton(text="🏦 Сейф банка", callback_data=f"ecy:sfv:{f}")],
-        [InlineKeyboardButton(text="🏛️ Аукцион (инфо)", callback_data=f"ecy:auc:{f}")],
+        [InlineKeyboardButton(text="🛒 Магазин (инфо)", callback_data=f"ecy:auc:{f}")],
         [InlineKeyboardButton(text="⬅ В город", callback_data=f"ecy:back:{f}")],
         menu_nav_button_row(),
     ]

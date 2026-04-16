@@ -1,5 +1,5 @@
 """
-Аукцион: /auction, выставление из сумки, ставки, мои лоты, снятие и смена цены.
+Магазин (лоты игроков): /магазин, выставление из сумки, покупка по цене, личные предложения.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from bot.keyboards.auction_kb import (
 from bot.states.auction_states import AuctionCreateStates
 from bot.states.combat_states import CombatStates
 from db.repository import auction_repo, character_repo, inventory_repo, user_repo
-from game.economy.market import LOT_DURATION_DAYS, min_next_bid_for_lot
+from game.economy.market import LOT_DURATION_DAYS, _expires_at_utc
 from game.items import item_categories
 from services import economy_service
 from utils.ui import format_inventory_item_html, format_number, item_bag_button_label
@@ -48,12 +48,13 @@ async def _clear_auction_fsm_only(state: FSMContext) -> None:
         await state.clear()
 
 
-def _auction_intro_html() -> str:
+def _shop_intro_html() -> str:
     return (
-        "🏛️ <b>Аукцион</b>\n"
+        "🛒 <b>Магазин</b>\n"
         f"Из сумки · до <b>{LOT_DURATION_DAYS}</b> дн. · комиссия <b>5%</b> · активных лотов — до <b>5</b>.\n"
+        "Публичные лоты — <b>фиксированная цена</b>, покупка сразу.\n"
         "🎯 <b>Игроку по ID</b> — личное предложение по <b>игровому номеру</b> из профиля: "
-        "покупатель получит сообщение и сможет купить за указанную цену или отказаться."
+        "адресат получит сообщение и сможет купить за указанную цену или отказаться."
     )
 
 
@@ -80,13 +81,9 @@ def _lot_detail_html(lot, seller_name: str) -> str:
             f"<i>(только адресат может купить или отказаться)</i>\n\n"
             f"{item_block}"
         )
-    cur = int(lot.current_bid)
-    nxt = min_next_bid_for_lot(lot)
-    leader = "ставок пока нет" if cur <= 0 else f"{format_number(cur)} зол."
     return (
         f"<b>Лот #{lot.id}</b> · {html.escape(seller_name)}\n"
-        f"~<b>{hrs}</b> ч · старт <b>{format_number(start_p)}</b> · ставка: <b>{leader}</b> · "
-        f"мин. шаг от <b>{format_number(nxt)}</b> зол.\n\n"
+        f"~<b>{hrs}</b> ч · цена <b>{format_number(start_p)}</b> зол. · <i>покупка сразу</i>\n\n"
         f"{item_block}"
     )
 
@@ -101,7 +98,7 @@ def _my_lots_html(lots: list, *, target_game_by_lot_id: dict[int, int | None] | 
         st = lot.status
         name = html.escape(str((lot.item_data or {}).get("name", "?"))[:40])
         lines.append(
-            f"#{lot.id} · {name} · <i>{html.escape(st)}</i> · старт {format_number(int(lot.start_price))}",
+            f"#{lot.id} · {name} · <i>{html.escape(st)}</i> · цена {format_number(int(lot.start_price))}",
         )
         if getattr(lot, "target_char_id", None) is not None:
             gid = tmap.get(int(lot.id))
@@ -112,9 +109,9 @@ def _my_lots_html(lots: list, *, target_game_by_lot_id: dict[int, int | None] | 
         if st == "active":
             cur = int(lot.current_bid)
             if cur > 0:
-                lines.append(f"   текущая ставка: {format_number(cur)}")
+                lines.append(f"   продано / зарезервировано: {format_number(cur)}")
     lines.append(
-        "\n<i>Снять лот или сменить стартовую цену можно, пока <b>нет ставок</b> "
+        "\n<i>Снять лот или сменить цену можно, пока <b>никто не купил</b> "
         "(для личных предложений — пока адресат не купил и не отказался).</i>",
     )
     return "\n".join(lines)
@@ -135,7 +132,7 @@ async def _notify_direct_offer_target(
     price = int(lot.start_price)
     item_block = format_inventory_item_html(lot.item_data or {})
     text = (
-        "🎯 <b>Личное предложение с аукциона</b>\n"
+        "🎯 <b>Личное предложение из магазина</b>\n"
         f"От <b>{html.escape(seller.display_name)}</b> (игровой ID <code>{gid}</code>)\n"
         f"Лот <b>#{lot.id}</b> · цена <b>{format_number(price)}</b> зол.\n\n"
         f"{item_block}\n\n"
@@ -204,8 +201,31 @@ def _parse_lot_detail_cd(data: str | None) -> tuple[int, int, str]:
     return lid, page, cat
 
 
+def _parse_buy_cd(data: str | None) -> tuple[int, int, str]:
+    parts = (data or "").split(":")
+    if len(parts) < 5 or parts[1] != "buy" or not parts[2].isdigit():
+        return 0, 0, item_categories.BAG_CAT_ALL
+    lid = int(parts[2])
+    page = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 0
+    cat = (
+        parts[4]
+        if len(parts) >= 5
+        and parts[4]
+        in (
+            item_categories.BAG_CAT_ALL,
+            item_categories.BAG_CAT_EQUIP,
+            item_categories.BAG_CAT_USE,
+            item_categories.BAG_CAT_OTHER,
+        )
+        else item_categories.BAG_CAT_ALL
+    )
+    return lid, page, cat
+
+
 @router.message(Command("auction"))
 @router.message(Command("аукцион"))
+@router.message(Command("магазин"))
+@router.message(Command("shop"))
 async def cmd_auction(message: Message, session: AsyncSession, state: FSMContext) -> None:
     try:
         await _clear_auction_fsm_only(state)
@@ -216,13 +236,13 @@ async def cmd_auction(message: Message, session: AsyncSession, state: FSMContext
             await message.answer("Сначала создай героя через /start.")
             return
         await message.answer(
-            _auction_intro_html(),
+            _shop_intro_html(),
             parse_mode=ParseMode.HTML,
             reply_markup=auction_hub_keyboard(),
         )
     except Exception:
         logger.exception("cmd_auction")
-        await message.answer("Ошибка аукциона.")
+        await message.answer("Ошибка магазина.")
 
 
 @router.callback_query(F.data == "auc:hub")
@@ -238,7 +258,7 @@ async def auc_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCont
             return
         try:
             await callback.message.edit_text(
-                _auction_intro_html(),
+                _shop_intro_html(),
                 parse_mode=ParseMode.HTML,
                 reply_markup=auction_hub_keyboard(),
             )
@@ -287,7 +307,7 @@ async def auc_create_start(callback: CallbackQuery, session: AsyncSession, state
         for it in sorted(filtered, key=lambda x: (x.bag_slot or 0)):
             slot = int(it.bag_slot or 0)
             pairs.append((slot, item_bag_button_label(it.item_data, slot)))
-        text = _auction_intro_html() + "\n<b>Ячейка сумки</b> (предмет уйдёт в лот):"
+        text = _shop_intro_html() + "\n<b>Ячейка сумки</b> (предмет уйдёт в лот):"
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
@@ -324,7 +344,7 @@ async def auc_pick_slot(callback: CallbackQuery, session: AsyncSession, state: F
         await state.set_state(AuctionCreateStates.waiting_price)
         await state.update_data(auc_bag_slot=slot)
         preview = format_inventory_item_html(it.item_data or {})
-        text = f"{preview}\n\n<b>Стартовая цена</b> — одним сообщением, золото (целое ≥ 1)."
+        text = f"{preview}\n\n<b>Цена лота</b> — одним сообщением, золото (целое ≥ 1)."
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
@@ -352,7 +372,7 @@ async def auc_price_input(message: Message, session: AsyncSession, state: FSMCon
             return
         raw = (message.text or "").strip().replace(" ", "").replace("\u00a0", "")
         if not raw.isdigit():
-            await message.answer("Нужно целое число — стартовая цена в золоте.")
+            await message.answer("Нужно целое число — цена лота в золоте.")
             return
         price = int(raw)
         data = await state.get_data()
@@ -378,14 +398,14 @@ async def auc_reprice_input(message: Message, session: AsyncSession, state: FSMC
             return
         raw = (message.text or "").strip().replace(" ", "").replace("\u00a0", "")
         if not raw.isdigit():
-            await message.answer("Нужно целое число — новая стартовая цена в золоте.")
+            await message.answer("Нужно целое число — новая цена в золоте.")
             return
         price = int(raw)
         data = await state.get_data()
         lot_id = int(data.get("auc_reprice_lot_id", 0))
         await state.clear()
         if lot_id <= 0:
-            await message.answer("Сессия устарела. Открой аукцион снова.")
+            await message.answer("Сессия устарела. Открой магазин снова.")
             return
         ok, payload = await economy_service.auction_seller_reprice_lot(session, char, lot_id, price)
         await message.answer(payload, reply_markup=auction_hub_keyboard())
@@ -414,7 +434,7 @@ async def auc_browse(callback: CallbackQuery, session: AsyncSession, state: FSMC
             offset=page * AUCTION_PAGE_SIZE,
             category=cat,
         )
-        text = _auction_intro_html() + f"\n<b>Лоты</b> ({total})\n"
+        text = _shop_intro_html() + f"\n<b>Каталог</b> ({total})\n"
         if not lots:
             text += "<i>Сейчас нет лотов в этой категории.</i>"
         await callback.message.edit_text(
@@ -453,9 +473,7 @@ async def auc_lot_detail(callback: CallbackQuery, session: AsyncSession, state: 
         if lot is None or lot.status != "active":
             await callback.answer("Лот недоступен.", show_alert=True)
             return
-        exp = lot.expires_at
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=UTC)
+        exp = _expires_at_utc(lot.expires_at)
         if datetime.now(UTC) >= exp:
             await callback.answer("Лот истёк.", show_alert=True)
             return
@@ -503,11 +521,18 @@ async def auc_cancel_lot(callback: CallbackQuery, session: AsyncSession, state: 
         ok, msg = await economy_service.auction_seller_cancel_lot(session, char, int(lid_s))
         await callback.answer(msg[:200], show_alert=not ok)
         if ok:
-            await callback.message.edit_text(
-                _auction_intro_html() + f"\n\n{html.escape(msg)}",
-                parse_mode=ParseMode.HTML,
-                reply_markup=auction_hub_keyboard(),
-            )
+            try:
+                await callback.message.edit_text(
+                    _shop_intro_html() + f"\n\n{html.escape(msg)}",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=auction_hub_keyboard(),
+                )
+            except TelegramBadRequest:
+                await callback.message.answer(
+                    _shop_intro_html() + f"\n\n{html.escape(msg)}",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=auction_hub_keyboard(),
+                )
     except Exception:
         logger.exception("auc:cnl")
         await callback.answer("Ошибка.", show_alert=True)
@@ -536,7 +561,7 @@ async def auc_reprice_start(callback: CallbackQuery, session: AsyncSession, stat
             await callback.answer("Лот недоступен.", show_alert=True)
             return
         if int(lot.current_bid) > 0 or lot.buyer_char_id is not None:
-            await callback.answer("Уже есть ставка — цену менять нельзя.", show_alert=True)
+            await callback.answer("Лот уже куплен — цену менять нельзя.", show_alert=True)
             return
         await state.set_state(AuctionCreateStates.waiting_reprice)
         await state.update_data(auc_reprice_lot_id=lid)
@@ -544,8 +569,8 @@ async def auc_reprice_start(callback: CallbackQuery, session: AsyncSession, stat
         cur = int(lot.start_price)
         text = (
             f"{preview}\n\n"
-            f"<b>Лот #{lid}</b> · текущий старт: <b>{format_number(cur)}</b> зол.\n"
-            f"Напиши в чат <b>одним числом</b> новую стартовую цену (≥ 1)."
+            f"<b>Лот #{lid}</b> · текущая цена: <b>{format_number(cur)}</b> зол.\n"
+            f"Напиши в чат <b>одним числом</b> новую цену (≥ 1)."
         )
         await callback.message.edit_text(
             text,
@@ -558,70 +583,46 @@ async def auc_reprice_start(callback: CallbackQuery, session: AsyncSession, stat
         await callback.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("auc:bid:"))
-async def auc_bid(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+@router.callback_query(F.data.startswith("auc:buy:"))
+async def auc_buy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         await _clear_auction_fsm_only(state)
         if callback.from_user is None:
             await callback.answer()
             return
+        if callback.message is None:
+            await callback.answer()
+            return
         if await state.get_state() == CombatStates.in_battle.state:
             await callback.answer("Сначала заверши бой.", show_alert=True)
             return
-        parts = (callback.data or "").split(":")
-        if len(parts) < 4 or parts[1] != "bid":
-            await callback.answer()
-            return
-        lot_id_s, amt_s = parts[2], parts[3]
-        if len(parts) >= 6 and parts[4].isdigit() and parts[5] in (
-            item_categories.BAG_CAT_ALL,
-            item_categories.BAG_CAT_EQUIP,
-            item_categories.BAG_CAT_USE,
-            item_categories.BAG_CAT_OTHER,
-        ):
-            browse_page = int(parts[4])
-            browse_cat = parts[5]
-        else:
-            browse_page, browse_cat = 0, item_categories.BAG_CAT_ALL
-        if not lot_id_s.isdigit() or not amt_s.isdigit():
+        lid, _browse_page, _browse_cat = _parse_buy_cd(callback.data)
+        if lid <= 0:
             await callback.answer()
             return
         _, char = await _load_char(session, callback.from_user.id)
         if char is None:
             await callback.answer("Нет доступа.", show_alert=True)
             return
-        ok, msg = await economy_service.auction_place_bid(session, char, int(lot_id_s), int(amt_s))
+        ok, msg = await economy_service.auction_buy_lot_now(session, char, lid)
+        if ok:
+            await session.commit()
         await session.refresh(char)
         await callback.answer(msg[:200], show_alert=not ok)
-        if callback.message is not None and ok:
-            lot = await auction_repo.get_by_id(session, int(lot_id_s))
-            exp = lot.expires_at if lot else None
-            if exp is not None and exp.tzinfo is None:
-                exp = exp.replace(tzinfo=UTC)
-            if (
-                lot
-                and lot.status == "active"
-                and exp is not None
-                and datetime.now(UTC) < exp
-            ):
-                seller = await character_repo.get_by_id(session, int(lot.seller_char_id))
-                seller_name = seller.display_name if seller else "???"
-                kb = viewer_lot_keyboard(
-                    lot,
-                    int(char.id),
-                    browse_page=browse_page,
-                    browse_cat=browse_cat,
+        if ok:
+            try:
+                await callback.message.edit_text(
+                    _shop_intro_html() + f"\n\n✅ {html.escape(msg)}",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=auction_hub_keyboard(),
                 )
-                try:
-                    await callback.message.edit_text(
-                        _lot_detail_html(lot, seller_name),
-                        parse_mode=ParseMode.HTML,
-                        reply_markup=kb,
-                    )
-                except TelegramBadRequest:
-                    pass
+            except TelegramBadRequest:
+                await callback.message.answer(
+                    f"✅ {msg}",
+                    reply_markup=auction_hub_keyboard(),
+                )
     except Exception:
-        logger.exception("auc:bid")
+        logger.exception("auc:buy")
         await callback.answer("Ошибка.", show_alert=True)
 
 
@@ -643,11 +644,11 @@ async def auc_my(callback: CallbackQuery, session: AsyncSession, state: FSMConte
                 tc = await character_repo.get_by_id(session, int(lot.target_char_id))
                 tmap[int(lot.id)] = int(tc.game_id) if tc and tc.game_id is not None else None
         text = _my_lots_html(lots, target_game_by_lot_id=tmap)
-        active_ids = [int(l.id) for l in lots if l.status == "active"]
+        active_lots = [(int(l.id), int(l.start_price)) for l in lots if l.status == "active"]
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=auction_my_lots_keyboard(active_ids),
+            reply_markup=auction_my_lots_keyboard(active_lots),
         )
         await callback.answer()
     except Exception:
@@ -671,7 +672,7 @@ async def auc_direct_start(callback: CallbackQuery, session: AsyncSession, state
         await state.set_state(AuctionCreateStates.waiting_direct_game_id)
         await state.update_data(auc_direct_flow=1)
         text = (
-            _auction_intro_html()
+            _shop_intro_html()
             + "\n\n🎯 <b>Личное предложение</b>\n"
             "Напиши в чат <b>одним числом</b> <b>игровой ID</b> получателя "
             "(его можно посмотреть в профиле / статусе героя — публичный номер игрока)."
@@ -726,7 +727,7 @@ async def auc_direct_bag(callback: CallbackQuery, session: AsyncSession, state: 
         for it in sorted(filtered, key=lambda x: (x.bag_slot or 0)):
             slot = int(it.bag_slot or 0)
             pairs.append((slot, item_bag_button_label(it.item_data, slot)))
-        text = _auction_intro_html() + "\n\n<b>Ячейка сумки</b> для личного предложения:"
+        text = _shop_intro_html() + "\n\n<b>Ячейка сумки</b> для личного предложения:"
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
@@ -814,7 +815,7 @@ async def auc_direct_game_id_input(message: Message, session: AsyncSession, stat
             slot = int(it.bag_slot or 0)
             pairs.append((slot, item_bag_button_label(it.item_data, slot)))
         text = (
-            _auction_intro_html()
+            _shop_intro_html()
             + f"\n\nАдресат: игровой ID <b>{gid}</b> · {html.escape(target.display_name)}\n"
             "<b>Ячейка сумки</b> (предмет уйдёт в предложение):"
         )
@@ -853,7 +854,7 @@ async def auc_direct_price_input(message: Message, session: AsyncSession, state:
         tid = int(data.get("auc_direct_target_char_id", 0))
         await state.clear()
         if slot < 0 or tid <= 0:
-            await message.answer("Сессия устарела. Открой аукцион снова.")
+            await message.answer("Сессия устарела. Открой магазин снова.")
             return
         target = await character_repo.get_by_id(session, tid)
         if target is None:
@@ -892,6 +893,8 @@ async def auc_direct_accept(callback: CallbackQuery, session: AsyncSession, stat
             await callback.answer("Нет доступа.", show_alert=True)
             return
         ok, msg = await economy_service.auction_accept_direct_offer(session, char, lid)
+        if ok:
+            await session.commit()
         await callback.answer(msg[:200], show_alert=not ok)
         if ok and callback.bot is not None:
             lot = await auction_repo.get_by_id(session, lid)
@@ -906,7 +909,7 @@ async def auc_direct_accept(callback: CallbackQuery, session: AsyncSession, stat
         if ok:
             try:
                 await callback.message.edit_text(
-                    f"✅ {html.escape(msg)}\n\nОткрой 🏛️ Аукцион в меню при необходимости.",
+                    f"✅ {html.escape(msg)}\n\nОткрой 🛒 <b>Магазин</b> в меню при необходимости.",
                     parse_mode=ParseMode.HTML,
                     reply_markup=auction_hub_keyboard(),
                 )
@@ -937,6 +940,8 @@ async def auc_direct_decline(callback: CallbackQuery, session: AsyncSession, sta
             await callback.answer("Нет доступа.", show_alert=True)
             return
         ok, msg = await economy_service.auction_decline_direct_offer(session, char, lid)
+        if ok:
+            await session.commit()
         await callback.answer(msg[:200], show_alert=not ok)
         if ok and callback.bot is not None:
             lot = await auction_repo.get_by_id(session, lid)
