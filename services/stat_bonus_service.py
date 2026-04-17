@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
@@ -28,6 +30,24 @@ def _messenger_set_bonus_from_equipped(items: list[InventoryItem]) -> dict[str, 
         b["luck"] = 5
         return b
     return empty_stat_bonus_map()
+
+
+def armor_hp_bonus_from_item_data(data: dict[str, Any] | None) -> int:
+    """Плоский бонус к макс. HP только с нагрудника (kind == armor)."""
+    if not data:
+        return 0
+    if str(data.get("kind") or "").lower() != "armor":
+        return 0
+    return max(0, int(data.get("hp_bonus", 0) or 0))
+
+
+async def equipped_armor_hp_bonus_flat(session: AsyncSession, character_id: int) -> int:
+    """Сумма hp_bonus с надетых предметов kind=armor (слот нагрудника)."""
+    total = 0
+    items = await inventory_repo.list_equipped_items(session, character_id)
+    for it in items:
+        total += armor_hp_bonus_from_item_data(dict(it.item_data or {}))
+    return total
 
 
 async def equipped_gear_stat_bonuses(session: AsyncSession, character_id: int) -> dict[str, int]:

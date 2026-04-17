@@ -7,6 +7,7 @@ import random
 from typing import Any
 
 from game.floors.monsters import FloorMonsterSpawn
+from game.items import loot_scaling as ls
 from game.items.equipment.item_asset_paths import item_gear_png
 
 _WEAPON_TYPES = ("blade", "staff", "bow", "dagger", "axe", "polearm", "hammer")
@@ -73,18 +74,18 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "image_url": item_gear_png("loot_pct_hp"),
     }
     gloves = {
-        "name": f"Перчатки с этажа {fl}",
+        "name": f"Перчатки {fl}",
         "kind": "gloves",
         "rarity": "common",
-        "defense": max(1, 1 + fl // 15),
+        "defense": ls.normal_gloves_defense(fl),
         "summary": "Простая защита рук с тела поверженного.",
         "image_url": item_gear_png("loot_gloves"),
     }
     ring = {
-        "name": f"Кольцо-оберег ({fl})",
+        "name": f"Кольцо {fl}",
         "kind": "ring",
         "rarity": "uncommon",
-        "defense": max(1, 1 + fl // 20),
+        "defense": ls.normal_ring_defense(fl),
         "summary": "Слабая магическая аура.",
         "image_url": item_gear_png("loot_ring"),
     }
@@ -96,9 +97,9 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "image_url": item_gear_png("loot_trophy"),
     }
     wt = _rand_weapon_type()
-    atk_low = max(4, 4 + fl // 3 + (1 if wt in ("dagger", "bow") else 0))
+    atk_low = ls.normal_weapon_attack_low(fl, dagger_or_bow=(wt in ("dagger", "bow")))
     forest_blade = {
-        "name": f"Ржавый клинок леса ({fl})",
+        "name": f"Клинок {fl}",
         "kind": "weapon",
         "rarity": "common",
         "attack": atk_low,
@@ -108,7 +109,7 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "image_url": item_gear_png("loot_weapon_blade"),
     }
     forest_staff = {
-        "name": f"Сук ведьмы ({fl})",
+        "name": f"Сук {fl}",
         "kind": "weapon",
         "rarity": "common",
         "attack": max(3, atk_low - 1),
@@ -118,43 +119,52 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "image_url": item_gear_png("loot_weapon_staff"),
     }
     moss_armor = {
-        "name": f"Моховая накидка ({fl})",
+        "name": f"Мох. накидка {fl}",
         "kind": "armor",
         "rarity": "common",
-        "defense": max(2, 2 + fl // 8),
+        "defense": ls.moss_armor_defense(fl),
+        "hp_bonus": ls.moss_armor_hp_bonus(fl),
         "summary": "Пахнет лесом и чуть отталкивает когти.",
         "image_url": item_gear_png("loot_moss_armor"),
     }
     cap = {
-        "name": f"Капюшон тропы ({fl})",
+        "name": f"Капюшон {fl}",
         "kind": "helmet",
         "rarity": "uncommon",
-        "defense": max(1, 1 + fl // 10),
+        "defense": ls.cap_defense(fl),
         "summary": "Скрывает лицо от лишних глаз.",
         "image_url": item_gear_png("loot_cap"),
     }
     charm = {
-        "name": "Костяной оберег",
+        "name": "Оберег",
         "kind": "amulet",
         "rarity": "uncommon",
-        "defense": max(1, 1 + fl // 12),
+        "defense": ls.charm_defense(fl),
         "summary": "Слабый резонанс — чуть крепче дух.",
         "image_url": item_gear_png("loot_charm_amulet"),
     }
     boots_like = {
-        "name": f"Обмотки путника ({fl})",
-        "kind": "gloves",
+        "name": f"Сапоги {fl}",
+        "kind": "boots",
         "rarity": "common",
-        "defense": max(1, 1 + fl // 14),
+        "defense": ls.boots_defense(fl),
         "dex": 1,
-        "summary": "Не броня для ног — но ловкость в пути заметна.",
+        "summary": "Шаги по лестнице башни чуть увереннее.",
         "image_url": item_gear_png("loot_boots_wraps"),
     }
+    cloak_like = {
+        "name": f"Плащ тумана {fl}",
+        "kind": "cloak",
+        "rarity": "common",
+        "defense": ls.cloak_defense(fl),
+        "summary": "Скрывает силуэт в полумраке этажа.",
+        "image_url": item_gear_png("loot_cloak_mist"),
+    }
     rare_edge = {
-        "name": f"Клинок росы ({fl})",
+        "name": f"Роса {fl}",
         "kind": "weapon",
         "rarity": "uncommon",
-        "attack": max(7, 6 + fl // 2),
+        "attack": ls.rare_edge_attack(fl),
         "enchant": 0,
         "weapon_type": random.choice(("blade", "polearm")),
         "summary": "Редкая удача на ранних этажах.",
@@ -176,6 +186,7 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
             (0.22, cap),
             (0.2, charm),
             (0.28, boots_like),
+            (0.22, cloak_like),
             (0.06, rare_edge),
         )
     return _weighted_payload(options)
@@ -183,10 +194,10 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
 
 def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     wtype = _rand_weapon_type()
-    atk = max(6, 7 + fl // 2 + (3 if wtype in ("staff", "dagger") else 0))
-    defense = max(2, 3 + fl // 5)
+    atk = ls.elite_weapon_attack(fl, staff_or_dagger=(wtype in ("staff", "dagger")))
+    defense = ls.elite_armor_defense_base(fl)
     weapon = {
-        "name": f"Добыча элиты ({fl})",
+        "name": f"Элита {fl}",
         "kind": "weapon",
         "rarity": "uncommon",
         "attack": atk,
@@ -196,18 +207,19 @@ def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "image_url": item_gear_png("elite_weapon"),
     }
     armor = {
-        "name": f"Накидка охотника ({fl})",
+        "name": f"Накидка {fl}",
         "kind": "armor",
         "rarity": "uncommon",
         "defense": defense,
+        "hp_bonus": ls.elite_armor_hp_bonus(fl),
         "summary": "Крепче обычного лута.",
         "image_url": item_gear_png("elite_armor"),
     }
     helm = {
-        "name": f"Шлем из засады ({fl})",
+        "name": f"Шлем {fl}",
         "kind": "helmet",
         "rarity": "common",
-        "defense": max(1, defense // 2 + 1),
+        "defense": ls.elite_helm_defense(fl, defense),
         "summary": "Спас от удара элиты.",
         "image_url": item_gear_png("elite_helm"),
     }
@@ -242,23 +254,24 @@ def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
 
 def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     wtype = _rand_weapon_type()
-    atk = max(8, 10 + fl // 2)
-    defense = max(4, 4 + fl // 4)
+    atk = ls.mini_weapon_attack(fl)
+    defense = ls.mini_armor_defense(fl)
     weapon = {
-        "name": f"Клык претендента ({fl})",
+        "name": f"Клык {fl}",
         "kind": "weapon",
         "rarity": "rare",
         "attack": atk,
-        "enchant": max(1, fl // 40),
+        "enchant": ls.mini_weapon_enchant(fl),
         "weapon_type": wtype,
         "summary": "Трофей мини-босса.",
         "image_url": item_gear_png("mini_weapon"),
     }
     armor = {
-        "name": f"Латы претендента ({fl})",
+        "name": f"Латы {fl}",
         "kind": "armor",
         "rarity": "rare",
         "defense": defense,
+        "hp_bonus": ls.mini_armor_hp_bonus(fl),
         "summary": "Выдержали удар сильного врага.",
         "image_url": item_gear_png("mini_armor"),
     }
@@ -266,7 +279,7 @@ def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "name": "Шлем претендента",
         "kind": "helmet",
         "rarity": "uncommon",
-        "defense": max(2, defense // 2),
+        "defense": ls.mini_helm_defense(fl, defense),
         "summary": "Снят с поверженного стража этажа.",
         "image_url": item_gear_png("mini_helm"),
     }
@@ -274,7 +287,7 @@ def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "name": "Рукавицы претендента",
         "kind": "gloves",
         "rarity": "uncommon",
-        "defense": max(1, defense // 3),
+        "defense": ls.mini_gloves_defense(fl, defense),
         "summary": "Удобны в бою.",
         "image_url": item_gear_png("mini_gloves"),
     }
@@ -300,11 +313,11 @@ def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
 
 def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     wtype = _rand_weapon_type()
-    atk = max(12, 12 + (fl * 3) // 4)
-    defense = max(5, 5 + fl // 3)
-    ench = max(1, fl // 22)
+    atk = ls.major_weapon_attack(fl)
+    defense = ls.major_armor_defense(fl)
+    ench = ls.major_weapon_enchant(fl)
     weapon = {
-        "name": f"Коронный клинок ({fl})",
+        "name": f"Корона {fl}",
         "kind": "weapon",
         "rarity": "rare",
         "attack": atk,
@@ -314,10 +327,11 @@ def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "image_url": item_gear_png("major_weapon"),
     }
     armor = {
-        "name": f"Броня стража этажа ({fl})",
+        "name": f"Страж {fl}",
         "kind": "armor",
         "rarity": "rare",
         "defense": defense + 2,
+        "hp_bonus": ls.major_armor_hp_bonus(fl),
         "summary": "Тяжёлая, но надёжная.",
         "image_url": item_gear_png("major_armor"),
     }
@@ -325,15 +339,15 @@ def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "name": "Печать этажа",
         "kind": "amulet",
         "rarity": "uncommon",
-        "defense": max(2, defense // 3 + 1),
+        "defense": ls.major_amulet_defense(fl, defense),
         "summary": "Символ победы над боссом.",
         "image_url": item_gear_png("major_amulet"),
     }
     ring = {
-        "name": f"Кольцо победителя ({fl})",
+        "name": f"Победа {fl}",
         "kind": "ring",
         "rarity": "rare",
-        "defense": max(2, defense // 4 + 2),
+        "defense": ls.major_ring_defense(fl, defense),
         "summary": "Пульсирует остаточной силой босса.",
         "image_url": item_gear_png("major_ring"),
     }

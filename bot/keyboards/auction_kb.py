@@ -7,7 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.auction_lot import AuctionLot
 from game.items import item_categories
-from game.items.equipment import RARITY_EMOJI
+from game.items.equipment import RARITY_EMOJI, gear_icon_for_item_data
 from utils.ui import format_number
 
 
@@ -170,10 +170,12 @@ def auction_lots_page_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     rows.append(auction_browse_category_keyboard(page=page, selected=category))
     for lot in lots:
-        em = _rarity_emoji_from_item_data(lot.item_data if isinstance(lot.item_data, dict) else None)
-        name = str((lot.item_data or {}).get("name", f"Лот #{lot.id}"))[:11]
+        idata = lot.item_data if isinstance(lot.item_data, dict) else None
+        gi = gear_icon_for_item_data(idata)
+        em = _rarity_emoji_from_item_data(idata)
+        name = str((idata or {}).get("name", f"Лот #{lot.id}"))[:9]
         p = format_number(int(lot.start_price))
-        btn = f"#{lot.id} {em} {name} · {p}💰"
+        btn = f"#{lot.id} {gi}{em} {name} · {p}💰"
         rows.append(
             [
                 InlineKeyboardButton(

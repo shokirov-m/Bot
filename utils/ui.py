@@ -12,6 +12,7 @@ from game.items.equipment import (
     RARITY_EMOJI,
     RARITY_NAME_RU,
     SLOT_LABEL_RU,
+    gear_icon_for_item_data,
     item_is_two_handed,
     resolve_equip_slot_for_item_data,
     ring_slot_is_explicit,
@@ -144,7 +145,8 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     r = str(data.get("rarity") or "common").lower()
     em = RARITY_EMOJI.get(r, "⚪")
     ru = RARITY_NAME_RU.get(r, html.escape(r))
-    lines.append(f"{em} 📦 <b>{name}</b> · <i>{html.escape(ru)}</i>")
+    gi = gear_icon_for_item_data(data)
+    lines.append(f"{em} {gi} <b>{name}</b> · <i>{html.escape(ru)}</i>")
     kind = data.get("kind")
     if str(kind).lower() == "weapon":
         if item_is_two_handed(data):
@@ -168,6 +170,10 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
         bd = int(defense)
         eff_def = scaled_armor_defense_value(bd, data) + armor_enchant_defensive_bonus(ench, data)
         lines.append(f"🛡️ Защита: <b>{eff_def}</b>")
+    if str(kind).lower() == "armor":
+        hpb = max(0, int(data.get("hp_bonus", 0) or 0))
+        if hpb > 0:
+            lines.append(f"❤️ Макс. HP: <b>+{hpb}</b>")
     if ench > 0:
         lines.append(f"✨ Заточка: {html.escape(render_enchant_stars(ench))}")
     st_line = format_item_stat_bonus_line(data)
@@ -194,14 +200,15 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
 def item_bag_button_label(data: dict[str, Any] | None, _bag_slot: int | None = None) -> str:
     """Короткая подпись для inline-кнопки сумки/аукциона (лимит Telegram; без номера ячейки)."""
     data = data or {}
+    gi = gear_icon_for_item_data(data)
     r = str(data.get("rarity") or "common").lower()
     em = RARITY_EMOJI.get(r, "⚪")
-    name = str(data.get("name", "?"))[:16]
+    name = str(data.get("name", "?"))[:11]
     atk = data.get("attack", data.get("atk"))
     if atk is not None:
-        s = f"{em} {name} ({atk})"
+        s = f"{gi}{em} {name} {atk}"
     else:
-        s = f"{em} {name}"
+        s = f"{gi}{em} {name}"
     return s[:30]
 
 

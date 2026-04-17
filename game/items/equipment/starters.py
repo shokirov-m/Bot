@@ -24,7 +24,7 @@ def starter_bread_payload() -> dict[str, Any]:
 
 def starter_pants_payload() -> dict[str, Any]:
     d: dict[str, Any] = {
-        "name": "Простые поножи новобранца",
+        "name": "Поножи новичка",
         "kind": "pants",
         "rarity": "common",
         "defense": 1,
@@ -36,10 +36,37 @@ def starter_pants_payload() -> dict[str, Any]:
     return d
 
 
+def starter_boots_payload() -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "name": "Сапоги",
+        "kind": "boots",
+        "rarity": "common",
+        "defense": 1,
+        "dex": 1,
+        "summary": "Против скользких ступеней башни.",
+        "image_url": item_gear_png("starter_boots"),
+    }
+    apply_item_payload_defaults(d)
+    return d
+
+
+def starter_cloak_payload() -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "name": "Плащ",
+        "kind": "cloak",
+        "rarity": "common",
+        "defense": 1,
+        "summary": "Лёгкий слой от сквозняков на этаже.",
+        "image_url": item_gear_png("starter_cloak"),
+    }
+    apply_item_payload_defaults(d)
+    return d
+
+
 def starter_offhand_dagger_payload() -> dict[str, Any]:
     """Второй кинжал для левой руки (assassin и др.)."""
     d: dict[str, Any] = {
-        "name": "Левый кинжал пары",
+        "name": "Кинжал 2 руки",
         "kind": "weapon",
         "hand": "off",
         "rarity": "common",
@@ -110,18 +137,19 @@ def starter_weapon_payload(class_key: str) -> dict[str, Any]:
 def promo_starter_armor_amulet_payloads() -> tuple[dict[str, Any], dict[str, Any]]:
     a = copy.deepcopy(
         {
-            "name": "Кольчуга дарственника",
+            "name": "Кольчуга дарства",
             "kind": "armor",
             "rarity": "common",
             "defense": 2,
             "vit": 1,
+            "hp_bonus": 6,
             "summary": "Простая кольчуга из набора для нового восходителя — чуть крепче кожи.",
             "image_url": item_gear_png("promo_armor_gift"),
         },
     )
     b = copy.deepcopy(
         {
-            "name": "Медальон первого яруса",
+            "name": "Медальон яруса",
             "kind": "amulet",
             "rarity": "common",
             "defense": 1,
@@ -138,7 +166,7 @@ def promo_starter_armor_amulet_payloads() -> tuple[dict[str, Any], dict[str, Any
 def referral_inviter_gear_payloads() -> tuple[dict[str, Any], dict[str, Any]]:
     a = copy.deepcopy(
         {
-            "name": "Перчатки благодарности башни",
+            "name": "Перчатки друга",
             "kind": "gloves",
             "rarity": "rare",
             "defense": 2,

@@ -178,7 +178,11 @@ async def record_floor_change(
     if not settings.ANTICHEAT_ENABLED:
         return
     now = time.monotonic()
-    if new_floor > old_floor:
+    # Подъём только в рамках уже открытых этажей (напр. 20 → 5 → 6) давал ложные ALERT:
+    # dt между переходами маленький, а «скорость этажей/мин» — большая. Проверяем только
+    # движение вверх в этаж, который ещё не был отмечен как highest_floor_reached.
+    hi = int(character.highest_floor_reached)
+    if new_floor > old_floor and int(new_floor) > hi:
         rec = _floor_residence.get(telegram_id)
         if rec is not None:
             cur_f, t0 = rec

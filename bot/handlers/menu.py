@@ -33,6 +33,7 @@ from services.daily_screen_service import build_daily_body_html
 from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui
 from services.menu_hub_service import format_menu_hub_html
 from services.rest_service import apply_completed_rest_if_needed
+from game.items.equipment.item_asset_paths import tower_bot_root
 from utils.game_images_prefs import game_images_enabled
 from utils.profile_portraits import portrait_path_for_character
 
@@ -99,7 +100,17 @@ async def menu_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
         refresh_global_passives(char)
         await session.flush()
         hub_text = format_menu_hub_html(char, locale=loc)
-        await _edit_same_message(callback, state, hub_text, main_menu_keyboard(locale=loc))
+        menu_img = tower_bot_root() / "assets" / "images" / "menu_hub.png"
+        photo_p = str(menu_img) if game_images_enabled(char) and menu_img.is_file() else None
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=hub_text,
+            reply_markup=main_menu_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=photo_p,
+        )
         await callback.answer()
     except Exception:
         logger.exception("mnu:hub")
@@ -231,7 +242,7 @@ async def menu_inventory(callback: CallbackQuery, session: AsyncSession, state: 
         if char is None:
             return
         bag = await inventory_repo.list_bag_items(session, char.id)
-        text = _bag_intro(len(bag))
+        text = _bag_intro(len(bag), floor_number=int(char.floor_number))
         await push_game_ui(
             state,
             callback.bot,

@@ -21,9 +21,11 @@ from bot.keyboards.inventory_kb import (
 )
 from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import push_game_ui
+from bot.utils.safe_media import normalize_photo_media
 from db.repository import character_repo, inventory_repo, user_repo
 from game.items import equipment as equip_meta
 from game.items import item_categories
+from game.items.equipment.defaults import apply_item_payload_defaults
 from services import character_service, shop_service, stat_bonus_service
 from utils.ui import format_inventory_item_html
 
@@ -32,12 +34,79 @@ router = Router(name="inventory")
 INV_HEADER = "🧰 <b>Инвентарь</b>\n"
 
 
-def _bag_intro(count: int) -> str:
-    return (
-        f"{INV_HEADER}🎒 <b>Сумка</b> — <b>{count}</b> предметов.\n"
+def _bag_filter_empty_hint(
+    total: int,
+    *,
+    bag_cat: str,
+    slot_filter: str | None,
+    matched: int | None,
+    n_in_category: int | None,
+) -> str:
+    if total <= 0:
+        return ""
+    if slot_filter:
+        if int(matched or 0) <= 0:
+            return (
+                "\n\n⚠️ <i>Нет вещей для этого слота — смени категорию фильтра или вкладку "
+                "<b>Все</b>.</i>"
+            )
+        return ""
+    if bag_cat != item_categories.BAG_CAT_ALL:
+        if int(n_in_category or 0) <= 0:
+            return "\n\n⚠️ <i>В этой категории пусто — выбери <b>Все</b> или другой фильтр.</i>"
+        return ""
+    return ""
+
+
+def _bag_summary_line(
+    count: int,
+    *,
+    bag_cat: str,
+    floor_number: int | None,
+) -> str:
+    cat_label = item_categories.bag_category_label_ru(bag_cat)
+    parts: list[str] = [f"📊 В сумке: <b>{count}</b> предм.", f"фильтр: <b>{html.escape(cat_label)}</b>"]
+    if floor_number is not None:
+        parts.insert(1, f"этаж героя: <b>{int(floor_number)}</b>")
+    return " · ".join(parts)
+
+
+def _bag_intro(
+    count: int,
+    *,
+    bag_cat: str = item_categories.BAG_CAT_ALL,
+    n_in_category: int | None = None,
+    slot_filter: str | None = None,
+    matched: int | None = None,
+    floor_number: int | None = None,
+) -> str:
+    summary = _bag_summary_line(count, bag_cat=bag_cat, floor_number=floor_number)
+    empty_hint = _bag_filter_empty_hint(
+        count,
+        bag_cat=bag_cat,
+        slot_filter=slot_filter,
+        matched=matched,
+        n_in_category=n_in_category,
+    )
+    hint = (
         "<i>Сначала редкие; по две кнопки в ряд — открой карточку. Номера ячеек не показываем.</i>\n"
         "Выбери предмет:"
     )
+    if count <= 0:
+        return (
+            f"{INV_HEADER}🎒 <b>Сумка</b> пуста.\n{summary}\n\n"
+            "<i>Побеждай врагов и открывай лавки — добыча попадёт сюда.</i>"
+        )
+    if slot_filter and slot_filter in equip_meta.EQUIP_ORDER:
+        lab = equip_meta.slot_label_ru(slot_filter)
+        m = int(matched) if matched is not None else 0
+        return (
+            f"{INV_HEADER}🎒 <b>Сумка</b> — слот <b>{html.escape(lab)}</b>: "
+            f"подходит <b>{m}</b> из <b>{count}</b>.\n"
+            f"{summary}\n{hint}"
+            f"{empty_hint}"
+        )
+    return f"{INV_HEADER}🎒 <b>Сумка</b>\n{summary}\n\n{hint}{empty_hint}"
 
 
 def _eq_intro() -> str:
@@ -66,7 +135,7 @@ async def cmd_inventory(message: Message, session: AsyncSession, state: FSMConte
             await message.answer("Сначала создай героя через /start.")
             return
         bag = await inventory_repo.list_bag_items(session, char.id)
-        text = _bag_intro(len(bag))
+        text = _bag_intro(len(bag), floor_number=int(char.floor_number))
         await push_game_ui(
             state,
             message.bot,
@@ -96,6 +165,90 @@ async def inv_close(callback: CallbackQuery, state: FSMContext) -> None:
             target_message=callback.message,
         )
     await callback.answer()
+
+
+def _slot_from_inv_item_parts(parts: list[str]) -> str | None:
+    if len(parts) < 7:
+        return None
+    raw = str(parts[6]).strip()
+    return raw if raw in equip_meta.EQUIP_ORDER else None
+
+
+@router.callback_query(F.data.startswith("inv:sb:"))
+async def inv_slotbag(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Сумка, отфильтрованная по слоту экипировки (кнопка пустого слота)."""
+    try:
+        if callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+        parts = (callback.data or "").split(":")
+        if len(parts) < 5:
+            await callback.answer()
+            return
+        slot = parts[2]
+        if slot not in equip_meta.EQUIP_ORDER:
+            await callback.answer("Неизвестный слот.", show_alert=True)
+            return
+        page = int(parts[3])
+        bag_cat = (
+            parts[4]
+            if parts[4]
+            in (
+                item_categories.BAG_CAT_ALL,
+                item_categories.BAG_CAT_EQUIP,
+                item_categories.BAG_CAT_USE,
+                item_categories.BAG_CAT_OTHER,
+            )
+            else item_categories.BAG_CAT_EQUIP
+        )
+        _, char = await _load_character(session, callback.from_user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        bag = await inventory_repo.list_bag_items(session, char.id)
+        matched = len(
+            [
+                it
+                for it in bag
+                if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)
+                and item_categories.item_data_matches_equip_slot(it.item_data, slot)
+            ],
+        )
+        max_page = max(
+            0,
+            (
+                len(
+                    [
+                        it
+                        for it in bag
+                        if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)
+                        and item_categories.item_data_matches_equip_slot(it.item_data, slot)
+                    ],
+                )
+                - 1
+            )
+            // BAG_PAGE_SIZE,
+        )
+        page = max(0, min(page, max_page))
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_bag_intro(
+                len(bag),
+                bag_cat=bag_cat,
+                n_in_category=matched,
+                slot_filter=slot,
+                matched=matched,
+                floor_number=int(char.floor_number),
+            ),
+            reply_markup=bag_tab_keyboard(bag, page, bag_cat=bag_cat, slot_target=slot),
+            target_message=callback.message,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("inv:sb")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("inv:tab:"))
@@ -132,7 +285,12 @@ async def inv_tab(callback: CallbackQuery, session: AsyncSession, state: FSMCont
                 state,
                 callback.bot,
                 chat_id=callback.message.chat.id,
-                text=_bag_intro(len(bag)),
+                text=_bag_intro(
+                    len(bag),
+                    bag_cat=bag_cat,
+                    n_in_category=len(filtered),
+                    floor_number=int(char.floor_number),
+                ),
                 reply_markup=bag_tab_keyboard(bag, page, bag_cat=bag_cat),
                 target_message=callback.message,
             )
@@ -180,6 +338,7 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             )
         ):
             bag_cat = parts[5]
+        slot_target = _slot_from_inv_item_parts(parts)
 
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
@@ -191,7 +350,9 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             await callback.answer("Предмет не найден.", show_alert=True)
             return
 
-        data = item.item_data or {}
+        data = dict(item.item_data or {})
+        apply_item_payload_defaults(data)
+        item.item_data = data
         can_equip = equip_meta.resolve_equip_slot_for_item_data(data) is not None
         utag = data.get("use_tag")
         show_ration = (
@@ -222,7 +383,10 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             bag_cat=bag_cat if from_bag else item_categories.BAG_CAT_ALL,
             show_ration_eat=show_ration,
             show_bread_eat=show_bread,
+            slot_target=slot_target,
         )
+        raw_img = str(data.get("image_url") or "").strip()
+        photo_arg = normalize_photo_media(raw_img) if raw_img else None
         await push_game_ui(
             state,
             callback.bot,
@@ -230,6 +394,7 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             text=text,
             reply_markup=kb,
             target_message=callback.message,
+            photo_path=photo_arg,
         )
         await callback.answer()
     except Exception:
@@ -275,7 +440,7 @@ async def inv_eat_ration(callback: CallbackQuery, session: AsyncSession, state: 
         filtered = [it for it in bag if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)]
         max_page = max(0, (len(filtered) - 1) // BAG_PAGE_SIZE)
         safe_page = min(bag_page, max_page)
-        text = f"{_bag_intro(len(bag))}\n\n{msg}"
+        text = f"{_bag_intro(len(bag), bag_cat=bag_cat, n_in_category=len(filtered), floor_number=int(char.floor_number))}\n\n{msg}"
         await push_game_ui(
             state,
             callback.bot,
@@ -328,7 +493,7 @@ async def inv_eat_bread(callback: CallbackQuery, session: AsyncSession, state: F
         filtered = [it for it in bag if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)]
         max_page = max(0, (len(filtered) - 1) // BAG_PAGE_SIZE)
         safe_page = min(bag_page, max_page)
-        text = f"{_bag_intro(len(bag))}\n\n{msg}"
+        text = f"{_bag_intro(len(bag), bag_cat=bag_cat, n_in_category=len(filtered), floor_number=int(char.floor_number))}\n\n{msg}"
         await push_game_ui(
             state,
             callback.bot,
@@ -359,11 +524,17 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             await callback.answer("Предмет не найден.", show_alert=True)
             return
         prior_eff = await stat_bonus_service.effective_primary_stats(session, char)
+        prior_armor_hp = await stat_bonus_service.equipped_armor_hp_bonus_flat(session, int(char.id))
         err = await inventory_repo.equip_item_from_bag(session, item)
         if err:
             await callback.answer(err, show_alert=True)
             return
-        await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
+        await character_service.refresh_hp_mp_from_effective(
+            session,
+            char,
+            prior_effective_stats=prior_eff,
+            prior_armor_hp_bonus_flat=prior_armor_hp,
+        )
         data = item.item_data or {}
         can_equip = equip_meta.resolve_equip_slot_for_item_data(data) is not None
         text = (
@@ -411,11 +582,17 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
             await callback.answer("Предмет не найден.", show_alert=True)
             return
         prior_eff = await stat_bonus_service.effective_primary_stats(session, char)
+        prior_armor_hp = await stat_bonus_service.equipped_armor_hp_bonus_flat(session, int(char.id))
         err = await inventory_repo.unequip_item(session, item)
         if err:
             await callback.answer(err, show_alert=True)
             return
-        await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
+        await character_service.refresh_hp_mp_from_effective(
+            session,
+            char,
+            prior_effective_stats=prior_eff,
+            prior_armor_hp_bonus_flat=prior_armor_hp,
+        )
         data = item.item_data or {}
         can_equip = equip_meta.resolve_equip_slot_for_item_data(data) is not None
         utag = (item.item_data or {}).get("use_tag")

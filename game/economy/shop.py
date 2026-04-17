@@ -93,12 +93,12 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
 SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
     ShopGood(
         key="f3_ring_str",
-        name="Кольцо первого кольца",
+        name="Кольцо яруса",
         emoji="💍",
         price=55,
         blurb="⚪ Обычное · +1 удача, +1 защита.",
         item_data={
-            "name": "Кольцо первого кольца",
+            "name": "Кольцо кольца",
             "kind": "ring",
             "rarity": "common",
             "defense": 1,
@@ -109,12 +109,12 @@ SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
     ),
     ShopGood(
         key="f3_gloves_dex",
-        name="Перчатки каната",
+        name="Перчатки",
         emoji="🧤",
         price=48,
         blurb="⚪ Обычное · +1 ловкость.",
         item_data={
-            "name": "Перчатки каната",
+            "name": "Перчатки",
             "kind": "gloves",
             "rarity": "common",
             "defense": 1,
@@ -125,12 +125,12 @@ SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
     ),
     ShopGood(
         key="f3_amulet_vit",
-        name="Обсидиановый жетон",
+        name="Жетон",
         emoji="📿",
         price=62,
         blurb="⚪ Обычное · +1 выносливость.",
         item_data={
-            "name": "Обсидиановый жетон",
+            "name": "Жетон",
             "kind": "amulet",
             "rarity": "common",
             "defense": 1,

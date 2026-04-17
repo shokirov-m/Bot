@@ -15,7 +15,7 @@ from game.characters.class_arcs import (
     offered_base_class_keys,
     subclass_keys_for_character,
 )
-from services import class_arc_service
+from services import character_service, class_arc_service
 from services.floor_service import floor_keyboard_for_character, format_floor_message
 
 router = Router(name="class_arc")
@@ -50,6 +50,7 @@ async def on_pick_base_class(query: CallbackQuery, session: AsyncSession) -> Non
             await query.answer("Ошибка класса.", show_alert=True)
             return
         await session.flush()
+        await character_service.refresh_hp_mp_from_effective(session, char)
         await query.message.edit_text(
             format_floor_message(char),
             reply_markup=await floor_keyboard_for_character(session, char),
@@ -82,6 +83,7 @@ async def on_pick_subclass(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Не удалось применить подкласс.", show_alert=True)
             return
         await session.flush()
+        await character_service.refresh_hp_mp_from_effective(session, char)
         await query.message.edit_text(
             format_floor_message(char),
             reply_markup=await floor_keyboard_for_character(session, char),

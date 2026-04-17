@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from db.models.inventory import InventoryItem
 from game.characters.skills import skills_for_class
+from game.items.equipment import gear_icon_for_item_data
 
 
 def combat_main_keyboard(class_key: str) -> InlineKeyboardMarkup:
@@ -36,9 +37,10 @@ def combat_item_picker_keyboard(bag_items: list[InventoryItem]) -> InlineKeyboar
     rows: list[list[InlineKeyboardButton]] = []
     for it in bag_items[:20]:
         data = it.item_data or {}
-        name = str(data.get("name", "?"))[:22]
+        gi = gear_icon_for_item_data(data)
+        name = str(data.get("name", "?"))[:16]
         rows.append(
-            [InlineKeyboardButton(text=f"🧪 {name}", callback_data=f"cb:itm:{it.id}")],
+            [InlineKeyboardButton(text=f"{gi} {name}"[:64], callback_data=f"cb:itm:{it.id}")],
         )
     rows.append(
         [InlineKeyboardButton(text="⬅ В бой", callback_data="cb:ret")],

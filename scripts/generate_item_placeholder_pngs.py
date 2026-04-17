@@ -57,6 +57,10 @@ def all_stems() -> list[str]:
         s.extend(f"{prefix}_{i:02d}" for i in range(1, 9))
     s.extend(
         [
+            "placeholder_item",
+            "starter_boots",
+            "starter_cloak",
+            "loot_cloak_mist",
             "loot_elixir_flat",
             "loot_mp_flat",
             "loot_pct_hp",
@@ -142,6 +146,11 @@ def main() -> None:
         p = out_dir / f"{stem}.png"
         write_placeholder(p, stem)
         print(p.name)
+    img_dir = root / "assets" / "images"
+    img_dir.mkdir(parents=True, exist_ok=True)
+    menu_p = img_dir / "menu_hub.png"
+    write_placeholder(menu_p, "menu_hub")
+    print(menu_p.name)
 
 
 if __name__ == "__main__":

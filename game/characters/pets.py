@@ -278,7 +278,34 @@ def format_pet_passive_plain(passive: dict[str, float | int], *, locale: str) ->
     return sep.join(parts)
 
 
-def format_pet_profile_block_html(character: Character, *, locale: str) -> str:
+def format_pet_passive_status_compact(passive: dict[str, float | int], *, locale: str) -> str:
+    """Одна строка для статуса: «+4% крит, +2 защита»."""
+    if not passive:
+        return ""
+    loc = "en" if str(locale).lower().startswith("en") else "ru"
+    parts: list[str] = []
+    if "crit_bonus" in passive:
+        p = round(float(passive["crit_bonus"]) * 100.0, 1)
+        ps = str(int(p)) if abs(p - int(p)) < 1e-9 else str(p)
+        parts.append(f"+{ps}% crit" if loc == "en" else f"+{ps}% крит")
+    if "dodge_bonus" in passive:
+        p = round(float(passive["dodge_bonus"]) * 100.0, 1)
+        ps = str(int(p)) if abs(p - int(p)) < 1e-9 else str(p)
+        parts.append(f"+{ps}% dodge" if loc == "en" else f"+{ps}% уклон")
+    if "def_bonus" in passive:
+        v = float(passive["def_bonus"])
+        vs = str(int(v)) if v == int(v) else str(v)
+        parts.append(f"+{vs} defense" if loc == "en" else f"+{vs} защита")
+    if "mp_regen_turn" in passive:
+        v = int(passive["mp_regen_turn"])
+        parts.append(f"+{v} MP/turn" if loc == "en" else f"+{v} MP/ход")
+    if "mag_bonus_percent" in passive:
+        v = int(passive["mag_bonus_percent"])
+        parts.append(f"+{v}% magic" if loc == "en" else f"+{v}% маг.")
+    return ", ".join(parts)
+
+
+def format_pet_profile_block_html(character: Character, *, locale: str, compact_status_line: bool = False) -> str:
     """
     Блок для статуса / полных характеристик: что дают питомцы и как выбрать активного.
     """
@@ -297,6 +324,13 @@ def format_pet_profile_block_html(character: Character, *, locale: str) -> str:
             "Выбрать его — кнопка <b>«Питомец»</b> в статусе или этажи <b>8 и 48</b> (когда открыты).</i>"
         )
     disp = active_pet_display(character) or "—"
+    if compact_status_line:
+        label = "Pet" if loc == "en" else "Питомец"
+        extras = format_pet_passive_status_compact(pet_passive_delta(character), locale=locale)
+        esc_d = html.escape(disp)
+        if extras:
+            return f"🐾 {label}: {esc_d} {html.escape(extras)}."
+        return f"🐾 {label}: {esc_d}."
     key = active_pet_key(character)
     d = _all_defs().get(key) if key else None
     blur = html.escape(d.blurb) if d else ""

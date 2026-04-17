@@ -19,11 +19,12 @@ SECRET_GEAR_ITEMS: tuple[tuple[float, dict[str, Any]], ...] = (
     (
         1.0,
         {
-            "name": "Потёртая кольчуга",
+            "name": "Кольчуга",
             "kind": "armor",
             "rarity": "common",
             "defense": 2,
             "vit": 1,
+            "hp_bonus": 5,
             "summary": "Кольца железа на коже — немного тяжелее шага, зато меньше синяков.",
             "image_url": item_gear_png("secret_armor_chain"),
         },

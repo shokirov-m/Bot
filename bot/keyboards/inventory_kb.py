@@ -7,7 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.inventory import InventoryItem
 from game.items import equipment as equip_meta
-from game.items.equipment import RARITY_EMOJI
+from game.items.equipment import RARITY_EMOJI, gear_icon_for_item_data
 from game.items import item_categories
 from utils.ui import item_bag_button_label
 
@@ -30,23 +30,30 @@ def _bag_sort_key(it: InventoryItem) -> tuple[int, int]:
 
 def _equip_button_label(it: InventoryItem) -> str:
     data = it.item_data or {}
+    gi = gear_icon_for_item_data(data)
     r = str(data.get("rarity") or "common").lower()
     em = RARITY_EMOJI.get(r, "⚪")
-    name = str(data.get("name", "?"))[:14]
-    return f"{em} {name}"[:30]
+    name = str(data.get("name", "?"))[:10]
+    return f"{gi}{em} {name}"[:32]
 
 
-def bag_category_filter_row(page: int, selected: str) -> list[InlineKeyboardButton]:
+def bag_category_filter_row(
+    page: int,
+    selected: str,
+    *,
+    slot_target: str | None = None,
+) -> list[InlineKeyboardButton]:
     opts = [
         (item_categories.BAG_CAT_ALL, "Все"),
         (item_categories.BAG_CAT_EQUIP, "⚔️ Экип"),
         (item_categories.BAG_CAT_USE, "🧪 Расх."),
         (item_categories.BAG_CAT_OTHER, "📦 Прочее"),
     ]
+    prefix = f"inv:sb:{slot_target}" if slot_target else "inv:tab:bag"
     return [
         InlineKeyboardButton(
             text=(f"·{label}") if code == selected else label,
-            callback_data=f"inv:tab:bag:{page}:{code}",
+            callback_data=f"{prefix}:{page}:{code}",
         )
         for code, label in opts
     ]
@@ -57,35 +64,43 @@ def bag_tab_keyboard(
     page: int,
     *,
     bag_cat: str = item_categories.BAG_CAT_ALL,
+    slot_target: str | None = None,
 ) -> InlineKeyboardMarkup:
     sorted_items = sorted(
-        [it for it in items if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)],
+        [
+            it
+            for it in items
+            if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)
+            and item_categories.item_data_matches_equip_slot(it.item_data, slot_target)
+        ],
         key=_bag_sort_key,
     )
     start = page * BAG_PAGE_SIZE
     chunk = sorted_items[start : start + BAG_PAGE_SIZE]
     rows: list[list[InlineKeyboardButton]] = []
-    rows.append(bag_category_filter_row(page, bag_cat))
+    rows.append(bag_category_filter_row(page, bag_cat, slot_target=slot_target))
+    nav_prefix = f"inv:sb:{slot_target}" if slot_target else "inv:tab:bag"
+    it_suffix = f":{slot_target}" if slot_target else ""
     for i in range(0, len(chunk), 2):
         row: list[InlineKeyboardButton] = [
             InlineKeyboardButton(
                 text=item_bag_button_label(chunk[i].item_data),
-                callback_data=f"inv:it:{chunk[i].id}:b:{page}:{bag_cat}",
+                callback_data=f"inv:it:{chunk[i].id}:b:{page}:{bag_cat}{it_suffix}",
             ),
         ]
         if i + 1 < len(chunk):
             row.append(
                 InlineKeyboardButton(
                     text=item_bag_button_label(chunk[i + 1].item_data),
-                    callback_data=f"inv:it:{chunk[i + 1].id}:b:{page}:{bag_cat}",
+                    callback_data=f"inv:it:{chunk[i + 1].id}:b:{page}:{bag_cat}{it_suffix}",
                 ),
             )
         rows.append(row)
     nav: list[InlineKeyboardButton] = []
     if start > 0:
-        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"inv:tab:bag:{page - 1}:{bag_cat}"))
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"{nav_prefix}:{page - 1}:{bag_cat}"))
     if start + BAG_PAGE_SIZE < len(sorted_items):
-        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"inv:tab:bag:{page + 1}:{bag_cat}"))
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"{nav_prefix}:{page + 1}:{bag_cat}"))
     if nav:
         rows.append(nav)
     rows.append([InlineKeyboardButton(text="⚔️ Экипировка", callback_data="inv:tab:eq")])
@@ -113,7 +128,7 @@ def equipment_tab_keyboard(equipped: list[InventoryItem]) -> InlineKeyboardMarku
                 [
                     InlineKeyboardButton(
                         text=f"{label_base}: —",
-                        callback_data="inv:noop",
+                        callback_data=f"inv:sb:{slot}:0:{item_categories.BAG_CAT_EQUIP}",
                     ),
                 ],
             )
@@ -135,10 +150,14 @@ def item_detail_keyboard(
     bag_cat: str = item_categories.BAG_CAT_ALL,
     show_ration_eat: bool = False,
     show_bread_eat: bool = False,
+    slot_target: str | None = None,
 ) -> InlineKeyboardMarkup:
-    back_cd = (
-        f"inv:tab:bag:{bag_page}:{bag_cat}" if from_bag else "inv:tab:eq"
-    )
+    if from_bag and slot_target:
+        back_cd = f"inv:sb:{slot_target}:{bag_page}:{bag_cat}"
+    elif from_bag:
+        back_cd = f"inv:tab:bag:{bag_page}:{bag_cat}"
+    else:
+        back_cd = "inv:tab:eq"
     rows: list[list[InlineKeyboardButton]] = []
     if is_equipped:
         rows.append([InlineKeyboardButton(text="✓ Снять в сумку", callback_data=f"inv:uneq:{item_id}")])

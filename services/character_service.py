@@ -22,7 +22,9 @@ from db.repository import character_repo, inventory_repo
 from game.characters.classes import ClassDefinition, get_class_or_none
 from game.characters.progression import experience_needed_for_next_level
 from game.items.equipment import (
+    starter_boots_payload,
     starter_bread_payload,
+    starter_cloak_payload,
     starter_offhand_dagger_payload,
     starter_pants_payload,
     starter_weapon_payload,
@@ -33,7 +35,8 @@ from utils.profile_portraits import META_PORTRAIT_KEY
 
 def _compute_hp_max(vitality: int, strength: int, cls: ClassDefinition) -> int:
     """Базовый расчёт HP с учётом ВЫН/СИЛ и пассива класса."""
-    base = 40 + vitality * 6 + strength * 4
+    # +1 СИЛ в распределении даёт больше макс. HP (раньше ×4 в базе формулы).
+    base = 40 + vitality * 6 + strength * 5
     # round: при множителе класса (напр. ×1.15) int() «съедал» доли HP за каждую единицу СИЛ/ВЫН
     return max(1, int(round(float(base) * float(cls.hp_multiplier))))
 
@@ -125,6 +128,18 @@ async def create_character_for_user(
             copy.deepcopy(starter_offhand_dagger_payload()),
             bag_slot=4,
         )
+    await inventory_repo.add_bag_item(
+        session,
+        char.id,
+        copy.deepcopy(starter_boots_payload()),
+        bag_slot=5,
+    )
+    await inventory_repo.add_bag_item(
+        session,
+        char.id,
+        copy.deepcopy(starter_cloak_payload()),
+        bag_slot=6,
+    )
     return char
 
 
@@ -251,17 +266,20 @@ def _apply_hp_mp_caps_from_totals(
     intl: int,
     ratio_hp_old_max: int | None = None,
     ratio_mp_old_max: int | None = None,
+    gear_hp_flat: int = 0,
 ) -> None:
     """Пересчитать максимумы HP/MP по заданным основным статам; текущие — пропорционально.
 
     ratio_hp_old_max / ratio_mp_old_max — знаменатель для доли текущих HP/MP до смены статов
     (например макс по эффективным статам *до* клика +1 СИЛ). Если None — берётся из полей
     персонажа; при устаревшем hp_max в БД иначе «залипал» прирост от +1 СИЛ/ВЫН.
+    gear_hp_flat — плоский бонус к макс. HP с надетой брони (kind=armor, поле hp_bonus).
     """
     cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
     if cls is None:
         return
-    new_hp = _compute_hp_max(int(vit), int(strn), cls)
+    gh = max(0, int(gear_hp_flat))
+    new_hp = max(1, int(_compute_hp_max(int(vit), int(strn), cls)) + gh)
     new_mp = _compute_mp_max(int(intl), cls)
     old_hm = max(1, int(ratio_hp_old_max)) if ratio_hp_old_max is not None else max(1, int(character.hp_max))
     old_mm = max(0, int(ratio_mp_old_max)) if ratio_mp_old_max is not None else max(0, int(character.mp_max))
@@ -291,15 +309,19 @@ async def refresh_hp_mp_from_effective(
     character: Character,
     *,
     prior_effective_stats: dict[str, int] | None = None,
+    prior_armor_hp_bonus_flat: int | None = None,
 ) -> None:
     """HP/MP максимумы по итоговым статам (база + экипировка + титулы), как в бою.
 
     prior_effective_stats — снимок effective_primary_stats *до* изменения базы/экипа;
     тогда доля текущего HP/MP считается от формульного макс. до изменения, а не от hp_max в БД.
+    prior_armor_hp_bonus_flat — сумма hp_bonus с брони *до* смены экипа; если None при
+    prior_effective_stats, берётся текущая сумма (статы менялись, броня та же).
     """
     from services import stat_bonus_service
 
     eff = await stat_bonus_service.effective_primary_stats(session, character)
+    gear_hp = await stat_bonus_service.equipped_armor_hp_bonus_flat(session, int(character.id))
     cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
     if cls is None:
         return
@@ -307,7 +329,12 @@ async def refresh_hp_mp_from_effective(
     ratio_mp: int | None = None
     if prior_effective_stats is not None:
         pe = prior_effective_stats
-        ratio_hp = max(1, _compute_hp_max(int(pe["vit"]), int(pe["str"]), cls))
+        old_gear_hp = (
+            max(0, int(prior_armor_hp_bonus_flat))
+            if prior_armor_hp_bonus_flat is not None
+            else gear_hp
+        )
+        ratio_hp = max(1, int(_compute_hp_max(int(pe["vit"]), int(pe["str"]), cls)) + old_gear_hp)
         ratio_mp = max(0, _compute_mp_max(int(pe["int"]), cls))
     _apply_hp_mp_caps_from_totals(
         character,
@@ -316,6 +343,7 @@ async def refresh_hp_mp_from_effective(
         intl=int(eff["int"]),
         ratio_hp_old_max=ratio_hp,
         ratio_mp_old_max=ratio_mp,
+        gear_hp_flat=gear_hp,
     )
 
 

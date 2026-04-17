@@ -354,7 +354,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         ranker_badge=rk_badge,
         ranker_effect=rk_eff,
     )
-    pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc)
+    pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=True)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"
 
 
@@ -384,7 +384,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         ranker_badge=rk_badge,
         ranker_effect=rk_eff,
     )
-    pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc)
+    pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=False)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"
 
 
