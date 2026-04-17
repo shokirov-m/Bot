@@ -8,7 +8,14 @@ import html
 from typing import Any
 
 from game.items import enchant as enchant_rules
-from game.items.equipment import RARITY_EMOJI, RARITY_NAME_RU, SLOT_LABEL_RU, equip_slot_for_kind
+from game.items.equipment import (
+    RARITY_EMOJI,
+    RARITY_NAME_RU,
+    SLOT_LABEL_RU,
+    item_is_two_handed,
+    resolve_equip_slot_for_item_data,
+    ring_slot_is_explicit,
+)
 from game.items.rarity_scaling import (
     armor_enchant_defensive_bonus,
     scaled_armor_defense_value,
@@ -41,22 +48,36 @@ def _mono_bar(current: int, maximum: int, length: int = _BAR_LEN) -> str:
     return "█" * filled + "░" * (length - filled)
 
 
-def render_hp_bar(current: int, max_hp: int, length: int = _BAR_LEN) -> str:
-    """HP: симметричная полоска + числа справа (моноширинный блок)."""
+def render_hp_bar(
+    current: int,
+    max_hp: int,
+    length: int = _BAR_LEN,
+    *,
+    wrap_bar_in_code: bool = True,
+) -> str:
+    """HP: полоска + числа справа; в бою bar в <code> для моноширины."""
     bar = _mono_bar(current, max_hp, length)
     pct = (current / max_hp) * 100 if max_hp > 0 else 0
     icon = "💔" if pct < 25 else "🧡" if pct < 55 else "❤️"
     n = f"{format_number(current)}/{format_number(max_hp)}"
-    return f"{icon} <code>{bar}</code>  {n}"
+    bar_s = f"<code>{bar}</code>" if wrap_bar_in_code else bar
+    return f"{icon} {bar_s}  {n}"
 
 
-def render_mp_bar(current: int, max_mp: int, length: int = _BAR_LEN) -> str:
+def render_mp_bar(
+    current: int,
+    max_mp: int,
+    length: int = _BAR_LEN,
+    *,
+    wrap_bar_in_code: bool = True,
+) -> str:
     """MP — тот же формат, что HP."""
     bar = _mono_bar(current, max_mp, length)
     pct = (current / max_mp) * 100 if max_mp > 0 else 0
     icon = "💧" if pct < 25 else "💠" if pct < 55 else "💙"
     n = f"{format_number(current)}/{format_number(max_mp)}"
-    return f"{icon} <code>{bar}</code>  {n}"
+    bar_s = f"<code>{bar}</code>" if wrap_bar_in_code else bar
+    return f"{icon} {bar_s}  {n}"
 
 
 def render_stamina_bar(
@@ -65,8 +86,9 @@ def render_stamina_bar(
     length: int = 10,
     *,
     minutes_to_next: int | None = None,
+    wrap_bar_in_code: bool = True,
 ) -> str:
-    """Жёлтая полоска стамины; при 0 — подсказка о восстановлении."""
+    """Полоска стамины; при 0 — подсказка о восстановлении."""
     if max_stam <= 0:
         max_stam = 1
     current = max(0, min(current, max_stam))
@@ -78,16 +100,26 @@ def render_stamina_bar(
         suffix = f" (восст. через {minutes_to_next} мин)"
     elif current == 0:
         suffix = " (восст. по таймеру)"
-    return f"⚡ {bar} {format_number(current)}/{format_number(max_stam)}{suffix}"
+    bar_s = f"<code>{bar}</code>" if wrap_bar_in_code else bar
+    if wrap_bar_in_code:
+        return f"⚡ {bar_s} {format_number(current)}/{format_number(max_stam)}{suffix}"
+    return f"⚡ {bar_s}  {format_number(current)}/{format_number(max_stam)}{suffix}"
 
 
-def render_exp_bar(current: int, needed: int, length: int = _BAR_LEN) -> str:
+def render_exp_bar(
+    current: int,
+    needed: int,
+    length: int = _BAR_LEN,
+    *,
+    wrap_bar_in_code: bool = True,
+) -> str:
     """Опыт к следующему уровню — тот же ритм полосы, что HP/MP."""
     if needed <= 0:
         needed = 1
     bar = _mono_bar(current, needed, length)
     n = f"{format_number(current)}/{format_number(needed)}"
-    return f"✨ <code>{bar}</code>  {n}"
+    bar_s = f"<code>{bar}</code>" if wrap_bar_in_code else bar
+    return f"✨ {bar_s}  {n}"
 
 
 def render_enchant_stars(level: int) -> str:
@@ -114,8 +146,15 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     ru = RARITY_NAME_RU.get(r, html.escape(r))
     lines.append(f"{em} 📦 <b>{name}</b> · <i>{html.escape(ru)}</i>")
     kind = data.get("kind")
-    slot = equip_slot_for_kind(str(kind) if kind else "")
-    if slot and slot in SLOT_LABEL_RU:
+    if str(kind).lower() == "weapon":
+        if item_is_two_handed(data):
+            lines.append("⚙️ <b>Двуручное</b> — вторая рука занята этим оружием.")
+        elif str(data.get("hand") or "main").lower() in ("off", "offhand", "second", "left"):
+            lines.append("⚙️ Надевается во <b>вторую руку</b>.")
+    slot = resolve_equip_slot_for_item_data(data)
+    if str(kind).lower() == "ring" and slot and not ring_slot_is_explicit(data):
+        lines.append("📌 Тип: 💍 Кольцо (первый свободный слот I или II)")
+    elif slot and slot in SLOT_LABEL_RU:
         lines.append(f"📌 Тип: {SLOT_LABEL_RU[slot]}")
     elif kind:
         lines.append(f"📌 Тип: {html.escape(str(kind))}")
@@ -144,6 +183,11 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     summary = data.get("summary")
     if summary:
         lines.append(f"<i>{html.escape(str(summary))}</i>")
+    img = str(data.get("image_url") or "").strip()
+    if img.startswith(("http://", "https://")):
+        lines.append(f'🖼 <a href="{html.escape(img)}">картинка (ссылка)</a>')
+    elif img.lower().endswith(".png") or ":\\" in img or img.startswith("/"):
+        lines.append(f"🖼 Локальный файл: <code>{html.escape(img)}</code> (замени PNG с тем же именем)")
     return "\n".join(lines)
 
 

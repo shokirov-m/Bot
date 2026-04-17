@@ -86,6 +86,21 @@ async def profile_ranker_status_line(session: AsyncSession, character: Character
     return t(locale, "profile_ranker_tier_45_line")
 
 
+async def profile_ranker_status_parts(
+    session: AsyncSession,
+    character: Character,
+    *,
+    locale: str,
+) -> tuple[str, str]:
+    """(короткий бейдж для строки «Звание», строка эффекта); обе пустые, если не ранкер."""
+    rank = await best_leaderboard_rank(session, character)
+    if rank is None:
+        return "", ""
+    if rank <= 3:
+        return t(locale, f"profile_ranker_badge_tier_{rank}"), t(locale, f"profile_ranker_effect_tier_{rank}")
+    return t(locale, "profile_ranker_badge_tier_45"), t(locale, "profile_ranker_effect_tier_45")
+
+
 async def character_has_ranker_gold_bonus(session: AsyncSession, character: Character) -> bool:
     """Совместимость: True если персонаж в топ-5 хотя бы в одной категории."""
     r = await best_leaderboard_rank(session, character)

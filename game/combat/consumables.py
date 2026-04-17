@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from game.combat import effects
@@ -14,15 +15,34 @@ COMBAT_USE_TAGS = frozenset(
 )
 
 
+def item_data_as_dict(raw: Any) -> dict[str, Any]:
+    """Нормализация JSON из БД: dict или редкая строка с JSON."""
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+            return dict(parsed) if isinstance(parsed, dict) else {}
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    return {}
+
+
 def normalize_combat_use_tag(item_data: dict[str, Any]) -> str:
     """Единый формат тега (лавка/лут могли сохранить регистр иначе)."""
-    return str(item_data.get("use_tag") or "").strip().lower()
+    return str(item_data.get("use_tag") or item_data.get("USE_TAG") or "").strip().lower()
 
 
 def apply_consumable(state: dict[str, Any], item_data: dict[str, Any]) -> list[str]:
     """Изменяет combat state; возвращает строки лога боя."""
     tag = normalize_combat_use_tag(item_data)
-    val = int(item_data.get("use_value", 0))
+    raw_v = item_data.get("use_value", 0)
+    try:
+        val = int(raw_v) if raw_v is not None else 0
+    except (TypeError, ValueError):
+        val = 0
     logs: list[str] = []
 
     if tag not in COMBAT_USE_TAGS:

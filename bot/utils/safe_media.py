@@ -23,6 +23,21 @@ def resolve_photo_path(photo_path: str | Path | None) -> Path | None:
     return p
 
 
+def normalize_photo_media(photo_arg: str | Path | None) -> Path | str | None:
+    """Локальный файл или HTTPS-URL для send_photo / edit_media."""
+    if photo_arg is None:
+        return None
+    if isinstance(photo_arg, str) and photo_arg.startswith(("http://", "https://")):
+        return photo_arg
+    return resolve_photo_path(Path(photo_arg) if isinstance(photo_arg, str) else photo_arg)
+
+
+def _photo_input_file(photo: Path | str):
+    if isinstance(photo, str) and photo.startswith(("http://", "https://")):
+        return photo
+    return FSInputFile(photo)
+
+
 def _is_not_modified(exc: TelegramBadRequest) -> bool:
     return "message is not modified" in str(exc).lower()
 
@@ -30,7 +45,7 @@ def _is_not_modified(exc: TelegramBadRequest) -> bool:
 async def safe_edit_message_photo(
     message: Message,
     *,
-    photo_path: Path,
+    photo_path: Path | str,
     caption: str,
     reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: ParseMode | str = ParseMode.HTML,
@@ -38,7 +53,7 @@ async def safe_edit_message_photo(
     """Поменять медиа у сообщения с фото. False — нужен другой путь (удалить/отправить заново)."""
     try:
         media = InputMediaPhoto(
-            media=FSInputFile(photo_path),
+            media=_photo_input_file(photo_path),
             caption=caption,
             parse_mode=parse_mode,
         )
@@ -56,7 +71,7 @@ async def safe_bot_edit_message_photo(
     chat_id: int,
     message_id: int,
     *,
-    photo_path: Path,
+    photo_path: Path | str,
     caption: str,
     reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: ParseMode | str = ParseMode.HTML,
@@ -67,7 +82,7 @@ async def safe_bot_edit_message_photo(
             chat_id=chat_id,
             message_id=message_id,
             media=InputMediaPhoto(
-                media=FSInputFile(photo_path),
+                media=_photo_input_file(photo_path),
                 caption=caption,
                 parse_mode=parse_mode,
             ),
@@ -84,7 +99,7 @@ async def safe_bot_edit_message_photo(
 async def safe_send_photo(
     bot: Bot,
     chat_id: int,
-    photo_path: Path,
+    photo_path: Path | str,
     *,
     caption: str,
     reply_markup: InlineKeyboardMarkup | None = None,
@@ -93,7 +108,7 @@ async def safe_send_photo(
     try:
         return await bot.send_photo(
             chat_id=chat_id,
-            photo=FSInputFile(photo_path),
+            photo=_photo_input_file(photo_path),
             caption=caption,
             reply_markup=reply_markup,
             parse_mode=parse_mode,
@@ -108,7 +123,7 @@ async def safe_send_photo(
 
 async def safe_answer_photo(
     message: Message,
-    photo_path: Path,
+    photo_path: Path | str,
     *,
     caption: str,
     reply_markup: InlineKeyboardMarkup | None = None,
@@ -116,7 +131,7 @@ async def safe_answer_photo(
 ) -> Message | None:
     try:
         return await message.answer_photo(
-            photo=FSInputFile(photo_path),
+            photo=_photo_input_file(photo_path),
             caption=caption,
             reply_markup=reply_markup,
             parse_mode=parse_mode,

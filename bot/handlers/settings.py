@@ -26,7 +26,7 @@ from bot.states.settings_states import SettingsStates
 from bot.utils.game_ui import push_game_ui
 from config import settings
 from db.repository import character_repo, user_repo
-from services import anticheat_service, character_service
+from services import anticheat_service, character_service, stat_bonus_service
 from services.referral_service import referral_bot_link, resolve_bot_username_for_referral
 from services.settings_service import redeem_promo, try_paid_rename
 from utils.game_images_prefs import set_game_images_hidden, game_images_enabled
@@ -258,6 +258,7 @@ async def stg_stat_reset_execute(callback: CallbackQuery, session: AsyncSession,
         loc = get_locale(char, callback.from_user.language_code)
         pts = character_service.count_allocated_stat_points_over_nominal(char)
         cost = int(character_service.STAT_ALLOC_RESET_COST_GOLD)
+        prior_eff = await stat_bonus_service.effective_primary_stats(session, char)
         ok, err_key = character_service.try_paid_reset_stat_allocations(char)
         if not ok:
             await callback.answer(t(loc, err_key, gold=cost), show_alert=True)
@@ -267,6 +268,8 @@ async def stg_stat_reset_execute(callback: CallbackQuery, session: AsyncSession,
                 reply_markup=settings_screen_keyboard(locale=loc, character=char),
             )
             return
+        await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
+        await session.flush()
         await state.clear()
         await callback.message.edit_text(
             f"{t(loc, 'settings_title')}\n{LINE_SEP}\n"

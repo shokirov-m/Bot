@@ -12,7 +12,7 @@ from aiogram.types import InlineKeyboardMarkup, Message
 from loguru import logger
 
 from bot.utils.safe_media import (
-    resolve_photo_path,
+    normalize_photo_media,
     safe_answer_photo,
     safe_bot_edit_message_photo,
     safe_delete_message,
@@ -49,7 +49,7 @@ async def push_game_ui(
     При смене типа (текст ↔ фото) старое сообщение удаляется и отправляется новое.
     Отправка фото идёт через ``safe_send_photo`` / ``safe_edit_message_photo`` с откатом на текст при ошибке.
     """
-    p = resolve_photo_path(photo_path)
+    p = normalize_photo_media(photo_path)
     text_kw: dict = {
         "text": text,
         "reply_markup": reply_markup,

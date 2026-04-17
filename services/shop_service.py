@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from db.models.character import Character
 from db.repository import inventory_repo
+from game.combat import consumables as combat_consumables
 from game.economy import shop as shop_data
 from utils.ui import LINE_SEP
 
@@ -104,8 +105,8 @@ async def try_use_bag_ration_by_id(
         return False, "Предмет не найден."
     if item.bag_slot is None:
         return False, "Предмет не в сумке."
-    data = item.item_data or {}
-    if data.get("use_tag") != "stamina_flat":
+    data = combat_consumables.item_data_as_dict(item.item_data)
+    if combat_consumables.normalize_combat_use_tag(data) != "stamina_flat":
         return False, "Это не походный паёк."
 
     mx = settings.MAX_STAMINA
@@ -132,8 +133,8 @@ async def try_use_bag_bread_by_id(
         return False, "Предмет не найден."
     if item.bag_slot is None:
         return False, "Предмет не в сумке."
-    data = item.item_data or {}
-    if data.get("use_tag") != "heal_hp_flat":
+    data = combat_consumables.item_data_as_dict(item.item_data)
+    if combat_consumables.normalize_combat_use_tag(data) != "heal_hp_flat":
         return False, "Это не хлеб."
 
     mx = int(character.hp_max)
@@ -155,6 +156,7 @@ async def try_use_first_bag_ration(session: AsyncSession, character: Character) 
     """Первый паёк в сумке (кнопка в лавке)."""
     items = await inventory_repo.list_bag_items(session, character.id)
     for it in sorted(items, key=lambda x: (x.bag_slot is None, x.bag_slot or 0)):
-        if (it.item_data or {}).get("use_tag") == "stamina_flat":
+        d = combat_consumables.item_data_as_dict(it.item_data)
+        if combat_consumables.normalize_combat_use_tag(d) == "stamina_flat":
             return await try_use_bag_ration_by_id(session, character, it.id)
     return False, "В сумке нет походного пайка."

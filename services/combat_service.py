@@ -58,6 +58,7 @@ from game.balance import (
     MONSTER_HP_FLOOR12_MULT,
     MONSTER_HP_FLOOR12_THRESHOLD,
     MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT,
+    MONSTER_FLOOR5_MINIBOSS_HP_CAP,
     MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR,
     MONSTER_HP_CURVE_MULT,
     MONSTER_HP_RAW_BASE,
@@ -303,6 +304,9 @@ def _monster_stat_bundle(
         atk_out = max(1, int(atk_out * msk))
         def_out = max(0, int(def_out * msk))
 
+    if int(floor_number) == 5 and spawn.is_mini_boss:
+        hp_out = max(1, int(MONSTER_FLOOR5_MINIBOSS_HP_CAP))
+
     # Обычные цели с 10-го этажа: +8 к атаке (не элита и не боссы).
     if (
         int(floor_number) >= 10
@@ -340,22 +344,30 @@ async def _weapon_profile(
     session: AsyncSession,
     character: Character,
 ) -> tuple[int, str, float, dict | None]:
-    """Атака оружия, тип для мастерства, множитель мастерства, item_data оружия (или None)."""
+    """Атака оружия (основная + вторая рука, если там оружие с атакой), тип мастерства с основной руки."""
     weapon = await inventory_repo.get_equipped_weapon(session, character.id)
+    off = await inventory_repo.get_equipped_in_slot(session, int(character.id), "offhand")
+    lv = int(character.level)
+    fl = int(character.floor_number)
+
+    off_atk = 0
+    off_data: dict | None = dict(off.item_data or {}) if off else None
+    if off_data:
+        oa = int(off_data.get("attack", off_data.get("atk", 0)) or 0)
+        if oa > 0:
+            off_atk = character_service.weapon_attack_value_from_item_data(off_data, level=lv, floor_number=fl)
+
     if weapon is None:
-        atk = character_service.weapon_attack_value_from_item_data(
-            None,
-            level=int(character.level),
-            floor_number=int(character.floor_number),
-        )
+        if off_atk > 0 and off_data is not None:
+            wtype = weapon_type_from_item_data(off_data)
+            return off_atk, wtype, damage_multiplier_for_type(character, wtype), off_data
+        atk = character_service.weapon_attack_value_from_item_data(None, level=lv, floor_number=fl)
         wtype = "unarmed"
         return atk, wtype, damage_multiplier_for_type(character, wtype), None
+
     data = dict(weapon.item_data or {})
-    atk = character_service.weapon_attack_value_from_item_data(
-        data,
-        level=int(character.level),
-        floor_number=int(character.floor_number),
-    )
+    main_atk = character_service.weapon_attack_value_from_item_data(data, level=lv, floor_number=fl)
+    atk = main_atk + off_atk
     wtype = weapon_type_from_item_data(data)
     return atk, wtype, damage_multiplier_for_type(character, wtype), data
 
@@ -683,6 +695,9 @@ async def start_combat(
     if night_on:
         combat_night.apply_night_to_monster_bundle(monster)
 
+    await character_service.refresh_hp_mp_from_effective(session, character)
+    await session.flush()
+
     eff_stats = await stat_bonus_service.effective_primary_stats(session, character)
     combat_state = _build_combat_dict(character, spawn, monster, primary_stats=eff_stats)
     combat_state["night_battle"] = night_on
@@ -832,6 +847,9 @@ async def start_tutorial_combat(
         return False
 
     monster = _tutorial_monster_bundle()
+    await character_service.refresh_hp_mp_from_effective(session, character)
+    await session.flush()
+
     eff_stats = await stat_bonus_service.effective_primary_stats(session, character)
     combat_state = _build_combat_dict(character, TUTORIAL_SPAWN, monster, primary_stats=eff_stats)
     wa, wtype, wmult, w_item = await _weapon_profile(session, character)
@@ -1356,8 +1374,9 @@ async def _victory_sequence(
     except Exception:
         logger.exception("victory UI: анимация награды")
     finally:
-        character.hp_current = int(combat_state["player_hp"])
-        character.mp_current = int(combat_state["player_mp"])
+        await character_service.refresh_hp_mp_from_effective(session, character)
+        character.hp_current = min(int(character.hp_max), int(combat_state["player_hp"]))
+        character.mp_current = min(int(character.mp_max), int(combat_state["player_mp"]))
         if message.from_user is not None:
             combat_idle_service.cancel_combat_idle_timer(int(message.from_user.id))
         await state.clear()
@@ -1397,6 +1416,7 @@ async def _defeat_sequence(
         pass
 
     if combat_state and combat_state.get("is_tutorial"):
+        await character_service.refresh_hp_mp_from_effective(session, character)
         character.hp_current = int(character.hp_max)
         character.mp_current = int(character.mp_max)
         loc = get_locale(character, None)
@@ -1431,6 +1451,8 @@ async def _defeat_sequence(
 
     await character_repo.lock_character_row(session, character.id)
     await session.refresh(character, attribute_names=["gold"])
+
+    await character_service.refresh_hp_mp_from_effective(session, character)
 
     character.death_count = int(character.death_count) + 1
     title_service.refresh_unlocks(character)
@@ -1492,8 +1514,8 @@ async def _bag_combat_consumables(session: AsyncSession, character_id: int) -> l
     bag = await inventory_repo.list_bag_items(session, character_id)
     out: list[InventoryItem] = []
     for it in bag:
-        data = it.item_data or {}
-        if consumables.normalize_combat_use_tag(dict(data)) in consumables.COMBAT_USE_TAGS:
+        data = consumables.item_data_as_dict(it.item_data)
+        if consumables.normalize_combat_use_tag(data) in consumables.COMBAT_USE_TAGS:
             out.append(it)
     out.sort(key=lambda x: (x.bag_slot is None, x.bag_slot or 0))
     return out
@@ -1508,7 +1530,7 @@ async def _apply_combat_item(
     item = await inventory_repo.get_item_for_character(session, character.id, item_id)
     if item is None or item.is_equipped or item.bag_slot is None:
         return False, "Предмета нет в сумке.", []
-    data = dict(item.item_data or {})
+    data = consumables.item_data_as_dict(item.item_data)
     tag = consumables.normalize_combat_use_tag(data)
     if tag == "stamina_flat":
         return False, "Пайок ешь после боя.", []
@@ -1680,8 +1702,9 @@ async def handle_combat_callback(
             finally:
                 if query.from_user is not None:
                     combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
-                character.hp_current = int(combat_state["player_hp"])
-                character.mp_current = int(combat_state["player_mp"])
+                await character_service.refresh_hp_mp_from_effective(session, character)
+                character.hp_current = min(int(character.hp_max), int(combat_state["player_hp"]))
+                character.mp_current = min(int(character.mp_max), int(combat_state["player_mp"]))
                 await state.clear()
             await query.answer("Побег!")
             return

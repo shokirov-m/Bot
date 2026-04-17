@@ -120,6 +120,12 @@ def test_combat_use_tag_normalizes_case() -> None:
     assert consumables.normalize_combat_use_tag({"use_tag": "  heal_mp_flat "}) == "heal_mp_flat"
 
 
+def test_item_data_as_dict_parses_json_string() -> None:
+    raw = '{"use_tag": "heal_hp_pct", "use_value": 35}'
+    d = consumables.item_data_as_dict(raw)
+    assert consumables.normalize_combat_use_tag(d) == "heal_hp_pct"
+
+
 def test_floor_callback_matches_lf_keys_underscore() -> None:
     import re
 
@@ -143,3 +149,44 @@ def test_long_floor_spawns_and_phase() -> None:
     assert lf.SLOT_W1 in {s.slot_code for s in lf.all_long_floor_spawns()}
     trip = lf.spawns_for_tower_progress(c, lf.PILOT_FLOOR)
     assert {s.slot_code for s in trip} == {lf.SLOT_W1, lf.SLOT_W2, lf.SLOT_BOSS}
+
+
+def test_hp_mp_ratio_uses_formula_baseline_when_column_stale() -> None:
+    """При устаревшем hp_max в БД доля текущего HP от старого макс. по формуле, не от колонки."""
+    from game.characters.classes import get_class_or_none
+
+    from services.character_service import _apply_hp_mp_caps_from_totals, _compute_hp_max
+
+    cls = get_class_or_none("warrior")
+    assert cls is not None
+    true_old = _compute_hp_max(10, 20, cls)
+    new_hp = _compute_hp_max(10, 21, cls)
+    assert new_hp > true_old
+    hc = int(true_old * 0.4)
+    stale_column = 100
+    assert stale_column != true_old
+    c = Character(
+        user_id=1,
+        display_name="T",
+        class_key="warrior",
+        stat_vitality=10,
+        stat_strength=21,
+        stat_intelligence=5,
+        hp_current=hc,
+        hp_max=stale_column,
+        mp_current=5,
+        mp_max=30,
+    )
+    _apply_hp_mp_caps_from_totals(
+        c,
+        vit=10,
+        strn=21,
+        intl=5,
+        ratio_hp_old_max=true_old,
+        ratio_mp_old_max=None,
+    )
+    want_cur = max(1, min(new_hp, int(hc * new_hp / true_old)))
+    assert c.hp_max == new_hp
+    assert c.hp_current == want_cur
+    wrong_cur = max(1, min(new_hp, int(hc * new_hp / stale_column)))
+    assert wrong_cur != want_cur

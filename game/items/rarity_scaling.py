@@ -49,7 +49,9 @@ _ENCHANT_ARMOR_DEF_PER_LEVEL: dict[str, float] = {
     "legendary": 2.75,
 }
 
-_ARMOR_KINDS: frozenset[str] = frozenset({"armor", "helmet", "gloves", "ring", "amulet"})
+_ARMOR_KINDS: frozenset[str] = frozenset(
+    {"armor", "pants", "helmet", "gloves", "ring", "amulet", "shield", "grimoire", "tome", "orb", "focus"},
+)
 
 
 def _norm_rarity(item_data: dict[str, Any] | None) -> str:

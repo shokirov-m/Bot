@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from game.floors import floor_data
+from game.items.equipment.item_asset_paths import item_gear_png
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +36,7 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
             "summary": "В бою: +35% к макс. HP (кнопка Предмет).",
             "use_tag": "heal_hp_pct",
             "use_value": 35,
+            "image_url": item_gear_png("shop_vita"),
         },
     ),
     ShopGood(
@@ -50,6 +52,7 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
             "summary": "В бою: +40% к макс. MP (кнопка Предмет).",
             "use_tag": "heal_mp_pct",
             "use_value": 40,
+            "image_url": item_gear_png("shop_ether"),
         },
     ),
     ShopGood(
@@ -65,6 +68,7 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
             "summary": "Съесть вне боя: +2 ⚡.",
             "use_tag": "stamina_flat",
             "use_value": 2,
+            "image_url": item_gear_png("shop_ration"),
         },
     ),
     ShopGood(
@@ -80,6 +84,7 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
             "summary": "В бою: снять яд (кнопка Предмет).",
             "use_tag": "cure_poison",
             "use_value": 1,
+            "image_url": item_gear_png("shop_antidote"),
         },
     ),
 )
@@ -99,6 +104,7 @@ SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
             "defense": 1,
             "luck": 1,
             "summary": "Простая оправа — чуть увереннее шаг по ступеням башни.",
+            "image_url": item_gear_png("shop_f3_ring"),
         },
     ),
     ShopGood(
@@ -114,6 +120,7 @@ SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
             "defense": 1,
             "dex": 1,
             "summary": "Обмотки для рук — меньше скольжения на мокром камне.",
+            "image_url": item_gear_png("shop_f3_gloves"),
         },
     ),
     ShopGood(
@@ -129,6 +136,7 @@ SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
             "defense": 1,
             "vit": 1,
             "summary": "Холодный камень у сердца — дышать ровнее в бою.",
+            "image_url": item_gear_png("shop_f3_amulet"),
         },
     ),
 )

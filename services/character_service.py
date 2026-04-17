@@ -21,7 +21,12 @@ from db.models.user import User
 from db.repository import character_repo, inventory_repo
 from game.characters.classes import ClassDefinition, get_class_or_none
 from game.characters.progression import experience_needed_for_next_level
-from game.items.equipment import starter_bread_payload, starter_weapon_payload
+from game.items.equipment import (
+    starter_bread_payload,
+    starter_offhand_dagger_payload,
+    starter_pants_payload,
+    starter_weapon_payload,
+)
 from game.items.rarity_scaling import scaled_weapon_attack_value
 from utils.profile_portraits import META_PORTRAIT_KEY
 
@@ -29,13 +34,14 @@ from utils.profile_portraits import META_PORTRAIT_KEY
 def _compute_hp_max(vitality: int, strength: int, cls: ClassDefinition) -> int:
     """Базовый расчёт HP с учётом ВЫН/СИЛ и пассива класса."""
     base = 40 + vitality * 6 + strength * 4
-    return max(1, int(base * cls.hp_multiplier))
+    # round: при множителе класса (напр. ×1.15) int() «съедал» доли HP за каждую единицу СИЛ/ВЫН
+    return max(1, int(round(float(base) * float(cls.hp_multiplier))))
 
 
 def _compute_mp_max(intelligence: int, cls: ClassDefinition) -> int:
     """Базовый расчёт MP с учётом ИНТ и пассива класса."""
     base = 15 + intelligence * 5
-    return max(0, int(base * cls.mp_multiplier))
+    return max(0, int(round(float(base) * float(cls.mp_multiplier))))
 
 
 async def create_character_for_user(
@@ -106,6 +112,19 @@ async def create_character_for_user(
             copy.deepcopy(starter_bread_payload()),
             bag_slot=slot,
         )
+    await inventory_repo.add_bag_item(
+        session,
+        char.id,
+        copy.deepcopy(starter_pants_payload()),
+        bag_slot=3,
+    )
+    if cls.key == "assassin":
+        await inventory_repo.add_bag_item(
+            session,
+            char.id,
+            copy.deepcopy(starter_offhand_dagger_payload()),
+            bag_slot=4,
+        )
     return char
 
 
@@ -126,17 +145,21 @@ def weapon_attack_value_from_item_data(
 
 async def equipped_weapon_attack_value(session: AsyncSession, character: Character) -> int:
     weapon = await inventory_repo.get_equipped_weapon(session, character.id)
-    if weapon is None:
-        return weapon_attack_value_from_item_data(
-            None,
-            level=int(character.level),
-            floor_number=int(character.floor_number),
-        )
-    return weapon_attack_value_from_item_data(
-        dict(weapon.item_data or {}),
-        level=int(character.level),
-        floor_number=int(character.floor_number),
-    )
+    off = await inventory_repo.get_equipped_in_slot(session, int(character.id), "offhand")
+    lv = int(character.level)
+    fl = int(character.floor_number)
+    total = 0
+    if weapon is not None:
+        total += weapon_attack_value_from_item_data(dict(weapon.item_data or {}), level=lv, floor_number=fl)
+    if off is not None:
+        od = dict(off.item_data or {})
+        if int(od.get("attack", od.get("atk", 0)) or 0) > 0:
+            total += weapon_attack_value_from_item_data(od, level=lv, floor_number=fl)
+    if weapon is None and off is None:
+        return weapon_attack_value_from_item_data(None, level=lv, floor_number=fl)
+    if total <= 0:
+        return weapon_attack_value_from_item_data(None, level=lv, floor_number=fl)
+    return total
 
 
 def add_gold(character: Character, amount: int) -> None:
@@ -220,15 +243,28 @@ _STAT_FIELD_BY_KEY: dict[str, str] = {
 }
 
 
-def refresh_hp_mp_after_stats(character: Character) -> None:
-    """Пересчитать HP/MP максимумы после изменения статов; текущие полосы — пропорционально."""
+def _apply_hp_mp_caps_from_totals(
+    character: Character,
+    *,
+    vit: int,
+    strn: int,
+    intl: int,
+    ratio_hp_old_max: int | None = None,
+    ratio_mp_old_max: int | None = None,
+) -> None:
+    """Пересчитать максимумы HP/MP по заданным основным статам; текущие — пропорционально.
+
+    ratio_hp_old_max / ratio_mp_old_max — знаменатель для доли текущих HP/MP до смены статов
+    (например макс по эффективным статам *до* клика +1 СИЛ). Если None — берётся из полей
+    персонажа; при устаревшем hp_max в БД иначе «залипал» прирост от +1 СИЛ/ВЫН.
+    """
     cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
     if cls is None:
         return
-    new_hp = _compute_hp_max(int(character.stat_vitality), int(character.stat_strength), cls)
-    new_mp = _compute_mp_max(int(character.stat_intelligence), cls)
-    old_hm = max(1, int(character.hp_max))
-    old_mm = max(0, int(character.mp_max))
+    new_hp = _compute_hp_max(int(vit), int(strn), cls)
+    new_mp = _compute_mp_max(int(intl), cls)
+    old_hm = max(1, int(ratio_hp_old_max)) if ratio_hp_old_max is not None else max(1, int(character.hp_max))
+    old_mm = max(0, int(ratio_mp_old_max)) if ratio_mp_old_max is not None else max(0, int(character.mp_max))
     character.hp_max = new_hp
     character.mp_max = new_mp
     hc = int(character.hp_current)
@@ -238,6 +274,49 @@ def refresh_hp_mp_after_stats(character: Character) -> None:
         character.mp_current = max(0, min(new_mp, int(mc * new_mp / old_mm)))
     else:
         character.mp_current = max(0, min(new_mp, mc))
+
+
+def refresh_hp_mp_after_stats(character: Character) -> None:
+    """Пересчитать HP/MP только по базовым статам из БД (без экипировки). Для сбросов без сессии."""
+    _apply_hp_mp_caps_from_totals(
+        character,
+        vit=int(character.stat_vitality),
+        strn=int(character.stat_strength),
+        intl=int(character.stat_intelligence),
+    )
+
+
+async def refresh_hp_mp_from_effective(
+    session: AsyncSession,
+    character: Character,
+    *,
+    prior_effective_stats: dict[str, int] | None = None,
+) -> None:
+    """HP/MP максимумы по итоговым статам (база + экипировка + титулы), как в бою.
+
+    prior_effective_stats — снимок effective_primary_stats *до* изменения базы/экипа;
+    тогда доля текущего HP/MP считается от формульного макс. до изменения, а не от hp_max в БД.
+    """
+    from services import stat_bonus_service
+
+    eff = await stat_bonus_service.effective_primary_stats(session, character)
+    cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
+    if cls is None:
+        return
+    ratio_hp: int | None = None
+    ratio_mp: int | None = None
+    if prior_effective_stats is not None:
+        pe = prior_effective_stats
+        ratio_hp = max(1, _compute_hp_max(int(pe["vit"]), int(pe["str"]), cls))
+        ratio_mp = max(0, _compute_mp_max(int(pe["int"]), cls))
+    _apply_hp_mp_caps_from_totals(
+        character,
+        vit=int(eff["vit"]),
+        strn=int(eff["str"]),
+        intl=int(eff["int"]),
+        ratio_hp_old_max=ratio_hp,
+        ratio_mp_old_max=ratio_mp,
+    )
 
 
 async def reset_all_progress_keep_identity(session: AsyncSession, character: Character) -> None:
@@ -378,7 +457,6 @@ def try_paid_reset_stat_allocations(character: Character) -> tuple[bool, str]:
     mp = dict(character.meta_progress or {})
     mp[STAT_ALLOC_RESET_DAY_META_KEY] = datetime.now(UTC).date().isoformat()
     character.meta_progress = mp
-    refresh_hp_mp_after_stats(character)
     return True, ""
 
 
@@ -392,5 +470,4 @@ def try_allocate_stat_point(character: Character, stat_key: str) -> bool:
     cur = int(getattr(character, field))
     setattr(character, field, cur + 1)
     character.unspent_stat_points = int(character.unspent_stat_points) - 1
-    refresh_hp_mp_after_stats(character)
     return True

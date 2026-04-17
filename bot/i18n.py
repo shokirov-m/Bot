@@ -281,6 +281,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_ranker_tier_45_line": (
             "🏅 <b>Ранкер (топ-4–5)</b> <i>+5% золота с монстров; не титул.</i>"
         ),
+        "profile_ranker_badge_tier_1": "🏅 Ранкер (1 место)",
+        "profile_ranker_badge_tier_2": "🏅 Ранкер (2 место)",
+        "profile_ranker_badge_tier_3": "🏅 Ранкер (3 место)",
+        "profile_ranker_badge_tier_45": "🏅 Ранкер (топ-4–5)",
+        "profile_ranker_effect_tier_1": (
+            "🏅 Ранкер (1 место) +10% золота и +5% опыта с монстров; не титул."
+        ),
+        "profile_ranker_effect_tier_2": (
+            "🏅 Ранкер (2 место) +8% золота и +3% опыта с монстров; не титул."
+        ),
+        "profile_ranker_effect_tier_3": (
+            "🏅 Ранкер (3 место) +6% золота и +1% опыта с монстров; не титул."
+        ),
+        "profile_ranker_effect_tier_45": "🏅 Ранкер (топ-4–5) +5% золота с монстров; не титул.",
     },
     "en": {
         "menu_profile": "🗡️ Status",
@@ -551,6 +565,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_ranker_tier_45_line": (
             "🏅 <b>Ranker (top 4–5)</b> <i>+5% gold from monsters; not a title.</i>"
         ),
+        "profile_ranker_badge_tier_1": "🏅 Ranker (#1)",
+        "profile_ranker_badge_tier_2": "🏅 Ranker (#2)",
+        "profile_ranker_badge_tier_3": "🏅 Ranker (#3)",
+        "profile_ranker_badge_tier_45": "🏅 Ranker (top 4–5)",
+        "profile_ranker_effect_tier_1": (
+            "🏅 Ranker (#1) +10% gold and +5% XP from monsters; not a title."
+        ),
+        "profile_ranker_effect_tier_2": (
+            "🏅 Ranker (#2) +8% gold and +3% XP from monsters; not a title."
+        ),
+        "profile_ranker_effect_tier_3": (
+            "🏅 Ranker (#3) +6% gold and +1% XP from monsters; not a title."
+        ),
+        "profile_ranker_effect_tier_45": "🏅 Ranker (top 4–5) +5% gold from monsters; not a title.",
     },
 }
 

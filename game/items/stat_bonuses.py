@@ -46,7 +46,7 @@ def _enchant_flat_stat_bonus(out: dict[str, int], raw: dict[str, Any]) -> None:
         for k in STAT_KEYS:
             if out[k] > 0:
                 out[k] += per
-    elif defe > 0 and kind in ("armor", "helmet", "gloves", "ring", "amulet"):
+    elif defe > 0 and kind in ("armor", "pants", "helmet", "gloves", "ring", "amulet"):
         out["vit"] += max(1, per)
 
 

@@ -40,6 +40,7 @@ from services.rest_service import apply_completed_rest_if_needed
 from game.items.equipment import (
     SECRET_GEAR_DROP_CHANCE,
     SECRET_GEAR_EARLY_MAX_FLOOR,
+    UI_PLACEHOLDER_IMAGE_URL,
     try_roll_secret_gear_payload,
 )
 from game.floors.monsters import FloorMonsterSpawn, build_spawns_for_floor
@@ -358,6 +359,8 @@ async def push_floor_screen_ui(
     splash_needed = int(row.visits) == 0 and not ex.get("_floor_intro_anim_v0")
     full_body = format_floor_message(character) + event_html + text_suffix
     photo = location_image_for_floor(n) if game_images_enabled(character) else None
+    if photo is None and game_images_enabled(character):
+        photo = UI_PLACEHOLDER_IMAGE_URL
     body_for_ui = (
         _clamp_telegram_caption(format_floor_message_photo_caption(character) + event_html + text_suffix)
         if photo is not None

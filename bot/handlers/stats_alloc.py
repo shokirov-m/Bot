@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.repository import character_repo, user_repo
-from services import character_service
+from services import character_service, stat_bonus_service
 
 router = Router(name="stats_alloc")
 
@@ -96,9 +96,11 @@ async def st_allocate(callback: CallbackQuery, session: AsyncSession) -> None:
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
+        prior_eff = await stat_bonus_service.effective_primary_stats(session, char)
         if not character_service.try_allocate_stat_point(char, key):
             await callback.answer("Нет свободных очков или неверный стат.", show_alert=True)
             return
+        await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
         await session.flush()
         usp = int(getattr(char, "unspent_stat_points", 0) or 0)
         await callback.message.edit_text(

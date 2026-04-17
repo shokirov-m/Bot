@@ -47,6 +47,7 @@ from utils.game_images_prefs import game_images_enabled
 from utils.profile_portraits import portrait_path_for_character
 from utils.ui import (
     LINE_SEP,
+    _BAR_LEN,
     element_label,
     element_profile_line,
     format_number,
@@ -93,10 +94,12 @@ async def _weapon_attack_value(session: AsyncSession, char: Character) -> int:
     return await character_service.equipped_weapon_attack_value(session, char)
 
 
-def _fmt_stat_base_plus(base: int, extra: int) -> str:
-    if extra <= 0:
-        return str(int(base))
-    return f"{int(base)} <i>(+{int(extra)})</i>"
+def _fmt_stat_plain(base: int, extra: int) -> str:
+    b = int(base)
+    e = int(extra)
+    if e <= 0:
+        return str(b)
+    return f"{b} (+{e})"
 
 
 def build_class_info_html(char: Character, *, locale: str) -> str:
@@ -161,7 +164,8 @@ def _build_profile_text(
     gear_stat_bonus: dict[str, int] | None = None,
     title_stat_bonus: dict[str, int] | None = None,
     effective_stats: dict[str, int] | None = None,
-    ranker_line: str = "",
+    ranker_badge: str = "",
+    ranker_effect: str = "",
 ) -> str:
     cls = get_class_or_none(char.class_key)
     if cls:
@@ -171,21 +175,21 @@ def _build_profile_text(
     sub = class_arc_service.subclass_display_ru(char.subclass_key)
     if sub:
         class_title += f" · ⭐ {html.escape(sub)}"
-    rank = path_rank_name_ru(char)
-    rank_s = html.escape(rank) if rank else "—"
+    rank_raw = path_rank_name_ru(char)
+    rank_s = html.escape(rank_raw) if rank_raw else "—"
     sec_raw = (char.meta_progress or {}).get("active_title_secondary_name_ru")
     sec_s = str(sec_raw).strip() if sec_raw else ""
     t1 = html.escape(char.active_title) if char.active_title else "—"
     t2 = html.escape(sec_s) if sec_s else "—"
-    title = f"① {t1} · ② {t2}" if (char.active_title or sec_s) else "—"
-    title_bonus = ""
+    titles_row = f"① {t1} · ② {t2}" if (char.active_title or sec_s) else "—"
+    title_bonus_extra: list[str] = []
     if not compact:
         t_parts: list[str] = []
         for tk in (title_service.active_title_key(char), title_service.active_secondary_title_key(char)):
             if tk and tk in TITLE_BY_KEY:
                 t_parts.append(html.escape(format_title_bonus_line(TITLE_BY_KEY[tk])))
         if t_parts:
-            title_bonus = "\n<i>Титулы: " + " · ".join(t_parts) + "</i>"
+            title_bonus_extra = ["", "<i>Титулы: " + " · ".join(t_parts) + "</i>"]
 
     xp_need = experience_needed_for_next_level(char.level, char.floor_number)
     st_hint = _stamina_minutes_hint(char.stamina, char.last_stamina_regen_at)
@@ -222,75 +226,106 @@ def _build_profile_text(
         dodge_pct = round(dodge_p * 100.0, 1)
 
     gp_show = html.escape(global_passives_line) if global_passives_line.strip() else "—"
-
     gid_s = html.escape(str(int(char.game_id))) if char.game_id is not None else "—"
-    lines = [
+
+    str_e = int(gb["str"]) + int(tb["str"])
+    dex_e = int(gb["dex"]) + int(tb["dex"])
+    int_e = int(gb["int"]) + int(tb["int"])
+    vit_e = int(gb["vit"]) + int(tb["vit"])
+    luck_e = int(gb["luck"]) + int(tb["luck"])
+
+    head_row = (
+        f"🗡️ {html.escape(char.display_name)} · 🎮 <b>ID {gid_s}</b> "
+        f"• Ур.{char.level} 📍 Этаж: {char.floor_number}"
+    )
+    if ranker_badge:
+        rank_combine = f"{rank_s} + {ranker_badge}" if rank_raw else ranker_badge
+    else:
+        rank_combine = rank_s
+
+    lines: list[str] = [
         LINE_SEP,
-        f"🗡️ {html.escape(char.display_name)} · 🎮 <b>ID {gid_s}</b> • {class_title} • Ур.{char.level}",
-        f"🎖️ Звание: <b>{rank_s}</b>",
+        head_row,
+        f"🎖️ Звание: {rank_combine}",
+        f"🏆 Титулы: {titles_row}",
     ]
-    lines.append(f"🏆 Титулы: {title}{title_bonus}")
-    if ranker_line:
-        lines.append(ranker_line)
-    lines.append(f"🌐 Глобальные бонусы: <i>{gp_show}</i>")
-    if not compact and mastery_html:
-        lines.append(mastery_html)
-    lines.append(LINE_SEP)
+    lines.extend(title_bonus_extra)
+    if ranker_effect:
+        lines.append(ranker_effect)
     lines.extend(
         [
-            render_hp_bar(char.hp_current, char.hp_max),
+            f"🌐 Глобальные бонусы: <i>{gp_show}</i>",
+            LINE_SEP,
+            f"💰 Золото: {format_number(int(char.gold))}",
+        ]
+    )
+    if not compact:
+        lines.append(f"⚗️ Рунные камни: {format_number(char.rune_stones)}")
+    lines.append(LINE_SEP)
+    if not compact:
+        lines.append(f"📜 Класс: {class_title}")
+        lines.append("")
+
+    lines.extend(
+        [
+            render_hp_bar(char.hp_current, char.hp_max, wrap_bar_in_code=False),
             "",
-            render_mp_bar(char.mp_current, char.mp_max),
+            render_mp_bar(char.mp_current, char.mp_max, wrap_bar_in_code=False),
             "",
             render_stamina_bar(
                 char.stamina,
                 settings.MAX_STAMINA,
+                length=_BAR_LEN,
                 minutes_to_next=st_hint,
+                wrap_bar_in_code=False,
             ),
             "",
-        ],
+            format_rest_status_line_html(char),
+            "",
+            render_exp_bar(int(char.experience), xp_need, wrap_bar_in_code=False),
+            LINE_SEP,
+        ]
     )
-    if compact:
-        lines.append(format_rest_status_line_html(char))
-        lines.append("")
+
+    stat_hdr = (
+        "📊 <b>Характеристики</b>"
+        if compact
+        else "📊 <b>Характеристики</b> <i>(база (+экип и титул))</i>"
+    )
     lines.extend(
         [
-            render_exp_bar(int(char.experience), xp_need),
+            stat_hdr,
+            f"⚔️ СИЛ: {_fmt_stat_plain(char.stat_strength, str_e)}    🏃 ЛОВ: {_fmt_stat_plain(char.stat_dexterity, dex_e)}",
+            f"🔮 ИНТ: {_fmt_stat_plain(char.stat_intelligence, int_e)}    🛡️ ВЫН: {_fmt_stat_plain(char.stat_vitality, vit_e)}",
+            f"🍀 УДА: {_fmt_stat_plain(char.stat_luck, luck_e)}",
             LINE_SEP,
-            "📊 <b>Характеристики</b> <i>(база из героя; + с экипировки и титула)</i>",
-            (
-                f"⚔️ СИЛ: {_fmt_stat_base_plus(char.stat_strength, int(gb['str']) + int(tb['str']))}    "
-                f"🏃 ЛОВ: {_fmt_stat_base_plus(char.stat_dexterity, int(gb['dex']) + int(tb['dex']))}"
-            ),
-            (
-                f"🔮 ИНТ: {_fmt_stat_base_plus(char.stat_intelligence, int(gb['int']) + int(tb['int']))}     "
-                f"🛡️ ВЫН: {_fmt_stat_base_plus(char.stat_vitality, int(gb['vit']) + int(tb['vit']))}"
-            ),
-            f"🍀 УДА: {_fmt_stat_base_plus(char.stat_luck, int(gb['luck']) + int(tb['luck']))}",
-            LINE_SEP,
-        ],
+        ]
     )
+
     if not compact:
+        if mastery_html:
+            lines.append(mastery_html)
+            lines.append(LINE_SEP)
         lines.extend(
             [
                 f"🗡️ Удар (физ.): <b>{dmg_lo}–{dmg_hi}</b>",
                 f"💥 Крит: <b>{crit_pct}%</b>    💨 Уклонение: <b>{dodge_pct}%</b>",
                 LINE_SEP,
-            ],
+            ]
         )
+
     unspent = int(getattr(char, "unspent_stat_points", 0) or 0)
     if unspent > 0:
-        lines.append(
-            f"✨ Свободных очков характеристик: <b>{unspent}</b> — /stats",
+        lines.append(f"✨ Свободных очков характеристик: <b>{unspent}</b> — /stats")
+
+    if not compact:
+        lines.extend(
+            [
+                element_profile_line(char.element),
+                f"📍 Этаж: {char.floor_number} / 100 · открыто до: {int(char.highest_floor_reached)}",
+            ]
         )
-    lines.extend(
-        [
-            element_profile_line(char.element),
-            f"📍 Этаж: {char.floor_number} / 100 · открыто до: {int(char.highest_floor_reached)}",
-            f"💰 Золото: {format_number(int(char.gold))}",
-            f"⚗️ Рунные камни: {format_number(char.rune_stones)}",
-        ],
-    )
+
     return "\n".join(lines)
 
 
@@ -306,7 +341,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
     loc = get_locale(char, None)
-    rk = await leaderboard_service.profile_ranker_status_line(session, char, locale=loc)
+    rk_badge, rk_eff = await leaderboard_service.profile_ranker_status_parts(session, char, locale=loc)
     base = _build_profile_text(
         char,
         compact=True,
@@ -316,7 +351,8 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
         effective_stats=eff,
-        ranker_line=rk,
+        ranker_badge=rk_badge,
+        ranker_effect=rk_eff,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"
@@ -335,7 +371,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
     loc = get_locale(char, None)
-    rk = await leaderboard_service.profile_ranker_status_line(session, char, locale=loc)
+    rk_badge, rk_eff = await leaderboard_service.profile_ranker_status_parts(session, char, locale=loc)
     base = _build_profile_text(
         char,
         compact=False,
@@ -345,7 +381,8 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
         effective_stats=eff,
-        ranker_line=rk,
+        ranker_badge=rk_badge,
+        ranker_effect=rk_eff,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"

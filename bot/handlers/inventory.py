@@ -24,7 +24,7 @@ from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, inventory_repo, user_repo
 from game.items import equipment as equip_meta
 from game.items import item_categories
-from services import shop_service
+from services import character_service, shop_service, stat_bonus_service
 from utils.ui import format_inventory_item_html
 
 router = Router(name="inventory")
@@ -192,7 +192,7 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             return
 
         data = item.item_data or {}
-        can_equip = equip_meta.equip_slot_for_kind(data.get("kind")) is not None
+        can_equip = equip_meta.resolve_equip_slot_for_item_data(data) is not None
         utag = data.get("use_tag")
         show_ration = (
             not item.is_equipped
@@ -358,12 +358,14 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
         if item is None:
             await callback.answer("Предмет не найден.", show_alert=True)
             return
+        prior_eff = await stat_bonus_service.effective_primary_stats(session, char)
         err = await inventory_repo.equip_item_from_bag(session, item)
         if err:
             await callback.answer(err, show_alert=True)
             return
+        await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
         data = item.item_data or {}
-        can_equip = equip_meta.equip_slot_for_kind(data.get("kind")) is not None
+        can_equip = equip_meta.resolve_equip_slot_for_item_data(data) is not None
         text = (
             f"{INV_HEADER}"
             f"{format_inventory_item_html(data)}\n\n"
@@ -408,12 +410,14 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
         if item is None:
             await callback.answer("Предмет не найден.", show_alert=True)
             return
+        prior_eff = await stat_bonus_service.effective_primary_stats(session, char)
         err = await inventory_repo.unequip_item(session, item)
         if err:
             await callback.answer(err, show_alert=True)
             return
+        await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
         data = item.item_data or {}
-        can_equip = equip_meta.equip_slot_for_kind(data.get("kind")) is not None
+        can_equip = equip_meta.resolve_equip_slot_for_item_data(data) is not None
         utag = (item.item_data or {}).get("use_tag")
         text = (
             f"{INV_HEADER}"

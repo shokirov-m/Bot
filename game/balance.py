@@ -89,8 +89,10 @@ MONSTER_FLOOR_DEF_PER_LEVEL = 0.0045
 MONSTER_TOWER_SCALING_BASE = 1.035
 MONSTER_TOWER_SCALING_CAP = 5.0
 
-# Мини-босс на 5 этаже — дополнительно ×2,2 к HP/атаке/защите (поверх множителя этажа).
+# Мини-босс на 5 этаже — дополнительно ×2,2 к атаке/защите (поверх множителя этажа); HP — фикс ниже.
 MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT = 2.2
+# HP мини-босса 5-го этажа (волна «босс» на ×5, не ×10): явное значение для баланса ранней башни.
+MONSTER_FLOOR5_MINIBOSS_HP_CAP = 550
 
 # С 6-го этажа: к итоговым HP/атаке/защите врага (+mult за каждый этаж выше 5-го).
 MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR = 0.03

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import random
 
 from sqlalchemy import select
@@ -9,6 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.inventory import InventoryItem
 from game.balance import BAG_MAX_SLOT_INDEX
+from game.items.equipment.defaults import apply_item_payload_defaults
+from game.items.equipment.slots import (
+    item_is_two_handed,
+    resolve_equip_slot_for_item_data,
+    ring_slot_is_explicit,
+)
 from game.items import equipment as equip_meta
 
 
@@ -83,6 +90,20 @@ async def get_equipped_in_slot(
     return result.scalar_one_or_none()
 
 
+async def _pick_ring_equip_slot(session: AsyncSession, character_id: int, data: dict) -> str:
+    """Без ring_slot в данных: первый пустой из ring / ring2, иначе смена кольца I."""
+    if ring_slot_is_explicit(data):
+        s = resolve_equip_slot_for_item_data(data)
+        return s if s in ("ring", "ring2") else "ring"
+    r1 = await get_equipped_in_slot(session, character_id, "ring")
+    r2 = await get_equipped_in_slot(session, character_id, "ring2")
+    if r1 is None:
+        return "ring"
+    if r2 is None:
+        return "ring2"
+    return "ring"
+
+
 async def first_free_bag_slot(session: AsyncSession, character_id: int) -> int | None:
     """Первый свободный индекс сумки (лимита по количеству ячеек нет)."""
     items = await list_bag_items(session, character_id)
@@ -98,18 +119,40 @@ async def first_free_bag_slot(session: AsyncSession, character_id: int) -> int |
 async def equip_item_from_bag(session: AsyncSession, item: InventoryItem) -> str | None:
     """
     Надеть предмет из сумки. При занятом слоте текущая вещь уходит в сумку.
+    Двуручное в основной руке освобождает вторую руку; при активном двуручнике вторую руку занять нельзя.
     Возвращает текст ошибки по-русски или None при успехе.
     """
-    data = item.item_data or {}
-    slot = equip_meta.equip_slot_for_kind(data.get("kind"))
+    data = dict(item.item_data or {})
+    apply_item_payload_defaults(data)
+    item.item_data = data
+    slot = resolve_equip_slot_for_item_data(data)
     if not slot:
         return "Этот предмет нельзя экипировать."
     if item.is_equipped:
         return "Уже надето."
+    cid = int(item.character_id)
 
-    existing = await get_equipped_in_slot(session, item.character_id, slot)
+    if str(data.get("kind") or "").lower() == "ring":
+        slot = await _pick_ring_equip_slot(session, cid, data)
+
+    if slot == "offhand":
+        main_w = await get_equipped_weapon(session, cid)
+        if main_w is not None and item_is_two_handed(dict(main_w.item_data or {})):
+            return "Двуручное оружие в основной руке — сначала сними его или смени на одноручное."
+
+    if slot == "weapon" and item_is_two_handed(data):
+        off_i = await get_equipped_in_slot(session, cid, "offhand")
+        if off_i is not None:
+            free = await first_free_bag_slot(session, cid)
+            if free is None:
+                return "Сумка полна. Освободи ячейку, чтобы снять предмет со второй руки перед двуручником."
+            off_i.is_equipped = False
+            off_i.equip_slot = None
+            off_i.bag_slot = free
+
+    existing = await get_equipped_in_slot(session, cid, slot)
     if existing is not None:
-        free = await first_free_bag_slot(session, item.character_id)
+        free = await first_free_bag_slot(session, cid)
         if free is None:
             return "Сумка полна. Освободи ячейку, чтобы снять текущую вещь."
         existing.is_equipped = False
@@ -144,12 +187,14 @@ async def add_starter_equipped_weapon(
     item_data: dict,
 ) -> InventoryItem:
     """Стартовое оружие сразу в слоте weapon."""
+    data = copy.deepcopy(item_data)
+    apply_item_payload_defaults(data)
     row = InventoryItem(
         character_id=character_id,
         is_equipped=True,
         equip_slot="weapon",
         bag_slot=None,
-        item_data=item_data,
+        item_data=data,
     )
     session.add(row)
     await session.flush()
@@ -188,12 +233,14 @@ async def add_bag_item(
     bag_slot: int | None = None,
 ) -> InventoryItem:
     """Добавить предмет в сумку (bag_slot можно назначить позже)."""
+    data = copy.deepcopy(item_data)
+    apply_item_payload_defaults(data)
     row = InventoryItem(
         character_id=character_id,
         is_equipped=False,
         equip_slot=None,
         bag_slot=bag_slot,
-        item_data=item_data,
+        item_data=data,
     )
     session.add(row)
     await session.flush()
