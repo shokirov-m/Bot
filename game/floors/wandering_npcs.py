@@ -81,6 +81,8 @@ def wandering_npc_for_floor(character_id: int, floor_number: int) -> dict[str, s
     Иначе None. Стабильно для пары (character_id, floor_number).
     """
     f = int(floor_number)
+    if f == 3:
+        return None
     if f < WANDERING_NPC_FLOOR_MIN or f > WANDERING_NPC_FLOOR_MAX:
         return None
     cid = int(character_id)

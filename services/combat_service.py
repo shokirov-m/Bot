@@ -39,6 +39,7 @@ from game.combat import consumables, effects, engine, formulas, monster_ai, nigh
 from game.items import runes as rune_items
 from game.balance import (
     DEATH_GOLD_LOSS_FRACTION,
+    MAX_DEATH_GOLD_LOSS,
     MONSTER_ATK_CURVE_MULT,
     MONSTER_ATK_FLAT_ELITE,
     MONSTER_ATK_FLAT_NORMAL,
@@ -127,11 +128,11 @@ TUTORIAL_SPAWN = FloorMonsterSpawn(
 
 
 def _taunt_banner_html(taunt_line: str) -> str:
-    """Насмешка монстра: пустые строки до/после, весь блок в курсиве — заметно среди статов."""
+    """Насмешка монстра (сырой текст хранится для экрана боя в 💬 «…»)."""
     t = (taunt_line or "").strip()
     if not t:
         return ""
-    return f"\n\n<i>{html.escape(t)}</i>\n\n"
+    return html.escape(t)
 
 
 async def _safe_edit_combat_message_text(
@@ -476,47 +477,15 @@ def _build_combat_dict(
     }
     effects.init_effects(state)
     loc_battle = get_locale(character, None)
-    pet_hi = pets_mod.format_pet_combat_highlight_line_html(character, locale=loc_battle)
     pet_base = pets_mod.format_pet_battle_line_html(character, locale=loc_battle)
-    if pet_hi and pet_base:
-        state["pet_line_html"] = f"{pet_hi}\n{pet_base}"
-    elif pet_hi:
-        state["pet_line_html"] = pet_hi
-    else:
-        state["pet_line_html"] = pet_base
+    state["pet_line_html"] = pet_base or ""
     return state
 
 
 def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
-    """Текст боя в духе ТЗ (HTML)."""
+    """Экран боя: этаж, враг (полосы, баффы, реплика), игрок, лог."""
     m = state["monster"]
-    tags: list[str] = []
-    if m.get("is_major_boss"):
-        tags.append("БОСС")
-    elif m.get("is_mini_boss"):
-        tags.append("МИНИ-БОСС")
-    if m.get("is_elite"):
-        tags.append("ЭЛИТА")
-    tag_disp = f" <i>[{html.escape(', '.join(tags))}]</i>" if tags else ""
-
     monster_ai.sync_monster_rage_visual(state)
-    rage = "💢 Ярость: <b>АКТИВНА</b> (+30% урон)\n" if state.get("monster_rage") else ""
-    night_line = (
-        "🌑 <b>[НОЧЬ UTC]</b> <i>Враг: <b>+20% HP и ATK</b>. Победа: <b>+40% золото и опыт</b>.</i>\n"
-        if state.get("night_battle")
-        else ""
-    )
-    shadow_line = (
-        "<i>Тени сгущаются — зверь ведёт себя агрессивнее, словно чует кровь.</i>\n"
-        if state.get("night_battle")
-        else ""
-    )
-    phase_note = ""
-    ph = int(state.get("monster_phase", 1))
-    if (m.get("is_mini_boss") or m.get("is_major_boss")) and ph >= 3:
-        phase_note = "💀 <b>Фаза 3 — ЯРОСТЬ</b> (+50% урон)\n"
-    elif (m.get("is_mini_boss") or m.get("is_major_boss")) and ph >= 2:
-        phase_note = "⚡ <b>Фаза 2</b>\n"
 
     elem = m.get("element", "earth")
     elem_icons = {
@@ -526,26 +495,42 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
         "dark": "🌑",
         "light": "✨",
         "earth": "🌿",
+        "poison": "☠️",
     }
-    el_icon = elem_icons.get(elem, "🌀")
+    el_icon = elem_icons.get(str(elem).lower(), "🌀")
 
-    hp_line = render_hp_bar(int(m["hp"]), int(m["max_hp"]))
-    mp_line = render_mp_bar(int(state["player_mp"]), int(state["player_mp_max"]))
-    php_line = render_hp_bar(int(state["player_hp"]), int(state["player_hp_max"]))
+    name_esc = html.escape(str(m.get("name", "Враг")))
+    if m.get("is_major_boss"):
+        enemy_line = f"👑 <b>{name_esc}</b> {el_icon} <i>(Босс)</i>"
+    elif m.get("is_mini_boss"):
+        enemy_line = f"👑 <b>{name_esc}</b> {el_icon} <i>(Мини-босс)</i>"
+    elif m.get("is_elite"):
+        enemy_line = f"⭐ <b>{name_esc}</b> {el_icon} <i>(Элита)</i>"
+    else:
+        enemy_line = f"{html.escape(str(m.get('emoji', '👹')))} <b>{name_esc}</b> {el_icon}"
 
-    last_m = state.get("monster_last_damage_to_player")
-    monster_last_line = ""
-    if last_m is not None and int(last_m) > 0:
-        monster_last_line = f"→ Последний урон по тебе: <b>{int(last_m)}</b> HP\n"
+    hp_mon = render_hp_bar(int(m["hp"]), int(m["max_hp"]), wrap_bar_in_code=False)
+    mp_line = render_mp_bar(int(state["player_mp"]), int(state["player_mp_max"]), wrap_bar_in_code=False)
+    php_line = render_hp_bar(int(state["player_hp"]), int(state["player_hp_max"]), wrap_bar_in_code=False)
 
-    last_p = state.get("player_last_damage_to_monster")
-    player_last_line = ""
-    if last_p is not None and int(last_p) > 0:
-        player_last_line = f"→ Твой последний урон по врагу: <b>{int(last_p)}</b> HP\n"
-
-    debuff_m = ""
+    buff_parts: list[str] = []
+    ph = int(state.get("monster_phase", 1))
+    if (m.get("is_mini_boss") or m.get("is_major_boss")) and ph >= 3:
+        buff_parts.append("💀 Фаза 3 (+50% урон)")
+    elif (m.get("is_mini_boss") or m.get("is_major_boss")) and ph >= 2:
+        buff_parts.append("⚡ Фаза 2")
+    if state.get("monster_rage"):
+        buff_parts.append("💢 Ярость (+30%)")
     if float(state.get("monster_outgoing_mult", 1.0)) < 1.0 and int(state.get("monster_debuff_turns", 0)) > 0:
-        debuff_m = f"🌫️ Атака врага ослаблена ({int(state['monster_debuff_turns'])} х.)\n"
+        buff_parts.append(f"🌫️ Слабость ({int(state['monster_debuff_turns'])} х.)")
+    buff_line = ""
+    if buff_parts:
+        buff_line = "Баффы: " + " | ".join(buff_parts) + "\n"
+
+    taunt_raw = str(state.get("battle_taunt_html") or "").strip()
+    taunt_block = ""
+    if taunt_raw:
+        taunt_block = f"💬 «{taunt_raw}»\n"
 
     shield_p = ""
     sh_val = int(state.get("player_shield_hp", 0))
@@ -557,49 +542,42 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     if pl:
         pet_p = f"{pl}\n"
 
-    logs = state.get("ui_logs", [])[-2:]
-    log_block = "\n".join(logs) if logs else ""
-    taunt_html = str(state.get("battle_taunt_html") or "")
-
-    mon_night_flavor = (
-        "<i>🌑 Ночной зверь — удары больнее, награда за падение твари щедрее.</i>\n"
-        if state.get("night_battle")
-        else ""
-    )
+    logs = state.get("ui_logs", [])[-6:]
+    log_block = "\n".join(logs) if logs else "<i>—</i>"
 
     fln = int(state.get("floor", 0))
-    battle_title = (
-        f"<b>⚔️ БОЙ</b> 🌑 <b>[НОЧЬ]</b> · этаж <b>{fln}</b>"
-        if state.get("night_battle")
-        else f"<b>⚔️ БОЙ</b> · этаж <b>{fln}</b>"
-    )
+    sep = LINE_SEP_BATTLE
+    night_note = ""
+    if state.get("night_battle"):
+        night_note = (
+            "<i>🌑 Ночь UTC: враг +20% HP/ATK, победа +40% золото и опыт.</i>\n"
+        )
+
+    title = f"⚔️ <b>ЭТАЖ {fln}</b>"
+    if state.get("night_battle"):
+        title += " 🌑"
+
     return (
-        f"{LINE_SEP_BATTLE}\n"
-        f"{battle_title}\n"
-        f"{LINE_SEP_BATTLE}\n"
-        f"<b>▸ Враг</b>\n"
-        f"{m.get('emoji', '👹')} <b>{html.escape(m['name'])}</b> {el_icon}{tag_disp}\n"
-        f"{mon_night_flavor}"
-        f"{hp_line}\n"
-        f"{monster_last_line}"
-        f"{phase_note}"
-        f"{rage}"
-        f"{night_line}"
-        f"{shadow_line}"
-        f"{debuff_m}"
-        f"<i>Ход врага {int(state.get('monster_turn', 0))} · "
-        f"броня {engine.monster_armor_value(state)}</i>\n"
-        f"{taunt_html}"
-        f"{LINE_SEP_BATTLE}\n"
-        f"<b>▸ Ты</b>\n"
+        f"{sep}\n"
+        f"{title}\n"
+        f"{sep}\n"
+        f"{night_note}"
+        f"<b>▸ ВРАГ</b>\n"
+        f"{enemy_line}\n"
+        f"{hp_mon}\n"
+        f"{buff_line}"
+        f"{taunt_block}"
+        f"\n"
+        f"<b>▸ ИГРОК</b>\n"
         f"{php_line}\n"
         f"{mp_line}\n"
-        f"{player_last_line}"
         f"{shield_p}"
         f"{pet_p}"
-        f"{LINE_SEP_BATTLE}\n"
-        f"<b>Лог</b>\n"
-        f"{log_block if log_block else '<i>—</i>'}"
+        f"\n"
+        f"{sep}\n"
+        f"📜 <b>Лог хода:</b>\n"
+        f"{log_block}\n"
+        f"{sep}"
     )
 
 
@@ -1424,7 +1402,7 @@ async def _defeat_sequence(
     else:
         pct = float(DEATH_GOLD_LOSS_FRACTION)
         lost_gold = max(1, int(g * pct))
-        lost_gold = min(lost_gold, g)
+        lost_gold = min(lost_gold, g, int(MAX_DEATH_GOLD_LOSS))
     character.gold = max(0, g - lost_gold)
 
     weapon = await inventory_repo.get_equipped_weapon(session, character.id)

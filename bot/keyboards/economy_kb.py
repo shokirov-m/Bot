@@ -23,8 +23,10 @@ def economy_hub_keyboard(floor_number: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def bank_safe_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+def bank_safe_keyboard(floor_number: int, *, bank_back: str = "hub") -> InlineKeyboardMarkup:
     f = int(floor_number)
+    back_cd = f"cty:mkt:{f}:open" if bank_back == "mkt" else f"ecy:hub:{f}"
+    back_txt = "⬅ Рынок" if bank_back == "mkt" else "⬅ Экономика"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -38,7 +40,7 @@ def bank_safe_keyboard(floor_number: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="➕ Всё влезет", callback_data=f"ecy:sfd:{f}:0")],
             [InlineKeyboardButton(text="➖ Снять всё", callback_data=f"ecy:sfw:{f}:0")],
             [InlineKeyboardButton(text="⬆️ Улучшить хранилище", callback_data=f"ecy:sfu:{f}")],
-            [InlineKeyboardButton(text="⬅ Экономика", callback_data=f"ecy:hub:{f}")],
+            [InlineKeyboardButton(text=back_txt, callback_data=back_cd)],
             menu_nav_button_row(),
         ],
     )

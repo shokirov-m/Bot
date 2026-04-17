@@ -46,6 +46,8 @@ RUNE_CHANCE_MAJOR = 0.45
 
 # Доля золота, теряемая при смерти на этаже (после боя; не учебный бой).
 DEATH_GOLD_LOSS_FRACTION = 0.10
+# Верхний предел потери за одну смерть (после расчёта доли и обрезки по текущему балансу).
+MAX_DEATH_GOLD_LOSS = 8_000
 
 DROP_CHANCE_NORMAL = 0.15
 DROP_CHANCE_ELITE = 0.28

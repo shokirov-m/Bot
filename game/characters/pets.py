@@ -395,14 +395,43 @@ def format_pet_combat_highlight_line_html(character: Character, *, locale: str) 
     return ""
 
 
+def format_pet_passive_battle_parens(passive: dict[str, float | int], *, locale: str) -> str:
+    """Кратко для строки боя: «Защита +2, Крит +4%» (без HTML)."""
+    if not passive:
+        return ""
+    loc = "en" if str(locale).lower().startswith("en") else "ru"
+    parts: list[str] = []
+    if "def_bonus" in passive:
+        v = float(passive["def_bonus"])
+        vs = str(int(v)) if v == int(v) else str(v)
+        parts.append(f"Defense +{vs}" if loc == "en" else f"Защита +{vs}")
+    if "crit_bonus" in passive:
+        p = round(float(passive["crit_bonus"]) * 100.0, 1)
+        ps = str(int(p)) if abs(p - int(p)) < 1e-9 else str(p)
+        parts.append(f"Crit +{ps}%" if loc == "en" else f"Крит +{ps}%")
+    if "dodge_bonus" in passive:
+        p = round(float(passive["dodge_bonus"]) * 100.0, 1)
+        ps = str(int(p)) if abs(p - int(p)) < 1e-9 else str(p)
+        parts.append(f"Dodge +{ps}%" if loc == "en" else f"Уклон +{ps}%")
+    if "mp_regen_turn" in passive:
+        v = int(passive["mp_regen_turn"])
+        parts.append(f"MP +{v}/turn" if loc == "en" else f"MP +{v}/ход")
+    if "mag_bonus_percent" in passive:
+        v = int(passive["mag_bonus_percent"])
+        parts.append(f"Magic +{v}%" if loc == "en" else f"Маг. +{v}%")
+    return ", ".join(parts)
+
+
 def format_pet_battle_line_html(character: Character, *, locale: str) -> str:
-    """Строка в экране боя: активный питомец и краткий эффект."""
+    """Строка в экране боя: 🐾 эмодзи Имя (Защита +2, Крит +4%)."""
     disp = active_pet_display(character)
     if not disp:
         return ""
-    passive = format_pet_passive_plain(pet_passive_delta(character), locale=locale)
-    passive_html = f" — <i>{html.escape(passive)}</i>" if passive else ""
-    return f"🐾 <b>{html.escape(disp)}</b>{passive_html}"
+    inner = format_pet_passive_battle_parens(pet_passive_delta(character), locale=locale)
+    esc_disp = html.escape(disp)
+    if inner:
+        return f"🐾 {esc_disp} ({html.escape(inner)})"
+    return f"🐾 {esc_disp}"
 
 
 def pet_choice_button_caption(key: str, *, locale: str, is_active: bool) -> str:

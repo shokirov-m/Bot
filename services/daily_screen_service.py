@@ -18,17 +18,14 @@ async def build_daily_body_html(
     character: Character,
     *,
     locale: str,
-    title_html: str,
+    title_html: str | None = None,
 ) -> tuple[str, bool]:
     """
     Полный HTML текста и флаг «подписан».
     """
+    del title_html  # заголовок внутри моноширинного блока
     subscribed, api_hint = await subscription_check(bot, telegram_user_id, locale=locale)
-    intro = daily_service.describe_daily_html(
-        character,
-        locale=locale,
-        title_html=title_html,
-    )
+    box = daily_service.format_daily_box_html(character, locale=locale, subscribed=subscribed)
     name = t(locale, "channel_display_name")
     url = channel_public_url()
     link = f'<a href="{html.escape(url)}">{html.escape(name)}</a>'
@@ -38,4 +35,4 @@ async def build_daily_body_html(
         extra = "\n" + t(locale, "daily_sub_required", channel=html.escape(name), link=link)
     else:
         extra = "\n" + t(locale, "daily_sub_ok")
-    return intro + extra, subscribed
+    return box + extra, subscribed

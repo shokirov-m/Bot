@@ -12,6 +12,24 @@ from game.characters import pets as pets_mod
 
 def city_hub_keyboard(floor_number: int, character: Character, *, locale: str = "ru") -> InlineKeyboardMarkup:
     loc = locale if locale in ("ru", "en") else "ru"
+    f = int(floor_number)
+    if f == 3:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="⚒️ Кузница", callback_data=f"frg:main:{f}")],
+                [InlineKeyboardButton(text="🍺 Таверна", callback_data=f"tvr:open:{f}")],
+                [InlineKeyboardButton(text="🏛️ Рынок", callback_data=f"cty:mkt:{f}:open")],
+                [
+                    InlineKeyboardButton(text="⚔️ Стражник", callback_data=f"cty:{f}:view"),
+                    InlineKeyboardButton(text="📜 Писарь", callback_data=f"cty:f3npc:scribe:{f}"),
+                ],
+                [
+                    InlineKeyboardButton(text="🌿 Мара", callback_data=f"cty:f3npc:herb:{f}"),
+                ],
+                [InlineKeyboardButton(text="🗺️ К этажу", callback_data=f"fl:{f}:return")],
+                menu_nav_button_row(),
+            ],
+        )
     c1, c3, _r = pets_mod.city_summon_price_band(character)
     left = pets_mod.city_pet_pulls_remaining_today(character)
     return InlineKeyboardMarkup(

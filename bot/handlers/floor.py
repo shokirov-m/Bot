@@ -40,7 +40,7 @@ from utils.ui import LINE_SEP
 router = Router(name="floor")
 
 _FLOOR_CB = re.compile(r"^fl:(\d+):([a-z0-9_]+)$")
-_SCR_CB = re.compile(r"^scr:(\d+|back)$")
+_SCR_CB = re.compile(r"^scr:(\d+|back|backmkt)$")
 
 
 @router.message(Command("floor"))
@@ -160,7 +160,29 @@ async def on_scrap_merchant_callback(
             )
             await query.answer()
             return
-        from bot.keyboards.scrap_kb import scrap_merchant_keyboard
+        if tok == "backmkt":
+            if int(char.floor_number) != 3:
+                await push_floor_screen_ui(
+                    session,
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    character=char,
+                    reply_markup=await floor_keyboard_for_character(session, char),
+                    target_message=query.message,
+                )
+            else:
+                from bot.keyboards.city_market_kb import city_floor3_market_keyboard
+
+                await query.message.edit_text(
+                    "🏛️ <b>Рынок «Тихий Ручей»</b>\n"
+                    "<i>Лавка, скупщик, сейф банка и храм призыва — выбери ниже.</i>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=city_floor3_market_keyboard(char.floor_number),
+                )
+            await query.answer()
+            return
+        from bot.keyboards.scrap_kb import scrap_merchant_keyboard, scrap_ui_back
         from db.repository import inventory_repo
         from services import scrap_merchant_service
 
@@ -181,7 +203,7 @@ async def on_scrap_merchant_callback(
         await query.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=scrap_merchant_keyboard(items),
+            reply_markup=scrap_merchant_keyboard(items, back=scrap_ui_back(char)),
         )
         await query.answer("Продано.", show_alert=False)
     except Exception:
@@ -289,16 +311,17 @@ async def on_floor_callback(
             if floor != 3:
                 await query.answer("Скупщик только на 3 этаже.", show_alert=True)
                 return
-            from bot.keyboards.scrap_kb import scrap_merchant_keyboard
+            from bot.keyboards.scrap_kb import scrap_merchant_keyboard, set_scrap_ui_back
             from db.repository import inventory_repo
             from services import scrap_merchant_service
 
+            set_scrap_ui_back(char, "floor")
             items = await inventory_repo.list_bag_items(session, char.id)
             text = scrap_merchant_service.format_scrap_menu_html(char, items)
             await query.message.edit_text(
                 text,
                 parse_mode=ParseMode.HTML,
-                reply_markup=scrap_merchant_keyboard(items),
+                reply_markup=scrap_merchant_keyboard(items, back="floor"),
             )
             await query.answer()
             return

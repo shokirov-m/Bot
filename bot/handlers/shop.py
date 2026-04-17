@@ -26,7 +26,7 @@ async def _load_char(session: AsyncSession, telegram_id: int):
 
 
 def _origin_ok(s: str) -> str:
-    return s if s in ("c", "f") else "f"
+    return s if s in ("c", "f", "m") else "f"
 
 
 @router.callback_query(F.data.startswith("shp:main:"))
@@ -48,7 +48,7 @@ async def shop_open(query: CallbackQuery, session: AsyncSession) -> None:
         if not shop_data.shop_available_on_floor(char.floor_number):
             await query.answer("Здесь нет торговца.", show_alert=True)
             return
-        text = shop_service.format_shop_welcome_html(char, from_city=(origin == "c"))
+        text = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
         await query.message.edit_text(text, reply_markup=shop_main_keyboard(char.floor_number, origin))
         await query.answer()
     except Exception:
@@ -82,7 +82,7 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer(payload[:180], show_alert=True)
             return
 
-        header = shop_service.format_shop_welcome_html(char, from_city=(origin == "c"))
+        header = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
         await query.message.edit_text(
             f"{header}\n\n{LINE_SEP}\n{payload}",
             reply_markup=shop_main_keyboard(char.floor_number, origin),
@@ -115,7 +115,7 @@ async def shop_eat_ration(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer(msg[:180], show_alert=True)
             return
 
-        header = shop_service.format_shop_welcome_html(char, from_city=(origin == "c"))
+        header = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
         await query.message.edit_text(
             f"{header}\n\n{LINE_SEP}\n{msg}",
             reply_markup=shop_main_keyboard(char.floor_number, origin),

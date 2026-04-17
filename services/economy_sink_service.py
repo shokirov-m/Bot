@@ -142,3 +142,23 @@ def try_bank_safe_upgrade(character: Character, *, floor_key: int) -> tuple[bool
 
 async def flush(session: AsyncSession, character: Character) -> None:
     await session.flush()
+
+
+BANK_BACK_UI_KEY = "_econ_bank_back_v1"
+
+
+def set_bank_ui_back(character: Character, mode: str) -> None:
+    mp = _mp(character)
+    mp[BANK_BACK_UI_KEY] = mode if mode in ("hub", "mkt") else "hub"
+    _save_mp(character, mp)
+
+
+def bank_ui_back(character: Character) -> str:
+    v = str(_mp(character).get(BANK_BACK_UI_KEY) or "hub")
+    return v if v in ("hub", "mkt") else "hub"
+
+
+def clear_bank_ui_back(character: Character) -> None:
+    mp = _mp(character)
+    mp.pop(BANK_BACK_UI_KEY, None)
+    _save_mp(character, mp)

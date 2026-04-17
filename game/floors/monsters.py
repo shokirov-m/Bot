@@ -329,6 +329,9 @@ def build_spawns_for_floor(floor_number: int) -> list[FloorMonsterSpawn]:
     Список целей на этаже: 6 обычных + элита (на базе первого),
     плюс мини-босс / сильный босс по правилам этажа.
     """
+    # Этаж 3 — только город-хаб: боёв на карте нет (монстры, тайник, привал — убраны с экрана).
+    if int(floor_number) == 3:
+        return []
     if floor_number >= 100:
         zone = floor_data.ZONE_FINAL
         bb = major_boss_for_zone(zone, floor_number)

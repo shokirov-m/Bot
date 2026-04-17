@@ -8,8 +8,13 @@ from game.economy.shop import shop_goods_for_floor
 
 
 def shop_main_keyboard(floor_number: int, origin: str) -> InlineKeyboardMarkup:
-    """origin: c — из города, f — с этажа (5,10,15…)."""
-    back_cd = f"frg:city:{floor_number}" if origin == "c" else f"fl:{floor_number}:return"
+    """origin: c — из города, f — с этажа (5,10,15…), m — с рынка этажа 3."""
+    if origin == "m":
+        back_cd = f"cty:mkt:{floor_number}:open"
+    elif origin == "c":
+        back_cd = f"frg:city:{floor_number}"
+    else:
+        back_cd = f"fl:{floor_number}:return"
     rows: list[list[InlineKeyboardButton]] = []
     for g in shop_goods_for_floor(floor_number):
         label = f"{g.emoji} {g.name} — {g.price}💰"

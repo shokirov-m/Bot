@@ -12,8 +12,6 @@ from typing import Any
 from bot.i18n import t
 from db.models.character import Character
 from sqlalchemy.ext.asyncio import AsyncSession
-from utils.ui import LINE_SEP
-
 from services import character_service
 
 META_KEY = "daily_v1"
@@ -59,45 +57,66 @@ def record_kill(character: Character) -> None:
     _save_state(character, meta, st)
 
 
-def describe_daily_html(character: Character, *, locale: str, title_html: str) -> str:
-    """Текст экрана /daily (без блока подписки снаружи). Заголовок и строки — по locale."""
+def format_daily_box_html(character: Character, *, locale: str, subscribed: bool) -> str:
+    """Блок ежедневки в рамке (моноширинный через &lt;pre&gt;)."""
     today = _utc_today_iso()
     _, st = _load_state(character)
     kc = st["kc"] if st["kd"] == today else 0
     claimed = st["lcd"] == today
-    lines = [title_html, LINE_SEP]
-    if kc >= KILLS_GOAL:
-        lines.append(t(locale, "daily_progress_done", kc=kc, goal=KILLS_GOAL))
-    else:
-        lines.append(t(locale, "daily_progress_need", kc=kc, goal=KILLS_GOAL))
-    lines.append(t(locale, "daily_streak_line", streak=st["streak"]))
-    lines.append("")
-    preview = compute_next_daily_claim_rewards(character)
-    if claimed:
-        lines.append(t(locale, "daily_reward_section_title"))
-        lines.append(t(locale, "daily_claimed_reward_hint", streak=st["streak"]))
-        lines.append(t(locale, "daily_claimed_today"))
-    elif preview is not None:
-        gold, xp, nstreak = preview
-        lines.append(t(locale, "daily_reward_section_title"))
-        lines.append(
-            t(
-                locale,
-                "daily_reward_preview",
-                gold=gold,
-                xp=xp,
-                streak=nstreak,
-            ),
-        )
-        lines.append(t(locale, "daily_reward_streak_note"))
-        lines.append("")
-        if kc >= KILLS_GOAL:
-            lines.append(t(locale, "daily_can_claim_hint"))
+    streak = int(st["streak"])
+    battles_ok = kc >= KILLS_GOAL
+    sub_ok = subscribed
+    if str(locale).lower().startswith("en"):
+        bline = f"        ⚔️ Battles: [ {kc} / {KILLS_GOAL} ] {'✅' if battles_ok else ''}"
+        ch_lbl = "Subscribed" if sub_ok else "Not subscribed"
+        ch_line = f"        📢 Channel: [ {ch_lbl} ] {'✅' if sub_ok else '❌'}"
+        if claimed:
+            rew = "Claimed ✅"
+        elif battles_ok and sub_ok:
+            rew = "Ready — tap Claim"
+        elif not battles_ok:
+            rew = "In progress"
         else:
-            lines.append(t(locale, "daily_need_kills", need=KILLS_GOAL - kc))
-    lines.append("")
-    lines.append(t(locale, "daily_conditions_short"))
-    return "\n".join(lines)
+            rew = "Need channel sub"
+        streak_lbl = f"{streak} day(s)"
+        upd = "Resets at 00:00 UTC"
+        title = "📅 DAILY"
+    else:
+        bline = f"        ⚔️ Бои: [ {kc} / {KILLS_GOAL} ] {'✅' if battles_ok else ''}"
+        ch_lbl = "Подписан" if sub_ok else "Не подписан"
+        ch_line = f"        📢 Канал: [ {ch_lbl} ] {'✅' if sub_ok else '❌'}"
+        if claimed:
+            rew = "Получена ✅"
+        elif battles_ok and sub_ok:
+            rew = "Можно забрать"
+        elif not battles_ok:
+            rew = "В процессе"
+        else:
+            rew = "Нужна подписка"
+        streak_lbl = f"{streak} дн."
+        upd = "Обновление в 00:00 UTC"
+        title = "📅 ЕЖЕДНЕВКА"
+    inner = "\n".join(
+        [
+            f"╔══════ {title} ══════╗",
+            "        Цели:",
+            bline,
+            ch_line,
+            "",
+            "         Статус:",
+            f"         🔥 Серия побед: {streak_lbl}",
+            f"         🎁 Награда: {rew}",
+            f"         ⏳ {upd}",
+            "╚═══════════════════════╝",
+        ],
+    )
+    return f"<pre>{inner}</pre>"
+
+
+def describe_daily_html(character: Character, *, locale: str, title_html: str) -> str:
+    """Совместимость: без флага подписки — только блок (канал как не подписан)."""
+    del title_html
+    return format_daily_box_html(character, locale=locale, subscribed=False)
 
 
 @dataclass

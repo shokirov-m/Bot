@@ -55,6 +55,7 @@ async def economy_open_hub(query: CallbackQuery, session: AsyncSession) -> None:
         if char.floor_number != floor_key or floor_data.get_city_for_floor(char.floor_number) is None:
             await query.answer("Город недоступен здесь. Обнови этаж.", show_alert=True)
             return
+        economy_sink_service.clear_bank_ui_back(char)
         text = economy_sink_service.economy_hub_intro_html(char)
         try:
             await query.message.edit_text(
@@ -88,6 +89,7 @@ async def economy_back_city(query: CallbackQuery, session: AsyncSession) -> None
         from services.floor_service import format_city_hub_message
 
         loc = get_locale(char, query.from_user.language_code)
+        economy_sink_service.clear_bank_ui_back(char)
         try:
             await query.message.edit_text(
                 format_city_hub_message(char),
@@ -122,10 +124,11 @@ async def _refresh_bank_safe_screen(query: CallbackQuery, char, floor_key: int) 
     if query.message is None:
         return
     text = economy_sink_service.bank_safe_intro_html(char)
+    bb = economy_sink_service.bank_ui_back(char)
     try:
         await query.message.edit_text(
             text,
-            reply_markup=bank_safe_keyboard(floor_key),
+            reply_markup=bank_safe_keyboard(floor_key, bank_back=bb),
             parse_mode=ParseMode.HTML,
         )
     except TelegramBadRequest as e:
@@ -208,7 +211,8 @@ async def economy_safe_view(query: CallbackQuery, session: AsyncSession) -> None
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
             return
-        floor_key = int(query.data.split(":")[2])
+        parts = query.data.split(":")
+        floor_key = int(parts[2])
         char = await _load_char(session, query.from_user.id)
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
@@ -216,11 +220,16 @@ async def economy_safe_view(query: CallbackQuery, session: AsyncSession) -> None
         if char.floor_number != floor_key or floor_data.get_city_for_floor(char.floor_number) is None:
             await query.answer("Город недоступен здесь. Обнови этаж.", show_alert=True)
             return
+        if len(parts) > 3 and parts[3] == "mkt":
+            economy_sink_service.set_bank_ui_back(char, "mkt")
+        else:
+            economy_sink_service.set_bank_ui_back(char, "hub")
         text = economy_sink_service.bank_safe_intro_html(char)
+        bb = economy_sink_service.bank_ui_back(char)
         try:
             await query.message.edit_text(
                 text,
-                reply_markup=bank_safe_keyboard(floor_key),
+                reply_markup=bank_safe_keyboard(floor_key, bank_back=bb),
                 parse_mode=ParseMode.HTML,
             )
         except TelegramBadRequest as e:

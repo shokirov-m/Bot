@@ -116,20 +116,12 @@ def floor_screen_keyboard(
             ],
         )
 
-    if floor_number == 3 and not long_floor_mod.is_long_floor_active(character):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="💰 Скупщик",
-                    callback_data=_cb(floor_number, "scrap"),
-                ),
-            ],
-        )
-
     rows.extend(_pet_rows(character, floor_number))
 
-    if forest_beginnings_mod.is_forest_beginnings_zone(floor_number) and not long_floor_mod.is_long_floor_active(
-        character,
+    if (
+        forest_beginnings_mod.is_forest_beginnings_zone(floor_number)
+        and floor_number != 3
+        and not long_floor_mod.is_long_floor_active(character)
     ):
         camp_lbl = "🏕️ Привал (полн. HP, без ⚡)"
         if forest_beginnings_mod.camp_used(character):
@@ -158,7 +150,10 @@ def floor_screen_keyboard(
             ],
         )
 
-    wnpc = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), floor_number)
+    wnpc = None if floor_number == 3 else wandering_npcs_mod.wandering_npc_for_floor(
+        int(character.id),
+        floor_number,
+    )
     if wnpc is not None:
         btxt = str(wnpc["button"])
         if len(btxt) > 18:
@@ -239,11 +234,12 @@ def floor_screen_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if floor_number != 3:
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     if nav:
         rows.append(nav)
 
-    if floor_data.has_quest_npc(floor_number):
+    if floor_data.has_quest_npc(floor_number) and floor_number != 3:
         rows.append(
             [
                 InlineKeyboardButton(
@@ -278,8 +274,10 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
 
     rows.extend(_pet_rows(character, floor_number))
 
-    if forest_beginnings_mod.is_forest_beginnings_zone(floor_number) and not long_floor_mod.is_long_floor_active(
-        character,
+    if (
+        forest_beginnings_mod.is_forest_beginnings_zone(floor_number)
+        and floor_number != 3
+        and not long_floor_mod.is_long_floor_active(character)
     ):
         camp_lbl = "🏕️ Привал (полн. HP, без ⚡)"
         if forest_beginnings_mod.camp_used(character):
@@ -308,7 +306,10 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
             ],
         )
 
-    wnpc = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), floor_number)
+    wnpc = None if floor_number == 3 else wandering_npcs_mod.wandering_npc_for_floor(
+        int(character.id),
+        floor_number,
+    )
     if wnpc is not None:
         btxt = str(wnpc["button"])
         if len(btxt) > 18:
@@ -394,11 +395,12 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if floor_number != 3:
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     if nav:
         rows.append(nav)
 
-    if floor_data.has_quest_npc(floor_number):
+    if floor_data.has_quest_npc(floor_number) and floor_number != 3:
         rows.append(
             [
                 InlineKeyboardButton(

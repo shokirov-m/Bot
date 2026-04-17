@@ -152,14 +152,6 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "summary": "Шаги по лестнице башни чуть увереннее.",
         "image_url": item_gear_png("loot_boots_wraps"),
     }
-    cloak_like = {
-        "name": f"Плащ тумана {fl}",
-        "kind": "cloak",
-        "rarity": "common",
-        "defense": ls.cloak_defense(fl),
-        "summary": "Скрывает силуэт в полумраке этажа.",
-        "image_url": item_gear_png("loot_cloak_mist"),
-    }
     rare_edge = {
         "name": f"Роса {fl}",
         "kind": "weapon",
@@ -266,6 +258,7 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         (0.62, pct_vial),
         (0.52, gloves),
         (0.26, ring),
+        (0.22, boots_like),
         (0.11, trophy),
     )
     if fl <= 12:
@@ -275,8 +268,6 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
             (0.38, moss_armor),
             (0.22, cap),
             (0.2, charm),
-            (0.28, boots_like),
-            (0.22, cloak_like),
             (0.06, rare_edge),
             (0.1, twin_main),
             (0.09, twin_off),
@@ -389,6 +380,15 @@ def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "summary": "Удобны в бою.",
         "image_url": item_gear_png("mini_gloves"),
     }
+    boots_mini = {
+        "name": f"Сапоги претендента {fl}",
+        "kind": "boots",
+        "rarity": "uncommon",
+        "defense": max(2, ls.boots_defense(fl) + max(1, defense // 12)),
+        "dex": 1,
+        "summary": "Трофей с телохранителя этажа.",
+        "image_url": item_gear_png("loot_boots_wraps"),
+    }
     bundle = {
         "name": "Запас претендента",
         "kind": "misc",
@@ -404,6 +404,7 @@ def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
             (0.92, armor),
             (0.65, helm),
             (0.5, gloves),
+            (0.42, boots_mini),
             (0.45, bundle),
         ),
     )
@@ -449,6 +450,16 @@ def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "summary": "Пульсирует остаточной силой босса.",
         "image_url": item_gear_png("major_ring"),
     }
+    boots_major = {
+        "name": f"Сапоги триумфа {fl}",
+        "kind": "boots",
+        "rarity": "rare",
+        "defense": max(3, ls.boots_defense(fl) + max(2, defense // 10)),
+        "dex": 1,
+        "vit": 1,
+        "summary": "Шаг победителя по пеплу этажа.",
+        "image_url": item_gear_png("loot_boots_wraps"),
+    }
     chest = {
         "name": "Сосуд триумфа",
         "kind": "consumable",
@@ -464,6 +475,7 @@ def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
             (0.95, armor),
             (0.55, amulet),
             (0.42, ring),
+            (0.36, boots_major),
             (0.38, chest),
         ),
     )
