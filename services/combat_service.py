@@ -988,46 +988,6 @@ async def _apply_tower_progress_after_victory(
     )
 
 
-async def apply_forest_bypass_outcome(
-    session: AsyncSession,
-    character: Character,
-    spawn: FloorMonsterSpawn,
-    *,
-    telegram_id: int | None = None,
-    username: str | None = None,
-    bot: Any | None = None,
-) -> str:
-    """
-    Тайная тропа (1–10): цель считается пройденной без боя и без стамины.
-    Награда скромнее полноценной победы; убийства и квесты на убийство не считаются.
-    """
-    gross = gold_reward(int(character.floor_number), spawn)
-    xp_base = experience_reward(int(character.floor_number), spawn)
-    g = max(3, int(gross * 0.22))
-    x = max(2, int(xp_base * 0.18))
-    character_service.add_gold(character, g)
-    if telegram_id is not None:
-        await anticheat_service.record_gold_gain(
-            session,
-            character,
-            telegram_id=telegram_id,
-            username=username,
-            gold_delta=g,
-            bot=bot,
-        )
-    await character_service.add_experience_async(session, character, x, bot=bot)
-    refresh_global_passives(character)
-    m_disp = html.escape(getattr(spawn, "display_name", None) or spawn.template.name)
-    banner = await _apply_tower_progress_after_victory(session, character, spawn)
-    await session.flush()
-    return (
-        f"\n{LINE_SEP}\n"
-        f"🌿 <b>Тайная тропа:</b> ты обошёл <b>{m_disp}</b> без боя.\n"
-        f"💰 +{g} золота · 📈 +{x} опыта."
-        f"{banner}"
-    )
-
-
 async def _flush_weapon_mastery(
     session: AsyncSession,
     character: Character,

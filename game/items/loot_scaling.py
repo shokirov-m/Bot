@@ -63,6 +63,18 @@ def rare_edge_attack(fl: int) -> int:
     return max(7, 6 + f // 2)
 
 
+def greatsword_attack(fl: int) -> int:
+    """Двуручник под СИЛ: чуть выше обычного одноручного клинка."""
+    f = _fl(fl)
+    base = max(4, 4 + f // 3)
+    return max(8, base + 2 + f // 5)
+
+
+def balanced_shield_defense(fl: int) -> int:
+    f = _fl(fl)
+    return max(2, 2 + f // 10)
+
+
 # --- Элита ---
 
 

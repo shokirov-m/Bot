@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale, resolve_locale_from_telegram, t
 from bot.keyboards.menu_kb import main_menu_keyboard, main_menu_with_tutorial_hints
 from bot.states.registration_states import RegistrationStates
+from bot.utils.safe_media import safe_answer_photo
 from db.models.user import User
 from db.repository import character_repo, user_repo
 from game.characters.classes import get_class_or_none
@@ -100,15 +101,38 @@ async def _send_portrait_step(message: Message, gender: str) -> None:
                     parse_mode=ParseMode.HTML if i == 0 else None,
                 ),
             )
-        await message.bot.send_media_group(chat_id=message.chat.id, media=media)
-        await message.answer("Номер портрета:", reply_markup=kb)
+        try:
+            await message.bot.send_media_group(chat_id=message.chat.id, media=media)
+            await message.answer("Номер портрета:", reply_markup=kb)
+        except Exception:
+            logger.exception("send_media_group портретов: откат на одно фото")
+            sent = await safe_answer_photo(
+                message,
+                paths[0],
+                caption=cap,
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb,
+            )
+            if sent is None:
+                await message.answer(
+                    cap + "\n\n<i>Не удалось отправить фото — выбери номер 1–3 по кнопкам.</i>",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=kb,
+                )
     elif len(paths) == 1:
-        await message.answer_photo(
-            FSInputFile(paths[0]),
+        sent = await safe_answer_photo(
+            message,
+            paths[0],
             caption=cap,
             parse_mode=ParseMode.HTML,
             reply_markup=kb,
         )
+        if sent is None:
+            await message.answer(
+                cap + "\n\n<i>Файл портрета не отправился — выбери номер 1–3.</i>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=kb,
+            )
     else:
         await message.answer(
             cap + "\n\n<i>Файлы портретов не найдены — выбери номер 1–3; положи PNG в "

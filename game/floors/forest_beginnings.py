@@ -1,5 +1,5 @@
 """
-События зоны «Лес Начал» (этажи 1–10): тайная тропа, грибы, дух, привал.
+События зоны «Лес Начал» (этажи 1–10): грибы, дух, привал.
 Состояние в character.meta_progress["forest_bg_v1"].
 """
 
@@ -50,21 +50,19 @@ def set_spirit_used(character: Character) -> None:
 
 
 def eligible_for_forest_tricks(spawn) -> bool:
-    """Тайная тропа / грибы / дух — только обычные цели (не элита и не боссы)."""
+    """Грибы / дух — только обычные цели (не элита и не боссы)."""
     return not spawn.is_elite and not spawn.is_mini_boss and not spawn.is_major_boss
 
 
-def roll_prefight_kind(character: Character) -> Literal["bypass", "mushroom", "spirit", "combat"]:
+def roll_prefight_kind(character: Character) -> Literal["mushroom", "spirit", "combat"]:
     """
     Распределение при нажатии на обычного монстра в зоне 1–10.
     Дух леса — не чаще одного раза за проход зоны (пока не ушёл на 11+).
     """
     r = random.random()
-    if r < 0.20:
-        return "bypass"
-    if r < 0.32:
+    if r < 0.28:
         return "mushroom"
-    if r < 0.44 and not spirit_used(character):
+    if r < 0.42 and not spirit_used(character):
         return "spirit"
     return "combat"
 

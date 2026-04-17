@@ -7,10 +7,17 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 from game.characters.titles import TITLE_BY_KEY
 
+TITLE_KEYS_PAGE_SIZE = 5
 
-def titles_pick_keyboard(unlocked_keys: list[str]) -> InlineKeyboardMarkup:
+
+def titles_pick_keyboard(unlocked_keys: list[str], *, page: int = 0) -> InlineKeyboardMarkup:
+    n = len(unlocked_keys)
+    pages = max(1, (n + TITLE_KEYS_PAGE_SIZE - 1) // TITLE_KEYS_PAGE_SIZE) if n else 1
+    page = max(0, min(page, pages - 1))
+    chunk = unlocked_keys[page * TITLE_KEYS_PAGE_SIZE : (page + 1) * TITLE_KEYS_PAGE_SIZE]
+
     rows: list[list[InlineKeyboardButton]] = []
-    for key in unlocked_keys:
+    for key in chunk:
         t = TITLE_BY_KEY.get(key)
         if t is None:
             continue
@@ -29,6 +36,14 @@ def titles_pick_keyboard(unlocked_keys: list[str]) -> InlineKeyboardMarkup:
                 ),
             ],
         )
+    if pages > 1:
+        nav: list[InlineKeyboardButton] = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(text="◀️", callback_data=f"tit:pg:{page - 1}"))
+        nav.append(InlineKeyboardButton(text=f"{page + 1}/{pages}", callback_data="tit:noop"))
+        if page < pages - 1:
+            nav.append(InlineKeyboardButton(text="▶️", callback_data=f"tit:pg:{page + 1}"))
+        rows.append(nav)
     rows.append(
         [
             InlineKeyboardButton(text="❌ Снять ①", callback_data="ttl:clr1"),

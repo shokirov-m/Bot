@@ -182,7 +182,7 @@ def format_floor_message(character: Character) -> str:
     if forest_beginnings_mod.is_forest_beginnings_zone(n):
         lines.append(
             "🌲 <b>Лес Начал (1–10)</b> — обучение: "
-            "<i>тайная тропа ~20% обойти обычную цель без боя</i>, грибы, дух (1× за проход зоны); "
+            "<i>грибы</i> (шанс перед боем с обычной целью), <i>дух</i> (1× за проход зоны); "
             "кнопка «Привал» — полное HP/MP без стамины (1× за проход).",
         )
     if rotten_swamps_mod.is_rotten_swamps_zone(n):
@@ -260,7 +260,7 @@ def format_floor_message_photo_caption(character: Character) -> str:
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
         lines.append("🗝️ Зачистка → кнопка этажа / ⬆️")
     if forest_beginnings_mod.is_forest_beginnings_zone(n):
-        lines.append("🌲 Лес 1–10: тропа / грибы / дух · 🏕️ привал")
+        lines.append("🌲 Лес 1–10: грибы / дух · 🏕️ привал")
     if rotten_swamps_mod.is_rotten_swamps_zone(n):
         lines.append("🌿 Болота: туман −5 HP · пиявки · туман целей · лагерь")
     pend = tower_next_floor_pending(character)

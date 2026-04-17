@@ -17,45 +17,149 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.quest_kb import quest_back_keyboard, quest_dialog_keyboard
 from bot.states.combat_states import CombatStates
+from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, quest_repo, user_repo
 from game.floors import floor_data
 from game.quests.floor_quests import npc_quest_template
-from game.quests.npc_quests import templates_for_floor
+from game.quests.npc_quests import QuestTemplate, template_by_key, templates_for_floor
 from services import quest_service
 from services.floor_service import floor_keyboard_for_character, format_floor_message
 from utils.ui import LINE_SEP
 
 if TYPE_CHECKING:
     from db.models.character import Character
+    from db.models.quest import QuestProgress
 
 router = Router(name="quests")
 
 _QST_CB = re.compile(r"^qst:(\d+):(view|acc|back)$")
+
+QUEST_FLOOR_PAGE_SIZE = 1
+QUEST_ACTIVE_PAGE_SIZE = 6
 
 
 def _strip_html_alert(msg: str) -> str:
     return re.sub(r"<[^>]+>", "", msg).strip()
 
 
-async def render_quests_hub(session: AsyncSession, char: Character) -> tuple[str, InlineKeyboardMarkup]:
-    """Экран «Задания» для текущего этажа (npcq_*)."""
+async def _count_all_active_quests(session: AsyncSession, character_id: int) -> int:
+    a = await quest_repo.list_active_npc_extended_quests(session, character_id)
+    b = await quest_repo.list_active_slain_quests(session, character_id)
+    return len(a) + len(b)
+
+
+async def _merged_active_quest_rows(session: AsyncSession, character_id: int) -> list[QuestProgress]:
+    a = await quest_repo.list_active_npc_extended_quests(session, character_id)
+    b = await quest_repo.list_active_slain_quests(session, character_id)
+    merged = list(a) + list(b)
+    merged.sort(key=lambda r: r.quest_key)
+    return merged
+
+
+def _active_quest_title(row: QuestProgress) -> str:
+    qk = row.quest_key
+    if qk.startswith("npcq_"):
+        t = template_by_key(qk)
+        return t.title if t is not None else qk
+    if qk.startswith("tower_slain_"):
+        tail = qk.removeprefix("tower_slain_")
+        if tail.isdigit():
+            tpl = npc_quest_template(int(tail))
+            if tpl is not None:
+                return tpl.title
+    return qk
+
+
+def _btn_take_label(title: str, max_len: int = 22) -> str:
+    base = f"📋 Взять: {title}"
+    return f"{base[: max_len - 1]}…" if len(base) > max_len else base
+
+
+def _btn_claim_label(title: str, max_len: int = 20) -> str:
+    base = f"🎁 Сдать: {title}"
+    return f"{base[: max_len - 1]}…" if len(base) > max_len else base
+
+
+async def _floor_quest_lines_and_buttons(
+    session: AsyncSession,
+    char: Character,
+    tpl: QuestTemplate,
+) -> tuple[list[str], list[list[InlineKeyboardButton]]]:
+    lines: list[str] = []
+    rows_btn: list[list[InlineKeyboardButton]] = []
+    row = await quest_repo.get_by_key(session, char.id, tpl.key)
+    if row is None:
+        lines.append(f"○ <b>{html.escape(tpl.title)}</b> — можно взять.")
+        rows_btn.append(
+            [
+                InlineKeyboardButton(
+                    text=_btn_take_label(tpl.title),
+                    callback_data=f"qtk:{tpl.key}",
+                ),
+            ],
+        )
+        return lines, rows_btn
+    if row.status == "completed":
+        lines.append(f"🏁 <b>{html.escape(tpl.title)}</b> — уже выполнено.")
+        return lines, rows_btn
+    if row.status != "active":
+        return lines, rows_btn
+    p = dict(row.progress or {})
+    if p.get("pending_claim"):
+        lines.append(f"✅ <b>{html.escape(tpl.title)}</b> — <b>готово</b>, забирай награду!")
+        rows_btn.append(
+            [
+                InlineKeyboardButton(
+                    text=_btn_claim_label(tpl.title),
+                    callback_data=f"qcl:{tpl.key}",
+                ),
+            ],
+        )
+    else:
+        cur = int(p.get("current", 0))
+        need = int(p.get("target_count", 1))
+        lines.append(f"⚔️ <b>{html.escape(tpl.title)}</b> — <b>{cur}/{need}</b>")
+    return lines, rows_btn
+
+
+async def render_quest_floor_hub(
+    session: AsyncSession,
+    char: Character,
+    page: int = 0,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Экран «Задания» для текущего этажа (npcq_*), постранично по шаблонам этажа."""
     fl = int(char.floor_number)
     lines = [LINE_SEP, f"📋 <b>ЗАДАНИЯ — ЭТАЖ {fl}</b>", LINE_SEP, ""]
     rows_btn: list[list[InlineKeyboardButton]] = []
+    active_elsewhere = await _count_all_active_quests(session, char.id)
 
     if fl % 3 != 0 or fl >= 100:
         lines.append("На этом этаже нет заказчика таких поручений.")
         lines.append("<i>NPC стоят на этажах 3, 6, 9 … 99.</i>")
-        rows_btn.append(
-            [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
-        )
+        if active_elsewhere > 0:
+            rows_btn.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"📑 Все активные ({active_elsewhere})",
+                        callback_data="qhub:a:0",
+                    ),
+                ],
+            )
+        rows_btn.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
         return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
 
     tpls = templates_for_floor(fl)
     if not tpls:
-        rows_btn.append(
-            [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
-        )
+        if active_elsewhere > 0:
+            rows_btn.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"📑 Все активные ({active_elsewhere})",
+                        callback_data="qhub:a:0",
+                    ),
+                ],
+            )
+        rows_btn.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
         return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
 
     npc_name = tpls[0].npc_name
@@ -64,56 +168,133 @@ async def render_quests_hub(session: AsyncSession, char: Character) -> tuple[str
     lines.append("«Есть работа для того, кто не боится крови и пыли.»")
     lines.append("")
 
+    n_tpl = len(tpls)
+    pages = max(1, (n_tpl + QUEST_FLOOR_PAGE_SIZE - 1) // QUEST_FLOOR_PAGE_SIZE)
+    page = max(0, min(page, pages - 1))
+    slice_tpls = tpls[page * QUEST_FLOOR_PAGE_SIZE : (page + 1) * QUEST_FLOOR_PAGE_SIZE]
+
     has_active = False
     has_claim = False
     for tpl in tpls:
         row = await quest_repo.get_by_key(session, char.id, tpl.key)
-        if row is None:
-            lines.append(f"○ <b>{html.escape(tpl.title)}</b> — можно взять.")
-            rows_btn.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"📋 Взять: {tpl.title[:22]}…"
-                        if len(tpl.title) > 22
-                        else f"📋 Взять: {tpl.title}",
-                        callback_data=f"qtk:{tpl.key}",
-                    ),
-                ],
-            )
-            continue
-        if row.status == "completed":
-            lines.append(f"🏁 <b>{html.escape(tpl.title)}</b> — уже выполнено.")
-            continue
-        if row.status != "active":
-            continue
-        has_active = True
-        p = dict(row.progress or {})
-        if p.get("pending_claim"):
-            has_claim = True
-            lines.append(f"✅ <b>{html.escape(tpl.title)}</b> — <b>готово</b>, забирай награду!")
-            rows_btn.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"🎁 Сдать: {tpl.title[:20]}…"
-                        if len(tpl.title) > 20
-                        else f"🎁 Сдать: {tpl.title}",
-                        callback_data=f"qcl:{tpl.key}",
-                    ),
-                ],
-            )
-        else:
-            cur = int(p.get("current", 0))
-            need = int(p.get("target_count", 1))
-            lines.append(f"⚔️ <b>{html.escape(tpl.title)}</b> — <b>{cur}/{need}</b>")
+        if row is not None and row.status == "active":
+            has_active = True
+            p = dict(row.progress or {})
+            if p.get("pending_claim"):
+                has_claim = True
+
+    for tpl in slice_tpls:
+        bl, br = await _floor_quest_lines_and_buttons(session, char, tpl)
+        lines.extend(bl)
+        rows_btn.extend(br)
+
+    if pages > 1:
+        nav: list[InlineKeyboardButton] = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(text="◀️", callback_data=f"qhub:p:{page - 1}"))
+        nav.append(InlineKeyboardButton(text=f"{page + 1}/{pages}", callback_data="qhub:noop"))
+        if page < pages - 1:
+            nav.append(InlineKeyboardButton(text="▶️", callback_data=f"qhub:p:{page + 1}"))
+        rows_btn.append(nav)
+
+    if active_elsewhere > 0:
+        rows_btn.append(
+            [
+                InlineKeyboardButton(
+                    text=f"📑 Все активные ({active_elsewhere})",
+                    callback_data="qhub:a:0",
+                ),
+            ],
+        )
 
     if has_active and not has_claim:
         lines.append("")
         lines.append("<i>Продолжай бой на башне.</i>")
 
-    rows_btn.append(
-        [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
-    )
+    rows_btn.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
+
+
+async def render_active_quests_overview(
+    session: AsyncSession,
+    char: Character,
+    page: int = 0,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Все активные поручения (npcq_* и странник tower_slain_*), страницы из БД."""
+    rows = await _merged_active_quest_rows(session, char.id)
+    n = len(rows)
+    per = QUEST_ACTIVE_PAGE_SIZE
+    pages = max(1, (n + per - 1) // per) if n else 1
+    page = max(0, min(page, pages - 1))
+    chunk = rows[page * per : (page + 1) * per]
+
+    lines = [
+        LINE_SEP,
+        "📑 <b>ВСЕ АКТИВНЫЕ ПОРУЧЕНИЯ</b>",
+        LINE_SEP,
+        "",
+    ]
+    rows_btn: list[list[InlineKeyboardButton]] = []
+
+    if not rows:
+        lines.append("<i>Сейчас нет активных заданий такого типа.</i>")
+    else:
+        for row in chunk:
+            title = _active_quest_title(row)
+            p = dict(row.progress or {})
+            if row.quest_key.startswith("tower_slain_"):
+                k = int(p.get("kills", 0))
+                tail = row.quest_key.removeprefix("tower_slain_")
+                need = 1
+                if tail.isdigit():
+                    tpl = npc_quest_template(int(tail))
+                    if tpl is not None:
+                        need = int(p.get("need", tpl.kills_needed))
+                if p.get("pending_claim"):
+                    lines.append(f"✅ <b>{html.escape(title)}</b> — <b>готово</b>, сдай страннику.")
+                    rows_btn.append(
+                        [
+                            InlineKeyboardButton(
+                                text=_btn_claim_label(title),
+                                callback_data=f"qcl:{row.quest_key}",
+                            ),
+                        ],
+                    )
+                else:
+                    lines.append(f"⚔️ <b>{html.escape(title)}</b> — побед: <b>{k}/{need}</b>")
+            else:
+                if p.get("pending_claim"):
+                    lines.append(f"✅ <b>{html.escape(title)}</b> — <b>готово</b>, забирай награду!")
+                    rows_btn.append(
+                        [
+                            InlineKeyboardButton(
+                                text=_btn_claim_label(title),
+                                callback_data=f"qcl:{row.quest_key}",
+                            ),
+                        ],
+                    )
+                else:
+                    cur = int(p.get("current", 0))
+                    need = int(p.get("target_count", 1))
+                    lines.append(f"⚔️ <b>{html.escape(title)}</b> — <b>{cur}/{need}</b>")
+
+        if pages > 1:
+            nav2: list[InlineKeyboardButton] = []
+            if page > 0:
+                nav2.append(InlineKeyboardButton(text="◀️", callback_data=f"qhub:a:{page - 1}"))
+            nav2.append(InlineKeyboardButton(text=f"{page + 1}/{pages}", callback_data="qhub:noop"))
+            if page < pages - 1:
+                nav2.append(InlineKeyboardButton(text="▶️", callback_data=f"qhub:a:{page + 1}"))
+            rows_btn.append(nav2)
+
+    rows_btn.append([InlineKeyboardButton(text="📋 К этажу", callback_data="qhub:p:0")])
+    rows_btn.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
+
+
+async def render_quests_hub(session: AsyncSession, char: Character) -> tuple[str, InlineKeyboardMarkup]:
+    """Совместимость: первый экран заданий этажа."""
+    return await render_quest_floor_hub(session, char, 0)
 
 
 @router.message(Command("quests", "задания"))
@@ -129,15 +310,26 @@ async def cmd_quests(message: Message, session: AsyncSession) -> None:
         if char is None:
             await message.answer("Сначала /start.")
             return
-        text, kb = await render_quests_hub(session, char)
+        text, kb = await render_quest_floor_hub(session, char, 0)
         await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
     except Exception:
         logger.exception("cmd_quests")
         await message.answer("Ошибка.")
 
 
+@router.callback_query(F.data == "qhub:noop")
+async def quests_hub_noop(query: CallbackQuery) -> None:
+    await query.answer()
+
+
 @router.callback_query(F.data == "qhub:")
-async def quests_hub_refresh(query: CallbackQuery, session: AsyncSession) -> None:
+@router.callback_query(F.data.regexp(r"^qhub:p:\d+$"))
+@router.callback_query(F.data.regexp(r"^qhub:a:\d+$"))
+async def quests_hub_callbacks(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
     try:
         if query.message is None or query.from_user is None:
             await query.answer()
@@ -150,8 +342,31 @@ async def quests_hub_refresh(query: CallbackQuery, session: AsyncSession) -> Non
         if char is None:
             await query.answer("Сначала /start.", show_alert=True)
             return
-        text, kb = await render_quests_hub(session, char)
-        await query.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+
+        data = query.data or ""
+        if data == "qhub:":
+            mode, pg = "p", 0
+        elif data.startswith("qhub:p:"):
+            mode, pg = "p", int(data.split(":")[2])
+        elif data.startswith("qhub:a:"):
+            mode, pg = "a", int(data.split(":")[2])
+        else:
+            await query.answer()
+            return
+
+        if mode == "p":
+            text, kb = await render_quest_floor_hub(session, char, pg)
+        else:
+            text, kb = await render_active_quests_overview(session, char, pg)
+
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=kb,
+            target_message=query.message,
+        )
         await query.answer()
     except Exception:
         logger.exception("qhub")
@@ -181,8 +396,18 @@ async def on_quest_take(query: CallbackQuery, session: AsyncSession, state: FSMC
             await query.answer(_strip_html_alert(msg)[:180], show_alert=True)
             return
         await query.answer("Поручение принято.")
-        text, kb = await render_quests_hub(session, char)
-        await query.message.edit_text(msg, parse_mode=ParseMode.HTML, reply_markup=kb)
+        hub_text, kb = await render_quest_floor_hub(session, char, 0)
+        combined = f"{msg.rstrip()}\n\n{hub_text}"
+        if len(combined) > 3800:
+            combined = hub_text
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=combined,
+            reply_markup=kb,
+            target_message=query.message,
+        )
     except Exception:
         logger.exception("qtk")
         await query.answer("Ошибка.", show_alert=True)
@@ -207,14 +432,28 @@ async def on_quest_claim(query: CallbackQuery, session: AsyncSession, state: FSM
             await query.answer("Сначала /start.", show_alert=True)
             return
 
-        await query.message.edit_text("🎉 <b>Задание выполнено!</b>", parse_mode=ParseMode.HTML)
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text="🎉 <b>Задание выполнено!</b>",
+            reply_markup=None,
+            target_message=query.message,
+        )
         await asyncio.sleep(0.8)
 
         res = await quest_service.claim_quest_reward(session, char, key)
         if not res.get("ok"):
             await query.answer(str(res.get("error", "Нельзя")), show_alert=True)
-            text, kb = await render_quests_hub(session, char)
-            await query.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+            text, kb = await render_quest_floor_hub(session, char, 0)
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=query.message,
+            )
             return
 
         parts = [
@@ -228,11 +467,18 @@ async def on_quest_claim(query: CallbackQuery, session: AsyncSession, state: FSM
         body = "🎁 " + "  ".join(parts) + str(res.get("level_up_html") or "")
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="📋 Задания", callback_data="qhub:")],
+                [InlineKeyboardButton(text="📋 Задания", callback_data="qhub:p:0")],
                 [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
             ],
         )
-        await query.message.edit_text(body, parse_mode=ParseMode.HTML, reply_markup=kb)
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=body,
+            reply_markup=kb,
+            target_message=query.message,
+        )
         await query.answer("Награда получена.")
     except Exception:
         logger.exception("qcl")
@@ -280,10 +526,16 @@ async def on_quest_callback(
             await query.answer("Здесь нет странника.", show_alert=True)
             return
 
+        chat_id = query.message.chat.id
+
         if code == "back":
-            await query.message.edit_text(
-                format_floor_message(char),
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=chat_id,
+                text=format_floor_message(char),
                 reply_markup=await floor_keyboard_for_character(session, char),
+                target_message=query.message,
             )
             await query.answer()
             return
@@ -299,25 +551,41 @@ async def on_quest_callback(
                 if intro is None:
                     await query.answer("Нет квеста.", show_alert=True)
                     return
-                await query.message.edit_text(
-                    intro,
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=chat_id,
+                    text=intro,
                     reply_markup=quest_dialog_keyboard(floor),
+                    target_message=query.message,
                 )
             elif row.status == "completed":
-                await query.message.edit_text(
-                    f"📜 <b>{html.escape(tpl.title)}</b>\n"
-                    "Странник кивает: долг на этом этаже уже исполнен.",
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=chat_id,
+                    text=(
+                        f"📜 <b>{html.escape(tpl.title)}</b>\n"
+                        "Странник кивает: долг на этом этаже уже исполнен."
+                    ),
                     reply_markup=quest_back_keyboard(floor),
+                    target_message=query.message,
                 )
             else:
                 p = dict(row.progress or {})
                 k = int(p.get("kills", 0))
                 need = int(p.get("need", tpl.kills_needed))
-                await query.message.edit_text(
-                    f"📜 <b>{html.escape(tpl.title)}</b>\n"
-                    f"Прогресс: побед — <b>{k}/{need}</b>.\n"
-                    "Продолжай сражаться на башне.",
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=chat_id,
+                    text=(
+                        f"📜 <b>{html.escape(tpl.title)}</b>\n"
+                        f"Прогресс: побед — <b>{k}/{need}</b>.\n"
+                        "Продолжай сражаться на башне."
+                    ),
                     reply_markup=quest_back_keyboard(floor),
+                    target_message=query.message,
                 )
             await query.answer()
             return
@@ -327,9 +595,13 @@ async def on_quest_callback(
             if not ok:
                 await query.answer(msg.replace("<b>", "").replace("</b>", ""), show_alert=True)
                 return
-            await query.message.edit_text(
-                msg,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=chat_id,
+                text=msg,
                 reply_markup=await floor_keyboard_for_character(session, char),
+                target_message=query.message,
             )
             await query.answer("Квест обновлён.")
             return

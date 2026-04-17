@@ -490,39 +490,15 @@ async def on_floor_callback(
             and fb.eligible_for_forest_tricks(chosen)
         ):
             kind = fb.roll_prefight_kind(char)
-            if kind == "bypass":
-                suffix = await combat_service.apply_forest_bypass_outcome(
-                    session,
-                    char,
-                    chosen,
-                    telegram_id=query.from_user.id,
-                    username=query.from_user.username,
-                    bot=query.bot,
-                )
-                await session.refresh(char)
-                await push_floor_screen_ui(
-                    session,
+            if kind == "mushroom":
+                await push_game_ui(
                     state,
                     query.bot,
                     chat_id=query.message.chat.id,
-                    character=char,
-                    reply_markup=await floor_keyboard_for_character(session, char),
+                    text=fb.mushroom_intro_html(),
+                    reply_markup=forest_mushroom_keyboard(floor, code),
                     target_message=query.message,
-                    text_suffix=suffix,
                 )
-                await query.answer("Тайная тропа…")
-                return
-            if kind == "mushroom":
-                try:
-                    await query.message.edit_text(
-                        fb.mushroom_intro_html(),
-                        parse_mode=ParseMode.HTML,
-                        reply_markup=forest_mushroom_keyboard(floor, code),
-                    )
-                except Exception:
-                    logger.exception("forest mushroom UI")
-                    await query.answer("Не удалось показать сцену.", show_alert=True)
-                    return
                 await query.answer()
                 return
             if kind == "spirit":
@@ -530,17 +506,14 @@ async def on_floor_callback(
                 await state.update_data(
                     svc_forest_spirit={"correct": correct, "slot": chosen.slot_code, "floor": floor},
                 )
-                try:
-                    await query.message.edit_text(
-                        fb.spirit_intro_html(),
-                        parse_mode=ParseMode.HTML,
-                        reply_markup=forest_spirit_keyboard(floor, code),
-                    )
-                except Exception:
-                    logger.exception("forest spirit UI")
-                    await state.update_data(svc_forest_spirit=None)
-                    await query.answer("Не удалось показать сцену.", show_alert=True)
-                    return
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=fb.spirit_intro_html(),
+                    reply_markup=forest_spirit_keyboard(floor, code),
+                    target_message=query.message,
+                )
                 await query.answer()
                 return
 

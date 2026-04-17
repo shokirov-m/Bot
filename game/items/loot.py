@@ -170,6 +170,96 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "summary": "Редкая удача на ранних этажах.",
         "image_url": item_gear_png("loot_rare_edge"),
     }
+    atk_dex_pair = ls.normal_weapon_attack_low(fl, dagger_or_bow=True)
+    twin_main = {
+        "name": f"Кинжал пары {fl}",
+        "kind": "weapon",
+        "rarity": "uncommon",
+        "attack": atk_dex_pair,
+        "enchant": 0,
+        "weapon_type": "dagger",
+        "dex": 1,
+        "luck": 1,
+        "summary": "Лёгкий клинок для ловкого стиля — ищи второй во вторую руку.",
+        "image_url": item_gear_png("loot_weapon_blade"),
+    }
+    twin_off = {
+        "name": f"Боковик пары {fl}",
+        "kind": "weapon",
+        "rarity": "uncommon",
+        "attack": max(3, atk_dex_pair - 2),
+        "enchant": 0,
+        "weapon_type": "dagger",
+        "hand": "off",
+        "dex": 1,
+        "luck": 1,
+        "summary": "Вторая половина пары — надевается во вторую руку.",
+        "image_url": item_gear_png("loot_weapon_blade"),
+    }
+    greatsword = {
+        "name": f"Клеймор уступа {fl}",
+        "kind": "weapon",
+        "rarity": "uncommon",
+        "attack": ls.greatsword_attack(fl),
+        "enchant": 0,
+        "weapon_type": "blade",
+        "two_handed": True,
+        "str": 1,
+        "summary": "Тяжёлый двуручник — для тех, кто качает силу.",
+        "image_url": item_gear_png("loot_weapon_blade"),
+    }
+    balanced_blade = {
+        "name": f"Меч равновесия {fl}",
+        "kind": "weapon",
+        "rarity": "uncommon",
+        "attack": ls.normal_weapon_attack_low(fl, dagger_or_bow=False),
+        "enchant": 0,
+        "weapon_type": "blade",
+        "vit": 1,
+        "summary": "Универсальный клинок в паре со щитом.",
+        "image_url": item_gear_png("loot_weapon_blade"),
+    }
+    balanced_buckler = {
+        "name": f"Щит равновесия {fl}",
+        "kind": "shield",
+        "rarity": "uncommon",
+        "defense": ls.balanced_shield_defense(fl),
+        "vit": 1,
+        "summary": "Лёгкий щит под меч равновесия.",
+        "image_url": item_gear_png("catalog_shield_01"),
+    }
+    arcane_staff = {
+        "name": f"Посох дуги {fl}",
+        "kind": "weapon",
+        "rarity": "uncommon",
+        "attack": max(4, ls.normal_weapon_attack_low(fl, dagger_or_bow=False) - 1),
+        "enchant": 0,
+        "weapon_type": "staff",
+        "int": 2,
+        "summary": "Основной фокус мага — длинная дуга маны.",
+        "image_url": item_gear_png("loot_weapon_staff"),
+    }
+    focus_wand = {
+        "name": f"Палочка фокуса {fl}",
+        "kind": "weapon",
+        "rarity": "common",
+        "attack": max(3, ls.normal_weapon_attack_low(fl, dagger_or_bow=False) - 3),
+        "enchant": 0,
+        "weapon_type": "staff",
+        "int": 1,
+        "luck": 1,
+        "summary": "Короткий жезл для точечных заклинаний.",
+        "image_url": item_gear_png("loot_weapon_staff"),
+    }
+    apprentice_grimoire = {
+        "name": f"Гримуар заметок {fl}",
+        "kind": "grimoire",
+        "rarity": "common",
+        "defense": 1,
+        "int": 2,
+        "summary": "Вторая рука мага — формулы и чары.",
+        "image_url": item_gear_png("catalog_grimoire_01"),
+    }
     options: tuple[tuple[float, dict[str, Any]], ...] = (
         (1.15, elixir),
         (0.95, mp_vial),
@@ -180,14 +270,22 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     )
     if fl <= 12:
         options = options + (
-            (0.42, forest_blade),
-            (0.32, forest_staff),
+            (0.34, forest_blade),
+            (0.26, forest_staff),
             (0.38, moss_armor),
             (0.22, cap),
             (0.2, charm),
             (0.28, boots_like),
             (0.22, cloak_like),
             (0.06, rare_edge),
+            (0.1, twin_main),
+            (0.09, twin_off),
+            (0.08, greatsword),
+            (0.07, balanced_blade),
+            (0.07, balanced_buckler),
+            (0.08, arcane_staff),
+            (0.07, focus_wand),
+            (0.07, apprentice_grimoire),
         )
     return _weighted_payload(options)
 
