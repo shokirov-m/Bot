@@ -12,6 +12,18 @@ from db.models.character import Character
 
 META_KEY = "weapon_mastery_v1"
 THRESHOLDS: tuple[int, ...] = (50, 150, 500, 1000)
+
+# Родительный падеж для строки «Мастерство …» (как в UI полных характеристик).
+WEAPON_MASTERY_NAME_RU: dict[str, str] = {
+    "blade": "меча",
+    "staff": "посоха",
+    "bow": "лука",
+    "dagger": "кинжала",
+    "axe": "топора",
+    "polearm": "древкового",
+    "hammer": "молота",
+    "unarmed": "рукопаша",
+}
 # множитель урона по уровню мастерства 0..4
 MULT_BY_TIER: tuple[float, ...] = (1.0, 1.02, 1.04, 1.07, 1.11)
 
@@ -91,6 +103,28 @@ def record_strike(character: Character, weapon_type: str) -> tuple[int, int]:
     data[weapon_type] = {"hits": hits}
     _save_mastery(character, data)
     return hits, tier_for_hits(hits)
+
+
+def mastery_profile_lines(character: Character, weapon_type: str) -> tuple[str, str]:
+    """
+    Две строки для полных характеристик: множитель урона и прогресс ударов до следующего порога.
+    """
+    from utils.ui import _BAR_LEN, _mono_bar, format_number
+
+    data = _load_mastery(character.meta_progress or {})
+    h = int(data.get(weapon_type, {}).get("hits", 0))
+    mult = damage_multiplier_for_type(character, weapon_type)
+    nm = WEAPON_MASTERY_NAME_RU.get(weapon_type, weapon_type)
+    nm_disp = (nm[0].upper() + nm[1:]) if nm else nm
+    line1 = f"Мастерство {nm_disp}: урон ×{mult:.2f}"
+    nxt = next((t for t in THRESHOLDS if h < t), None)
+    if nxt is None:
+        bar = "█" * _BAR_LEN
+        line2 = f"✨ {bar}  {format_number(h)}уд. (макс.)"
+    else:
+        bar = _mono_bar(h, nxt, _BAR_LEN)
+        line2 = f"✨ {bar}  {format_number(h)}/{format_number(nxt)}уд."
+    return line1, line2
 
 
 def mastery_summary_line(character: Character, weapon_type: str) -> str:

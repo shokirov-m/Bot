@@ -483,7 +483,7 @@ def _build_combat_dict(
 
 
 def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
-    """Экран боя: этаж, враг (полосы, баффы, реплика), игрок, лог."""
+    """Экран боя: этаж, враг (полосы, баффы), игрок, лог с репликой монстра."""
     m = state["monster"]
     monster_ai.sync_monster_rage_visual(state)
 
@@ -509,16 +509,31 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     else:
         enemy_line = f"{html.escape(str(m.get('emoji', '👹')))} <b>{name_esc}</b> {el_icon}"
 
-    hp_mon = render_hp_bar(int(m["hp"]), int(m["max_hp"]), wrap_bar_in_code=False)
-    mp_line = render_mp_bar(int(state["player_mp"]), int(state["player_mp_max"]), wrap_bar_in_code=False)
-    php_line = render_hp_bar(int(state["player_hp"]), int(state["player_hp_max"]), wrap_bar_in_code=False)
+    hp_mon = render_hp_bar(
+        int(m["hp"]),
+        int(m["max_hp"]),
+        wrap_bar_in_code=False,
+        spaced_numbers=True,
+    )
+    mp_line = render_mp_bar(
+        int(state["player_mp"]),
+        int(state["player_mp_max"]),
+        wrap_bar_in_code=False,
+        spaced_numbers=True,
+    )
+    php_line = render_hp_bar(
+        int(state["player_hp"]),
+        int(state["player_hp_max"]),
+        wrap_bar_in_code=False,
+        spaced_numbers=True,
+    )
 
     buff_parts: list[str] = []
     ph = int(state.get("monster_phase", 1))
     if (m.get("is_mini_boss") or m.get("is_major_boss")) and ph >= 3:
         buff_parts.append("💀 Фаза 3 (+50% урон)")
     elif (m.get("is_mini_boss") or m.get("is_major_boss")) and ph >= 2:
-        buff_parts.append("⚡ Фаза 2")
+        buff_parts.append("⚡️ Фаза 2")
     if state.get("monster_rage"):
         buff_parts.append("💢 Ярость (+30%)")
     if float(state.get("monster_outgoing_mult", 1.0)) < 1.0 and int(state.get("monster_debuff_turns", 0)) > 0:
@@ -528,9 +543,6 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
         buff_line = "Баффы: " + " | ".join(buff_parts) + "\n"
 
     taunt_raw = str(state.get("battle_taunt_html") or "").strip()
-    taunt_block = ""
-    if taunt_raw:
-        taunt_block = f"💬 «{taunt_raw}»\n"
 
     shield_p = ""
     sh_val = int(state.get("player_shield_hp", 0))
@@ -542,8 +554,19 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     if pl:
         pet_p = f"{pl}\n"
 
-    logs = state.get("ui_logs", [])[-6:]
-    log_block = "\n".join(logs) if logs else "<i>—</i>"
+    logs = state.get("ui_logs", [])[-8:]
+    log_lines = "\n".join(logs) if logs else ""
+    taunt_line = ""
+    if taunt_raw:
+        taunt_line = taunt_raw if taunt_raw.startswith("💬") else f"💬 «{taunt_raw}»"
+    if log_lines and taunt_line:
+        log_block = f"{log_lines}\n\n{taunt_line}"
+    elif log_lines:
+        log_block = log_lines
+    elif taunt_line:
+        log_block = taunt_line
+    else:
+        log_block = "<i>—</i>"
 
     fln = int(state.get("floor", 0))
     sep = LINE_SEP_BATTLE
@@ -566,16 +589,15 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
         f"{enemy_line}\n"
         f"{hp_mon}\n"
         f"{buff_line}"
-        f"{taunt_block}"
         f"\n"
         f"<b>▸ ИГРОК</b>\n"
         f"{php_line}\n"
+        f"\n"
         f"{mp_line}\n"
         f"{shield_p}"
         f"{pet_p}"
-        f"\n"
         f"{sep}\n"
-        f"📜 <b>Лог хода:</b>\n"
+        f"📜 Лог хода:\n"
         f"{log_block}\n"
         f"{sep}"
     )

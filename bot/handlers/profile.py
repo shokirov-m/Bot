@@ -40,8 +40,8 @@ from game.characters.global_passives import format_unlocked_global_passives_ru, 
 from game.characters.path_ranks import path_rank_name_ru
 from game.characters.progression import experience_needed_for_next_level
 from game.characters.skills import passive_combat_modifiers_merged
-from game.characters.titles import TITLE_BY_KEY, format_title_bonus_line
-from game.characters.weapon_mastery import mastery_summary_line, weapon_type_from_item_data
+from game.characters.titles import TITLE_BY_KEY, format_title_bonus_brief, format_title_bonus_line
+from game.characters.weapon_mastery import mastery_profile_lines, weapon_type_from_item_data
 from game.combat import formulas
 from utils.game_images_prefs import game_images_enabled
 from utils.profile_portraits import portrait_path_for_character
@@ -159,7 +159,7 @@ def _build_profile_text(
     *,
     compact: bool = True,
     weapon_attack: int,
-    mastery_html: str = "",
+    weapon_type: str = "blade",
     global_passives_line: str = "",
     gear_stat_bonus: dict[str, int] | None = None,
     title_stat_bonus: dict[str, int] | None = None,
@@ -183,7 +183,7 @@ def _build_profile_text(
     t2 = html.escape(sec_s) if sec_s else "—"
     titles_row = f"① {t1} · ② {t2}" if (char.active_title or sec_s) else "—"
     title_bonus_extra: list[str] = []
-    if not compact:
+    if compact:
         t_parts: list[str] = []
         for tk in (title_service.active_title_key(char), title_service.active_secondary_title_key(char)):
             if tk and tk in TITLE_BY_KEY:
@@ -222,11 +222,12 @@ def _build_profile_text(
             0,
             elemental_bonus_percent=0,
         )
-        crit_pct = round(crit_p * 100.0, 1)
-        dodge_pct = round(dodge_p * 100.0, 1)
+        crit_pct = crit_p * 100.0
+        dodge_pct = dodge_p * 100.0
 
-    gp_show = html.escape(global_passives_line) if global_passives_line.strip() else "—"
-    gid_s = html.escape(str(int(char.game_id))) if char.game_id is not None else "—"
+    gp_plain = global_passives_line.strip()
+    gid_disp = str(int(char.game_id)) if char.game_id is not None else "—"
+    gid_esc = html.escape(gid_disp)
 
     str_e = int(gb["str"]) + int(tb["str"])
     dex_e = int(gb["dex"]) + int(tb["dex"])
@@ -234,8 +235,12 @@ def _build_profile_text(
     vit_e = int(gb["vit"]) + int(tb["vit"])
     luck_e = int(gb["luck"]) + int(tb["luck"])
 
-    head_row = (
-        f"🗡️ {html.escape(char.display_name)} · 🎮 <b>ID {gid_s}</b> "
+    head_row_compact = (
+        f"🗡️ {html.escape(char.display_name)} · 🎮 <b>ID {gid_esc}</b> "
+        f"• Ур.{char.level} 📍 Этаж: {char.floor_number}"
+    )
+    head_row_full = (
+        f"🗡️ {html.escape(char.display_name)} · 🎮 ID {gid_esc} "
         f"• Ур.{char.level} 📍 Этаж: {char.floor_number}"
     )
     if ranker_badge:
@@ -243,31 +248,104 @@ def _build_profile_text(
     else:
         rank_combine = rank_s
 
-    lines: list[str] = [
+    if compact:
+        gp_show = html.escape(global_passives_line) if global_passives_line.strip() else "—"
+        lines: list[str] = [
+            LINE_SEP,
+            head_row_compact,
+            f"🎖️ Звание: {rank_combine}",
+            f"🏆 Титулы: {titles_row}",
+        ]
+        lines.extend(title_bonus_extra)
+        if ranker_effect:
+            lines.append(ranker_effect)
+        lines.extend(
+            [
+                f"🌐 Глобальные бонусы: <i>{gp_show}</i>",
+                LINE_SEP,
+                f"💰 Золото: {format_number(int(char.gold))}",
+                LINE_SEP,
+                render_hp_bar(char.hp_current, char.hp_max, wrap_bar_in_code=False),
+                "",
+                render_mp_bar(char.mp_current, char.mp_max, wrap_bar_in_code=False),
+                "",
+                render_stamina_bar(
+                    char.stamina,
+                    settings.MAX_STAMINA,
+                    length=_BAR_LEN,
+                    minutes_to_next=st_hint,
+                    wrap_bar_in_code=False,
+                ),
+                "",
+                format_rest_status_line_html(char),
+                "",
+                render_exp_bar(int(char.experience), xp_need, wrap_bar_in_code=False),
+                LINE_SEP,
+                "📊 <b>Характеристики</b>",
+                f"⚔️ СИЛ: {_fmt_stat_plain(char.stat_strength, str_e)}    🏃 ЛОВ: {_fmt_stat_plain(char.stat_dexterity, dex_e)}",
+                f"🔮 ИНТ: {_fmt_stat_plain(char.stat_intelligence, int_e)}    🛡️ ВЫН: {_fmt_stat_plain(char.stat_vitality, vit_e)}",
+                f"🍀 УДА: {_fmt_stat_plain(char.stat_luck, luck_e)}",
+                LINE_SEP,
+            ],
+        )
+        unspent = int(getattr(char, "unspent_stat_points", 0) or 0)
+        if unspent > 0:
+            lines.append(f"✨ Свободных очков характеристик: <b>{unspent}</b> — /stats")
+        return "\n".join(lines)
+
+    # Полные характеристики — шаблон как в ТЗ (разделители «------------------------»).
+    title_slots: list[tuple[str, str] | None] = []
+    for tk in (
+        title_service.active_title_key(char),
+        title_service.active_secondary_title_key(char),
+    ):
+        if tk and tk in TITLE_BY_KEY:
+            td = TITLE_BY_KEY[tk]
+            title_slots.append((td.name_ru, format_title_bonus_brief(td)))
+        else:
+            title_slots.append(None)
+    named = [s for s in title_slots if s]
+    title_name_w = max((len(n) for n, _ in named), default=0)
+    title_name_w = max(8, min(title_name_w, 22))
+
+    def _title_row(circle: str, slot: tuple[str, str] | None) -> str:
+        if not slot:
+            return f" {circle} —"
+        name, brief = slot
+        gap = max(1, title_name_w - len(name) + 2)
+        return f" {circle} {html.escape(name)}{' ' * gap}{html.escape(brief)}"
+
+    lines = [
         LINE_SEP,
-        head_row,
+        head_row_full,
         f"🎖️ Звание: {rank_combine}",
-        f"🏆 Титулы: {titles_row}",
+        "🏆 Титулы:",
+        "",
     ]
-    lines.extend(title_bonus_extra)
+    lines.append(_title_row("①", title_slots[0]))
+    lines.append(_title_row("②", title_slots[1]))
+    lines.append("")
     if ranker_effect:
         lines.append(ranker_effect)
+        lines.append("")
+    lines.append("🌐 Глобальные бонусы:")
+    if not gp_plain or gp_plain == "—":
+        lines.append(" —")
+    else:
+        lines.append("")
+        gp_parts = [p.strip() for p in global_passives_line.split(";") if p.strip()]
+        last_i = len(gp_parts) - 1
+        for i, p in enumerate(gp_parts):
+            suf = ";" if i < last_i else ""
+            lines.append(f" {html.escape(p)}{suf}")
     lines.extend(
         [
-            f"🌐 Глобальные бонусы: <i>{gp_show}</i>",
             LINE_SEP,
             f"💰 Золото: {format_number(int(char.gold))}",
-        ]
-    )
-    if not compact:
-        lines.append(f"⚗️ Рунные камни: {format_number(char.rune_stones)}")
-    lines.append(LINE_SEP)
-    if not compact:
-        lines.append(f"📜 Класс: {class_title}")
-        lines.append("")
-
-    lines.extend(
-        [
+            f"⚗️ Рунные камни: {format_number(char.rune_stones)}",
+            LINE_SEP,
+            f"📜 Класс: {class_title}",
+            "",
             render_hp_bar(char.hp_current, char.hp_max, wrap_bar_in_code=False),
             "",
             render_mp_bar(char.mp_current, char.mp_max, wrap_bar_in_code=False),
@@ -284,48 +362,36 @@ def _build_profile_text(
             "",
             render_exp_bar(int(char.experience), xp_need, wrap_bar_in_code=False),
             LINE_SEP,
-        ]
-    )
-
-    stat_hdr = (
-        "📊 <b>Характеристики</b>"
-        if compact
-        else "📊 <b>Характеристики</b> <i>(база (+экип и титул))</i>"
-    )
-    lines.extend(
-        [
-            stat_hdr,
+            "📊 Характеристики (база (+экип и титул))",
             f"⚔️ СИЛ: {_fmt_stat_plain(char.stat_strength, str_e)}    🏃 ЛОВ: {_fmt_stat_plain(char.stat_dexterity, dex_e)}",
             f"🔮 ИНТ: {_fmt_stat_plain(char.stat_intelligence, int_e)}    🛡️ ВЫН: {_fmt_stat_plain(char.stat_vitality, vit_e)}",
             f"🍀 УДА: {_fmt_stat_plain(char.stat_luck, luck_e)}",
             LINE_SEP,
-        ]
+        ],
     )
-
-    if not compact:
-        if mastery_html:
-            lines.append(mastery_html)
-            lines.append(LINE_SEP)
-        lines.extend(
-            [
-                f"🗡️ Удар (физ.): <b>{dmg_lo}–{dmg_hi}</b>",
-                f"💥 Крит: <b>{crit_pct}%</b>    💨 Уклонение: <b>{dodge_pct}%</b>",
-                LINE_SEP,
-            ]
-        )
-
+    m1, m2 = mastery_profile_lines(char, weapon_type)
+    lines.extend([m1, "", m2, LINE_SEP])
+    elem_ln = (
+        "🔮 Элемент: нейтральный"
+        if not char.element
+        else element_profile_line(char.element)
+    )
+    lines.extend(
+        [
+            f"🗡️ Удар (физ.): {dmg_lo}–{dmg_hi}",
+            f"💥 Крит: {crit_pct:.1f}%    💨 Уклонение: {dodge_pct:.1f}%",
+            LINE_SEP,
+        ],
+    )
     unspent = int(getattr(char, "unspent_stat_points", 0) or 0)
     if unspent > 0:
-        lines.append(f"✨ Свободных очков характеристик: <b>{unspent}</b> — /stats")
-
-    if not compact:
-        lines.extend(
-            [
-                element_profile_line(char.element),
-                f"📍 Этаж: {char.floor_number} / 100 · открыто до: {int(char.highest_floor_reached)}",
-            ]
-        )
-
+        lines.append(f"✨ Свободных очков характеристик: {unspent} — /stats")
+    lines.extend(
+        [
+            elem_ln,
+            f"📍 Этаж: {char.floor_number} / 100 · открыто до: {int(char.highest_floor_reached)}",
+        ],
+    )
     return "\n".join(lines)
 
 
@@ -336,7 +402,6 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
     w_atk = await _weapon_attack_value(session, char)
     weapon = await inventory_repo.get_equipped_weapon(session, char.id)
     wtype = "unarmed" if weapon is None else weapon_type_from_item_data(weapon.item_data or {})
-    mast = mastery_summary_line(char, wtype)
     gp = format_unlocked_global_passives_ru(char)
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
@@ -346,7 +411,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         char,
         compact=True,
         weapon_attack=w_atk,
-        mastery_html=mast,
+        weapon_type=wtype,
         global_passives_line=gp,
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
@@ -366,7 +431,6 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     w_atk = await _weapon_attack_value(session, char)
     weapon = await inventory_repo.get_equipped_weapon(session, char.id)
     wtype = "unarmed" if weapon is None else weapon_type_from_item_data(weapon.item_data or {})
-    mast = mastery_summary_line(char, wtype)
     gp = format_unlocked_global_passives_ru(char)
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
@@ -376,7 +440,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         char,
         compact=False,
         weapon_attack=w_atk,
-        mastery_html=mast,
+        weapon_type=wtype,
         global_passives_line=gp,
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,

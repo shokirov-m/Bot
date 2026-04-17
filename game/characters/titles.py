@@ -39,6 +39,19 @@ def _city_quests_done(c: Character) -> bool:
     return int(_meta(c).get("city_quests_done", 0)) >= 3
 
 
+def format_title_bonus_brief(t: TitleDef) -> str:
+    """Очень кратко для карточки полных характеристик (слот ① / ②)."""
+    parts: list[str] = []
+    if t.gold_bonus_pct:
+        parts.append(f"+{t.gold_bonus_pct}% золота")
+    if t.xp_bonus_pct:
+        parts.append(f"+{t.xp_bonus_pct}% опыта")
+    for lab, v in (("СИЛ", t.stat_str), ("ЛОВ", t.stat_dex), ("ИНТ", t.stat_int), ("ВЫН", t.stat_vit), ("УДА", t.stat_luck)):
+        if v:
+            parts.append(f"+{v} {lab}")
+    return " ".join(parts) if parts else "—"
+
+
 def format_title_bonus_line(t: TitleDef) -> str:
     """Краткое описание бонуса активного титула (для профиля и справочника)."""
     parts: list[str] = []

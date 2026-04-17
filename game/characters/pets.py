@@ -337,25 +337,19 @@ def format_pet_profile_block_html(character: Character, *, locale: str, compact_
     passive = format_pet_passive_plain(pet_passive_delta(character), locale=locale)
     passive_html = html.escape(passive) if passive else ""
     if loc == "en":
-        switch = (
-            "<i>Use the <b>Pet</b> button in <b>Status</b> to open the list and equip one; "
-            "or floors <b>8 / 48</b> when unlocked.</i>"
-        )
+        switch = "<i>Switch active pet: the <b>Pet</b> button in Status.</i>"
         body = (
-            f"🐾 <b>Active in combat:</b> {html.escape(disp)}"
+            f"🐾 Active in combat: {html.escape(disp)}"
             + (f"\n<i>{blur}</i>" if blur else "")
-            + (f"\n<b>Passive:</b> <i>{passive_html}</i>" if passive_html else "")
+            + (f"\nPassive: {passive_html}" if passive_html else "")
             + f"\n{switch}"
         )
         return body
-    switch_ru = (
-        "<i>Сменить активного: кнопка «Питомец» в <b>статусе</b> — откроется список; "
-        "или этажи <b>8 и 48</b>, когда доступны.</i>"
-    )
+    switch_ru = "<i>Сменить активного: кнопка «Питомец» в статусе.</i>"
     return (
-        f"🐾 <b>В бою сейчас:</b> {html.escape(disp)}"
+        f"🐾 В бою сейчас: {html.escape(disp)}"
         + (f"\n<i>{blur}</i>" if blur else "")
-        + (f"\n<b>Пассив:</b> <i>{passive_html}</i>" if passive_html else "")
+        + (f"\nПассив: {passive_html}" if passive_html else "")
         + f"\n{switch_ru}"
     )
 

@@ -80,42 +80,26 @@ def starter_offhand_dagger_payload() -> dict[str, Any]:
     return d
 
 
-_STARTER_WEAPON_STEM: dict[str, str] = {
-    "wanderer": "starter_wpn_wanderer",
-    "star_touched": "starter_wpn_star_touched",
-    "tower_reaper": "starter_wpn_tower_reaper",
-    "warrior": "starter_wpn_warrior",
-    "mage": "starter_wpn_mage",
-    "archer": "starter_wpn_archer",
-    "priest": "starter_wpn_priest",
-    "assassin": "starter_wpn_assassin",
-    "berserker": "starter_wpn_berserker",
-    "necromancer": "starter_wpn_necromancer",
-    "warden": "starter_wpn_warden",
-    "shaman": "starter_wpn_shaman",
-    "hunter": "starter_wpn_hunter",
-}
-
-
 def starter_weapon_payload(class_key: str) -> dict[str, Any]:
-    table_full: dict[str, tuple[str, int, str, str, bool]] = {
-        "wanderer": ("Дорожный нож", 6, "Всё, что нужно страннику до перекрёстка.", "blade", False),
-        "star_touched": ("Кристалл утренней звезды", 7, "Откликается на удачу.", "staff", False),
-        "tower_reaper": ("Коса посвящения", 9, "Каждая победа делает лезвие острее.", "polearm", True),
-        "warrior": ("Тренировочный меч", 9, "Надёжный клинок новобранца.", "blade", False),
-        "mage": ("Учебный посох", 7, "Фокусирует ману ученика.", "staff", False),
-        "archer": ("Простой лук", 8, "Для первых выстрелов в Башне.", "bow", True),
-        "priest": ("Посох наставника", 6, "Благословлён для странников.", "staff", False),
-        "assassin": ("Парный кинжал (правая рука)", 8, "Основа тихого стиля.", "dagger", False),
-        "berserker": ("Топор новобранца", 10, "Тяжёлый, как обещание крови.", "axe", False),
-        "necromancer": ("Костяной жезл", 7, "Шепчет с мёртвыми.", "staff", False),
-        "warden": ("Боевой молот стража", 8, "Щит держишь ты — удар несёт молот.", "hammer", False),
-        "shaman": ("Тотемный клинок", 7, "Резонанс с духами.", "blade", False),
-        "hunter": ("Охотничий нож", 8, "Для зверей и монстров.", "blade", False),
+    """Имена и ATK — баланс v2.0 (предмети 0,1.txt); картинка — общая заглушка."""
+    table_full: dict[str, tuple[str, int, str, str, bool, dict[str, int]]] = {
+        "wanderer": ("Клинок Пилигрима", 14, "Первый клинок странника у врат Башни.", "blade", False, {}),
+        "star_touched": ("Осколок Утренней Звезды", 16, "Откликается на звёздную удачу.", "staff", False, {"int": 3}),
+        "tower_reaper": ("Коса Посвящения", 22, "Каждая победа делает лезвие острее.", "polearm", True, {}),
+        "warrior": ("Сталь Рекрута", 18, "Надёжный клинок новобранца.", "blade", False, {}),
+        "mage": ("Посох Искр", 16, "Фокусирует ману ученика.", "staff", False, {"int": 5}),
+        "archer": ("Лук Новичка", 18, "Для первых выстрелов в Башне.", "bow", True, {}),
+        "priest": ("Посох Утешителя", 15, "Благословлён для странников.", "staff", False, {"vit": 5}),
+        "assassin": ("Парный Кинжал", 17, "Основа тихого стиля.", "dagger", False, {}),
+        "berserker": ("Топор Ярости", 22, "Тяжёлый, как обещание крови.", "axe", False, {}),
+        "necromancer": ("Костяной Жезл", 16, "Шепчет с мёртвыми.", "staff", False, {"int": 4}),
+        "warden": ("Молот Стража", 18, "Удар несёт страж.", "hammer", False, {"vit": 6}),
+        "shaman": ("Тотемный Клык", 17, "Резонанс с духами.", "blade", False, {"int": 4}),
+        "hunter": ("Нож Следопыта", 19, "Для зверей и монстров.", "blade", False, {"dex": 4}),
     }
-    name, atk, summary, wtype, two_handed = table_full.get(
+    name, atk, summary, wtype, two_handed, extra_stats = table_full.get(
         class_key,
-        ("Путевой клинок", 7, "Начало пути в Башне.", "blade", False),
+        ("Путевой клинок", 14, "Начало пути в Башне.", "blade", False, {}),
     )
     d: dict[str, Any] = {
         "name": name,
@@ -126,8 +110,9 @@ def starter_weapon_payload(class_key: str) -> dict[str, Any]:
         "weapon_type": wtype,
         "summary": summary,
         "hand": "main",
-        "image_url": item_gear_png(_STARTER_WEAPON_STEM.get(class_key, "starter_wpn_default")),
+        "image_url": item_gear_png("placeholder_item"),
     }
+    d.update(extra_stats)
     if two_handed:
         d["two_handed"] = True
     apply_item_payload_defaults(d)

@@ -1,4 +1,4 @@
-"""Общая обёртка: 8 копий + дефолт image_url."""
+"""Общая обёртка: списки каталога + дефолтные поля item_data (в т.ч. image_url)."""
 
 from __future__ import annotations
 

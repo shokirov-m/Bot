@@ -55,14 +55,20 @@ def render_hp_bar(
     length: int = _BAR_LEN,
     *,
     wrap_bar_in_code: bool = True,
+    spaced_numbers: bool = False,
 ) -> str:
     """HP: полоска + числа справа; в бою bar в <code> для моноширины."""
     bar = _mono_bar(current, max_hp, length)
     pct = (current / max_hp) * 100 if max_hp > 0 else 0
     icon = "💔" if pct < 25 else "🧡" if pct < 55 else "❤️"
-    n = f"{format_number(current)}/{format_number(max_hp)}"
+    if spaced_numbers:
+        n = f"{format_number(current)} / {format_number(max_hp)}"
+        gap = "   "
+    else:
+        n = f"{format_number(current)}/{format_number(max_hp)}"
+        gap = "  "
     bar_s = f"<code>{bar}</code>" if wrap_bar_in_code else bar
-    return f"{icon} {bar_s}  {n}"
+    return f"{icon} {bar_s}{gap}{n}"
 
 
 def render_mp_bar(
@@ -71,14 +77,20 @@ def render_mp_bar(
     length: int = _BAR_LEN,
     *,
     wrap_bar_in_code: bool = True,
+    spaced_numbers: bool = False,
 ) -> str:
     """MP — тот же формат, что HP."""
     bar = _mono_bar(current, max_mp, length)
     pct = (current / max_mp) * 100 if max_mp > 0 else 0
     icon = "💧" if pct < 25 else "💠" if pct < 55 else "💙"
-    n = f"{format_number(current)}/{format_number(max_mp)}"
+    if spaced_numbers:
+        n = f"{format_number(current)} / {format_number(max_mp)}"
+        gap = "   "
+    else:
+        n = f"{format_number(current)}/{format_number(max_mp)}"
+        gap = "  "
     bar_s = f"<code>{bar}</code>" if wrap_bar_in_code else bar
-    return f"{icon} {bar_s}  {n}"
+    return f"{icon} {bar_s}{gap}{n}"
 
 
 def render_stamina_bar(
@@ -189,11 +201,6 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     summary = data.get("summary")
     if summary:
         lines.append(f"<i>{html.escape(str(summary))}</i>")
-    img = str(data.get("image_url") or "").strip()
-    if img.startswith(("http://", "https://")):
-        lines.append(f'🖼 <a href="{html.escape(img)}">картинка (ссылка)</a>')
-    elif img.lower().endswith(".png") or ":\\" in img or img.startswith("/"):
-        lines.append(f"🖼 Локальный файл: <code>{html.escape(img)}</code> (замени PNG с тем же именем)")
     return "\n".join(lines)
 
 
