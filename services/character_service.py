@@ -249,6 +249,52 @@ def level_up_notice_html(character: Character, levels_gained: int) -> str:
     )
 
 
+_ADMIN_LEVEL_CAP = 9999
+
+
+async def admin_grant_character_levels(
+    session: AsyncSession,
+    character: Character,
+    *,
+    delta: int | None = None,
+    target_level: int | None = None,
+) -> tuple[int, str | None]:
+    """
+    Админ: повысить уровень (только вверх). Начисляет +5 очков характеристик за каждый новый уровень
+    (как при обычном левелапе), обновляет титулы и HP/MP от эффективных статов.
+
+    Возвращает (сколько уровней добавлено, текст ошибки или None при успехе).
+    """
+    old = int(character.level)
+    if target_level is not None:
+        tgt = int(target_level)
+        if tgt < old:
+            return 0, "Целевой уровень ниже текущего — снижение через эту кнопку недоступно."
+        if tgt == old:
+            return 0, "Уже этот уровень."
+        d = tgt - old
+    elif delta is not None:
+        d = int(delta)
+        if d <= 0:
+            return 0, "Нужно положительное число уровней."
+    else:
+        return 0, "Внутренняя ошибка параметров."
+
+    if old >= _ADMIN_LEVEL_CAP:
+        return 0, f"Уже достигнут предел выдачи ({_ADMIN_LEVEL_CAP} ур.)."
+    d = min(d, _ADMIN_LEVEL_CAP - old)
+    if d <= 0:
+        return 0, f"Уже достигнут предел выдачи ({_ADMIN_LEVEL_CAP} ур.)."
+
+    character.level = old + d
+    character.unspent_stat_points = int(character.unspent_stat_points) + 5 * d
+    from services import title_service
+
+    title_service.refresh_unlocks(character)
+    await refresh_hp_mp_from_effective(session, character)
+    return d, None
+
+
 _STAT_FIELD_BY_KEY: dict[str, str] = {
     "str": "stat_strength",
     "dex": "stat_dexterity",

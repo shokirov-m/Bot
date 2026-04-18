@@ -80,16 +80,19 @@ def format_admin_player_snapshot_html(
     mp_current: int,
     mp_max: int,
     gold: int,
+    unspent_stat_points: int = 0,
     equipped_lines: list[str],
 ) -> str:
     """Краткий статус героя и надетые вещи (админка)."""
     ban = "🚫 <b>бан</b>" if is_banned else "✅ активен"
     un = f"@{html.escape(username)}" if username else "—"
     eq_block = "\n".join(equipped_lines) if equipped_lines else "<i>Ничего не надето.</i>"
+    pts = int(unspent_stat_points)
+    pts_line = f" · своб. очки стата: <b>{pts}</b> <i>(/stats)</i>"
     return (
         f"👤 <b>{html.escape(display_name)}</b>\n"
         f"TG <code>{telegram_id}</code> {un}\n"
-        f"{ban} · ур. <b>{level}</b> · этаж <b>{floor_number}</b> · класс <code>{html.escape(class_key)}</code>\n"
+        f"{ban} · ур. <b>{level}</b> · этаж <b>{floor_number}</b> · класс <code>{html.escape(class_key)}</code>{pts_line}\n"
         f"HP <b>{hp_current}</b>/<b>{hp_max}</b> · MP <b>{mp_current}</b>/<b>{mp_max}</b> · 💰 <b>{gold}</b>\n\n"
         f"<b>Надето:</b>\n{eq_block}"
     )

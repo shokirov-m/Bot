@@ -36,6 +36,9 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="🧙 Все игроки", callback_data="adm:players"),
             ],
+            [
+                InlineKeyboardButton(text="📈 Уровень по Telegram ID", callback_data="adm:lv_id"),
+            ],
         ],
     )
 
@@ -76,13 +79,30 @@ def admin_players_browser_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def admin_player_snapshot_keyboard(*, return_page: int) -> InlineKeyboardMarkup:
+def admin_player_snapshot_keyboard(*, character_id: int, return_page: int) -> InlineKeyboardMarkup:
+    """
+    Карточка игрока: возврат + выдача уровня короткими callback (лимит 64 байта).
+    adm:lvw:<id>:<page>:<delta> — добавить delta уровней (1, 5, 10).
+    adm:lvs:<id>:<page>:<lvl> — поднять до уровня lvl (не ниже текущего).
+    """
+    cid = int(character_id)
+    pg = int(return_page)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                InlineKeyboardButton(text="➕ +1 ур.", callback_data=f"adm:lvw:{cid}:{pg}:1"),
+                InlineKeyboardButton(text="➕ +5 ур.", callback_data=f"adm:lvw:{cid}:{pg}:5"),
+                InlineKeyboardButton(text="➕ +10 ур.", callback_data=f"adm:lvw:{cid}:{pg}:10"),
+            ],
+            [
+                InlineKeyboardButton(text="🎯 До 25 ур.", callback_data=f"adm:lvs:{cid}:{pg}:25"),
+                InlineKeyboardButton(text="🎯 До 50 ур.", callback_data=f"adm:lvs:{cid}:{pg}:50"),
+                InlineKeyboardButton(text="🎯 До 100 ур.", callback_data=f"adm:lvs:{cid}:{pg}:100"),
+            ],
+            [
                 InlineKeyboardButton(
                     text="⬅️ К списку игроков",
-                    callback_data=f"adm:pl:{return_page}",
+                    callback_data=f"adm:pl:{pg}",
                 ),
             ],
             [

@@ -30,6 +30,7 @@ from bot.keyboards.admin_kb import (
 )
 from bot.states.admin_states import AdminStates
 from config import settings
+from db.models.character import Character
 from db.models.inventory import InventoryItem
 from db.repository import admin_log_repo, character_repo, inventory_repo, user_repo
 from game.items import equipment as equipment_mod
@@ -41,6 +42,8 @@ router = Router(name="admin")
 PANEL_HTML = (
     "🔧 <b>Админ-панель</b>\n"
     "Выбери действие кнопкой.\n"
+    "📈 <b>Уровень игроку:</b> список «Все игроки» → строка героя → кнопки <b>+1 / +5 / +10</b> "
+    "или цель <b>25 / 50 / 100</b> ур. (только <b>повышение</b>, до 9999).\n"
     "<i>Команды <code>/admin …</code>, <code>/admin_stats</code>, "
     "<code>/admin_ban</code> и т.д. тоже работают.</i>"
 )
@@ -97,6 +100,35 @@ def _truncate_html(s: str, max_len: int = 3800) -> str:
     if len(s) <= max_len:
         return s
     return s[: max_len - 20] + "\n… <i>(обрезано)</i>"
+
+
+async def _admin_player_snapshot_html(session: AsyncSession, character_id: int) -> tuple[str | None, Character | None]:
+    """HTML карточки игрока для админки или (None, None) если нет данных."""
+    ch = await character_repo.get_by_id(session, character_id)
+    if ch is None:
+        return None, None
+    u = await user_repo.get_by_id(session, int(ch.user_id))
+    if u is None:
+        return None, None
+    equipped = await inventory_repo.list_equipped_items(session, int(ch.id))
+    lines = _admin_equipped_lines_from_items(equipped)
+    body = panel.format_admin_player_snapshot_html(
+        telegram_id=int(u.telegram_id),
+        username=u.username,
+        display_name=ch.display_name,
+        level=int(ch.level),
+        floor_number=int(ch.floor_number),
+        class_key=str(ch.class_key),
+        is_banned=bool(u.is_banned),
+        hp_current=int(ch.hp_current),
+        hp_max=int(ch.hp_max),
+        mp_current=int(ch.mp_current),
+        mp_max=int(ch.mp_max),
+        gold=int(ch.gold),
+        unspent_stat_points=int(ch.unspent_stat_points),
+        equipped_lines=lines,
+    )
+    return body, ch
 
 
 async def _safe_edit_panel(
@@ -363,7 +395,7 @@ async def _admin_render_players_page(
     header = (
         f"🧙 <b>Список игроков</b> · стр. <b>{page + 1}</b>/<b>{total_pages}</b> "
         f"(всего героев: <b>{total}</b>)\n"
-        "<i>Нажми строку — краткий статус и надетые вещи.</i>"
+        "<i>Нажми строку — карточка героя, надетые вещи и кнопки выдачи уровня (+1/+5/+10, до 25/50/100).</i>"
     )
     kb = admin_players_browser_keyboard(
         entries,
@@ -402,40 +434,151 @@ async def cb_admin_player_view(callback: CallbackQuery, session: AsyncSession, s
     cid = int(parts[2])
     ret_page = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 0
     try:
-        ch = await character_repo.get_by_id(session, cid)
-        if ch is None:
-            await callback.answer("Персонаж не найден.", show_alert=True)
+        body, ch = await _admin_player_snapshot_html(session, cid)
+        if body is None or ch is None:
+            await callback.answer("Персонаж или пользователь не найден.", show_alert=True)
             return
-        u = await user_repo.get_by_id(session, int(ch.user_id))
-        if u is None:
-            await callback.answer("Пользователь не найден.", show_alert=True)
-            return
-        equipped = await inventory_repo.list_equipped_items(session, int(ch.id))
-        lines = _admin_equipped_lines_from_items(equipped)
-        body = panel.format_admin_player_snapshot_html(
-            telegram_id=int(u.telegram_id),
-            username=u.username,
-            display_name=ch.display_name,
-            level=int(ch.level),
-            floor_number=int(ch.floor_number),
-            class_key=str(ch.class_key),
-            is_banned=bool(u.is_banned),
-            hp_current=int(ch.hp_current),
-            hp_max=int(ch.hp_max),
-            mp_current=int(ch.mp_current),
-            mp_max=int(ch.mp_max),
-            gold=int(ch.gold),
-            equipped_lines=lines,
-        )
         await _safe_edit_panel(
             callback.message,
             _truncate_html(body),
-            reply_markup=admin_player_snapshot_keyboard(return_page=ret_page),
+            reply_markup=admin_player_snapshot_keyboard(character_id=cid, return_page=ret_page),
         )
         await callback.answer()
     except Exception:
         logger.exception("adm:pv")
         await callback.answer("Ошибка БД.", show_alert=True)
+
+
+async def _admin_apply_level_and_refresh(
+    *,
+    callback: CallbackQuery,
+    session: AsyncSession,
+    character_id: int,
+    return_page: int,
+    actor_telegram_id: int,
+    *,
+    delta: int | None = None,
+    target_level: int | None = None,
+) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    ch = await character_repo.get_by_id(session, character_id)
+    if ch is None:
+        await callback.answer("Персонаж не найден.", show_alert=True)
+        return
+    u = await user_repo.get_by_id(session, int(ch.user_id))
+    if u is None:
+        await callback.answer("Пользователь не найден.", show_alert=True)
+        return
+    old_lv = int(ch.level)
+    gained, err = await character_service.admin_grant_character_levels(
+        session,
+        ch,
+        delta=delta,
+        target_level=target_level,
+    )
+    if err:
+        await callback.answer(err, show_alert=True)
+        return
+    await anticheat_service.log_admin_action(
+        session,
+        actor_telegram_id=actor_telegram_id,
+        target_user_id=int(u.id),
+        action="admin_grant_levels",
+        message=f"{old_lv}→{int(ch.level)} (+{gained})",
+        payload={
+            "character_id": int(ch.id),
+            "telegram_id": int(u.telegram_id),
+            "levels_added": gained,
+            "level_before": old_lv,
+            "level_after": int(ch.level),
+        },
+    )
+    await session.commit()
+    body, ch2 = await _admin_player_snapshot_html(session, character_id)
+    if body is None or ch2 is None:
+        await callback.answer("Готово, но карточку обновить не удалось.", show_alert=True)
+        return
+    await _safe_edit_panel(
+        callback.message,
+        _truncate_html(body),
+        reply_markup=admin_player_snapshot_keyboard(
+            character_id=character_id,
+            return_page=return_page,
+        ),
+    )
+    await callback.answer(f"+{gained} ур. → сейчас {int(ch2.level)} ✓")
+
+
+@router.callback_query(F.data.startswith("adm:lvw:"), IsAdmin())
+async def cb_admin_level_delta(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.from_user is None:
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    if len(parts) != 5 or parts[1] != "lvw" or not parts[2].isdigit() or not parts[3].isdigit() or not parts[4].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    page = int(parts[3])
+    d = int(parts[4])
+    try:
+        await _admin_apply_level_and_refresh(
+            callback=callback,
+            session=session,
+            character_id=cid,
+            return_page=page,
+            actor_telegram_id=int(callback.from_user.id),
+            delta=d,
+            target_level=None,
+        )
+    except Exception:
+        logger.exception("adm:lvw")
+        await callback.answer("Ошибка БД.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("adm:lvs:"), IsAdmin())
+async def cb_admin_level_set(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.from_user is None:
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    if len(parts) != 5 or parts[1] != "lvs" or not parts[2].isdigit() or not parts[3].isdigit() or not parts[4].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    page = int(parts[3])
+    tgt = int(parts[4])
+    try:
+        await _admin_apply_level_and_refresh(
+            callback=callback,
+            session=session,
+            character_id=cid,
+            return_page=page,
+            actor_telegram_id=int(callback.from_user.id),
+            delta=None,
+            target_level=tgt,
+        )
+    except Exception:
+        logger.exception("adm:lvs")
+        await callback.answer("Ошибка БД.", show_alert=True)
+
+
+@router.callback_query(F.data == "adm:lv_id", IsAdmin())
+async def cb_admin_level_by_id(callback: CallbackQuery, state: FSMContext) -> None:
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="level_tid",
+        html_text=(
+            "📈 <b>Уровень по Telegram ID</b>\n"
+            "Введи <b>только цифры</b> — ID пользователя в Telegram.\n"
+            "Откроется та же карточка, что в списке игроков: кнопки <b>+1 / +5 / +10</b> "
+            "и <b>до 25 / 50 / 100</b> ур. Снижать уровень этим способом нельзя."
+        ),
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data == "adm:referrals", IsAdmin())
@@ -698,6 +841,38 @@ async def admin_fsm_text(message: Message, session: AsyncSession, state: FSMCont
                 return
             await _answer_user_lookup(message, session, int(text))
             await _try_restore_hub_from_state(message.bot, state)
+            return
+
+        if kind == "level_tid":
+            if not text.isdigit():
+                await message.answer("Нужен числовой Telegram ID.")
+                return
+            tid = int(text)
+            u = await user_repo.get_by_telegram_id(session, tid)
+            if u is None:
+                await message.answer(f"Нет пользователя <code>{tid}</code>.", parse_mode=ParseMode.HTML)
+                await _try_restore_hub_from_state(message.bot, state)
+                return
+            ch = await character_repo.get_by_user_id(session, u.id)
+            if ch is None:
+                await message.answer("У пользователя нет персонажа.", parse_mode=ParseMode.HTML)
+                await _try_restore_hub_from_state(message.bot, state)
+                return
+            body, ch2 = await _admin_player_snapshot_html(session, int(ch.id))
+            if body is None or ch2 is None:
+                await message.answer("Не удалось собрать карточку.")
+                await _try_restore_hub_from_state(message.bot, state)
+                return
+            await message.answer(
+                _truncate_html(body),
+                parse_mode=ParseMode.HTML,
+                reply_markup=admin_player_snapshot_keyboard(character_id=int(ch.id), return_page=0),
+            )
+            await _try_restore_hub_from_state(message.bot, state)
+            await message.answer(
+                "Карточка выше: меняй уровень кнопками <b>+1 / +5 / +10</b> или <b>до 25 / 50 / 100</b>.",
+                parse_mode=ParseMode.HTML,
+            )
             return
 
         if kind == "give":
