@@ -456,7 +456,6 @@ async def _admin_apply_level_and_refresh(
     character_id: int,
     return_page: int,
     actor_telegram_id: int,
-    *,
     delta: int | None = None,
     target_level: int | None = None,
 ) -> None:
