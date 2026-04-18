@@ -20,7 +20,7 @@ from bot.keyboards.leaderboard_kb import leaderboard_categories_keyboard
 from bot.keyboards.inventory_kb import bag_tab_keyboard
 from bot.keyboards.auction_kb import auction_hub_keyboard
 from bot.keyboards.daily_kb import daily_screen_keyboard
-from bot.keyboards.menu_kb import main_menu_keyboard
+from bot.keyboards.menu_kb import main_menu_keyboard, portal_screen_keyboard
 from bot.keyboards.profile_kb import profile_view_keyboard
 from bot.keyboards.title_kb import titles_pick_keyboard
 from bot.states.combat_states import CombatStates
@@ -30,7 +30,8 @@ from db.repository import character_repo, inventory_repo, user_repo
 from bot.handlers.quests import render_quests_hub
 from services import daily_service, title_service
 from services.daily_screen_service import build_daily_body_html
-from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui
+from game.floors.portal import PORTAL_DESTINATION_FLOORS
+from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui, travel_to_floor
 from services.menu_hub_service import format_menu_hub_html
 from services.rest_service import apply_completed_rest_if_needed
 from game.items.equipment.item_asset_paths import tower_bot_root
@@ -229,6 +230,90 @@ async def menu_floor(callback: CallbackQuery, session: AsyncSession, state: FSMC
         await callback.answer()
     except Exception:
         logger.exception("mnu:flr")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "mnu:prt")
+async def menu_portal_open(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Экран портала: выбор этажа для быстрого перехода."""
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer("Сначала заверши бой.", show_alert=True)
+            return
+        _, char = await _char_or_alert(session, callback)
+        if char is None:
+            return
+        loc = get_locale(char, callback.from_user.language_code)
+        floors_txt = ", ".join(str(x) for x in PORTAL_DESTINATION_FLOORS)
+        body = t(loc, "portal_intro", floors=floors_txt)
+        kb = portal_screen_keyboard(locale=loc, highest_floor_reached=int(char.highest_floor_reached))
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=body,
+            reply_markup=kb,
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("mnu:prt")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^mnu:prt:\d+$"))
+async def menu_portal_travel(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Переход на этаж из портала (callback mnu:prt:<n>)."""
+    try:
+        if callback.message is None or callback.from_user is None or callback.data is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer("Сначала заверши бой.", show_alert=True)
+            return
+        _, char = await _char_or_alert(session, callback)
+        if char is None:
+            return
+        loc = get_locale(char, callback.from_user.language_code)
+        target = int(callback.data.split(":")[2])
+        if target not in PORTAL_DESTINATION_FLOORS:
+            await callback.answer()
+            return
+        if int(char.floor_number) == target:
+            await callback.answer(t(loc, "portal_same_floor"), show_alert=True)
+            return
+        if int(char.highest_floor_reached) < target:
+            await callback.answer(t(loc, "portal_locked_alert", n=target), show_alert=True)
+            return
+        ok, err = await travel_to_floor(
+            session,
+            char,
+            target,
+            telegram_id=callback.from_user.id,
+            username=callback.from_user.username,
+            bot=callback.bot,
+        )
+        if not ok:
+            await callback.answer(err or "Нельзя.", show_alert=True)
+            return
+        await session.commit()
+        kb = await floor_keyboard_for_character(session, char)
+        await push_floor_screen_ui(
+            session,
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            character=char,
+            reply_markup=kb,
+            target_message=callback.message,
+        )
+        await callback.answer(f"Этаж {target} ✓")
+    except Exception:
+        logger.exception("mnu:prt:N")
         await callback.answer("Ошибка.", show_alert=True)
 
 

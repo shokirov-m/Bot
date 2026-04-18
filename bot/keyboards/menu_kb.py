@@ -17,6 +17,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.i18n import t
 from bot.keyboards.tutorial_kb import tutorial_hints_keyboard
 from game.characters.classes import all_classes_ordered
+from game.floors.portal import PORTAL_DESTINATION_FLOORS
 
 
 
@@ -82,7 +83,7 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
                 InlineKeyboardButton(text=t(loc, "menu_inv"), callback_data="mnu:inv"),
 
-                InlineKeyboardButton(text=t(loc, "menu_city"), callback_data="mnu:cty"),
+                InlineKeyboardButton(text=t(loc, "menu_portal"), callback_data="mnu:prt"),
 
             ],
 
@@ -113,6 +114,27 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
     ],
 
 )
+
+
+def portal_screen_keyboard(*, locale: str = "ru", highest_floor_reached: int) -> InlineKeyboardMarkup:
+    """Портал: быстрый переход на важные этажи (список в game/floors/portal.py)."""
+    loc = locale if locale in ("ru", "en") else "ru"
+    row: list[InlineKeyboardButton] = []
+    for fl in PORTAL_DESTINATION_FLOORS:
+        locked = int(highest_floor_reached) < int(fl)
+        key = "portal_btn_floor_locked" if locked else "portal_btn_floor"
+        row.append(
+            InlineKeyboardButton(
+                text=t(loc, key, n=fl),
+                callback_data=f"mnu:prt:{fl}",
+            ),
+        )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            row,
+            [InlineKeyboardButton(text=t(loc, "portal_back_menu"), callback_data="mnu:hub")],
+        ],
+    )
 
 
 def main_menu_with_tutorial_hints(*, locale: str = "ru") -> InlineKeyboardMarkup:

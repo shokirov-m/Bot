@@ -75,46 +75,6 @@ async def on_city_hub_open(
         await query.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data == "mnu:cty")
-async def menu_open_city_from_hub(
-    query: CallbackQuery,
-    session: AsyncSession,
-    state: FSMContext,
-) -> None:
-    """Город из главного меню (только если текущий этаж — городской хаб)."""
-    try:
-        if query.from_user is None or query.message is None:
-            await query.answer()
-            return
-        if await state.get_state() == CombatStates.in_battle.state:
-            await query.answer("Сначала заверши текущий бой.", show_alert=True)
-            return
-        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
-        if user is None or user.is_banned:
-            await query.answer("Нет доступа.", show_alert=True)
-            return
-        char = await character_repo.get_by_user_id(session, user.id)
-        if char is None:
-            await query.answer("Сначала /start.", show_alert=True)
-            return
-        loc = get_locale(char, query.from_user.language_code)
-        if floor_data.get_city_for_floor(char.floor_number) is None:
-            await query.answer(t(loc, "menu_city_unavailable"), show_alert=True)
-            return
-        await push_game_ui(
-            state,
-            query.bot,
-            chat_id=query.message.chat.id,
-            text=format_city_hub_message(char),
-            reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
-            target_message=query.message,
-        )
-        await query.answer()
-    except Exception:
-        logger.exception("mnu:cty")
-        await query.answer("Ошибка.", show_alert=True)
-
-
 @router.callback_query(F.data.regexp(r"^cty:pet:(1|3):(\d+)$"))
 async def on_city_pet_summon(
     query: CallbackQuery,

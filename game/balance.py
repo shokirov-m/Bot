@@ -136,11 +136,7 @@ MONSTER_ARMOR_PENETRATION = 0.20
 # Мини-босс и главный босс (в бою оба помечены is_mini_boss / is_major_boss).
 MONSTER_ARMOR_PENETRATION_MAJOR_BOSS = 0.25
 
-# --- Масштаб монстров от уровня персонажа (кроме учебного боя) ---
-# На каждый уровень героя выше 1-го: чуть больше HP / атака / защита врага.
-MONSTER_PLAYER_LEVEL_HP_PER_LEVEL = 0.022
-MONSTER_PLAYER_LEVEL_ATK_PER_LEVEL = 0.018
-MONSTER_PLAYER_LEVEL_DEF_PER_LEVEL = 0.012
+# Монстры масштабируются только этажем/типом спавна (см. combat_service._monster_stat_bundle).
 
 # Плоский бонус к защите игрока от уровня (добавляется в бою поверх экипировки).
 PLAYER_DEFENSE_BONUS_PER_LEVEL = 1

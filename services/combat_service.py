@@ -73,9 +73,6 @@ from game.balance import (
     MONSTER_MULT_MAJOR_HP,
     MONSTER_MULT_MINI_ATK,
     MONSTER_MULT_MINI_HP,
-    MONSTER_PLAYER_LEVEL_ATK_PER_LEVEL,
-    MONSTER_PLAYER_LEVEL_DEF_PER_LEVEL,
-    MONSTER_PLAYER_LEVEL_HP_PER_LEVEL,
     PLAYER_DEFENSE_BONUS_PER_LEVEL,
     monster_tower_floor_strength_multiplier,
 )
@@ -232,10 +229,8 @@ def _monster_strike_ailment(
 def _monster_stat_bundle(
     floor_number: int,
     spawn: FloorMonsterSpawn,
-    *,
-    player_level: int = 1,
 ) -> dict[str, Any]:
-    """HP/атака/защита с учётом типа цели и уровня героя."""
+    """HP/атака/защита с учётом типа цели и этажа (без масштаба от уровня героя — только этаж/тип врага)."""
     raw_hp = MONSTER_HP_RAW_BASE + floor_number * MONSTER_HP_RAW_PER_FLOOR
     hp = int(raw_hp * MONSTER_HP_CURVE_MULT)
     raw_atk = MONSTER_ATK_RAW_BASE + floor_number // MONSTER_ATK_RAW_DIV_FLOOR
@@ -262,18 +257,13 @@ def _monster_stat_bundle(
     pwr = 1.0 + lv * MONSTER_FLOOR_POWER_PER_LEVEL
     dfn = 1.0 + lv * MONSTER_FLOOR_DEF_PER_LEVEL
 
-    plv = max(0, int(player_level) - 1)
-    pl_hp = 1.0 + plv * MONSTER_PLAYER_LEVEL_HP_PER_LEVEL
-    pl_atk = 1.0 + plv * MONSTER_PLAYER_LEVEL_ATK_PER_LEVEL
-    pl_def = 1.0 + plv * MONSTER_PLAYER_LEVEL_DEF_PER_LEVEL
-
     tower_m = monster_tower_floor_strength_multiplier(floor_number)
     if floor_number == 5 and spawn.is_mini_boss:
         tower_m *= MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT
 
-    hp_out = max(1, int(hp * mult_hp * pwr * pl_hp * tower_m))
-    atk_out = max(1, int(atk_final * pwr * pl_atk * tower_m))
-    def_out = max(0, int(defense * dfn * pl_def * tower_m))
+    hp_out = max(1, int(hp * mult_hp * pwr * tower_m))
+    atk_out = max(1, int(atk_final * pwr * tower_m))
+    def_out = max(0, int(defense * dfn * tower_m))
 
     post5 = _monster_post_floor5_strength_mult(floor_number)
     hp_out = max(1, int(hp_out * post5))
@@ -680,11 +670,7 @@ async def start_combat(
             bot=query.bot,
         )
 
-    monster = _monster_stat_bundle(
-        character.floor_number,
-        spawn,
-        player_level=int(character.level),
-    )
+    monster = _monster_stat_bundle(character.floor_number, spawn)
     monster["is_elite"] = spawn.is_elite
     monster["is_mini_boss"] = spawn.is_mini_boss
     monster["is_major_boss"] = spawn.is_major_boss

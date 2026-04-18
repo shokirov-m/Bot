@@ -26,7 +26,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_titles": "🏆 Титулы",
         "menu_top": "📊 Топ игроков",
         "menu_city": "🏙️ Город",
+        "menu_portal": "🌀 Портал",
         "menu_city_unavailable": "Город только на городских этажах. Открой этаж с хабом или спустись к нему.",
+        "portal_intro": (
+            "🌀 <b>Портал</b>\n"
+            "Мгновенный переход на <b>важные этажи</b> башни (список можно расширить в настройках игры).\n"
+            "Сейчас: <b>{floors}</b>.\n"
+            "<i>Нужен открытый маршрут: твой «максимум этажа» ≥ цели. Город по-прежнему с кнопки "
+            "«Город» на карте этажа, если ты уже на городском ярусе.</i>"
+        ),
+        "portal_btn_floor": "📍 Этаж {n}",
+        "portal_btn_floor_locked": "🔒 Этаж {n}",
+        "portal_locked_alert": "Этаж {n} ещё не открыт — поднимись выше в башне.",
+        "portal_same_floor": "Ты уже на этом этаже.",
+        "portal_back_menu": "📋 В меню",
         "city_pet_summon_1": "🐾 ×1 {cost}💰 · сегодня {left}/3",
         "city_pet_summon_3": "🐾 ×3 {cost}💰 · сегодня {left}/3",
         "pet_city_summon_limit": (
@@ -312,7 +325,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_titles": "🏆 Titles",
         "menu_top": "📊 Leaderboard",
         "menu_city": "🏙️ City",
+        "menu_portal": "🌀 Portal",
         "menu_city_unavailable": "City hub is only on certain floors. Go to a city floor (or travel there).",
+        "portal_intro": (
+            "🌀 <b>Portal</b>\n"
+            "Quick travel to <b>key floors</b> (the list can be expanded later).\n"
+            "Now: <b>{floors}</b>.\n"
+            "<i>You must have the floor unlocked: your <b>highest reached floor</b> ≥ target. "
+            "The city hub is still opened with the <b>City</b> button on the floor map when you are on a city floor.</i>"
+        ),
+        "portal_btn_floor": "📍 Fl {n}",
+        "portal_btn_floor_locked": "🔒 Fl {n}",
+        "portal_locked_alert": "Floor {n} is not unlocked yet — climb higher in the tower.",
+        "portal_same_floor": "You are already on this floor.",
+        "portal_back_menu": "📋 Menu",
         "city_pet_summon_1": "🐾 ×1 {cost}💰 · today {left}/3",
         "city_pet_summon_3": "🐾 ×3 {cost}💰 · today {left}/3",
         "pet_city_summon_limit": (
