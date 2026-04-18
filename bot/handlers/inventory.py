@@ -27,6 +27,7 @@ from game.items import equipment as equip_meta
 from game.items import item_categories
 from game.items.equipment.defaults import apply_item_payload_defaults
 from services import character_service, shop_service, stat_bonus_service
+from utils.game_images_prefs import game_images_enabled
 from utils.ui import format_inventory_item_html
 
 router = Router(name="inventory")
@@ -386,7 +387,11 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             slot_target=slot_target,
         )
         raw_img = str(data.get("image_url") or "").strip()
-        photo_arg = normalize_photo_media(raw_img) if raw_img else None
+        photo_arg = (
+            normalize_photo_media(raw_img)
+            if raw_img and game_images_enabled(char)
+            else None
+        )
         await push_game_ui(
             state,
             callback.bot,

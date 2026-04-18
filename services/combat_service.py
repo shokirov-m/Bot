@@ -80,6 +80,7 @@ from game.characters import pets as pets_mod
 from game.floors import floor_data
 from game.floors import long_floor as long_floor_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
+from game.floors.monster_portraits import combat_monster_portrait_path
 from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawns_for_floor
 from game.economy import sinks as sink_rules
 from game.floors.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
@@ -87,6 +88,8 @@ from game.items import enchant as enchant_rules
 from game.items.rarity_scaling import armor_enchant_defensive_bonus, scaled_armor_defense_value
 from game.items import loot as loot_tables
 from game.characters.global_passives import refresh_global_passives
+from utils.game_images_prefs import game_images_enabled
+
 from services import (
     anticheat_service,
     character_service,
@@ -132,7 +135,14 @@ def _taunt_banner_html(taunt_line: str) -> str:
     return html.escape(t)
 
 
+def _clamp_battle_caption(html: str, max_len: int = 1020) -> str:
+    if len(html) <= max_len:
+        return html
+    return html[: max_len - 1] + "…"
+
+
 async def _safe_edit_combat_message_text(
+    state: FSMContext,
     message: Message,
     text: str,
     *,
@@ -141,20 +151,63 @@ async def _safe_edit_combat_message_text(
     """
     Правка текста боя / победы / поражения.
     Не рвёт транзакцию из‑за «message is not modified» или редкого несовпадения типа сообщения.
+    Для боя с портретом-монстром (фото) длинные экраны переводятся в обычное текстовое сообщение.
     """
-    try:
-        await message.edit_text(
-            text,
+    data = await state.get_data()
+    mid = data.get("combat_message_id")
+    cid = data.get("combat_chat_id")
+    is_photo = bool(data.get("combat_ui_is_photo"))
+    bot = message.bot
+
+    if is_photo and len(text) > 1019:
+        await push_game_ui(
+            state,
+            bot,
+            chat_id=int(cid or message.chat.id),
+            text=text,
             reply_markup=reply_markup,
-            parse_mode=ParseMode.HTML,
+            target_message=message,
+            photo_path=None,
         )
+        u = await state.get_data()
+        nmid = u.get(GAME_UI_MESSAGE_ID)
+        ncid = u.get(GAME_UI_CHAT_ID)
+        if nmid is not None and ncid is not None:
+            await state.update_data(
+                combat_ui_is_photo=False,
+                combat_message_id=int(nmid),
+                combat_chat_id=int(ncid),
+            )
+        return True
+
+    use_mid = int(mid) if mid is not None else message.message_id
+    use_cid = int(cid) if cid is not None else message.chat.id
+
+    try:
+        if is_photo:
+            cap = _clamp_battle_caption(text)
+            await bot.edit_message_caption(
+                chat_id=use_cid,
+                message_id=use_mid,
+                caption=cap,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await bot.edit_message_text(
+                chat_id=use_cid,
+                message_id=use_mid,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+            )
         return True
     except TelegramBadRequest as e:
         err = str(e).lower()
         if "message is not modified" in err:
             return True
         if "message can't be edited" in err or "there is no text" in err or "have no text" in err:
-            logger.warning("combat UI: edit_text пропущен ({})", e)
+            logger.warning("combat UI: правка сообщения пропущена ({})", e)
             return False
         raise
 
@@ -745,32 +798,70 @@ async def start_combat(
         await query.answer()
         return False
 
+    tpl_key = str(monster.get("template_key") or "")
+    battle_photo = (
+        combat_monster_portrait_path(tpl_key)
+        if game_images_enabled(character)
+        else None
+    )
+
     try:
-        ok = await _safe_edit_combat_message_text(query.message, text, reply_markup=kb)
-    except TelegramBadRequest:
-        logger.warning("Не удалось отредактировать сообщение этажа — замена через якорь UI.")
-        ok = False
-    try:
-        if ok:
-            await state.update_data(
-                combat_message_id=query.message.message_id,
-                combat_chat_id=query.message.chat.id,
-            )
-        else:
-            await push_game_ui(
-                state,
-                query.bot,
-                chat_id=query.message.chat.id,
-                text=text,
-                reply_markup=kb,
-                target_message=query.message,
-                photo_path=None,
-            )
-            data = await state.get_data()
-            mid = data.get(GAME_UI_MESSAGE_ID)
-            cid = data.get(GAME_UI_CHAT_ID)
-            if mid is not None and cid is not None:
-                await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
+        opened_with_portrait = False
+        if battle_photo is not None:
+            try:
+                cap = _clamp_battle_caption(text)
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=cap,
+                    reply_markup=kb,
+                    target_message=query.message,
+                    photo_path=battle_photo,
+                )
+                data = await state.get_data()
+                mid = data.get(GAME_UI_MESSAGE_ID)
+                cid = data.get(GAME_UI_CHAT_ID)
+                if mid is not None and cid is not None:
+                    await state.update_data(
+                        combat_message_id=int(mid),
+                        combat_chat_id=int(cid),
+                        combat_ui_is_photo=True,
+                    )
+                    opened_with_portrait = True
+            except Exception:
+                logger.exception("start_combat: портрет монстра — откат на текст")
+        if not opened_with_portrait:
+            try:
+                ok = await _safe_edit_combat_message_text(state, query.message, text, reply_markup=kb)
+            except TelegramBadRequest:
+                logger.warning("Не удалось отредактировать сообщение этажа — замена через якорь UI.")
+                ok = False
+            if ok:
+                await state.update_data(
+                    combat_message_id=query.message.message_id,
+                    combat_chat_id=query.message.chat.id,
+                    combat_ui_is_photo=False,
+                )
+            else:
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=text,
+                    reply_markup=kb,
+                    target_message=query.message,
+                    photo_path=None,
+                )
+                data = await state.get_data()
+                mid = data.get(GAME_UI_MESSAGE_ID)
+                cid = data.get(GAME_UI_CHAT_ID)
+                if mid is not None and cid is not None:
+                    await state.update_data(
+                        combat_message_id=int(mid),
+                        combat_chat_id=int(cid),
+                        combat_ui_is_photo=False,
+                    )
         if query.from_user is not None:
             await combat_idle_service.arm_combat_idle_after_player_turn(
                 bot=query.bot,
@@ -873,7 +964,7 @@ async def start_tutorial_combat(
         return False
 
     try:
-        ok = await _safe_edit_combat_message_text(query.message, text, reply_markup=kb)
+        ok = await _safe_edit_combat_message_text(state, query.message, text, reply_markup=kb)
     except TelegramBadRequest:
         logger.warning("Не удалось отредактировать сообщение (учебный бой) — замена через якорь UI.")
         ok = False
@@ -882,6 +973,7 @@ async def start_tutorial_combat(
             await state.update_data(
                 combat_message_id=query.message.message_id,
                 combat_chat_id=query.message.chat.id,
+                combat_ui_is_photo=False,
             )
         else:
             await push_game_ui(
@@ -897,7 +989,11 @@ async def start_tutorial_combat(
             mid = data.get(GAME_UI_MESSAGE_ID)
             cid = data.get(GAME_UI_CHAT_ID)
             if mid is not None and cid is not None:
-                await state.update_data(combat_message_id=int(mid), combat_chat_id=int(cid))
+                await state.update_data(
+                    combat_message_id=int(mid),
+                    combat_chat_id=int(cid),
+                    combat_ui_is_photo=False,
+                )
         if query.from_user is not None:
             await combat_idle_service.arm_combat_idle_after_player_turn(
                 bot=query.bot,
@@ -1018,6 +1114,7 @@ async def _after_monster_killed_player_action(
         if query.message:
             try:
                 await _safe_edit_combat_message_text(
+                    state,
                     query.message,
                     format_battle_view(combat_state, class_ru),
                     reply_markup=combat_main_keyboard(character.class_key),
@@ -1089,6 +1186,7 @@ async def _victory_sequence(
         victory_kb = InlineKeyboardMarkup(inline_keyboard=floor_rows)
         try:
             await _safe_edit_combat_message_text(
+                state,
                 message,
                 f"🏆 <b>Учебный бой пройден!</b>\n"
                 f"{LINE_SEP}\n"
@@ -1277,12 +1375,14 @@ async def _victory_sequence(
 
     try:
         await _safe_edit_combat_message_text(
+            state,
             message,
             f"🏆 <b>Победа!</b> <b>{mname}</b>\n⚔️ <b>Удар!</b>",
             reply_markup=None,
         )
         await asyncio.sleep(0.6)
         await _safe_edit_combat_message_text(
+            state,
             message,
             f"🏆 <b>Победа!</b> <b>{mname}</b>\n💀 <b>Монстр повержен!</b>",
             reply_markup=None,
@@ -1309,6 +1409,7 @@ async def _victory_sequence(
             if gross_gold != net_gold and is_last:
                 gold_line += f" <i>(до удержания долга: {gross_gold})</i>"
             await _safe_edit_combat_message_text(
+                state,
                 message,
                 f"🏆 <b>Победа!</b> <b>{mname}</b>\n✨ Награда… {label}\n"
                 f"{gold_line}\n"
@@ -1387,6 +1488,7 @@ async def _defeat_sequence(
         )
         try:
             await _safe_edit_combat_message_text(
+                state,
                 message,
                 tut_body,
                 reply_markup=revive_kb,
@@ -1450,7 +1552,7 @@ async def _defeat_sequence(
     ]
     defeat_kb = InlineKeyboardMarkup(inline_keyboard=defeat_rows)
     try:
-        await _safe_edit_combat_message_text(message, text, reply_markup=defeat_kb)
+        await _safe_edit_combat_message_text(state, message, text, reply_markup=defeat_kb)
     finally:
         await state.clear()
 
@@ -1640,6 +1742,7 @@ async def handle_combat_callback(
             sink_rules.set_escape_success_xp_penalty(character)
             try:
                 await _safe_edit_combat_message_text(
+                    state,
                     query.message,
                     "🏃 Ты сбежал из боя. Стамина уже потрачена.\n"
                     "<i>Следующая победа даст на 10% меньше опыта.</i>",
@@ -1769,6 +1872,7 @@ async def handle_combat_callback(
 
     try:
         await _safe_edit_combat_message_text(
+            state,
             query.message,
             format_battle_view(combat_state, class_ru),
             reply_markup=combat_main_keyboard(character.class_key),
