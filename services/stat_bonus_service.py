@@ -14,7 +14,7 @@ from db.models.inventory import InventoryItem
 from db.repository import inventory_repo
 from game.characters.titles import TITLE_BY_KEY
 from game.items.stat_bonuses import STAT_KEYS, empty_stat_bonus_map, stat_bonuses_from_item_data
-from services import title_service
+from services import profession_service, title_service
 
 
 def _messenger_set_bonus_from_equipped(items: list[InventoryItem]) -> dict[str, int]:
@@ -101,9 +101,11 @@ def active_title_stat_bonuses(character: Character) -> dict[str, int]:
 
 
 async def extra_stat_bonuses(session: AsyncSession, character: Character) -> tuple[dict[str, int], dict[str, int]]:
-    """(сумма с экипировки, сумма с активного титула)."""
+    """(сумма с экипировки, сумма с активного титула + основная профессия)."""
     gear = await equipped_gear_stat_bonuses(session, character.id)
     title_b = active_title_stat_bonuses(character)
+    prof_b = profession_service.profession_primary_stat_bonuses(character)
+    title_b = merge_stat_maps(title_b, prof_b)
     return gear, title_b
 
 
@@ -112,7 +114,7 @@ def merge_stat_maps(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
 
 
 async def effective_primary_stats(session: AsyncSession, character: Character) -> dict[str, int]:
-    """Статы персонажа в бою/профиле: база из БД + экипировка + титул."""
+    """Статы в бою/профиле: база из БД + экип + титул(ы) + бонус основной профессии."""
     gear, title_b = await extra_stat_bonuses(session, character)
     extra = merge_stat_maps(gear, title_b)
     return {

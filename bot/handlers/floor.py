@@ -327,17 +327,8 @@ async def on_floor_callback(
             return
 
         if code == "classtalk":
-            if int(char.floor_number) != 11:
-                await query.answer("Наставник только на 11 ярусе.", show_alert=True)
-                return
-            from game.characters.class_arcs import needs_base_class_choice
-
-            if not needs_base_class_choice(char):
-                await query.answer("Твой путь уже определён.", show_alert=True)
-                return
             await query.answer(
-                "Эрид: «Каждый род ремесла тянет тебя в свою сторону: одни черты окрепнут, "
-                "другие ослабнут. Выбери кнопку класса ниже — и не оглядывайся.»",
+                "Наставник Эрида больше не распределяет классы — используй «Профессии» в статусе или меню.",
                 show_alert=True,
             )
             return

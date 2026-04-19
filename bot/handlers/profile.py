@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import html
+import re
 from datetime import UTC, datetime
 
 from aiogram import F, Router
@@ -20,6 +21,7 @@ from config import settings
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
 from bot.keyboards.menu_kb import main_menu_keyboard
+from bot.keyboards.city_market_kb import profile_skills_main_keyboard, profile_skills_pick_keyboard
 from bot.keyboards.profile_kb import (
     profile_class_detail_keyboard,
     profile_full_stats_keyboard,
@@ -27,7 +29,7 @@ from bot.keyboards.profile_kb import (
     profile_view_keyboard,
 )
 from bot.utils.game_ui import push_game_ui
-from services import character_service, class_arc_service, leaderboard_service, stat_bonus_service, title_service
+from services import character_service, leaderboard_service, profession_service, stat_bonus_service, title_service
 from scheduler.tasks import schedule_rest_completion_notification
 from services.rest_service import (
     apply_completed_rest_if_needed,
@@ -39,6 +41,13 @@ from game.characters.classes import get_class_or_none
 from game.characters.global_passives import format_unlocked_global_passives_ru, refresh_global_passives
 from game.characters.path_ranks import path_rank_name_ru
 from game.characters.progression import experience_needed_for_next_level
+from game.characters.player_skills import (
+    SKILL_BY_KEY,
+    ensure_skill_meta,
+    equipped_skill_key_slots,
+    learned_skill_keys,
+    set_equipped_slot,
+)
 from game.characters.skills import passive_combat_modifiers_merged
 from game.characters.titles import TITLE_BY_KEY, format_title_bonus_brief, format_title_bonus_line
 from game.characters.weapon_mastery import mastery_profile_lines, weapon_type_from_item_data
@@ -74,6 +83,24 @@ def clamp_profile_caption_for_photo(html: str, max_len: int = 1000) -> str:
     )
 
 
+def build_skills_screen_html(char: Character, *, locale: str) -> str:
+    """Экран экипировки трёх боевых навыков (магия/физ. — как в combat engine)."""
+    loc = locale if locale in ("ru", "en") else "ru"
+    ensure_skill_meta(char)
+    slots = equipped_skill_key_slots(char)
+    lines = [
+        t(loc, "skills_screen_title"),
+        "",
+    ]
+    for i, key in enumerate(slots):
+        sk = SKILL_BY_KEY.get(key) if key else None
+        nm = html.escape(sk.name) if sk else "—"
+        slot_label = html.escape(t(loc, "skills_slot_btn", n=i + 1))
+        lines.append(f"<b>{slot_label}</b>: {nm}")
+    lines.extend(["", t(loc, "skills_equip_hint")])
+    return "\n".join(lines)
+
+
 def _stamina_minutes_hint(stamina: int, last_regen: datetime | None) -> int | None:
     """Минуты до +1 стамины; для подсказки только при нулевой стамине."""
     if stamina > 0:
@@ -107,16 +134,13 @@ def build_class_info_html(char: Character, *, locale: str) -> str:
     loc = locale if locale in ("ru", "en") else "ru"
     title = t(loc, "profile_class_screen_title")
     cls = get_class_or_none(str(char.class_key or ""))
-    sub = class_arc_service.subclass_display_ru(char.subclass_key)
     lines = [LINE_SEP, title, LINE_SEP]
     if cls is None:
         unk = "Класс не выбран или неизвестен." if loc == "ru" else "Class not set or unknown."
         lines.append(f"<i>{html.escape(unk)}</i>")
         return "\n".join(lines)
     lines.append(f"{cls.emoji} <b>{html.escape(cls.name_ru)}</b>")
-    if sub:
-        sub_lbl = "Подкласс" if loc == "ru" else "Subclass"
-        lines.append(f"⭐ {sub_lbl}: <b>{html.escape(sub)}</b>")
+    lines.append(f"<i>{t(loc, 'profile_class_flavor_note')}</i>")
     lines.append("")
     pas_lbl = "<b>Пассив класса</b>" if loc == "ru" else "<b>Class passive</b>"
     lines.append(f"{pas_lbl}: <i>{html.escape(cls.passive_ru)}</i>")
@@ -166,15 +190,24 @@ def _build_profile_text(
     effective_stats: dict[str, int] | None = None,
     ranker_badge: str = "",
     ranker_effect: str = "",
+    locale: str = "ru",
 ) -> str:
     cls = get_class_or_none(char.class_key)
     if cls:
         class_title = f"{cls.emoji} {html.escape(cls.name_ru)}"
     else:
         class_title = html.escape(char.class_key)
-    sub = class_arc_service.subclass_display_ru(char.subclass_key)
-    if sub:
-        class_title += f" · ⭐ {html.escape(sub)}"
+    profession_service.ensure_profession_meta(char)
+    loc = locale if locale in ("ru", "en") else "ru"
+    p1 = profession_service.active_primary_key(char)
+    p2 = profession_service.active_secondary_key(char)
+    prof_parts: list[str] = []
+    if p1:
+        prof_parts.append(html.escape(profession_service.profession_display_name(p1, locale=loc)))
+    if p2:
+        prof_parts.append(html.escape(profession_service.profession_display_name(p2, locale=loc)))
+    if prof_parts:
+        class_title += " · " + " / ".join(prof_parts)
     rank_raw = path_rank_name_ru(char)
     rank_s = html.escape(rank_raw) if rank_raw else "—"
     sec_raw = (char.meta_progress or {}).get("active_title_secondary_name_ru")
@@ -418,6 +451,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         effective_stats=eff,
         ranker_badge=rk_badge,
         ranker_effect=rk_eff,
+        locale=loc,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=True)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"
@@ -447,6 +481,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         effective_stats=eff,
         ranker_badge=rk_badge,
         ranker_effect=rk_eff,
+        locale=loc,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=False)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"
@@ -600,6 +635,128 @@ async def on_profile_class_info(callback: CallbackQuery, session: AsyncSession, 
         await callback.answer()
     except Exception:
         logger.exception("prf:class")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:skills")
+async def on_profile_skills(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        ensure_skill_meta(char)
+        await session.flush()
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        text = build_skills_screen_html(char, locale=loc)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=profile_skills_main_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:skills")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^prf:sk_slot:\d+$"))
+async def on_profile_skills_slot(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None or callback.data is None:
+            await callback.answer()
+            return
+        m = re.match(r"^prf:sk_slot:(\d+)$", callback.data)
+        if m is None:
+            await callback.answer()
+            return
+        slot = int(m.group(1))
+        if slot not in (0, 1, 2):
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        ensure_skill_meta(char)
+        learned = sorted(learned_skill_keys(char))
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        if not learned:
+            hint = "Сначала купи навыки в школе у храма на 3 этаже." if loc == "ru" else "Buy skills at the temple school on floor 3."
+            await callback.answer(hint, show_alert=True)
+            return
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=build_skills_screen_html(char, locale=loc),
+            reply_markup=profile_skills_pick_keyboard(slot=slot, learned_keys=learned),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:sk_slot")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^prf:sk_eq:\d+:.+$"))
+async def on_profile_skills_equip(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None or callback.data is None:
+            await callback.answer()
+            return
+        m = re.match(r"^prf:sk_eq:(\d+):(.+)$", callback.data)
+        if m is None:
+            await callback.answer()
+            return
+        slot = int(m.group(1))
+        skill_key = m.group(2).strip()
+        if slot not in (0, 1, 2):
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        ensure_skill_meta(char)
+        if not set_equipped_slot(char, slot, skill_key):
+            await callback.answer("Нельзя назначить этот навык.", show_alert=True)
+            return
+        await session.flush()
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        text = build_skills_screen_html(char, locale=loc)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=profile_skills_main_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:sk_eq")
         await callback.answer("Ошибка.", show_alert=True)
 
 

@@ -27,12 +27,9 @@ from config import settings
 from db.models.character import Character
 from db.models.inventory import InventoryItem
 from db.repository import character_repo, floor_progress_repo, inventory_repo, user_repo
-from game.characters.class_arcs import (
-    combat_blocked_for_missing_base_class,
-    needs_subclass_choice,
-)
 from game.characters.classes import get_class_or_none
 from game.characters.path_ranks import PATH_RANK_BY_KEY
+from game.characters.player_skills import battle_skills_tuple, ensure_skill_meta
 from game.characters.skills import passive_combat_modifiers_merged, skills_for_class
 from game.characters.weapon_mastery import damage_multiplier_for_type, record_strike, weapon_type_from_item_data
 from game.combat import consumables, effects, engine, formulas, monster_ai, night_mode as combat_night
@@ -100,6 +97,7 @@ from services import (
     floor10_pioneer_service,
     game_metrics_service,
     leaderboard_service,
+    profession_service,
     quest_service,
     rest_service,
     season_record_service,
@@ -486,6 +484,7 @@ def _build_combat_dict(
         "floor": character.floor_number,
         "spawn_slot": spawn.slot_code,
         "class_key": character.class_key,
+        "combat_skill_class_key": profession_service.combat_skill_class_key(character),
         "stats": st,
         "player_hp": character.hp_current,
         "player_hp_max": character.hp_max,
@@ -518,6 +517,8 @@ def _build_combat_dict(
         "player_last_damage_to_monster": None,
         "monster_last_damage_to_player": None,
     }
+    ensure_skill_meta(character)
+    state["combat_skills"] = battle_skills_tuple(character)
     effects.init_effects(state)
     loc_battle = get_locale(character, None)
     pet_base = pets_mod.format_pet_battle_line_html(character, locale=loc_battle)
@@ -597,7 +598,7 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     if pl:
         pet_p = f"{pl}\n"
 
-    logs = state.get("ui_logs", [])[-8:]
+    logs = list(state.get("ui_logs", []) or [])
     log_lines = "\n".join(logs) if logs else ""
     taunt_line = ""
     if taunt_raw:
@@ -647,9 +648,12 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
 
 
 def _append_logs(state: dict[str, Any], lines: list[str]) -> None:
-    buf = list(state.get("ui_logs", []))
+    """Добавить строки в лог текущего хода (перед новым ходом список обнуляется в handle_combat_callback)."""
+    if not lines:
+        return
+    buf = list(state.get("ui_logs", []) or [])
     buf.extend(lines)
-    state["ui_logs"] = buf[-8:]
+    state["ui_logs"] = buf
 
 
 async def start_combat(
@@ -661,19 +665,6 @@ async def start_combat(
     spawn: FloorMonsterSpawn,
 ) -> bool:
     """Начать бой. True если бой начат."""
-    if combat_blocked_for_missing_base_class(character):
-        await query.answer(
-            "На этом ярусе без класса в бой нельзя. Сходи на 11 этаж к наставнику Эриду "
-            "и выбери путь (кнопки под «Наставник путей»).",
-            show_alert=True,
-        )
-        return False
-    if needs_subclass_choice(character):
-        await query.answer(
-            "Сначала выбери подкласс (×2 к статам) — кнопки «Углубление пути».",
-            show_alert=True,
-        )
-        return False
     if not can_start_combat(character, settings.MAX_STAMINA):
         await query.answer("Недостаточно стамины (нужна 1).", show_alert=True)
         return False
@@ -783,7 +774,7 @@ async def start_combat(
     cls = get_class_or_none(character.class_key)
     class_ru = cls.name_ru if cls else character.class_key
     text = format_battle_view(combat_state, class_ru)
-    kb = combat_main_keyboard(character.class_key)
+    kb = combat_main_keyboard(character)
 
     if query.message is None:
         await state.clear()
@@ -905,9 +896,6 @@ async def start_tutorial_combat(
     if not tutorial_battle_pending(character):
         await query.answer("Ты уже прошёл обучение у наставника.", show_alert=True)
         return False
-    if combat_blocked_for_missing_base_class(character) or needs_subclass_choice(character):
-        await query.answer("Сначала заверши выбор класса / подкласса на этаже.", show_alert=True)
-        return False
 
     if rest_service.apply_completed_rest_if_needed(character):
         await session.flush()
@@ -954,7 +942,7 @@ async def start_tutorial_combat(
     cls = get_class_or_none(character.class_key)
     class_ru = cls.name_ru if cls else character.class_key
     text = format_battle_view(combat_state, class_ru)
-    kb = combat_main_keyboard(character.class_key)
+    kb = combat_main_keyboard(character)
 
     if query.message is None:
         await state.clear()
@@ -1107,17 +1095,16 @@ async def _after_monster_killed_player_action(
         combat_state["player_last_damage_to_monster"] = None
         combat_state["monster_last_damage_to_player"] = None
         combat_state["battle_taunt_html"] = _taunt_banner_html(engine.opening_taunt(combat_state))
-        _append_logs(
-            combat_state,
-            ["", "⚡ <b>Вторая фаза.</b> Наставник швыряет в круг второго манекена — он бьёт сильнее!"],
-        )
+        combat_state["ui_logs"] = [
+            "⚡ <b>Вторая фаза.</b> Наставник швыряет в круг второго манекена — он бьёт сильнее!",
+        ]
         if query.message:
             try:
                 await _safe_edit_combat_message_text(
                     state,
                     query.message,
                     format_battle_view(combat_state, class_ru),
-                    reply_markup=combat_main_keyboard(character.class_key),
+                    reply_markup=combat_main_keyboard(character),
                 )
             except Exception:
                 logger.exception("edit tutorial wave2")
@@ -1621,7 +1608,7 @@ async def handle_combat_callback(
     class_ru = cls.name_ru if cls else character.class_key
 
     if action == "ret":
-        await query.message.edit_reply_markup(reply_markup=combat_main_keyboard(character.class_key))
+        await query.message.edit_reply_markup(reply_markup=combat_main_keyboard(character))
         if query.from_user is not None:
             await combat_idle_service.arm_combat_idle_after_player_turn(
                 bot=query.bot,
@@ -1654,6 +1641,7 @@ async def handle_combat_callback(
 
     lines: list[str] = []
     failed_escape = False
+    combat_state["ui_logs"] = []
 
     # Доты и пассивная регенерация MP в начале твоего хода
     lines.extend(engine.apply_dot_damage_player(combat_state))
@@ -1698,7 +1686,9 @@ async def handle_combat_callback(
         else:
             outcome = maybe
         if skill_dmg > 0 and query.from_user is not None:
-            sks = skills_for_class(character.class_key)
+            sks = combat_state.get("combat_skills") or skills_for_class(
+                str(combat_state.get("combat_skill_class_key") or character.class_key or "wanderer"),
+            )
             if 0 <= skill_index < len(sks):
                 sk_def = sks[skill_index]
                 stt = combat_state["stats"]
@@ -1875,7 +1865,7 @@ async def handle_combat_callback(
             state,
             query.message,
             format_battle_view(combat_state, class_ru),
-            reply_markup=combat_main_keyboard(character.class_key),
+            reply_markup=combat_main_keyboard(character),
         )
     except Exception:
         logger.exception("Не удалось обновить сообщение боя")

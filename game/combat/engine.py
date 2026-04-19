@@ -385,13 +385,16 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     Урон — только по веткам, наносящим HP-урон монстру (после всех множителей).
     """
     logs: list[str] = []
-    class_key = state["class_key"]
-    skills = skills_for_class(class_key)
+    skill_src = str(state.get("combat_skill_class_key") or state.get("class_key") or "wanderer")
+    skills: tuple[SkillDef, SkillDef, SkillDef] = state.get("combat_skills") or skills_for_class(skill_src)
     if index < 0 or index > 2:
         logs.append("Нет такого навыка.")
         return logs, None, 0
 
     sk: SkillDef = skills[index]
+    if sk.key == "_empty":
+        logs.append("Пустой слот навыка — экипируй навык в статусе.")
+        return logs, None, 0
     cd = int(state["skill_cd"].get(str(index), 0))
     if cd > 0:
         logs.append(f"Навык на перезарядке ({cd} х.).")

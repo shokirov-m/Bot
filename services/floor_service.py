@@ -22,11 +22,6 @@ from bot.utils.game_ui import push_game_ui, remember_game_ui_anchor
 from db.models.character import Character
 from db.models.floor_progress import FloorProgress
 from db.repository import floor_progress_repo, inventory_repo
-from game.characters.class_arcs import (
-    can_pick_base_class_on_current_floor,
-    needs_base_class_choice,
-    needs_subclass_choice,
-)
 from game.characters import pets as pets_mod
 from game.combat import night_mode as combat_night
 from game.floors import floor_data
@@ -135,13 +130,6 @@ def _format_floor3_city_only(character: Character) -> str:
     lines.append("🌲 Дальше по башне (4–10) — обычные цели, привал и тайники по правилам леса.")
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️ · на этом ярусе нет врагов для боя.")
-    if needs_base_class_choice(character):
-        if can_pick_base_class_on_current_floor(character):
-            lines.append("🎓 <b>Наставник Эрид</b> — выбери класс (кнопки «Путь» ниже наставника).")
-        else:
-            lines.append("⚠️ С <b>10 ур.</b> нужен класс: наставник <b>Эрид на 11 ярусе</b>.")
-    if needs_subclass_choice(character):
-        lines.append("⚠️ Ур.57: подкласс — «Углубление пути».")
     pend = tower_next_floor_pending(character)
     if pend is not None:
         lines.append(
@@ -227,13 +215,6 @@ def format_floor_message(character: Character) -> str:
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️ · при входе цели сбрасываются.")
 
-    if needs_base_class_choice(character):
-        if can_pick_base_class_on_current_floor(character):
-            lines.append("🎓 <b>Наставник Эрид</b> — выбери класс (кнопки «Путь» ниже наставника).")
-        else:
-            lines.append("⚠️ С <b>10 ур.</b> нужен класс: наставник <b>Эрид на 11 ярусе</b> (ниже 11-го в бой можно).")
-    if needs_subclass_choice(character):
-        lines.append("⚠️ Ур.57: подкласс — «Углубление пути».")
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
         lines.append("🗝️ Новый ярус: зачисти все цели, затем кнопка «Этаж N» или ⬆️ Выше.")
     if forest_beginnings_mod.is_forest_beginnings_zone(n) and int(n) != 3:
@@ -322,10 +303,6 @@ def format_floor_message_photo_caption(character: Character) -> str:
         lines.append("🐾 Питомцы: город / пассив · один активен")
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 1–{hi} · ⬆️⬇️ · цели сбрасываются при входе")
-    if needs_base_class_choice(character):
-        lines.append("🎓 Класс: Эрид на 11" if can_pick_base_class_on_current_floor(character) else "⚠️ Класс: 11 яр.")
-    if needs_subclass_choice(character):
-        lines.append("⚠️ Ур.57: подкласс")
     if n < 100 and not long_floor_mod.is_long_floor_active(character):
         lines.append("🗝️ Зачистка → кнопка этажа / ⬆️")
     if forest_beginnings_mod.is_forest_beginnings_zone(n) and int(n) != 3:

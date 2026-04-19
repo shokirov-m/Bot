@@ -8,14 +8,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
-from game.characters.class_arcs import (
-    SUBCLASS_NAME_RU,
-    can_pick_base_class_on_current_floor,
-    needs_subclass_choice,
-    offered_base_class_keys,
-    subclass_keys_for_character,
-)
-from game.characters.classes import get_class_or_none
 from game.characters import pets as pets_mod
 from game.floors import floor_data
 from game.floors import forest_beginnings as forest_beginnings_mod
@@ -48,48 +40,8 @@ def _pet_rows(character: Character, floor_number: int) -> list[list[InlineKeyboa
 
 
 def _class_arc_rows(character: Character) -> list[list[InlineKeyboardButton]]:
-    rows: list[list[InlineKeyboardButton]] = []
-    fn = int(character.floor_number)
-    if can_pick_base_class_on_current_floor(character):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="🎓 Наставник Эрид",
-                    callback_data=_cb(fn, "classtalk"),
-                ),
-            ],
-        )
-        row_buf: list[InlineKeyboardButton] = []
-        for key in offered_base_class_keys(character):
-            cls = get_class_or_none(key)
-            if cls is None:
-                continue
-            label = f"{cls.emoji} {cls.name_ru}"
-            if len(label) > 36:
-                label = label[:33] + "…"
-            row_buf.append(
-                InlineKeyboardButton(
-                    text=label,
-                    callback_data=f"arc:b:{key}",
-                ),
-            )
-            if len(row_buf) >= 2:
-                rows.append(row_buf)
-                row_buf = []
-        if row_buf:
-            rows.append(row_buf)
-    if needs_subclass_choice(character):
-        for sk in subclass_keys_for_character(character):
-            name = SUBCLASS_NAME_RU.get(sk, sk)
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"⭐ {name} (×2 статов)",
-                        callback_data=f"arc:s:{sk}",
-                    ),
-                ],
-            )
-    return rows
+    """Классовая ветка наставника снята — профессии в статусе / меню."""
+    return []
 
 
 def floor_screen_keyboard(

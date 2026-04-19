@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from db.models.character import Character
 from db.models.inventory import InventoryItem
-from game.characters.skills import skills_for_class
+from game.characters.player_skills import battle_skills_tuple, ensure_skill_meta
 from game.items.equipment import gear_icon_for_item_data
 
 
-def combat_main_keyboard(class_key: str) -> InlineKeyboardMarkup:
-    """Четыре действия + три скилла вторым рядом (компактно: скиллы одной строкой нельзя — 2+1)."""
-    sk = skills_for_class(class_key)
+def combat_main_keyboard(character: Character) -> InlineKeyboardMarkup:
+    """Четыре действия + три экипированных навыка (см. статус → Навыки)."""
+    ensure_skill_meta(character)
+    sk = battle_skills_tuple(character)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -19,11 +21,20 @@ def combat_main_keyboard(class_key: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🏃 Бежать", callback_data="cb:run"),
             ],
             [
-                InlineKeyboardButton(text=f"🔮 {sk[0].name[:15]}", callback_data="cb:sk:0"),
-                InlineKeyboardButton(text=f"🔮 {sk[1].name[:15]}", callback_data="cb:sk:1"),
+                InlineKeyboardButton(
+                    text=f"{'🔮' if sk[0].kind == 'mag' else '⚔️'} {sk[0].name[:15]}",
+                    callback_data="cb:sk:0",
+                ),
+                InlineKeyboardButton(
+                    text=f"{'🔮' if sk[1].kind == 'mag' else '⚔️'} {sk[1].name[:15]}",
+                    callback_data="cb:sk:1",
+                ),
             ],
             [
-                InlineKeyboardButton(text=f"🔮 {sk[2].name[:15]}", callback_data="cb:sk:2"),
+                InlineKeyboardButton(
+                    text=f"{'🔮' if sk[2].kind == 'mag' else '⚔️'} {sk[2].name[:15]}",
+                    callback_data="cb:sk:2",
+                ),
             ],
             [
                 InlineKeyboardButton(text="🎒 Предмет", callback_data="cb:item"),

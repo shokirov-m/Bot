@@ -12,6 +12,12 @@ LOCALE_KEY = "locale"  # в character.meta_progress
 STRINGS: dict[str, dict[str, str]] = {
     "ru": {
         "menu_profile": "🗡️ Статус",
+        "profile_skills_btn": "⚔️ Навыки",
+        "skills_screen_title": "⚔️ <b>Боевые навыки</b>",
+        "skills_slot_btn": "Слот {n}",
+        "skills_equip_hint": (
+            "<i>В бою доступны только <b>три</b> выбранных навыка. Магия тянется от ИНТ, удары — от СИЛ.</i>"
+        ),
         "profile_back_compact": "⬅️ К статусу",
         "profile_class_btn": "📜 Класс",
         "profile_class_screen_title": "📜 <b>Класс героя</b>",
@@ -24,6 +30,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_floor": "🗺️ Этаж",
         "menu_inv": "🎒 Инвентарь",
         "menu_titles": "🏆 Титулы",
+        "menu_professions": "⚒️ Профессии",
+        "profile_class_flavor_note": (
+            "<i>Стартовый архетип при регистрации задаёт лор и начальный лут; в бою действуют "
+            "<b>профессии</b> и выбранные в школе навыки.</i>"
+        ),
+        "professions_screen_title": "⚒️ <b>Профессии</b>",
+        "professions_screen_intro": (
+            "<i>Открываются по базовым статам и опыту заточки. Основная задаёт набор боевых "
+            "навыков по умолчанию и бонусы к статам; вторая — с макс. этажа <b>{floor}</b>, только "
+            "к пассивным модификаторам боя (половина).</i>"
+        ),
+        "professions_clear_slot1": "❌ Снять основную",
+        "professions_clear_slot2": "❌ Снять вторую",
+        "professions_equipped_line": "Основная: <b>{p}</b>\nВторая: <b>{s}</b>",
         "menu_top": "📊 Топ игроков",
         "menu_city": "🏙️ Город",
         "menu_portal": "🌀 Портал",
@@ -311,6 +331,12 @@ STRINGS: dict[str, dict[str, str]] = {
     },
     "en": {
         "menu_profile": "🗡️ Status",
+        "profile_skills_btn": "⚔️ Skills",
+        "skills_screen_title": "⚔️ <b>Combat skills</b>",
+        "skills_slot_btn": "Slot {n}",
+        "skills_equip_hint": (
+            "<i>Only <b>three</b> picked skills are used in battle. Magic scales with INT; strikes with STR.</i>"
+        ),
         "profile_back_compact": "⬅️ Back to status",
         "profile_class_btn": "📜 Class",
         "profile_class_screen_title": "📜 <b>Your class</b>",
@@ -323,6 +349,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_floor": "🗺️ Floor",
         "menu_inv": "🎒 Inventory",
         "menu_titles": "🏆 Titles",
+        "menu_professions": "⚒️ Professions",
+        "profile_class_flavor_note": (
+            "<i>Your registration archetype sets lore and starter loot; in combat, "
+            "<b>professions</b> and skills from the school matter.</i>"
+        ),
+        "professions_screen_title": "⚒️ <b>Professions</b>",
+        "professions_screen_intro": (
+            "<i>Unlock by base stats and enchant attempts. Primary sets default combat skills and "
+            "stat bonuses; secondary from max floor <b>{floor}</b> adds half of its passive combat "
+            "modifiers only.</i>"
+        ),
+        "professions_clear_slot1": "❌ Clear primary",
+        "professions_clear_slot2": "❌ Clear secondary",
+        "professions_equipped_line": "Primary: <b>{p}</b>\nSecondary: <b>{s}</b>",
         "menu_top": "📊 Leaderboard",
         "menu_city": "🏙️ City",
         "menu_portal": "🌀 Portal",

@@ -17,9 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale, t
 from bot.keyboards.city_kb import city_hub_keyboard
-from bot.keyboards.city_market_kb import city_floor3_market_keyboard, temple_floor3_keyboard
+from bot.keyboards.city_market_kb import (
+    city_floor3_market_keyboard,
+    temple_floor3_keyboard,
+    temple_skills_shop_keyboard,
+)
 from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import push_game_ui
+from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
 from game.characters import pets as pets_mod
 from game.characters import temple_floor3
@@ -29,6 +34,21 @@ from services.floor_service import format_city_hub_message
 from services import economy_sink_service
 
 router = Router(name="city")
+
+
+def _temple_skills_shop_html(character: Character, locale: str) -> str:
+    from game.characters import player_skills as psk
+
+    loc = locale if locale in ("ru", "en") else "ru"
+    psk.ensure_skill_meta(character)
+    hint = psk.skill_shop_summary_html(loc)
+    return (
+        "📜 <b>Школа навыков</b>\n"
+        "<i>Деревня «Тихий Ручей», у храма.</i>\n\n"
+        f"{hint}\n\n"
+        f"💰 <b>Золото:</b> {character.gold}\n"
+        "<i>Купленное назначай в статусе → «Навыки».</i>"
+    )
 
 
 @router.callback_query(F.data.regexp(r"^fl:(\d+):city$"))
@@ -177,6 +197,21 @@ async def on_city_floor3_market(
             await query.answer()
             return
 
+        if act == "skills":
+            await character_repo.lock_character_row(session, char.id)
+            from game.characters import player_skills as psk
+
+            psk.ensure_skill_meta(char)
+            await session.flush()
+            body = _temple_skills_shop_html(char, loc)
+            await query.message.edit_text(
+                body,
+                parse_mode=ParseMode.HTML,
+                reply_markup=temple_skills_shop_keyboard(floor_key, char),
+            )
+            await query.answer()
+            return
+
         if act == "scrap":
             from bot.keyboards.scrap_kb import scrap_merchant_keyboard, set_scrap_ui_back
             from services import scrap_merchant_service
@@ -270,6 +305,98 @@ async def on_city_floor3_market(
         await query.answer()
     except Exception:
         logger.exception("cty:mkt")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("cty:skillbuy:"))
+async def on_city_skill_buy(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        m = re.match(r"^cty:skillbuy:(\d+):(.+)$", query.data)
+        if m is None:
+            await query.answer()
+            return
+        floor_key = int(m.group(1))
+        skill_key = m.group(2).strip()
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+        loc = get_locale(char, query.from_user.language_code)
+        if floor_key != int(char.floor_number) or int(char.floor_number) != 3:
+            await query.answer("Школа навыков только в деревне на 3 этаже.", show_alert=True)
+            return
+        await character_repo.lock_character_row(session, char.id)
+        from game.characters import player_skills as psk
+
+        ok, msg = psk.try_buy_temple_skill(char, skill_key)
+        await session.flush()
+        plain = re.sub(r"<[^>]+>", "", msg)
+        if not ok:
+            await query.answer(plain[:200] if plain else "Нельзя.", show_alert=True)
+            return
+        await query.answer(plain[:180] if plain else "Ок.", show_alert=False)
+        body = _temple_skills_shop_html(char, loc)
+        await query.message.edit_text(
+            body,
+            parse_mode=ParseMode.HTML,
+            reply_markup=temple_skills_shop_keyboard(floor_key, char),
+        )
+    except Exception:
+        logger.exception("cty:skillbuy")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("cty:skillhave:"))
+async def on_city_skill_have(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if query.data is None or query.from_user is None:
+            await query.answer()
+            return
+        m = re.match(r"^cty:skillhave:(\d+):(.+)$", query.data)
+        if m is None:
+            await query.answer()
+            return
+        floor_key = int(m.group(1))
+        skill_key = m.group(2).strip()
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+        loc = get_locale(char, query.from_user.language_code)
+        if floor_key != int(char.floor_number) or int(char.floor_number) != 3:
+            await query.answer("Школа навыков только в деревне на 3 этаже.", show_alert=True)
+            return
+        from game.characters import player_skills as psk
+
+        psk.ensure_skill_meta(char)
+        sk = psk.SKILL_BY_KEY.get(skill_key)
+        nm = sk.name if sk else skill_key
+        hint = f"Уже изучено: {nm}" if loc == "ru" else f"Already learned: {nm}"
+        await query.answer(hint[:200], show_alert=True)
+    except Exception:
+        logger.exception("cty:skillhave")
         await query.answer("Ошибка.", show_alert=True)
 
 

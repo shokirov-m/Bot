@@ -33,6 +33,8 @@ def profile_view_keyboard(character: Character | None = None, *, locale: str = "
             InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),
             InlineKeyboardButton(text=t(loc, "menu_titles"), callback_data="mnu:ttl"),
         ],
+        [InlineKeyboardButton(text=t(loc, "menu_professions"), callback_data="mnu:prof")],
+        [InlineKeyboardButton(text=t(loc, "profile_skills_btn"), callback_data="prf:skills")],
         [InlineKeyboardButton(text="📊 Полные характеристики", callback_data="prf:full")],
     ]
     if character is not None:
@@ -59,6 +61,8 @@ def profile_full_stats_keyboard(character: Character | None = None, *, locale: s
             InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),
             InlineKeyboardButton(text=t(loc, "menu_titles"), callback_data="mnu:ttl"),
         ],
+        [InlineKeyboardButton(text=t(loc, "menu_professions"), callback_data="mnu:prof")],
+        [InlineKeyboardButton(text=t(loc, "profile_skills_btn"), callback_data="prf:skills")],
     ]
     if character is not None:
         owned = pets_mod.owned_keys(character)

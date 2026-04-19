@@ -23,16 +23,19 @@ def enchant_attempt_cost_gold(current_level: int) -> int:
     return 30 + c * 45 + max(0, c - 6) * 80 + max(0, c - 11) * 120
 
 
-def roll_enchant_outcome(current_level: int) -> EnchantOutcome:
+def roll_enchant_outcome(current_level: int, *, success_chance_bonus: float = 0.0) -> EnchantOutcome:
     """
     Исход попытки (current_level — до попытки).
     success: +1; fail: без изменений; downgrade: −1 (не ниже 0).
+    success_chance_bonus — абсолютная добавка к шансу успеха (например бонус профессии «кузнец»).
     """
     if current_level >= MAX_ENCHANT:
         return "max"
     # базовый шанс успеха падает с уровнем
+    bonus = max(0.0, float(success_chance_bonus))
     p_ok = 0.88 - current_level * 0.038
     p_ok = max(0.22, min(0.88, p_ok))
+    p_ok = min(0.95, p_ok + bonus)
     r = random.random()
     if r < p_ok:
         return "success"

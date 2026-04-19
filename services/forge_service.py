@@ -19,7 +19,7 @@ from game.items import enchant as enchant_rules
 from game.items import equipment as equip_meta
 from game.items import runes as rune_sys
 from game.locations import forge as forge_loc
-from services import title_service
+from services import profession_service, title_service
 from utils.ui import LINE_SEP, format_inventory_item_html, render_enchant_stars
 
 
@@ -174,8 +174,12 @@ async def try_enchant_equipped_in_slot(
     if rune_ward:
         character.rune_stones = int(character.rune_stones) - 1
     title_service.refresh_unlocks(character)
+    profession_service.refresh_unlocks(character)
 
-    rolled = enchant_rules.roll_enchant_outcome(cur)
+    rolled = enchant_rules.roll_enchant_outcome(
+        cur,
+        success_chance_bonus=profession_service.enchant_success_bonus_active(character),
+    )
     outcome = rolled
     ward_absorbed = False
     if rune_ward and rolled == "downgrade":

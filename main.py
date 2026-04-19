@@ -48,6 +48,7 @@ from bot.handlers.inventory import router as inventory_router
 from bot.handlers.clans import router as clans_router
 from bot.handlers.profile import router as profile_router
 from bot.handlers.titles import router as titles_router
+from bot.handlers.professions_hub import router as professions_hub_router
 from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
 from bot.handlers.stats_alloc import router as stats_alloc_router
@@ -134,6 +135,7 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(settings_router)
     dp.include_router(leaderboard_router)
     dp.include_router(titles_router)
+    dp.include_router(professions_hub_router)
     dp.include_router(inventory_router)
     dp.include_router(combat_router)
     dp.include_router(arena_router)

@@ -132,9 +132,29 @@ def passive_combat_modifiers(class_key: str) -> dict[str, float]:
     return {**defaults, **row}  # type: ignore[arg-type]
 
 
+def scale_passive_row(row: dict[str, float | int], factor: float) -> dict[str, float | int]:
+    """Масштаб пассивов второй профессии (0.5)."""
+    f = max(0.0, float(factor))
+    out: dict[str, float | int] = {}
+    for k, v in row.items():
+        if k == "mp_regen_turn":
+            out[k] = int(round(int(v) * f))
+        elif k == "mag_bonus_percent":
+            out[k] = int(round(int(v) * f))
+        else:
+            out[k] = float(v) * f
+    return out
+
+
 def passive_combat_modifiers_merged(character: Character) -> dict[str, float | int]:
-    """Класс + пассив звания (path_passive_key) + глобальные пассивы + активный питомец."""
-    base = passive_combat_modifiers(character.class_key)
+    """Активная профессия (бой) + 50% пассивов второй (с 51 этажа) + звание + глобальные + питомец."""
+    from services import profession_service
+
+    primary = profession_service.primary_skill_class_for_passives(character)
+    base = passive_combat_modifiers(primary)
+    sec_key = profession_service.secondary_skill_class_for_passives(character)
+    if sec_key:
+        base = merge_passive_row(base, scale_passive_row(passive_combat_modifiers(sec_key), 0.5))
     merged = merge_passive_row(base, path_passive_delta(character.meta_progress))
     merged = merge_passive_row(merged, global_passive_delta(character.meta_progress))
     return merge_passive_row(merged, pets_mod.pet_passive_delta(character))
