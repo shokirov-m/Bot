@@ -13,6 +13,10 @@ STRINGS: dict[str, dict[str, str]] = {
     "ru": {
         "menu_profile": "🗡️ Статус",
         "profile_skills_btn": "⚔️ Навыки",
+        "profile_spec_btn": "🎭 Специализация",
+        "profile_spec_intro": (
+            "<i>Титулы, профессии и боевые навыки — выбери раздел ниже.</i>"
+        ),
         "skills_screen_title": "⚔️ <b>Боевые навыки</b>",
         "skills_slot_btn": "Слот {n}",
         "skills_equip_hint": (
@@ -332,6 +336,10 @@ STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "menu_profile": "🗡️ Status",
         "profile_skills_btn": "⚔️ Skills",
+        "profile_spec_btn": "🎭 Specialization",
+        "profile_spec_intro": (
+            "<i>Titles, professions, and combat skills — pick a section below.</i>"
+        ),
         "skills_screen_title": "⚔️ <b>Combat skills</b>",
         "skills_slot_btn": "Slot {n}",
         "skills_equip_hint": (

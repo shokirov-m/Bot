@@ -25,10 +25,11 @@ from bot.keyboards.city_market_kb import profile_skills_main_keyboard, profile_s
 from bot.keyboards.profile_kb import (
     profile_full_stats_keyboard,
     profile_pet_picker_keyboard,
+    profile_spec_submenu_keyboard,
     profile_view_keyboard,
 )
 from bot.utils.game_ui import push_game_ui
-from services import character_service, leaderboard_service, profession_service, stat_bonus_service, title_service
+from services import character_service, profession_service, stat_bonus_service, title_service
 from scheduler.tasks import schedule_rest_completion_notification
 from services.rest_service import (
     apply_completed_rest_if_needed,
@@ -137,8 +138,6 @@ def _build_profile_text(
     gear_stat_bonus: dict[str, int] | None = None,
     title_stat_bonus: dict[str, int] | None = None,
     effective_stats: dict[str, int] | None = None,
-    ranker_badge: str = "",
-    ranker_effect: str = "",
     locale: str = "ru",
 ) -> str:
     cls = get_class_or_none(char.class_key)
@@ -217,10 +216,7 @@ def _build_profile_text(
         f"🗡️ {html.escape(char.display_name)} · 🎮 ID {gid_esc} "
         f"• Ур.{char.level} 📍 Этаж: {char.floor_number}"
     )
-    if ranker_badge:
-        rank_combine = f"{rank_s} + {ranker_badge}" if rank_raw else ranker_badge
-    else:
-        rank_combine = rank_s
+    rank_combine = rank_s
 
     if compact:
         gp_show = html.escape(global_passives_line) if global_passives_line.strip() else "—"
@@ -230,8 +226,6 @@ def _build_profile_text(
             f"🎖️ Звание: {rank_combine}",
             f"🏆 Титулы: {titles_row}",
         ]
-        if ranker_effect:
-            lines.append(ranker_effect)
         lines.extend(
             [
                 f"🌐 Глобальные бонусы: <i>{gp_show}</i>",
@@ -298,9 +292,6 @@ def _build_profile_text(
     lines.append(_title_row("①", title_slots[0]))
     lines.append(_title_row("②", title_slots[1]))
     lines.append("")
-    if ranker_effect:
-        lines.append(ranker_effect)
-        lines.append("")
     lines.append("🌐 Глобальные бонусы:")
     if not gp_plain or gp_plain == "—":
         lines.append(" —")
@@ -379,7 +370,6 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
     loc = get_locale(char, None)
-    rk_badge, rk_eff = await leaderboard_service.profile_ranker_status_parts(session, char, locale=loc)
     base = _build_profile_text(
         char,
         compact=True,
@@ -389,8 +379,6 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
         effective_stats=eff,
-        ranker_badge=rk_badge,
-        ranker_effect=rk_eff,
         locale=loc,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=True)
@@ -409,7 +397,6 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
     loc = get_locale(char, None)
-    rk_badge, rk_eff = await leaderboard_service.profile_ranker_status_parts(session, char, locale=loc)
     base = _build_profile_text(
         char,
         compact=False,
@@ -419,8 +406,6 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
         effective_stats=eff,
-        ranker_badge=rk_badge,
-        ranker_effect=rk_eff,
         locale=loc,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=False)
@@ -497,13 +482,44 @@ async def on_profile_full_stats(callback: CallbackQuery, session: AsyncSession, 
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=profile_full_stats_keyboard(char, locale=loc),
+            reply_markup=profile_full_stats_keyboard(locale=loc),
             target_message=callback.message,
             photo_path=None,
         )
         await callback.answer()
     except Exception:
         logger.exception("prf:full")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:spec")
+async def on_profile_spec_submenu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        text = t(loc, "profile_spec_intro")
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=profile_spec_submenu_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:spec")
         await callback.answer("Ошибка.", show_alert=True)
 
 
