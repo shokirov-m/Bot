@@ -21,7 +21,7 @@ def auction_portraits_screen_html(character: Character) -> str:
     fl = int(character.floor_number)
     lines = [
         "🖼 <b>Облики для профиля</b>",
-        "<i>Покупка разблокирует портрет в <b>Дом → Гардероб</b>. PNG — в каталоге assets/images/profile.</i>",
+        "<i>Нажми на облик — превью и покупка. После покупки — в <b>Дом → Гардероб</b>.</i>",
         LINE_SEP,
         f"💰 Золото: <b>{int(character.gold):,}</b>",
         LINE_SEP,
@@ -36,6 +36,35 @@ def auction_portraits_screen_html(character: Character) -> str:
     return "\n".join(lines)
 
 
+def auction_portrait_preview_keyboard(
+    floor_number: int,
+    good_key: str,
+    *,
+    price: int,
+    already_owned: bool,
+) -> InlineKeyboardMarkup:
+    """После предпросмотра облика в магазине: купить (если ещё нет) и назад."""
+    fl = int(floor_number)
+    gk = good_key.strip()[:32]
+    rows: list[list[InlineKeyboardButton]] = []
+    if not already_owned:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🛒 Купить · {price}💰"[:64],
+                    callback_data=f"shp:buy:{fl}:{gk}:a",
+                ),
+            ],
+        )
+    else:
+        rows.append(
+            [InlineKeyboardButton(text="✓ Уже в гардеробе", callback_data="auc:prvown")],
+        )
+    rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data="auc:prt")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def auction_portraits_keyboard(floor_number: int) -> InlineKeyboardMarkup:
     from game.economy.shop import SHOP_PORTRAITS, effective_good_price
 
@@ -43,14 +72,14 @@ def auction_portraits_keyboard(floor_number: int) -> InlineKeyboardMarkup:
     fl = int(floor_number)
     for g in SHOP_PORTRAITS:
         price = effective_good_price(g.price, fl)
-        label = f"{g.emoji} {g.name} — {price}💰"
+        label = f"{g.emoji} {g.name} · {price}💰"
         if len(label) > 64:
             label = label[:61] + "…"
         rows.append(
             [
                 InlineKeyboardButton(
                     text=label,
-                    callback_data=f"shp:buy:{fl}:{g.key}:a",
+                    callback_data=f"auc:prv:{fl}:{g.key}",
                 ),
             ],
         )

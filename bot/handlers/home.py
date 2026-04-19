@@ -155,6 +155,11 @@ async def home_level_upgrade(callback: CallbackQuery, session: AsyncSession, sta
         await callback.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data == "hom:pvcur")
+async def home_portrait_already_equipped(callback: CallbackQuery) -> None:
+    await callback.answer("Этот облик уже надет.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("hom:pv:"))
 async def home_portrait_preview(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -175,11 +180,7 @@ async def home_portrait_preview(callback: CallbackQuery, session: AsyncSession, 
         cur = str(mp.get(META_PORTRAIT_KEY) or "")
         caption = home_service.portrait_preview_caption_html(char, pk)
         img = portrait_path_if_exists(pk)
-        extra = (
-            "\n\n⚠️ <i>Файл PNG для этого ключа не найден в assets/images/profile/</i>"
-            if img is None
-            else ""
-        )
+        extra = "\n\n⚠️ <i>Изображение для этого облика пока не загружено.</i>" if img is None else ""
         await push_game_ui(
             state,
             callback.bot,

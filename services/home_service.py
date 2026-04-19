@@ -214,8 +214,8 @@ def unlock_portrait(character: Character, portrait_key: str) -> None:
 
 
 def try_set_portrait_key(character: Character, portrait_key: str) -> tuple[bool, str]:
-    """Установить портрет (ключ файла в assets/images/profile/)."""
-    from utils.profile_portraits import META_PORTRAIT_KEY
+    """Установить активный портрет профиля."""
+    from utils.profile_portraits import META_PORTRAIT_KEY, portrait_title_ru
 
     pk = str(portrait_key).strip()[:48]
     if not pk:
@@ -228,7 +228,7 @@ def try_set_portrait_key(character: Character, portrait_key: str) -> tuple[bool,
     mp = dict(character.meta_progress or {})
     mp[META_PORTRAIT_KEY] = pk
     character.meta_progress = mp
-    return True, f"Портрет сменён на «{pk}»."
+    return True, f"Выбран облик «{portrait_title_ru(pk)}»."
 
 
 def alchemy_tier(character: Character) -> int:
@@ -279,36 +279,39 @@ def format_home_main_html(character: Character) -> str:
 
 
 def portrait_preview_caption_html(character: Character, portrait_key: str) -> str:
-    from utils.profile_portraits import META_PORTRAIT_KEY, portrait_label_ru
+    import html
+
+    from utils.profile_portraits import META_PORTRAIT_KEY, portrait_title_ru
 
     mp = character.meta_progress or {}
     cur = str(mp.get(META_PORTRAIT_KEY) or "")
     pk = str(portrait_key).strip()
-    ru = portrait_label_ru(pk)
-    mark = " <b>(сейчас надет)</b>" if pk == cur else ""
-    return f"🪞 <b>Просмотр</b>\n<code>{pk}</code> — <i>{ru}</i>{mark}"
+    title = html.escape(portrait_title_ru(pk))
+    mark = " · <i>сейчас надет</i>" if pk == cur else ""
+    return f"🪞 <b>Просмотр</b>\n<b>{title}</b>{mark}"
 
 
 def format_wardrobe_html(character: Character) -> str:
-    from utils.profile_portraits import META_PORTRAIT_KEY, portrait_label_ru
+    import html
+
+    from utils.profile_portraits import META_PORTRAIT_KEY, portrait_title_ru
 
     mp = character.meta_progress or {}
-    cur = str(mp.get(META_PORTRAIT_KEY) or "—")
+    cur_raw = str(mp.get(META_PORTRAIT_KEY) or "").strip()
+    cur_disp = portrait_title_ru(cur_raw) if cur_raw else "—"
     keys = wardrobe_all_selectable_keys(character)
     lines = [
         "🪞 <b>Гардероб</b>",
-        f"<i>Сейчас:</i> <code>{cur}</code>",
+        f"<i>Сейчас:</i> <b>{html.escape(cur_disp)}</b>",
         "",
-        "<b>Твои облики:</b> стартовые (пол при регистрации) и купленные в «Магазине».",
+        "<b>Облики:</b> стартовые и купленные в «Магазине».",
         "",
-        "<i>Нажми «смотреть», чтобы увидеть картинку; «выбрать» — применить портрет к профилю.</i>",
+        "<i>Нажми на название — превью, затем <b>Надеть</b> или <b>Назад</b>.</i>",
     ]
     for k in keys:
-        mark = "✓ " if k == cur else ""
-        label = portrait_label_ru(k)
-        lines.append(f"• {mark}<code>{k}</code> — <i>{label}</i>")
-    lines.append("")
-    lines.append("<i>Файлы портретов: каталог assets/images/profile (ключ.png).</i>")
+        mark = "✓ " if k == cur_raw else ""
+        label = html.escape(portrait_title_ru(k))
+        lines.append(f"• {mark}{label}")
     return "\n".join(lines)
 
 

@@ -46,22 +46,21 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
 
 
 def wardrobe_keyboard(portrait_keys: list[str], *, current_key: str) -> InlineKeyboardMarkup:
-    """Два действия на облик: превью картинки и выбор."""
+    """Одна кнопка на облик — открывает превью (там «Надеть» / «Надет» и «Назад»)."""
     from utils.profile_portraits import portrait_label_ru
 
     rows: list[list[InlineKeyboardButton]] = []
     for pk in portrait_keys:
         ru = portrait_label_ru(pk)
-        preview_lbl = (ru[:16] + "…") if len(ru) > 17 else ru
+        prefix = "✓ " if pk == current_key else ""
+        label = f"{prefix}{ru}"
+        if len(label) > 36:
+            label = label[:33] + "…"
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"👁 {preview_lbl}"[:36],
+                    text=label,
                     callback_data=f"hom:pv:{pk}"[:64],
-                ),
-                InlineKeyboardButton(
-                    text=("✓ Надет" if pk == current_key else "✅ Выбрать"),
-                    callback_data=f"hom:setp:{pk}"[:64],
                 ),
             ],
         )
@@ -93,11 +92,10 @@ def alchemy_keyboard() -> InlineKeyboardMarkup:
 def wardrobe_preview_keyboard(portrait_key: str, *, is_current: bool) -> InlineKeyboardMarkup:
     pk = portrait_key[:48]
     rows: list[list[InlineKeyboardButton]] = []
-    if not is_current:
-        rows.append(
-            [InlineKeyboardButton(text="✅ Надеть этот облик", callback_data=f"hom:setp:{pk}"[:64])],
-        )
-    rows.append([InlineKeyboardButton(text="📋 К списку обликов", callback_data="hom:ward")])
-    rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
+    if is_current:
+        rows.append([InlineKeyboardButton(text="✓ Надет", callback_data="hom:pvcur")])
+    else:
+        rows.append([InlineKeyboardButton(text="✅ Надеть", callback_data=f"hom:setp:{pk}"[:64])])
+    rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data="hom:ward")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)

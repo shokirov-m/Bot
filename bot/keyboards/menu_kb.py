@@ -72,11 +72,6 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
         inline_keyboard=[
 
             [
-                InlineKeyboardButton(text=t(loc, "menu_home"), callback_data="hom:hub"),
-                InlineKeyboardButton(text=t(loc, "menu_lavka"), callback_data="mnu:lav"),
-            ],
-
-            [
 
                 InlineKeyboardButton(text=t(loc, "menu_profile"), callback_data="mnu:prf"),
 
@@ -114,11 +109,13 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
                 InlineKeyboardButton(text=t(loc, "menu_settings"), callback_data="mnu:stg"),
 
+            ],
+
+            [InlineKeyboardButton(text=t(loc, "menu_home"), callback_data="hom:hub")],
+
         ],
 
-    ],
-
-)
+    )
 
 
 def portal_screen_keyboard(*, locale: str = "ru", highest_floor_reached: int) -> InlineKeyboardMarkup:

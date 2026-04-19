@@ -80,12 +80,30 @@ def portrait_key_from_slot(slot: int) -> str | None:
     return PORTRAIT_ORDER[slot - 1]
 
 
+# Отображаемые названия (без технических ключей и путей к файлам).
+_PORTRAIT_TITLE_RU: dict[str, str] = {
+    "male_1": "Страж I",
+    "male_2": "Страж II",
+    "male_3": "Страж III",
+    "female_1": "Леди I",
+    "female_2": "Леди II",
+    "female_3": "Леди III",
+    "noble_1": "Дворянин",
+    "arcane_1": "Арканист",
+}
+
+
+def portrait_title_ru(key: str) -> str:
+    """Краткое русское имя облика для меню и превью."""
+    k = str(key or "").strip()
+    if not k:
+        return "Облик"
+    return _PORTRAIT_TITLE_RU.get(k, "Особый облик")
+
+
 def portrait_label_ru(key: str) -> str:
-    if key.startswith("male_"):
-        return f"мужской облик {key[-1]}"
-    if key.startswith("female_"):
-        return f"женский облик {key[-1]}"
-    return key
+    """Синоним для подписей кнопок и списков гардероба."""
+    return portrait_title_ru(key)
 
 
 def portrait_path_for_character(character: Character) -> Path | None:

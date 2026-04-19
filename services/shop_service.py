@@ -102,9 +102,12 @@ async def try_buy_good(
         if used_discount:
             left = int((character.meta_progress or {}).get("merchant_discount_charges") or 0)
             note = f"\n<i>🏪 Скидка торговца: осталось ходов со скидкой — {left}.</i>"
+        from utils.profile_portraits import portrait_title_ru
+
+        disp = html.escape(portrait_title_ru(pk))
         return (
             True,
-            f"−{price} 💰\nОблик <b>{html.escape(pk)}</b> открыт в <b>Дом → Гардероб</b>.{note}",
+            f"−{price} 💰\nОблик «{disp}» открыт в <b>Дом → Гардероб</b>.{note}",
         )
 
     free = await inventory_repo.first_free_bag_slot(session, character.id)

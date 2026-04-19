@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.auction_kb import (
     auction_cancel_create_keyboard,
     auction_hub_keyboard,
+    auction_portrait_preview_keyboard,
     auction_portraits_keyboard,
     auction_portraits_screen_html,
     auction_lots_page_keyboard,
@@ -33,10 +34,11 @@ from bot.keyboards.auction_kb import (
 )
 from bot.states.auction_states import AuctionCreateStates
 from bot.states.combat_states import CombatStates
+from bot.utils.game_ui import push_game_ui
 from db.repository import auction_repo, character_repo, inventory_repo, user_repo
 from game.economy.market import LOT_DURATION_DAYS, _expires_at_utc
 from game.items import item_categories
-from services import economy_service
+from services import economy_service, home_service
 from utils.ui import format_inventory_item_html, format_number, item_bag_button_label
 
 router = Router(name="auction")
@@ -300,6 +302,74 @@ async def auc_portraits(callback: CallbackQuery, session: AsyncSession, state: F
     except Exception:
         logger.exception("auc:prt")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("auc:prv:"))
+async def auc_portrait_preview(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Предпросмотр PNG облика перед покупкой."""
+    try:
+        await _clear_auction_fsm_only(state)
+        if callback.message is None or callback.from_user is None or callback.data is None:
+            await callback.answer()
+            return
+        parts = callback.data.split(":")
+        if len(parts) < 4:
+            await callback.answer()
+            return
+        fl = int(parts[2])
+        gk = str(parts[3]).strip().lower()
+        _, char = await _load_char(session, callback.from_user.id)
+        if char is None:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        if int(char.floor_number) != fl:
+            await callback.answer("Этаж устарел.", show_alert=True)
+            return
+        from game.economy.shop import effective_good_price, good_by_key
+
+        g = good_by_key(gk, floor_number=fl)
+        if g is None or str(g.item_data.get("virtual_shop") or "") != "portrait_unlock":
+            await callback.answer("Облик не найден.", show_alert=True)
+            return
+        pk = str(g.item_data.get("portrait_key") or "").strip()
+        price = effective_good_price(g.price, fl)
+        already_owned = bool(pk and home_service.has_portrait_unlock(char, pk))
+        from utils.profile_portraits import portrait_path_if_exists
+
+        img = portrait_path_if_exists(pk) if pk else None
+        cap_lines = [
+            f"🖼 <b>{html.escape(g.name)}</b>",
+            f"<i>{g.blurb}</i>",
+            "",
+            f"Цена: <b>{price}</b> 💰",
+        ]
+        if img is None:
+            cap_lines.extend(["", "⚠️ <i>Превью пока недоступно.</i>"])
+        caption = "\n".join(cap_lines)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=caption,
+            reply_markup=auction_portrait_preview_keyboard(
+                fl,
+                g.key,
+                price=price,
+                already_owned=already_owned,
+            ),
+            target_message=callback.message,
+            photo_path=str(img) if img is not None else None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("auc:prv")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "auc:prvown")
+async def auc_portrait_already_owned_stub(callback: CallbackQuery) -> None:
+    """Кнопка при уже купленном облике из превью магазина."""
+    await callback.answer("Этот облик уже в гардеробе дома.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("auc:create"))
