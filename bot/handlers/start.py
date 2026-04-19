@@ -23,15 +23,17 @@ from aiogram.types import (
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.handlers.profile import clamp_profile_caption_for_photo
 from bot.i18n import get_locale, resolve_locale_from_telegram, t
 from bot.keyboards.menu_kb import main_menu_keyboard, main_menu_with_tutorial_hints
 from bot.states.registration_states import RegistrationStates
 from bot.utils.safe_media import safe_answer_photo
 from db.models.user import User
+from db.models.character import Character
 from db.repository import character_repo, user_repo
 from game.characters.classes import get_class_or_none
 from services.character_service import create_character_for_user
-from services.menu_hub_service import format_menu_hub_html
+from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
 from services.referral_service import bind_invitee_to_referrer, parse_referrer_telegram_id_from_start_text
 from utils.profile_portraits import (
     GENDER_FEMALE,
@@ -40,6 +42,35 @@ from utils.profile_portraits import (
 )
 
 router = Router(name="start")
+
+
+async def _answer_with_menu_hub_photo(
+    message: Message,
+    character: Character,
+    *,
+    text: str,
+    reply_markup: InlineKeyboardMarkup,
+) -> None:
+    """Главное меню с фото: портрет героя (или заглушка хаба), иначе текст."""
+    p = resolve_menu_hub_photo_path(character)
+    if p is not None:
+        cap = clamp_profile_caption_for_photo(text)
+        sent = await safe_answer_photo(
+            message,
+            p,
+            caption=cap,
+            parse_mode=ParseMode.HTML,
+            reply_markup=reply_markup,
+        )
+        if sent is not None:
+            return
+    await message.answer(
+        text,
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+        reply_markup=reply_markup,
+    )
+
 
 TOWER_WAKE_LORE = (
     "🌫️ Ты в <b>башне из 100 этажей</b>: бои, стамина, экипировка, города. "
@@ -184,10 +215,10 @@ async def _finish_new_character_registration(
         f"<i>Навыки:</i> {cls.skill_1}, {cls.skill_2}, {cls.skill_3}\n\n"
         f"{format_menu_hub_html(char, locale=loc)}"
     )
-    await message.answer(
-        body,
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True,
+    await _answer_with_menu_hub_photo(
+        message,
+        char,
+        text=body,
         reply_markup=main_menu_with_tutorial_hints(locale=loc),
     )
 
@@ -222,10 +253,11 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
         if character is not None:
             await state.clear()
             loc = get_locale(character, tg.language_code)
-            await message.answer(
-                t(loc, "welcome_back") + "\n\n" + format_menu_hub_html(character, locale=loc),
+            await _answer_with_menu_hub_photo(
+                message,
+                character,
+                text=t(loc, "welcome_back") + "\n\n" + format_menu_hub_html(character, locale=loc),
                 reply_markup=main_menu_keyboard(locale=loc),
-                parse_mode=ParseMode.HTML,
             )
             return
 

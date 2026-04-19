@@ -32,9 +32,8 @@ from services import daily_service, title_service
 from services.daily_screen_service import build_daily_body_html
 from game.floors.portal import PORTAL_DESTINATION_FLOORS
 from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui, travel_to_floor
-from services.menu_hub_service import format_menu_hub_html
+from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
 from services.rest_service import apply_completed_rest_if_needed
-from game.items.equipment.item_asset_paths import tower_bot_root
 from utils.game_images_prefs import game_images_enabled
 from utils.profile_portraits import portrait_path_for_character
 
@@ -101,8 +100,8 @@ async def menu_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
         refresh_global_passives(char)
         await session.flush()
         hub_text = format_menu_hub_html(char, locale=loc)
-        menu_img = tower_bot_root() / "assets" / "images" / "menu_hub.png"
-        photo_p = str(menu_img) if game_images_enabled(char) and menu_img.is_file() else None
+        pp = resolve_menu_hub_photo_path(char)
+        photo_p = str(pp) if pp is not None else None
         await push_game_ui(
             state,
             callback.bot,
