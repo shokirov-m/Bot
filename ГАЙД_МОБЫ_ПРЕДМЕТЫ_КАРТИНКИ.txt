@@ -112,10 +112,8 @@
   - Меню «хаб»:  tower_bot/assets/images/menu_hub.png
   - Портреты при регистрации: assets/images/profile/ (см. start.py и
     utils/profile_portraits.py)
-  - В image_assets.py есть задел monster_image_for_template() под путь
-    assets/images/monsters/{key}.png — это ОТДЕЛЬНО от боевых портретов в
-    assets/monsters/ из раздела 2; смотри, какой путь реально использует твоя
-    фича в коде.
+  - В image_assets.py monster_image_for_template() смотрит тот же каталог, что
+    и портрет боя: assets/monsters/{key}.png (см. раздел 2).
 
 
 --------------------------------------------------------------------------------

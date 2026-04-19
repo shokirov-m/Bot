@@ -22,11 +22,9 @@
 
 Рекомендуемый размер: **1280×720** или **1024×576** (читаемо в Telegram).
 
-## `monsters/`
+## Монстры
 
-Для будущего UI боя: `{template_key}.png`, например `wolf.png`, `goblin.png` (ключи из `game/floors/monsters.py` → `MonsterTemplate.key`).
-
-`default.png` — если картинки монстра нет.
+PNG монстров лежат в **`tower_bot/assets/monsters/`** (общий каталог для боя и `monster_image_for_template`). Подпапки `images/monsters/` больше не используются.
 
 ## `items/`
 

@@ -1,12 +1,15 @@
 """
 Генерация цветных PNG-заглушек для assets/items (только stdlib).
-Запуск из корня репозитория или из tower_bot:
+Собирает имена файлов из вызовов item_gear_png("...") в game/ и из списка каталога.
+
+Запуск из каталога tower_bot:
   python -m scripts.generate_item_placeholder_pngs
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 import struct
 import zlib
 from pathlib import Path
@@ -33,9 +36,15 @@ def _color_for_stem(stem: str) -> tuple[int, int, int]:
 
 
 def write_placeholder(path: Path, stem: str) -> None:
-    r, g, b = _color_for_stem(stem)
-    row = bytes([r, g, b] * W)
-    rows = [row] * H
+    r0, g0, b0 = _color_for_stem(stem)
+    r1, g1, b1 = max(0, r0 - 55), max(0, g0 - 55), max(0, b0 - 55)
+    rows: list[bytes] = []
+    for y in range(H):
+        t = y / max(H - 1, 1)
+        r = int(r0 + (r1 - r0) * t)
+        g = int(g0 + (g1 - g0) * t)
+        b = int(b0 + (b1 - b0) * t)
+        rows.append(bytes([r, g, b]) * W)
     path.write_bytes(_png_rgb(W, H, rows))
 
 
@@ -138,11 +147,24 @@ def all_stems() -> list[str]:
     return s
 
 
+def stems_from_sources(game_dir: Path) -> set[str]:
+    pat = re.compile(r'item_gear_png\(\s*"([^"]+)"\s*\)')
+    found: set[str] = set()
+    for py in game_dir.rglob("*.py"):
+        try:
+            text = py.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        found.update(pat.findall(text))
+    return found
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
+    stems = sorted(set(all_stems()) | stems_from_sources(root / "game"))
     out_dir = root / "assets" / "items"
     out_dir.mkdir(parents=True, exist_ok=True)
-    for stem in all_stems():
+    for stem in stems:
         p = out_dir / f"{stem}.png"
         write_placeholder(p, stem)
         print(p.name)

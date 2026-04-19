@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from game.floors import floor_data
+from game.items.equipment.item_asset_paths import tower_bot_root
 
 _ASSETS = Path(__file__).resolve().parent.parent / "assets" / "images"
 
@@ -40,9 +41,9 @@ def location_image_for_floor(floor_number: int) -> Path | None:
 
 
 def monster_image_for_template(template_key: str) -> Path | None:
-    """`monsters/{key}.png` — для будущего UI боя; сейчас чаще только default."""
+    """Тот же каталог, что и боевой портрет: ``tower_bot/assets/monsters/{key}.png``."""
     key = (template_key or "").strip().lower().replace(" ", "_")
-    mon_dir = _ASSETS / "monsters"
+    mon_dir = tower_bot_root() / "assets" / "monsters"
     if key:
         p = mon_dir / f"{key}.png"
         if p.is_file():
