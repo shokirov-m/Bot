@@ -21,6 +21,8 @@ PORTRAIT_ORDER: tuple[str, ...] = (
 )
 
 META_PORTRAIT_KEY = "portrait_key"
+# male / female — зафиксировано при регистрации (для гардероба / стартовых трёх обликов)
+META_REG_GENDER = "reg_gender"
 
 GENDER_MALE = "male"
 GENDER_FEMALE = "female"

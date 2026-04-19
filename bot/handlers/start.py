@@ -182,14 +182,17 @@ async def _finish_new_character_registration(
     display_name: str,
     portrait_key: str,
 ) -> None:
+    data = await state.get_data()
+    pend_gender = data.get("pending_gender")
+    reg_gender = pend_gender if pend_gender in ("male", "female") else None
     char = await create_character_for_user(
         session,
         user=user,
         display_name=display_name,
         class_key="wanderer",
         portrait_key=portrait_key,
+        reg_gender=reg_gender,
     )
-    data = await state.get_data()
     ref_tid = data.get("referrer_telegram_id")
     if isinstance(ref_tid, int) or (isinstance(ref_tid, str) and str(ref_tid).isdigit()):
         await bind_invitee_to_referrer(

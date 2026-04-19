@@ -30,11 +30,9 @@ from bot.keyboards.profile_kb import (
 )
 from bot.utils.game_ui import push_game_ui
 from services import character_service, leaderboard_service, profession_service, stat_bonus_service, title_service
-from scheduler.tasks import schedule_rest_completion_notification
 from services.rest_service import (
     apply_completed_rest_if_needed,
     format_rest_status_line_html,
-    try_begin_or_claim_rest,
 )
 from game.characters import pets as pets_mod
 from game.characters.classes import get_class_or_none
@@ -795,29 +793,11 @@ async def on_profile_rest(callback: CallbackQuery, session: AsyncSession, state:
             return
 
         title_service.refresh_unlocks(char)
-        ok, payload, rest_until = try_begin_or_claim_rest(char)
         await session.flush()
-        if ok and rest_until is not None:
-            schedule_rest_completion_notification(
-                callback.bot,
-                chat_id=callback.message.chat.id,
-                telegram_id=callback.from_user.id,
-                until=rest_until,
-            )
-        text_compact = await build_profile_html_async(session, char)
-        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        p = portrait_path_for_character(char) if game_images_enabled(char) else None
-        cap = clamp_profile_caption_for_photo(text_compact) if p is not None else text_compact
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=cap,
-            reply_markup=profile_view_keyboard(char, locale=loc),
-            target_message=callback.message,
-            photo_path=p,
+        await callback.answer(
+            "Передышка доступна в разделе «Дом» (кнопка 🏠 в меню).",
+            show_alert=True,
         )
-        await callback.answer(payload[:200], show_alert=not ok)
     except Exception:
         logger.exception("prf:rest")
         await callback.answer("Ошибка.", show_alert=True)

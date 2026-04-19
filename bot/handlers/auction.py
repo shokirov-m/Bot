@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.auction_kb import (
     auction_cancel_create_keyboard,
     auction_hub_keyboard,
+    auction_portraits_keyboard,
+    auction_portraits_screen_html,
     auction_lots_page_keyboard,
     auction_my_lots_keyboard,
     auction_reprice_cancel_keyboard,
@@ -52,6 +54,7 @@ async def _clear_auction_fsm_only(state: FSMContext) -> None:
 def _shop_intro_html() -> str:
     return (
         "🛒 <b>Магазин</b>\n"
+        "🖼 <b>Облики профиля</b> за золото — отдельная кнопка ниже (разблокировка в гардеробе дома).\n\n"
         f"Из сумки · до <b>{LOT_DURATION_DAYS}</b> дн. · налог с продажи <b>10%</b> · активных лотов — до <b>5</b>.\n"
         "Публичные лоты — <b>фиксированная цена</b>, покупка сразу.\n"
         "🎯 <b>Игроку по ID</b> — личное предложение по <b>игровому номеру</b> из профиля: "
@@ -269,6 +272,33 @@ async def auc_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCont
         await callback.answer()
     except Exception:
         logger.exception("auc:hub")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "auc:prt")
+async def auc_portraits(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Покупка обликов профиля за золото (те же позиции, что раньше в лавке)."""
+    try:
+        await _clear_auction_fsm_only(state)
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        _, char = await _load_char(session, callback.from_user.id)
+        if char is None:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        try:
+            await callback.message.edit_text(
+                auction_portraits_screen_html(char),
+                parse_mode=ParseMode.HTML,
+                reply_markup=auction_portraits_keyboard(int(char.floor_number)),
+            )
+        except TelegramBadRequest as e:
+            if "message is not modified" not in str(e).lower():
+                raise
+        await callback.answer()
+    except Exception:
+        logger.exception("auc:prt")
         await callback.answer("Ошибка.", show_alert=True)
 
 

@@ -33,6 +33,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "Открой /profile, если карточка ещё не обновилась."
         ),
         "menu_home": "🏠 Дом",
+        "menu_lavka": "🏪 Лавка",
         "menu_floor": "🗺️ Этаж",
         "menu_inv": "🎒 Инвентарь",
         "menu_titles": "🏆 Титулы",
@@ -358,6 +359,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "Open /profile if your status card still looks stale."
         ),
         "menu_home": "🏠 Home",
+        "menu_lavka": "🏪 Supplies",
         "menu_floor": "🗺️ Floor",
         "menu_inv": "🎒 Inventory",
         "menu_titles": "🏆 Titles",

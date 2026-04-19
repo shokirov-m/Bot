@@ -171,8 +171,8 @@ SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
 
 
 def shop_goods_for_floor(floor_number: int) -> tuple[ShopGood, ...]:
-    """Расходники везде; облики — везде; снаряжение этажа 3 — на 3 этаже."""
-    base = SHOP_GOODS + SHOP_PORTRAITS
+    """Расходники в лавке меню; облики профиля — только в разделе «Магазин» (игрок-к-игроку хаб); снаряжение этажа 3 — на 3 этаже."""
+    base = SHOP_GOODS
     if int(floor_number) == 3:
         return base + SHOP_FLOOR3_GEAR
     return base
@@ -181,6 +181,9 @@ def shop_goods_for_floor(floor_number: int) -> tuple[ShopGood, ...]:
 def good_by_key(key: str, *, floor_number: int) -> ShopGood | None:
     k = key.strip().lower()
     for g in shop_goods_for_floor(floor_number):
+        if g.key == k:
+            return g
+    for g in SHOP_PORTRAITS:
         if g.key == k:
             return g
     return None

@@ -6,9 +6,57 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.auction_lot import AuctionLot
+from db.models.character import Character
 from game.items import item_categories
 from game.items.equipment import RARITY_EMOJI, gear_icon_for_item_data
-from utils.ui import format_number
+from utils.ui import LINE_SEP, format_number
+
+
+def auction_portraits_screen_html(character: Character) -> str:
+    """Экран покупки обликов профиля (раздел «Магазин» главного меню)."""
+    import html
+
+    from game.economy.shop import SHOP_PORTRAITS, effective_good_price
+
+    fl = int(character.floor_number)
+    lines = [
+        "🖼 <b>Облики для профиля</b>",
+        "<i>Покупка разблокирует портрет в <b>Дом → Гардероб</b>. PNG — в каталоге assets/images/profile.</i>",
+        LINE_SEP,
+        f"💰 Золото: <b>{int(character.gold):,}</b>",
+        LINE_SEP,
+        "<b>Товары:</b>",
+    ]
+    for g in SHOP_PORTRAITS:
+        p = effective_good_price(g.price, fl)
+        lines.append(
+            f"{g.emoji} <b>{html.escape(g.name)}</b> — {p} 💰"
+            f"{f' <i>(база {g.price})</i>' if p != g.price else ''}\n<i>{g.blurb}</i>",
+        )
+    return "\n".join(lines)
+
+
+def auction_portraits_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+    from game.economy.shop import SHOP_PORTRAITS, effective_good_price
+
+    rows: list[list[InlineKeyboardButton]] = []
+    fl = int(floor_number)
+    for g in SHOP_PORTRAITS:
+        price = effective_good_price(g.price, fl)
+        label = f"{g.emoji} {g.name} — {price}💰"
+        if len(label) > 64:
+            label = label[:61] + "…"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=label,
+                    callback_data=f"shp:buy:{fl}:{g.key}:a",
+                ),
+            ],
+        )
+    rows.append([InlineKeyboardButton(text="⬅ В магазин", callback_data="auc:hub")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _rarity_emoji_from_item_data(item_data: dict | None) -> str:
@@ -19,6 +67,7 @@ def _rarity_emoji_from_item_data(item_data: dict | None) -> str:
 def auction_hub_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="🖼 Облики профиля", callback_data="auc:prt")],
             [InlineKeyboardButton(text="📤 Выставить", callback_data="auc:create")],
             [
                 InlineKeyboardButton(

@@ -13,6 +13,8 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.i18n import get_locale
+from bot.keyboards.menu_kb import main_menu_keyboard
 from bot.keyboards.inventory_kb import (
     BAG_PAGE_SIZE,
     bag_tab_keyboard,
@@ -28,6 +30,7 @@ from game.items import equipment as equip_meta
 from game.items import item_categories
 from game.items.equipment.defaults import apply_item_payload_defaults
 from services import character_service, shop_service, stat_bonus_service
+from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
 from utils.game_images_prefs import game_images_enabled
 from utils.ui import format_inventory_item_html
 
@@ -240,17 +243,40 @@ async def inv_noop(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data == "inv:close")
-async def inv_close(callback: CallbackQuery, state: FSMContext) -> None:
-    if callback.message:
+async def inv_close(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if callback.message is None or callback.bot is None or callback.from_user is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or getattr(user, "is_banned", False):
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        loc = get_locale(char, callback.from_user.language_code)
+        hub_text = format_menu_hub_html(char, locale=loc)
+        pp = resolve_menu_hub_photo_path(char)
+        photo_p = str(pp) if pp is not None else None
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
-            text="Инвентарь закрыт.",
-            reply_markup=None,
+            text=hub_text,
+            reply_markup=main_menu_keyboard(locale=loc),
             target_message=callback.message,
+            photo_path=photo_p,
         )
-    await callback.answer()
+        await callback.answer()
+    except Exception:
+        logger.exception("inv:close")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("inv:sb:"))

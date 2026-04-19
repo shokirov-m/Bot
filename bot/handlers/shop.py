@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.keyboards.auction_kb import auction_portraits_keyboard, auction_portraits_screen_html
 from bot.keyboards.shop_kb import shop_main_keyboard
 from db.repository import character_repo, user_repo
 from game.economy import shop as shop_data
@@ -27,7 +28,7 @@ async def _load_char(session: AsyncSession, telegram_id: int):
 
 
 def _origin_ok(s: str) -> str:
-    return s if s in ("c", "f", "m", "h") else "f"
+    return s if s in ("c", "f", "m", "h", "u", "a") else "f"
 
 
 @router.callback_query(F.data.startswith("shp:main:"))
@@ -46,12 +47,22 @@ async def shop_open(query: CallbackQuery, session: AsyncSession) -> None:
         if char.floor_number != floor_key:
             await query.answer("Ты не здесь. Обнови /floor.", show_alert=True)
             return
-        if origin != "h" and not shop_data.shop_available_on_floor(char.floor_number):
+        if origin not in ("h", "u", "a") and not shop_data.shop_available_on_floor(char.floor_number):
             await query.answer("Здесь нет торговца.", show_alert=True)
+            return
+        if origin == "a":
+            await query.message.edit_text(
+                auction_portraits_screen_html(char),
+                reply_markup=auction_portraits_keyboard(int(char.floor_number)),
+                parse_mode=ParseMode.HTML,
+            )
+            await query.answer()
             return
         text = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
         if origin == "h":
             text = "🏠 <i>Заказ из дома</i> — те же цены по этажу героя.\n\n" + text
+        elif origin == "u":
+            text = "🏪 <i>Лавка главного меню</i> — цены как на твоём текущем этаже.\n\n" + text
         await query.message.edit_text(
             text,
             reply_markup=shop_main_keyboard(char.floor_number, origin),
@@ -84,21 +95,33 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Этаж устарел.", show_alert=True)
             return
 
-        allow_home = origin == "h"
+        allow_remote = origin in ("h", "u", "a")
         ok, payload = await shop_service.try_buy_good(
             session,
             char,
             good_key,
             expected_floor=floor_key,
-            allow_remote_shop=allow_home,
+            allow_remote_shop=allow_remote,
         )
         if not ok:
             await query.answer(payload[:180], show_alert=True)
             return
 
+        if origin == "a":
+            await session.refresh(char)
+            await query.message.edit_text(
+                auction_portraits_screen_html(char) + "\n\n" + LINE_SEP + "\n" + payload,
+                reply_markup=auction_portraits_keyboard(int(char.floor_number)),
+                parse_mode=ParseMode.HTML,
+            )
+            await query.answer("Куплено!")
+            return
+
         header = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
         if origin == "h":
             header = "🏠 <i>Заказ из дома</i>\n\n" + header
+        elif origin == "u":
+            header = "🏪 <i>Лавка главного меню</i>\n\n" + header
         await query.message.edit_text(
             f"{header}\n\n{LINE_SEP}\n{payload}",
             reply_markup=shop_main_keyboard(char.floor_number, origin),
@@ -135,9 +158,12 @@ async def shop_eat_ration(query: CallbackQuery, session: AsyncSession) -> None:
         header = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
         if origin == "h":
             header = "🏠 <i>Заказ из дома</i>\n\n" + header
+        elif origin == "u":
+            header = "🏪 <i>Лавка главного меню</i>\n\n" + header
         await query.message.edit_text(
             f"{header}\n\n{LINE_SEP}\n{msg}",
             reply_markup=shop_main_keyboard(char.floor_number, origin),
+            parse_mode=ParseMode.HTML,
         )
         await query.answer("Вкусно!")
     except Exception:

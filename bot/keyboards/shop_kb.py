@@ -8,8 +8,12 @@ from game.economy.shop import shop_goods_for_floor
 
 
 def shop_main_keyboard(floor_number: int, origin: str) -> InlineKeyboardMarkup:
-    """origin: c — из города, f — с этажа (5,10,15…), m — с рынка этажа 3, h — из дома."""
-    if origin == "h":
+    """origin: c — из города, f — с этажа (5,10,15…), m — с рынка этажа 3, h — из дома, u — из меню."""
+    if origin == "a":
+        back_cd = "auc:hub"
+    elif origin == "u":
+        back_cd = "mnu:hub"
+    elif origin == "h":
         back_cd = "hom:hub"
     elif origin == "m":
         back_cd = f"cty:mkt:{floor_number}:open"

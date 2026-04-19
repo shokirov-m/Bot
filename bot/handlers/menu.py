@@ -21,6 +21,7 @@ from bot.keyboards.inventory_kb import inventory_hub_keyboard
 from bot.keyboards.auction_kb import auction_hub_keyboard
 from bot.keyboards.daily_kb import daily_screen_keyboard
 from bot.keyboards.menu_kb import main_menu_keyboard, portal_screen_keyboard
+from bot.keyboards.shop_kb import shop_main_keyboard
 from bot.keyboards.profile_kb import profile_view_keyboard
 from bot.keyboards.title_kb import titles_pick_keyboard
 from bot.states.combat_states import CombatStates
@@ -28,7 +29,7 @@ from bot.i18n import get_locale, t
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from bot.handlers.quests import render_quests_hub
-from services import daily_service, title_service
+from services import daily_service, shop_service, title_service
 from services.daily_service import build_daily_body_html
 from game.floors.floor_data import PORTAL_DESTINATION_FLOORS
 from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui, travel_to_floor
@@ -313,6 +314,35 @@ async def menu_portal_travel(callback: CallbackQuery, session: AsyncSession, sta
         await callback.answer(f"Этаж {target} ✓")
     except Exception:
         logger.exception("mnu:prt:N")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "mnu:lav")
+async def menu_lavka(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Лавка за золото (расходники и облики) из главного меню — те же цены, что на этаже героя."""
+    try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        _, char = await _char_or_alert(session, callback)
+        if char is None:
+            return
+        floor_key = int(char.floor_number)
+        origin = "u"
+        body = shop_service.format_shop_welcome_html(char, from_city=False)
+        text = "🏪 <i>Лавка главного меню</i> — цены как на твоём текущем этаже.\n\n" + body
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=shop_main_keyboard(floor_key, origin),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("mnu:lav")
         await callback.answer("Ошибка.", show_alert=True)
 
 

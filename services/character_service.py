@@ -33,7 +33,7 @@ from game.items.equipment import (
     starter_weapon_payload,
 )
 from game.items.rarity_scaling import scaled_weapon_attack_value
-from utils.profile_portraits import META_PORTRAIT_KEY
+from utils.profile_portraits import META_PORTRAIT_KEY, META_REG_GENDER
 
 
 def zone_multiplier_for_floor(floor_number: int) -> float:
@@ -81,6 +81,7 @@ async def create_character_for_user(
     display_name: str,
     class_key: str,
     portrait_key: str | None = None,
+    reg_gender: str | None = None,
 ) -> Character:
     """
     Создать персонажа для пользователя. Вызывать только если персонажа ещё нет.
@@ -98,6 +99,9 @@ async def create_character_for_user(
     pk = (portrait_key or "").strip()
     if pk:
         meta[META_PORTRAIT_KEY] = pk[:48]
+    rg = str(reg_gender or "").strip().lower()
+    if rg in ("male", "female"):
+        meta[META_REG_GENDER] = rg
     char = Character(
         user_id=user.id,
         display_name=name,
