@@ -37,30 +37,13 @@ from game.items import runes as rune_items
 from game.balance import (
     DEATH_GOLD_LOSS_FRACTION,
     MAX_DEATH_GOLD_LOSS,
-    MONSTER_ATK_CURVE_MULT,
     MONSTER_ATK_FLAT_ELITE,
     MONSTER_ATK_FLAT_NORMAL,
-    MONSTER_ATK_RAW_BASE,
-    MONSTER_ATK_RAW_DIV_FLOOR,
-    MONSTER_DEF_BASE,
-    MONSTER_DEF_CURVE_MULT,
-    MONSTER_DEF_DIV_FLOOR,
-    MONSTER_FLOOR_DEF_PER_LEVEL,
-    MONSTER_FLOOR_POWER_PER_LEVEL,
     MONSTER_FLOOR10_MAJOR_BOSS_MULT,
     MONSTER_FLOOR20_SLIME_KING_ARMOR_PENETRATION,
     MONSTER_FLOOR20_SLIME_KING_STAT_MULT,
     MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY,
-    MONSTER_FLOOR18_19_FLOORS,
-    MONSTER_FLOOR18_19_MULT,
-    MONSTER_HP_FLOOR12_MULT,
-    MONSTER_HP_FLOOR12_THRESHOLD,
-    MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT,
     MONSTER_FLOOR5_MINIBOSS_HP_CAP,
-    MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR,
-    MONSTER_HP_CURVE_MULT,
-    MONSTER_HP_RAW_BASE,
-    MONSTER_HP_RAW_PER_FLOOR,
     MONSTER_LATE_ATK_MULT,
     MONSTER_LATE_FLOOR_THRESHOLD,
     MONSTER_LATE_HP_MULT,
@@ -71,13 +54,14 @@ from game.balance import (
     MONSTER_MULT_MINI_ATK,
     MONSTER_MULT_MINI_HP,
     PLAYER_DEFENSE_BONUS_PER_LEVEL,
-    monster_tower_floor_strength_multiplier,
 )
 from game.characters import pets as pets_mod
 from game.floors import floor_data
 from game.floors import long_floor as long_floor_mod
+from game.floors import monster_catalog as monster_catalog_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
-from game.floors.monster_portraits import combat_monster_portrait_path
+from utils.image_assets import combat_monster_portrait_path
+from game.floors.monster_stat_formula import compute_formula_stat_bundle, monster_strike_ailment
 from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawns_for_floor
 from game.economy import sinks as sink_rules
 from game.floors.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
@@ -242,144 +226,106 @@ def _tutorial_monster_wave2() -> dict[str, Any]:
     }
 
 
-def _monster_post_floor5_strength_mult(floor_number: int) -> float:
-    """С 6-го этажа: чуть больше HP/атака/защита за каждый этаж выше 5-го."""
-    fl = int(floor_number)
-    if fl < 6:
-        return 1.0
-    return 1.0 + (fl - 5) * float(MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR)
-
-
-def _monster_strike_ailment(
+def _monster_stat_bundle_from_catalog(
     floor_number: int,
     spawn: FloorMonsterSpawn,
-) -> tuple[float, str, str]:
-    """
-    Доля доп. «стихийного» урона от базы удара (до защиты) и подпись для лога.
-    У элит/боссов всегда; у обычных — ~40%.
-    """
-    if spawn.is_elite or spawn.is_mini_boss or spawn.is_major_boss:
-        take = True
+    cat: dict[str, Any],
+) -> dict[str, Any]:
+    """Явные hp/atk/def из каталога (.py) + опционально множители роли (элита / мини / мажор)."""
+    ratio = monster_catalog_mod.floor_ratio(cat, int(floor_number))
+    tpl_key = str(spawn.template.key or "")
+    skip_role = bool(cat.get("catalog_skip_spawn_mults"))
+
+    if skip_role:
+        hp_out = max(1, int(float(cat["hp"]) * ratio))
+        atk_out = max(1, int(float(cat["atk"]) * ratio))
+        def_out = max(0, int(float(cat["def"]) * ratio))
     else:
-        h = (int(floor_number) * 7919 + abs(hash(spawn.template.key))) % 100
-        take = h < 40
-    if not take:
-        return 0.0, "", ""
-    opts: tuple[tuple[float, str, str], ...] = (
-        (0.055, "огнём", "🔥"),
-        (0.05, "ядом", "☠️"),
-        (0.045, "морозом", "❄️"),
-        (0.045, "молнией", "⚡"),
-        (0.04, "порчей", "🌑"),
-    )
-    i = abs(hash(spawn.template.key) + int(floor_number) * 17) % len(opts)
-    mult, lab, em = opts[i]
-    return mult, lab, em
+        hp0 = max(1, int(float(cat["hp"]) * ratio))
+        atk0 = max(1, int(float(cat["atk"]) * ratio))
+        def0 = max(0, int(float(cat["def"]) * ratio))
+        mult_hp = 1.0
+        mult_atk = 1.0
+        if spawn.is_elite:
+            mult_hp *= MONSTER_MULT_ELITE_HP
+            mult_atk *= MONSTER_MULT_ELITE_ATK
+        if spawn.is_mini_boss:
+            mult_hp *= MONSTER_MULT_MINI_HP
+            mult_atk *= MONSTER_MULT_MINI_ATK
+        if spawn.is_major_boss:
+            mult_hp *= MONSTER_MULT_MAJOR_HP
+            mult_atk *= MONSTER_MULT_MAJOR_ATK
+        if floor_number >= MONSTER_LATE_FLOOR_THRESHOLD:
+            mult_hp *= MONSTER_LATE_HP_MULT
+            mult_atk *= MONSTER_LATE_ATK_MULT
+
+        atk_scaled = max(1, int(atk0 * mult_atk))
+        atk_scaled += MONSTER_ATK_FLAT_ELITE if spawn.is_elite else MONSTER_ATK_FLAT_NORMAL
+        hp_out = max(1, int(hp0 * mult_hp))
+        atk_out = atk_scaled
+        def_out = max(0, int(def0 * mult_hp))
+
+        if int(floor_number) == 10 and spawn.is_major_boss:
+            m10 = float(MONSTER_FLOOR10_MAJOR_BOSS_MULT)
+            hp_out = max(1, int(hp_out * m10))
+            atk_out = max(1, int(atk_out * m10))
+            def_out = max(0, int(def_out * m10))
+
+        if (
+            int(floor_number) == 20
+            and spawn.is_major_boss
+            and tpl_key == MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY
+        ):
+            msk = float(MONSTER_FLOOR20_SLIME_KING_STAT_MULT)
+            hp_out = max(1, int(hp_out * msk))
+            atk_out = max(1, int(atk_out * msk))
+            def_out = max(0, int(def_out * msk))
+
+        if int(floor_number) == 5 and spawn.is_mini_boss:
+            hp_out = max(1, min(int(hp_out), int(MONSTER_FLOOR5_MINIBOSS_HP_CAP)))
+
+    ail_mult, ail_lab, ail_em = monster_strike_ailment(floor_number, spawn)
+    display_name = str(cat.get("name") or spawn.template.name).strip()
+    elem = str(cat.get("element") or spawn.template.element or "earth")
+    phrases = cat.get("phrases") if isinstance(cat.get("phrases"), list) else []
+    skills = cat.get("skills") if isinstance(cat.get("skills"), list) else []
+
+    bundle: dict[str, Any] = {
+        "name": display_name,
+        "emoji": spawn.template.emoji,
+        "template_key": tpl_key,
+        "hp": hp_out,
+        "max_hp": hp_out,
+        "atk": atk_out,
+        "defense": def_out,
+        "element": elem,
+        "strike_ailment_mult": ail_mult,
+        "strike_ailment_label_ru": ail_lab,
+        "strike_ailment_emoji": ail_em,
+        "catalog_phrases": [str(p) for p in phrases if p],
+        "catalog_skills": skills,
+        "catalog_loot_table": str(cat.get("loot_table") or ""),
+        "from_catalog": True,
+    }
+    if (
+        int(floor_number) == 20
+        and spawn.is_major_boss
+        and tpl_key == MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY
+    ):
+        bundle["armor_penetration"] = float(MONSTER_FLOOR20_SLIME_KING_ARMOR_PENETRATION)
+        bundle["applies_poison_on_hit"] = True
+    return bundle
 
 
 def _monster_stat_bundle(
     floor_number: int,
     spawn: FloorMonsterSpawn,
 ) -> dict[str, Any]:
-    """HP/атака/защита с учётом типа цели и этажа (без масштаба от уровня героя — только этаж/тип врага)."""
-    raw_hp = MONSTER_HP_RAW_BASE + floor_number * MONSTER_HP_RAW_PER_FLOOR
-    hp = int(raw_hp * MONSTER_HP_CURVE_MULT)
-    raw_atk = MONSTER_ATK_RAW_BASE + floor_number // MONSTER_ATK_RAW_DIV_FLOOR
-    atk = max(1, int(raw_atk * MONSTER_ATK_CURVE_MULT))
-    defense = max(0, int((MONSTER_DEF_BASE + floor_number // MONSTER_DEF_DIV_FLOOR) * MONSTER_DEF_CURVE_MULT))
-    mult_hp = 1.0
-    mult_atk = 1.0
-    if spawn.is_elite:
-        mult_hp *= MONSTER_MULT_ELITE_HP
-        mult_atk *= MONSTER_MULT_ELITE_ATK
-    if spawn.is_mini_boss:
-        mult_hp *= MONSTER_MULT_MINI_HP
-        mult_atk *= MONSTER_MULT_MINI_ATK
-    if spawn.is_major_boss:
-        mult_hp *= MONSTER_MULT_MAJOR_HP
-        mult_atk *= MONSTER_MULT_MAJOR_ATK
-    if floor_number >= MONSTER_LATE_FLOOR_THRESHOLD:
-        mult_hp *= MONSTER_LATE_HP_MULT
-        mult_atk *= MONSTER_LATE_ATK_MULT
-    atk_final = max(1, int(atk * mult_atk))
-    atk_final += MONSTER_ATK_FLAT_ELITE if spawn.is_elite else MONSTER_ATK_FLAT_NORMAL
-
-    lv = max(0, floor_number - 1)
-    pwr = 1.0 + lv * MONSTER_FLOOR_POWER_PER_LEVEL
-    dfn = 1.0 + lv * MONSTER_FLOOR_DEF_PER_LEVEL
-
-    tower_m = monster_tower_floor_strength_multiplier(floor_number)
-    if floor_number == 5 and spawn.is_mini_boss:
-        tower_m *= MONSTER_FLOOR5_MINIBOSS_EXTRA_MULT
-
-    hp_out = max(1, int(hp * mult_hp * pwr * tower_m))
-    atk_out = max(1, int(atk_final * pwr * tower_m))
-    def_out = max(0, int(defense * dfn * tower_m))
-
-    post5 = _monster_post_floor5_strength_mult(floor_number)
-    hp_out = max(1, int(hp_out * post5))
-    atk_out = max(1, int(atk_out * post5))
-    def_out = max(0, int(def_out * post5))
-
-    if int(floor_number) == 10 and spawn.is_major_boss:
-        m10 = float(MONSTER_FLOOR10_MAJOR_BOSS_MULT)
-        hp_out = max(1, int(hp_out * m10))
-        atk_out = max(1, int(atk_out * m10))
-        def_out = max(0, int(def_out * m10))
-
-    if int(floor_number) >= MONSTER_HP_FLOOR12_THRESHOLD:
-        hp_out = max(1, int(hp_out * MONSTER_HP_FLOOR12_MULT))
-
-    if int(floor_number) in MONSTER_FLOOR18_19_FLOORS:
-        m1819 = float(MONSTER_FLOOR18_19_MULT)
-        hp_out = max(1, int(hp_out * m1819))
-        atk_out = max(1, int(atk_out * m1819))
-        def_out = max(0, int(def_out * m1819))
-
-    if (
-        int(floor_number) == 20
-        and spawn.is_major_boss
-        and str(spawn.template.key) == MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY
-    ):
-        msk = float(MONSTER_FLOOR20_SLIME_KING_STAT_MULT)
-        hp_out = max(1, int(hp_out * msk))
-        atk_out = max(1, int(atk_out * msk))
-        def_out = max(0, int(def_out * msk))
-
-    if int(floor_number) == 5 and spawn.is_mini_boss:
-        hp_out = max(1, int(MONSTER_FLOOR5_MINIBOSS_HP_CAP))
-
-    # Обычные цели с 10-го этажа: +8 к атаке (не элита и не боссы).
-    if (
-        int(floor_number) >= 10
-        and not spawn.is_elite
-        and not spawn.is_mini_boss
-        and not spawn.is_major_boss
-    ):
-        atk_out = max(1, int(atk_out) + 8)
-
-    ail_mult, ail_lab, ail_em = _monster_strike_ailment(floor_number, spawn)
-    bundle: dict[str, Any] = {
-        "name": spawn.template.name,
-        "emoji": spawn.template.emoji,
-        "template_key": spawn.template.key,
-        "hp": hp_out,
-        "max_hp": hp_out,
-        "atk": atk_out,
-        "defense": def_out,
-        "element": spawn.template.element or "earth",
-        "strike_ailment_mult": ail_mult,
-        "strike_ailment_label_ru": ail_lab,
-        "strike_ailment_emoji": ail_em,
-    }
-    if (
-        int(floor_number) == 20
-        and spawn.is_major_boss
-        and str(spawn.template.key) == MONSTER_FLOOR20_SLIME_KING_TEMPLATE_KEY
-    ):
-        bundle["armor_penetration"] = float(MONSTER_FLOOR20_SLIME_KING_ARMOR_PENETRATION)
-        bundle["applies_poison_on_hit"] = True
-    return bundle
+    """HP/атака/защита: каталог (.py) или общая формула monster_stat_formula."""
+    cat = monster_catalog_mod.get_definition(str(spawn.template.key or ""))
+    if cat and monster_catalog_mod.has_explicit_stats(cat):
+        return _monster_stat_bundle_from_catalog(floor_number, spawn, cat)
+    return compute_formula_stat_bundle(floor_number, spawn)
 
 
 async def _weapon_profile(
@@ -1200,6 +1146,13 @@ async def _victory_sequence(
 
     gross_gold = gold_reward(character.floor_number, spawn)
     xp = experience_reward(character.floor_number, spawn)
+    cat_win = monster_catalog_mod.get_definition(str(spawn.template.key or ""))
+    if cat_win:
+        cg, cx = monster_catalog_mod.scaled_gold_exp(cat_win, battle_floor)
+        if cg is not None:
+            gross_gold = cg
+        if cx is not None:
+            xp = cx
     if combat_state.get("night_battle"):
         gross_gold = int(gross_gold * combat_night.REWARD_MULT)
         xp = int(xp * combat_night.REWARD_MULT)

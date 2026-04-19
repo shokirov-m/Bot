@@ -13,7 +13,7 @@ from game.items.equipment.constants import (
     SECRET_GEAR_MAX_FLOOR,
 )
 from game.items.equipment.defaults import apply_item_payload_defaults
-from game.items.equipment.item_asset_paths import item_gear_png, procedural_secret_gear_image
+from utils.image_assets import item_gear_png, procedural_secret_gear_image
 
 SECRET_GEAR_ITEMS: tuple[tuple[float, dict[str, Any]], ...] = (
     (

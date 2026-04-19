@@ -9,7 +9,7 @@ from aiogram.types import Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.repository import admin_log_repo, promo_offer_repo
+from db.repository import admin_log_repo, promo_repo
 
 _CODE_RE = re.compile(r"^[A-Z0-9_]{3,40}$")
 
@@ -48,7 +48,7 @@ async def handle_admin_promo(
     action = parts[1].lower()
 
     if action == "list":
-        rows = await promo_offer_repo.list_recent(session, limit=20)
+        rows = await promo_repo.list_recent(session, limit=20)
         if not rows:
             await message.answer("В БД пока нет промокодов.")
             return
@@ -88,12 +88,12 @@ async def handle_admin_promo(
             await message.answer("Хотя бы одна награда (золото, XP или руны) должна быть больше нуля.")
             return
 
-        if await promo_offer_repo.get_by_code(session, raw_code):
+        if await promo_repo.get_by_code(session, raw_code):
             await message.answer(f"Код <code>{html.escape(raw_code)}</code> уже есть в БД.", parse_mode="HTML")
             return
 
         try:
-            await promo_offer_repo.create_offer(
+            await promo_repo.create_offer(
                 session,
                 code_key=raw_code,
                 gold=gold,
@@ -142,7 +142,7 @@ async def handle_admin_promo(
             return
         ck = parts[2].strip().upper()
         if action in ("del", "delete"):
-            ok = await promo_offer_repo.delete_by_code(session, ck)
+            ok = await promo_repo.delete_by_code(session, ck)
             if ok:
                 await admin_log_repo.save_log(
                     session,
@@ -159,7 +159,7 @@ async def handle_admin_promo(
                 await message.answer("Код в БД не найден.")
             return
 
-        ok = await promo_offer_repo.set_active(session, ck, active=(action == "on"))
+        ok = await promo_repo.set_active(session, ck, active=(action == "on"))
         if ok:
             await admin_log_repo.save_log(
                 session,

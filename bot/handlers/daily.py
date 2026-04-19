@@ -15,7 +15,7 @@ from bot.i18n import get_locale, t
 from bot.keyboards.daily_kb import daily_screen_keyboard
 from db.repository import character_repo, user_repo
 from services import daily_service
-from services.daily_screen_service import build_daily_body_html
+from services.daily_service import build_daily_body_html
 from services.subscription_service import subscription_check
 
 router = Router(name="daily")

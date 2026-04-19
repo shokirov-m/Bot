@@ -17,6 +17,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_spec_intro": (
             "<i>Титулы, профессии и боевые навыки — выбери раздел ниже.</i>"
         ),
+        "profile_ranker_name_badge": "🏅 Ранкер ",
         "skills_screen_title": "⚔️ <b>Боевые навыки</b>",
         "skills_slot_btn": "Слот {n}",
         "skills_equip_hint": (
@@ -340,6 +341,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_spec_intro": (
             "<i>Titles, professions, and combat skills — pick a section below.</i>"
         ),
+        "profile_ranker_name_badge": "🏅 Ranker ",
         "skills_screen_title": "⚔️ <b>Combat skills</b>",
         "skills_slot_btn": "Slot {n}",
         "skills_equip_hint": (

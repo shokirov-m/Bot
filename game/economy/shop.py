@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from game.floors import floor_data
-from game.items.equipment.item_asset_paths import item_gear_png
+from utils.image_assets import item_gear_png
 
 
 @dataclass(frozen=True, slots=True)

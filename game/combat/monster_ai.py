@@ -346,6 +346,11 @@ def special_attack_name(element: str) -> str:
 def opening_taunt_line(state: dict[str, Any]) -> str:
     """Первая реплика в бою."""
     m = state["monster"]
+    phrases = m.get("catalog_phrases") or []
+    if isinstance(phrases, list) and phrases:
+        line = random.choice([str(p) for p in phrases if str(p).strip()])
+        if line.strip():
+            return f"💬 «{line.strip()}»"
     if m.get("is_major_boss") or m.get("is_mini_boss"):
         return f"💬 {boss_entry_line(m['name'], is_major_boss=bool(m.get('is_major_boss')), phase=1)}"
     return f"💬 «{pick_taunt(m['name'], str(m.get('template_key', '')))}»"

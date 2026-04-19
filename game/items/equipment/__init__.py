@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from game.items.equipment.catalog_generated import all_example_groups
+from typing import Any
+
 from game.items.equipment.constants import (
     ITEM_IMAGE_PLACEHOLDER_URL,
     RARITY_EMOJI,
@@ -38,6 +39,15 @@ from game.items.equipment.starters import (
     starter_pants_payload,
     starter_weapon_payload,
 )
+
+
+def __getattr__(name: str) -> Any:
+    if name == "all_example_groups":
+        from game.items.equipment.catalog_generated import all_example_groups as fn
+
+        return fn
+    raise AttributeError(name)
+
 
 __all__ = [
     "ITEM_IMAGE_PLACEHOLDER_URL",

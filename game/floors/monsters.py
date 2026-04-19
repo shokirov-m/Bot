@@ -6,7 +6,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from game.data.monsters import MONSTER_TEMPLATE_META, ZONE_POOL_KEYS
 from game.floors import floor_data
+
+
+def _template(key: str) -> MonsterTemplate:
+    m = MONSTER_TEMPLATE_META[key]
+    return MonsterTemplate(key, m["display_name"], m["emoji"], m["element"], m["blurb"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,99 +62,8 @@ def zone_monster_templates(zone_key: str) -> tuple[MonsterTemplate, ...]:
 
 
 def _pool(zone_key: str) -> tuple[MonsterTemplate, ...]:
-    pools: dict[str, tuple[MonsterTemplate, ...]] = {
-        "forest_beginnings": (
-            MonsterTemplate("wolf", "Серый волк", "🐺", "earth", "Стая уверена в своей силе."),
-            MonsterTemplate("spider", "Паук-ткач", "🕷️", "earth", "Ловит в нити слепых."),
-            MonsterTemplate("goblin", "Гоблин", "👺", "earth", "Бросается камнями из кустов."),
-            MonsterTemplate("boar", "Кабан", "🐗", "earth", "Рывок и клыки."),
-            MonsterTemplate("sprite", "Лесной спрайт", "✨", "light", "Слепит вспышками."),
-            MonsterTemplate("bandit", "Лесной разбойник", "🗡️", "earth", "Знает тропы и слабые места."),
-            MonsterTemplate("thorn_lurker", "Терн. прыгун", "🌵", "earth", "Выскакивает из зарослей."),
-        ),
-        "rotten_swamps": (
-            MonsterTemplate("zombie", "Болотный зомби", "🧟", "dark", "Тянет к холодной воде."),
-            MonsterTemplate("slime", "Кислотный слизень", "🫧", "earth", "Разъедает броню."),
-            MonsterTemplate("wyvern", "Виверна", "🐉", "fire", "Бьётся крыльями и ядом."),
-            MonsterTemplate("witch", "Топи-ведьма", "🧙‍♀️", "dark", "Проклятия из тумана."),
-            MonsterTemplate("leech", "Пиявка-гигант", "🪱", "earth", "Высасывает силы."),
-            MonsterTemplate("gas_frog", "Газовая жаба", "🐸", "dark", "Выдыхает едкий туман."),
-            MonsterTemplate("bog_mosquito", "Рой комаров", "🦟", "earth", "Жужжит и высасывает кровь."),
-        ),
-        "shadow_caves": (
-            MonsterTemplate("bat_swarm", "Рой летучих", "🦇", "dark", "Заслоняет свет."),
-            MonsterTemplate("shade", "Теневой дух", "🌑", "dark", "Проходит сквозь сталь."),
-            MonsterTemplate("crawler", "Пещерный ползун", "🪨", "earth", "Цепляется к потолку."),
-            MonsterTemplate("wisp", "Огонёк-обман", "🔥", "fire", "Ведёт к ловушке."),
-            MonsterTemplate("echo", "Эхо-призрак", "👻", "dark", "Повторяет твои шаги."),
-            MonsterTemplate("stalactite", "Живой сталактит", "🪨", "earth", "Обрушивается сверху."),
-            MonsterTemplate("gloom_weaver", "Ткач мрака", "🕸️", "dark", "Плетёт нити из тени."),
-        ),
-        "icy_peaks": (
-            MonsterTemplate("yeti", "Снежный йети", "🧌", "ice", "Оглушает ревом."),
-            MonsterTemplate("golem_ice", "Ледяной голем", "🧊", "ice", "Броня из вековых льдов."),
-            MonsterTemplate("frost_wisp", "Морозная искра", "❄️", "ice", "Замедляет конечности."),
-            MonsterTemplate("harpy", "Ледяная гарпия", "🪶", "ice", "Когти и ветер."),
-            MonsterTemplate("frost_spider", "Инейный паук", "🕸️", "ice", "Сеть хрустит от холода."),
-            MonsterTemplate("ice_wolf", "Ледяной волк", "🐺", "ice", "Синеет от мороза."),
-            MonsterTemplate("avalanche", "Дух лавины", "⛰️", "ice", "Срывает снежную массу."),
-        ),
-        "desert_oblivion": (
-            MonsterTemplate("scorpion", "Ядовитый скорпион", "🦂", "earth", "Удар хвоста — яд."),
-            MonsterTemplate("sand_wraith", "Песочный призрак", "🌪️", "dark", "Режет зерном времени."),
-            MonsterTemplate("cobra", "Песчаная кобра", "🐍", "earth", "Плюётся жаром."),
-            MonsterTemplate("golem_sand", "Песчаный страж", "🏺", "earth", "Рассыпается и собирается."),
-            MonsterTemplate("mirage", "Мираж-искуситель", "🪞", "light", "Ломает ориентиры."),
-            MonsterTemplate("dune_roc", "Пустынная птица", "🦅", "earth", "Клюв как кинжал."),
-            MonsterTemplate("salt_lich", "Соляной лич", "🧂", "dark", "Высушивает плоть."),
-        ),
-        "volcanic_ruins": (
-            MonsterTemplate("salamander", "Огненная саламандра", "🦎", "fire", "Оставляет след из пепла."),
-            MonsterTemplate("ember_spirit", "Угольный дух", "🔥", "fire", "Вспыхивает при ударе."),
-            MonsterTemplate("drake", "Лавовый дракончик", "🐲", "fire", "Крошечный, но жгучий."),
-            MonsterTemplate("ash_shade", "Тень пепла", "💨", "dark", "Ослепляет сажей."),
-            MonsterTemplate("magma_slug", "Магмовый слизень", "🌋", "fire", "Капает раскалённым металлом."),
-            MonsterTemplate("cinder_imp", "Пепельный бес", "😈", "fire", "Швыряет угли."),
-            MonsterTemplate("obsidian_hound", "Обсидиановая гончая", "🐕", "fire", "Зубы как стекло."),
-        ),
-        "sky_citadel": (
-            MonsterTemplate("griffon", "Бешеный грифон", "🦅", "earth", "Бьётся когтями сверху."),
-            MonsterTemplate("fallen", "Ангел хаоса", "😇", "light", "Крылья режут воздух."),
-            MonsterTemplate("storm_elem", "Эл. бури", "⛈️", "lightning", "Бьёт цепями."),
-            MonsterTemplate("sky_serpent", "Небесный змей", "🐍", "lightning", "Прячется в облаке."),
-            MonsterTemplate("valkyrie", "Падшая валькирия", "⚔️", "light", "Бросает копья молний."),
-            MonsterTemplate("cloud_stalker", "Охотник в облаках", "☁️", "light", "Бьёт из невидимости."),
-            MonsterTemplate("thunder_wisp", "Громовая искра", "⚡", "lightning", "Скачет по металлу."),
-        ),
-        "chaos_abyss": (
-            MonsterTemplate("demon_imp", "Бес бездны", "😈", "dark", "Насмехается и режет."),
-            MonsterTemplate("chaos_spawn", "Порожд. хаоса", "🌀", "dark", "Меняет форму."),
-            MonsterTemplate("void_ling", "Дух пустоты", "🕳️", "dark", "Пожирает звук."),
-            MonsterTemplate("corruptor", "Искажатель", "🧬", "dark", "Ломает баланс стихий."),
-            MonsterTemplate("mad_cultist", "Безумный культист", "🧿", "dark", "Призывает углы реальности."),
-            MonsterTemplate("fractal_hound", "Фрактальная гончая", "🔷", "dark", "Дублируется в углах."),
-            MonsterTemplate("entropy_mite", "Клещ энтропии", "🪲", "dark", "Грызёт порядок."),
-        ),
-        "eternity_hall": (
-            MonsterTemplate("archdemon", "Архидемон", "👹", "dark", "Говорит заклинаниями боли."),
-            MonsterTemplate("eternity_warden", "Страж вечности", "⚡", "light", "Щит из остановленного времени."),
-            MonsterTemplate("time_phantom", "Фантом часов", "⏳", "lightning", "Ускоряет и замедляет."),
-            MonsterTemplate("seraph_dark", "Серафим тьмы", "🪽", "dark", "Перья как клинки."),
-            MonsterTemplate("rune_golem", "Рунный колосс", "🗿", "earth", "Каждый шаг — удар."),
-            MonsterTemplate("chrono_wraith", "Призрак хроноса", "⌛", "light", "Рвет шкалу времени."),
-            MonsterTemplate("seal_breaker", "Разруш. печатей", "📜", "dark", "Гасит защитные руны."),
-        ),
-        floor_data.ZONE_FINAL_KEY: (
-            MonsterTemplate(
-                "tower_warden",
-                "Око башни",
-                "👁️",
-                "dark",
-                "Три фазы. Требует легендарное оружие и три ключа.",
-            ),
-        ),
-    }
-    return pools.get(zone_key, pools["forest_beginnings"])
+    keys = ZONE_POOL_KEYS.get(zone_key, ZONE_POOL_KEYS["forest_beginnings"])
+    return tuple(_template(k) for k in keys)
 
 
 def _pick_indices(floor_number: int, count: int, pool_len: int) -> list[int]:
@@ -170,158 +85,38 @@ def _pick_indices(floor_number: int, count: int, pool_len: int) -> list[int]:
 
 def mini_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterTemplate:
     """Уникальный мини-босс по зоне."""
-    table: dict[str, MonsterTemplate] = {
-        "forest_beginnings": MonsterTemplate(
-            "mini_alpha_wolf",
-            "Альфа",
-            "🐺",
-            "earth",
-            "Дважды крупнее обычного волка.",
-        ),
-        "rotten_swamps": MonsterTemplate(
-            "mini_bog_queen",
-            "Болотная королева",
-            "👑",
-            "dark",
-            "Плетёт сеть из гнили.",
-        ),
-        "shadow_caves": MonsterTemplate(
-            "mini_shadow_weaver",
-            "Ткач теней",
-            "🕸️",
-            "dark",
-            "Режет свет.",
-        ),
-        "icy_peaks": MonsterTemplate(
-            "mini_frost_troll",
-            "Морозный тролль",
-            "🧌",
-            "ice",
-            "Восстанавливается от холода.",
-        ),
-        "desert_oblivion": MonsterTemplate(
-            "mini_sand_titan",
-            "Песчаный титан",
-            "🏜️",
-            "earth",
-            "Удары вызывают бури.",
-        ),
-        "volcanic_ruins": MonsterTemplate(
-            "mini_magma_lord",
-            "Повелитель магмы",
-            "🌋",
-            "fire",
-            "Расплавляет камень под ногами.",
-        ),
-        "sky_citadel": MonsterTemplate(
-            "mini_storm_herald",
-            "Глашатай гроз",
-            "⛈️",
-            "lightning",
-            "Призывает цепные удары.",
-        ),
-        "chaos_abyss": MonsterTemplate(
-            "mini_chaos_knight",
-            "Рыцарь бездны",
-            "🗡️",
-            "dark",
-            "Броня из сломанных миров.",
-        ),
-        "eternity_hall": MonsterTemplate(
-            "mini_time_judge",
-            "Судья времён",
-            "⏳",
-            "light",
-            "Останавливает твой следующий ход.",
-        ),
-        floor_data.ZONE_FINAL_KEY: MonsterTemplate(
-            "final_warden",
-            "Страж Башни",
-            "👁️",
-            "dark",
-            "Финальное испытание.",
-        ),
+    table: dict[str, str] = {
+        "forest_beginnings": "mini_alpha_wolf",
+        "rotten_swamps": "mini_bog_queen",
+        "shadow_caves": "mini_shadow_weaver",
+        "icy_peaks": "mini_frost_troll",
+        "desert_oblivion": "mini_sand_titan",
+        "volcanic_ruins": "mini_magma_lord",
+        "sky_citadel": "mini_storm_herald",
+        "chaos_abyss": "mini_chaos_knight",
+        "eternity_hall": "mini_time_judge",
+        floor_data.ZONE_FINAL_KEY: "final_warden",
     }
-    return table.get(zone.key, table["forest_beginnings"])
+    return _template(table.get(zone.key, table["forest_beginnings"]))
 
 
 def major_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterTemplate:
     """Сильный босс на каждом 10-м этаже."""
     # Для этажа 100 — финальный страж
     if floor_number >= 100:
-        return MonsterTemplate(
-            "boss_tower_core",
-            "Страж (×3)",
-            "👁️",
-            "dark",
-            "Легендарный лут. Особое поведение ИИ.",
-        )
-    table: dict[str, MonsterTemplate] = {
-        "forest_beginnings": MonsterTemplate(
-            "boss_ancient_treant",
-            "Король леса",
-            "🐻",
-            "earth",
-            "Истинный царь джунглей.",
-        ),
-        "rotten_swamps": MonsterTemplate(
-            "boss_slime_king",
-            "Царь слизней",
-            "👑",
-            "poison",
-            "Трон из слизи и яда: бьёт сильно и отравляет.",
-        ),
-        "shadow_caves": MonsterTemplate(
-            "boss_night_stalker",
-            "Ночной охотник",
-            "🌑",
-            "dark",
-            "Исчезает между ударами.",
-        ),
-        "icy_peaks": MonsterTemplate(
-            "boss_glacier_king",
-            "Король ледников",
-            "🧊",
-            "ice",
-            "Две фазы: броня и ядро.",
-        ),
-        "desert_oblivion": MonsterTemplate(
-            "boss_time_scarab",
-            "Скарабей времени",
-            "🪲",
-            "lightning",
-            "Перематывает твои баффы.",
-        ),
-        "volcanic_ruins": MonsterTemplate(
-            "boss_ember_dragon",
-            "Угольный дракон",
-            "🐉",
-            "fire",
-            "Дыхание волной жара.",
-        ),
-        "sky_citadel": MonsterTemplate(
-            "boss_sky_tyrant",
-            "Небесный тиран",
-            "☁️",
-            "light",
-            "Блокирует небо.",
-        ),
-        "chaos_abyss": MonsterTemplate(
-            "boss_chaos_avatar",
-            "Аватар хаоса",
-            "🌀",
-            "dark",
-            "Меняет стихию каждую фазу.",
-        ),
-        "eternity_hall": MonsterTemplate(
-            "boss_eternity_judge",
-            "Судья вечности",
-            "⚖️",
-            "light",
-            "Считает каждый твой промах.",
-        ),
+        return _template("boss_tower_core")
+    table: dict[str, str] = {
+        "forest_beginnings": "boss_ancient_treant",
+        "rotten_swamps": "boss_slime_king",
+        "shadow_caves": "boss_night_stalker",
+        "icy_peaks": "boss_glacier_king",
+        "desert_oblivion": "boss_time_scarab",
+        "volcanic_ruins": "boss_ember_dragon",
+        "sky_citadel": "boss_sky_tyrant",
+        "chaos_abyss": "boss_chaos_avatar",
+        "eternity_hall": "boss_eternity_judge",
     }
-    return table.get(zone.key, table["forest_beginnings"])
+    return _template(table.get(zone.key, table["forest_beginnings"]))
 
 
 def build_spawns_for_floor(floor_number: int) -> list[FloorMonsterSpawn]:

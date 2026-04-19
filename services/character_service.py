@@ -13,6 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from db.models.character import Character
+from game.balance import (
+    PROGRESSION_BASE_EXP,
+    PROGRESSION_LEVEL1_XP_NEEDED,
+    PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2,
+    ZONE_MULTIPLIER_BY_MAX_FLOOR,
+)
 from db.models.enchant import EnchantLog
 from db.models.floor_progress import FloorProgress
 from db.models.inventory import InventoryItem
@@ -20,7 +26,6 @@ from db.models.quest import QuestProgress
 from db.models.user import User
 from db.repository import character_repo, inventory_repo
 from game.characters.classes import ClassDefinition, get_class_or_none
-from game.characters.progression import experience_needed_for_next_level
 from game.items.equipment import (
     starter_boots_payload,
     starter_bread_payload,
@@ -31,6 +36,30 @@ from game.items.equipment import (
 )
 from game.items.rarity_scaling import scaled_weapon_attack_value
 from utils.profile_portraits import META_PORTRAIT_KEY
+
+
+def zone_multiplier_for_floor(floor_number: int) -> float:
+    """Множитель зоны по номеру текущего этажа персонажа."""
+    if floor_number <= 0:
+        return 1.0
+    for max_floor, mult in ZONE_MULTIPLIER_BY_MAX_FLOOR:
+        if floor_number <= max_floor:
+            return mult
+    return ZONE_MULTIPLIER_BY_MAX_FLOOR[-1][1]
+
+
+def experience_needed_for_next_level(level: int, floor_number: int) -> int:
+    """Опыт до следующего уровня с учётом этажа (зона)."""
+    if level < 1:
+        level = 1
+    if level == 1:
+        return PROGRESSION_LEVEL1_XP_NEEDED
+    n_next = level + 1
+    mult = zone_multiplier_for_floor(floor_number)
+    need = max(1, int(PROGRESSION_BASE_EXP * (n_next**2.2) * mult))
+    if level >= 2:
+        need = max(1, need // PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2)
+    return need
 
 
 def _compute_hp_max(vitality: int, strength: int, cls: ClassDefinition) -> int:

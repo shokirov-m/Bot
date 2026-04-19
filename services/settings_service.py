@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from db.repository import inventory_repo, promo_offer_repo, promo_repo
+from db.repository import inventory_repo, promo_repo
 from game.characters.global_passives import refresh_global_passives
 from game.characters import pets as pets_mod
 from game.promos import bag_payloads_for_code, promo_pet_key_for_code, reward_for_code
@@ -122,7 +122,7 @@ async def redeem_promo(
     if await promo_repo.has_redeemed(session, int(user.id), code):
         return False, "settings_promo_used", {}
 
-    offer = await promo_offer_repo.get_by_code(session, code)
+    offer = await promo_repo.get_by_code(session, code)
     if offer is not None:
         now = datetime.now(UTC)
         if not offer.is_active:
@@ -132,7 +132,7 @@ async def redeem_promo(
         if offer.valid_until is not None and now > offer.valid_until:
             return False, "settings_promo_expired", {}
 
-        ok_inc = await promo_offer_repo.try_take_one_use(session, offer.id)
+        ok_inc = await promo_repo.try_take_one_use(session, offer.id)
         if not ok_inc:
             return False, "settings_promo_exhausted", {}
 

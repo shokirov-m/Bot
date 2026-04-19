@@ -29,7 +29,7 @@ from bot.keyboards.profile_kb import (
     profile_view_keyboard,
 )
 from bot.utils.game_ui import push_game_ui
-from services import character_service, profession_service, stat_bonus_service, title_service
+from services import character_service, leaderboard_service, profession_service, stat_bonus_service, title_service
 from scheduler.tasks import schedule_rest_completion_notification
 from services.rest_service import (
     apply_completed_rest_if_needed,
@@ -40,7 +40,7 @@ from game.characters import pets as pets_mod
 from game.characters.classes import get_class_or_none
 from game.characters.global_passives import format_unlocked_global_passives_ru, refresh_global_passives
 from game.characters.path_ranks import path_rank_name_ru
-from game.characters.progression import experience_needed_for_next_level
+from services.character_service import experience_needed_for_next_level
 from game.characters.player_skills import (
     SKILL_BY_KEY,
     ensure_skill_meta,
@@ -138,6 +138,7 @@ def _build_profile_text(
     gear_stat_bonus: dict[str, int] | None = None,
     title_stat_bonus: dict[str, int] | None = None,
     effective_stats: dict[str, int] | None = None,
+    ranker_name_prefix: str = "",
     locale: str = "ru",
 ) -> str:
     cls = get_class_or_none(char.class_key)
@@ -208,12 +209,13 @@ def _build_profile_text(
     vit_e = int(gb["vit"]) + int(tb["vit"])
     luck_e = int(gb["luck"]) + int(tb["luck"])
 
+    rp_esc = html.escape(ranker_name_prefix) if ranker_name_prefix else ""
     head_row_compact = (
-        f"🗡️ {html.escape(char.display_name)} · 🎮 <b>ID {gid_esc}</b> "
+        f"🗡️ {rp_esc}{html.escape(char.display_name)} · 🎮 <b>ID {gid_esc}</b> "
         f"• Ур.{char.level} 📍 Этаж: {char.floor_number}"
     )
     head_row_full = (
-        f"🗡️ {html.escape(char.display_name)} · 🎮 ID {gid_esc} "
+        f"🗡️ {rp_esc}{html.escape(char.display_name)} · 🎮 ID {gid_esc} "
         f"• Ур.{char.level} 📍 Этаж: {char.floor_number}"
     )
     rank_combine = rank_s
@@ -370,6 +372,8 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
     loc = get_locale(char, None)
+    lb_rank = await leaderboard_service.best_leaderboard_rank(session, char)
+    rp = t(loc, "profile_ranker_name_badge") if lb_rank is not None else ""
     base = _build_profile_text(
         char,
         compact=True,
@@ -379,6 +383,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
         effective_stats=eff,
+        ranker_name_prefix=rp,
         locale=loc,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=True)
@@ -397,6 +402,8 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
     loc = get_locale(char, None)
+    lb_rank = await leaderboard_service.best_leaderboard_rank(session, char)
+    rp = t(loc, "profile_ranker_name_badge") if lb_rank is not None else ""
     base = _build_profile_text(
         char,
         compact=False,
@@ -406,6 +413,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         gear_stat_bonus=gear_b,
         title_stat_bonus=title_b,
         effective_stats=eff,
+        ranker_name_prefix=rp,
         locale=loc,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=False)

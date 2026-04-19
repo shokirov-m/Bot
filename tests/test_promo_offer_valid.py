@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from db.models.promo_offer import PromoOffer
-from db.repository.promo_offer_repo import offer_is_valid_now
+from db.repository.promo_repo import offer_is_valid_now
 
 
 def _offer(**kw) -> PromoOffer:

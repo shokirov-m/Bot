@@ -29,8 +29,8 @@ from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, inventory_repo, user_repo
 from bot.handlers.quests import render_quests_hub
 from services import daily_service, title_service
-from services.daily_screen_service import build_daily_body_html
-from game.floors.portal import PORTAL_DESTINATION_FLOORS
+from services.daily_service import build_daily_body_html
+from game.floors.floor_data import PORTAL_DESTINATION_FLOORS
 from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui, travel_to_floor
 from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
 from services.rest_service import apply_completed_rest_if_needed

@@ -8,7 +8,7 @@ from pathlib import Path
 from bot.i18n import t
 from db.models.character import Character
 from game.characters.path_ranks import path_rank_name_ru
-from game.items.equipment.item_asset_paths import tower_bot_root
+from utils.image_assets import tower_bot_root
 from utils.game_images_prefs import game_images_enabled
 from utils.profile_portraits import portrait_path_for_character
 from utils.ui import LINE_SEP

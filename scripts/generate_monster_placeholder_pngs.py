@@ -1,21 +1,23 @@
 """
-PNG-заглушки для всех шаблонов монстров (stdlib, без Pillow).
+PNG-заглушки для всех монстров из ``game/data/monsters_catalog.json`` (stdlib, без Pillow).
 
-Единый каталог ``assets/monsters/{key}.png`` — и бой (monster_portraits), и monster_image_for_template().
+Единый каталог ``assets/monsters/{key}.png`` — бой и ``monster_image_for_template()``.
 
 Запуск из каталога tower_bot:
-  python -m scripts.generate_monster_placeholder_pngs
+  python -m scripts.generate_monster_placeholder_pngs            # только отсутствующие
+  python -m scripts.generate_monster_placeholder_pngs --force  # пересобрать все из каталога
+  python -m scripts.generate_monster_placeholder_pngs --prune  # удалить *.png, которых нет в JSON
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import struct
 import zlib
 from pathlib import Path
 
-from game.floors import floor_data as fd
-from game.floors import monsters as mf
+from game.data.monsters import ALL_MONSTERS
 
 W = H = 400
 
@@ -67,36 +69,54 @@ def _write_monster_png(path: Path, key: str, element: str | None) -> None:
 
 
 def collect_monster_keys_and_elements() -> dict[str, str | None]:
-    """Ключ шаблона → стихия (для цвета)."""
+    """Ключ из каталога → стихия (для цвета градиента)."""
     out: dict[str, str | None] = {}
-
-    def reg(t: mf.MonsterTemplate) -> None:
-        out[t.key] = t.element
-
-    for z in fd.ZONES:
-        for t in mf.zone_monster_templates(z.key):
-            reg(t)
-    for t in mf.zone_monster_templates(fd.ZONE_FINAL.key):
-        reg(t)
-
-    for z in fd.ZONES:
-        reg(mf.mini_boss_for_zone(z, z.floor_from))
-        reg(mf.major_boss_for_zone(z, z.floor_from))
-
-    reg(mf.mini_boss_for_zone(fd.ZONE_FINAL, 100))
-    reg(mf.major_boss_for_zone(fd.ZONE_FINAL, 100))
-
+    for key, row in ALL_MONSTERS.items():
+        el = row.get("element")
+        out[key] = str(el) if el is not None else "earth"
     return out
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Синхронизация PNG с monsters_catalog.json")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Перезаписать существующие PNG (по умолчанию создаются только отсутствующие)",
+    )
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="Удалить в assets/monsters PNG, ключа которого нет в monsters_catalog",
+    )
+    args = parser.parse_args()
+
     root = Path(__file__).resolve().parents[1]
     meta = collect_monster_keys_and_elements()
     mon_dir = root / "assets" / "monsters"
+    created = 0
+    skipped = 0
     for key in sorted(meta.keys()):
-        el = meta[key]
-        _write_monster_png(mon_dir / f"{key}.png", key, el)
+        path = mon_dir / f"{key}.png"
+        if path.is_file() and not args.force:
+            skipped += 1
+            continue
+        _write_monster_png(path, key, meta[key])
+        created += 1
         print(key)
+
+    print(f"Создано/обновлено: {created}, пропущено (уже есть): {skipped}")
+
+    if args.prune:
+        allowed = set(meta.keys()) | {"default"}
+        removed = 0
+        for p in mon_dir.glob("*.png"):
+            if p.stem not in allowed:
+                p.unlink()
+                removed += 1
+                print(f"remove {p.name}")
+        if removed:
+            print(f"Удалено лишних: {removed}")
 
     # Заглушка по ключу без файла — fallback для monster_image_for_template
     default_top = (70, 75, 85)
@@ -110,8 +130,9 @@ def main() -> None:
         rows.append(bytes([r, g, b]) * 128)
     default_path = mon_dir / "default.png"
     default_path.parent.mkdir(parents=True, exist_ok=True)
-    default_path.write_bytes(_png_rgb(128, 128, rows))
-    print("default.png")
+    if not default_path.is_file() or args.force:
+        default_path.write_bytes(_png_rgb(128, 128, rows))
+        print("default.png")
 
 
 if __name__ == "__main__":

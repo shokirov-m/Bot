@@ -8,7 +8,7 @@ from typing import Any
 
 from game.floors.monsters import FloorMonsterSpawn
 from game.items import loot_scaling as ls
-from game.items.equipment.item_asset_paths import item_gear_png
+from utils.image_assets import item_gear_png
 
 _WEAPON_TYPES = ("blade", "staff", "bow", "dagger", "axe", "polearm", "hammer")
 

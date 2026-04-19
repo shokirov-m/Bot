@@ -17,7 +17,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.i18n import t
 from bot.keyboards.tutorial_kb import tutorial_hints_keyboard
 from game.characters.classes import all_classes_ordered
-from game.floors.portal import PORTAL_DESTINATION_FLOORS
+from game.floors.floor_data import PORTAL_DESTINATION_FLOORS
 
 
 
@@ -117,7 +117,7 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
 
 def portal_screen_keyboard(*, locale: str = "ru", highest_floor_reached: int) -> InlineKeyboardMarkup:
-    """Портал: быстрый переход на важные этажи (список в game/floors/portal.py)."""
+    """Портал: быстрый переход на важные этажи (список в floor_data.PORTAL_DESTINATION_FLOORS)."""
     loc = locale if locale in ("ru", "en") else "ru"
     row: list[InlineKeyboardButton] = []
     for fl in PORTAL_DESTINATION_FLOORS:

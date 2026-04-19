@@ -5,14 +5,17 @@
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 
+from aiogram import Bot
 from bot.i18n import t
 from db.models.character import Character
 from sqlalchemy.ext.asyncio import AsyncSession
 from services import character_service
+from services.subscription_service import channel_public_url, subscription_check
 
 META_KEY = "daily_v1"
 KILLS_GOAL = 3
@@ -212,3 +215,29 @@ async def try_claim_daily_reward(
             streak=new_streak,
         ),
     )
+
+
+async def build_daily_body_html(
+    bot: Bot,
+    telegram_user_id: int,
+    character: Character,
+    *,
+    locale: str,
+    title_html: str | None = None,
+) -> tuple[str, bool]:
+    """
+    Полный HTML текста ежедневки и флаг «подписан на канал».
+    """
+    del title_html
+    subscribed, api_hint = await subscription_check(bot, telegram_user_id, locale=locale)
+    box = format_daily_box_html(character, locale=locale, subscribed=subscribed)
+    name = t(locale, "channel_display_name")
+    url = channel_public_url()
+    link = f'<a href="{html.escape(url)}">{html.escape(name)}</a>'
+    if api_hint:
+        extra = "\n" + api_hint
+    elif not subscribed:
+        extra = "\n" + t(locale, "daily_sub_required", channel=html.escape(name), link=link)
+    else:
+        extra = "\n" + t(locale, "daily_sub_ok")
+    return box + extra, subscribed
