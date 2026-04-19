@@ -23,7 +23,6 @@ from db.repository import character_repo, inventory_repo, user_repo
 from bot.keyboards.menu_kb import main_menu_keyboard
 from bot.keyboards.city_market_kb import profile_skills_main_keyboard, profile_skills_pick_keyboard
 from bot.keyboards.profile_kb import (
-    profile_class_detail_keyboard,
     profile_full_stats_keyboard,
     profile_pet_picker_keyboard,
     profile_view_keyboard,
@@ -49,7 +48,7 @@ from game.characters.player_skills import (
     set_equipped_slot,
 )
 from game.characters.skills import passive_combat_modifiers_merged
-from game.characters.titles import TITLE_BY_KEY, format_title_bonus_brief, format_title_bonus_line
+from game.characters.titles import TITLE_BY_KEY, format_title_bonus_brief
 from game.characters.weapon_mastery import mastery_profile_lines, weapon_type_from_item_data
 from game.combat import formulas
 from utils.game_images_prefs import game_images_enabled
@@ -57,7 +56,6 @@ from utils.profile_portraits import portrait_path_for_character
 from utils.ui import (
     LINE_SEP,
     _BAR_LEN,
-    element_label,
     element_profile_line,
     format_number,
     render_exp_bar,
@@ -129,55 +127,6 @@ def _fmt_stat_plain(base: int, extra: int) -> str:
     return f"{b} (+{e})"
 
 
-def build_class_info_html(char: Character, *, locale: str) -> str:
-    """Экран «Класс»: пассив, навыки, стартовые статы (тексты классов на русском)."""
-    loc = locale if locale in ("ru", "en") else "ru"
-    title = t(loc, "profile_class_screen_title")
-    cls = get_class_or_none(str(char.class_key or ""))
-    lines = [LINE_SEP, title, LINE_SEP]
-    if cls is None:
-        unk = "Класс не выбран или неизвестен." if loc == "ru" else "Class not set or unknown."
-        lines.append(f"<i>{html.escape(unk)}</i>")
-        return "\n".join(lines)
-    lines.append(f"{cls.emoji} <b>{html.escape(cls.name_ru)}</b>")
-    lines.append(f"<i>{t(loc, 'profile_class_flavor_note')}</i>")
-    lines.append("")
-    pas_lbl = "<b>Пассив класса</b>" if loc == "ru" else "<b>Class passive</b>"
-    lines.append(f"{pas_lbl}: <i>{html.escape(cls.passive_ru)}</i>")
-    sk_lbl = "<b>Навыки в бою</b>" if loc == "ru" else "<b>Combat skills</b>"
-    lines.extend(["", sk_lbl])
-    for sk in (cls.skill_1, cls.skill_2, cls.skill_3):
-        lines.append(f" · {html.escape(sk)}")
-    base_lbl = (
-        "<b>Стартовые статы шаблона класса</b> (до экипировки и роста):"
-        if loc == "ru"
-        else "<b>Class template base stats</b> (before gear and growth):"
-    )
-    lines.extend(
-        [
-            "",
-            base_lbl,
-            (
-                f"СИЛ {cls.strength} · ЛОВ {cls.dexterity} · ИНТ {cls.intelligence} · "
-                f"ВЫН {cls.vitality} · УДА {cls.luck}"
-            ),
-        ],
-    )
-    if cls.hp_multiplier != 1.0 or cls.mp_multiplier != 1.0:
-        lines.append(
-            f"<i>HP ×{cls.hp_multiplier} · MP ×{cls.mp_multiplier}</i>",
-        )
-    if cls.default_element:
-        lines.append("")
-        lines.append(
-            ("<b>Стихия класса:</b> " if loc == "ru" else "<b>Class element:</b> ")
-            + element_label(cls.default_element),
-        )
-    lines.append("")
-    lines.append(element_profile_line(char.element))
-    return "\n".join(lines)
-
-
 def _build_profile_text(
     char: Character,
     *,
@@ -215,14 +164,6 @@ def _build_profile_text(
     t1 = html.escape(char.active_title) if char.active_title else "—"
     t2 = html.escape(sec_s) if sec_s else "—"
     titles_row = f"① {t1} · ② {t2}" if (char.active_title or sec_s) else "—"
-    title_bonus_extra: list[str] = []
-    if compact:
-        t_parts: list[str] = []
-        for tk in (title_service.active_title_key(char), title_service.active_secondary_title_key(char)):
-            if tk and tk in TITLE_BY_KEY:
-                t_parts.append(html.escape(format_title_bonus_line(TITLE_BY_KEY[tk])))
-        if t_parts:
-            title_bonus_extra = ["", "<i>Титулы: " + " · ".join(t_parts) + "</i>"]
 
     xp_need = experience_needed_for_next_level(char.level, char.floor_number)
     st_hint = _stamina_minutes_hint(char.stamina, char.last_stamina_regen_at)
@@ -289,7 +230,6 @@ def _build_profile_text(
             f"🎖️ Звание: {rank_combine}",
             f"🏆 Титулы: {titles_row}",
         ]
-        lines.extend(title_bonus_extra)
         if ranker_effect:
             lines.append(ranker_effect)
         lines.extend(
@@ -600,41 +540,6 @@ async def on_profile_back_compact(callback: CallbackQuery, session: AsyncSession
         await callback.answer()
     except Exception:
         logger.exception("prf:back")
-        await callback.answer("Ошибка.", show_alert=True)
-
-
-@router.callback_query(F.data == "prf:class")
-async def on_profile_class_info(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    """Отдельный экран: описание класса, пассив, навыки."""
-    try:
-        if callback.from_user is None or callback.message is None or callback.bot is None:
-            await callback.answer()
-            return
-        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
-        if user is None or user.is_banned:
-            await callback.answer("Нет доступа.", show_alert=True)
-            return
-        char = await character_repo.get_by_user_id(session, user.id)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-        title_service.refresh_unlocks(char)
-        apply_completed_rest_if_needed(char)
-        await session.flush()
-        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        text = build_class_info_html(char, locale=loc)
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=profile_class_detail_keyboard(char, locale=loc),
-            target_message=callback.message,
-            photo_path=None,
-        )
-        await callback.answer()
-    except Exception:
-        logger.exception("prf:class")
         await callback.answer("Ошибка.", show_alert=True)
 
 
