@@ -526,6 +526,48 @@ def patch_sqlite_stored_gear_boost_v3() -> None:
         logger.exception("Патч SQLite (gear_stats_boost_v3) не удался: {}", p)
 
 
+def patch_sqlite_unequip_boots_cloak() -> None:
+    """Снять сапоги/плащ с экипировки (слоты удалены из игры) — предметы в сумку."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            row_tbl = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory_items'",
+            ).fetchone()
+            if row_tbl is None:
+                return
+            rows = con.execute(
+                "SELECT id, character_id FROM inventory_items "
+                "WHERE is_equipped = 1 AND equip_slot IN ('boots', 'cloak')",
+            ).fetchall()
+            for iid, cid in rows:
+                r = con.execute(
+                    "SELECT COALESCE(MAX(bag_slot), -1) FROM inventory_items "
+                    "WHERE character_id = ? AND bag_slot IS NOT NULL",
+                    (int(cid),),
+                ).fetchone()
+                next_slot = int(r[0]) + 1
+                con.execute(
+                    "UPDATE inventory_items SET is_equipped = 0, equip_slot = NULL, bag_slot = ? "
+                    "WHERE id = ?",
+                    (next_slot, int(iid)),
+                )
+            con.commit()
+            if rows:
+                logger.info("Патч SQLite: сапоги/плащ сняты с экипировки ({} шт.)", len(rows))
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (unequip boots/cloak) не удался: {}", p)
+
+
 def resolve_db_path() -> Path:
     """
     Абсолютный путь к файлу SQLite.
@@ -577,6 +619,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_promo_offers_table()
     patch_sqlite_clans_tables()
     patch_sqlite_stored_gear_boost_v3()
+    patch_sqlite_unequip_boots_cloak()
     had_users = False
     if p.exists():
         try:

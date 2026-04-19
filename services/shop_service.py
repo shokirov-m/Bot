@@ -14,6 +14,7 @@ from db.models.character import Character
 from db.repository import inventory_repo
 from game.combat import consumables as combat_consumables
 from game.economy import shop as shop_data
+from services import home_service
 from utils.ui import LINE_SEP
 
 
@@ -59,14 +60,16 @@ async def try_buy_good(
     good_key: str,
     *,
     expected_floor: int,
+    allow_remote_shop: bool = False,
 ) -> tuple[bool, str]:
     """
     Покупка в сумку. (False, plain) для alert или (True, HTML блок результата).
+    allow_remote_shop — заказ из дома (лава ок без торговца на текущем этаже).
     """
     if character.floor_number != expected_floor:
         return False, "Ты не на этом этаже."
 
-    if not shop_data.shop_available_on_floor(character.floor_number):
+    if not allow_remote_shop and not shop_data.shop_available_on_floor(character.floor_number):
         return False, "Здесь нет торговца."
 
     good = shop_data.good_by_key(good_key, floor_number=int(character.floor_number))
@@ -82,6 +85,27 @@ async def try_buy_good(
         used_discount = True
     if int(character.gold) < price:
         return False, f"Нужно {price} золота."
+
+    if str(good.item_data.get("virtual_shop") or "") == "portrait_unlock":
+        pk = str(good.item_data.get("portrait_key") or "").strip()
+        if not pk:
+            return False, "Ошибка описания товара."
+        if home_service.has_portrait_unlock(character, pk):
+            return False, "Этот облик уже открыт."
+        character.gold = int(character.gold) - price
+        if used_discount:
+            mp["merchant_discount_charges"] = disc_left - 1
+            character.meta_progress = mp
+        home_service.unlock_portrait(character, pk)
+        await session.flush()
+        note = ""
+        if used_discount:
+            left = int((character.meta_progress or {}).get("merchant_discount_charges") or 0)
+            note = f"\n<i>🏪 Скидка торговца: осталось ходов со скидкой — {left}.</i>"
+        return (
+            True,
+            f"−{price} 💰\nОблик <b>{html.escape(pk)}</b> открыт в <b>Дом → Гардероб</b>.{note}",
+        )
 
     free = await inventory_repo.first_free_bag_slot(session, character.id)
     if free is None:

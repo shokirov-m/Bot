@@ -27,9 +27,7 @@ from db.models.user import User
 from db.repository import character_repo, inventory_repo
 from game.characters.classes import ClassDefinition, get_class_or_none
 from game.items.equipment import (
-    starter_boots_payload,
     starter_bread_payload,
-    starter_cloak_payload,
     starter_offhand_dagger_payload,
     starter_pants_payload,
     starter_weapon_payload,
@@ -157,18 +155,6 @@ async def create_character_for_user(
             copy.deepcopy(starter_offhand_dagger_payload()),
             bag_slot=4,
         )
-    await inventory_repo.add_bag_item(
-        session,
-        char.id,
-        copy.deepcopy(starter_boots_payload()),
-        bag_slot=5,
-    )
-    await inventory_repo.add_bag_item(
-        session,
-        char.id,
-        copy.deepcopy(starter_cloak_payload()),
-        bag_slot=6,
-    )
     return char
 
 

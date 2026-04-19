@@ -36,33 +36,6 @@ def starter_pants_payload() -> dict[str, Any]:
     return d
 
 
-def starter_boots_payload() -> dict[str, Any]:
-    d: dict[str, Any] = {
-        "name": "Сапоги",
-        "kind": "boots",
-        "rarity": "common",
-        "defense": 1,
-        "dex": 1,
-        "summary": "Против скользких ступеней башни.",
-        "image_url": item_gear_png("starter_boots"),
-    }
-    apply_item_payload_defaults(d)
-    return d
-
-
-def starter_cloak_payload() -> dict[str, Any]:
-    d: dict[str, Any] = {
-        "name": "Плащ",
-        "kind": "cloak",
-        "rarity": "common",
-        "defense": 1,
-        "summary": "Лёгкий слой от сквозняков на этаже.",
-        "image_url": item_gear_png("starter_cloak"),
-    }
-    apply_item_payload_defaults(d)
-    return d
-
-
 def starter_offhand_dagger_payload() -> dict[str, Any]:
     """Второй кинжал для левой руки (assassin и др.)."""
     d: dict[str, Any] = {

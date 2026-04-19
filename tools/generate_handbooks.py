@@ -24,9 +24,7 @@ from game.items.equipment.starters import (
     promo_starter_armor_amulet_payloads,
     referral_inviter_epic_necklace_payload,
     referral_inviter_gear_payloads,
-    starter_boots_payload,
     starter_bread_payload,
-    starter_cloak_payload,
     starter_offhand_dagger_payload,
     starter_pants_payload,
     starter_weapon_payload,
@@ -177,8 +175,6 @@ def build_items_document() -> str:
     lines.append("=" * 80)
     lines.extend(_item_block("starter", starter_bread_payload()))
     lines.extend(_item_block("starter", starter_pants_payload()))
-    lines.extend(_item_block("starter", starter_boots_payload()))
-    lines.extend(_item_block("starter", starter_cloak_payload()))
     lines.extend(_item_block("starter", starter_offhand_dagger_payload()))
     starter_weapon_keys = (
         "wanderer",

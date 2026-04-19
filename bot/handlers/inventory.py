@@ -1,5 +1,5 @@
 """
-Инвентарь и экипировка: /inv, сумка (без лимита ячеек), надеть/снять.
+Инвентарь и экипировка: /inv, сумка по категориям, надеть/снять.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from bot.keyboards.inventory_kb import (
     BAG_PAGE_SIZE,
     bag_tab_keyboard,
     equipment_tab_keyboard,
+    inventory_hub_keyboard,
     item_detail_keyboard,
 )
 from bot.states.combat_states import CombatStates
@@ -34,86 +35,78 @@ router = Router(name="inventory")
 
 INV_HEADER = "🧰 <b>Инвентарь</b>\n"
 
+_SECTION_INFER_ORDER: tuple[str, ...] = (
+    item_categories.INV_SEC_WEAPON,
+    item_categories.INV_SEC_ARMOR_BODY,
+    item_categories.INV_SEC_ACCESSORY,
+    item_categories.INV_SEC_HELMET,
+    item_categories.INV_SEC_PANTS,
+    item_categories.INV_SEC_OTHER_GEAR,
+    item_categories.INV_SEC_CONSUMABLE,
+    item_categories.INV_SEC_RESOURCE,
+)
 
-def _bag_filter_empty_hint(
-    total: int,
+
+def infer_inv_section_from_item_data(data: dict | None) -> str:
+    """Подобрать секцию сумки для карточки предмета (для «Назад» после снятия)."""
+    ic = item_categories
+    d = dict(data or {})
+    for sec in _SECTION_INFER_ORDER:
+        if ic.item_data_matches_inv_section(d, sec):
+            return sec
+    return ic.INV_SEC_RESOURCE
+
+
+def _normalize_inv_section(raw: str | None) -> str:
+    ic = item_categories
+    if raw and raw in ic.ALL_INV_SECTIONS:
+        return raw
+    if raw == ic.BAG_CAT_USE:
+        return ic.INV_SEC_CONSUMABLE
+    if raw == ic.BAG_CAT_OTHER:
+        return ic.INV_SEC_RESOURCE
+    return ic.INV_SEC_WEAPON
+
+
+def _inventory_hub_text(floor_number: int) -> str:
+    return (
+        f"{INV_HEADER}"
+        "<i>Выбери категорию сумки. Надеть предметы можно здесь или в разделе "
+        "<b>Что надето</b>.</i>\n\n"
+        f"📊 Этаж героя: <b>{int(floor_number)}</b>"
+    )
+
+
+def _section_bag_intro(
+    total_bag: int,
     *,
-    bag_cat: str,
-    slot_filter: str | None,
-    matched: int | None,
-    n_in_category: int | None,
+    section: str,
+    n_in_section: int,
+    floor_number: int,
 ) -> str:
-    if total <= 0:
-        return ""
-    if slot_filter:
-        if int(matched or 0) <= 0:
-            return (
-                "\n\n⚠️ <i>Нет вещей для этого слота — смени категорию фильтра или вкладку "
-                "<b>Все</b>.</i>"
-            )
-        return ""
-    if bag_cat != item_categories.BAG_CAT_ALL:
-        if int(n_in_category or 0) <= 0:
-            return "\n\n⚠️ <i>В этой категории пусто — выбери <b>Все</b> или другой фильтр.</i>"
-        return ""
-    return ""
-
-
-def _bag_summary_line(
-    count: int,
-    *,
-    bag_cat: str,
-    floor_number: int | None,
-) -> str:
-    cat_label = item_categories.bag_category_label_ru(bag_cat)
-    parts: list[str] = [f"📊 В сумке: <b>{count}</b> предм.", f"фильтр: <b>{html.escape(cat_label)}</b>"]
-    if floor_number is not None:
-        parts.insert(1, f"этаж героя: <b>{int(floor_number)}</b>")
-    return " · ".join(parts)
-
-
-def _bag_intro(
-    count: int,
-    *,
-    bag_cat: str = item_categories.BAG_CAT_ALL,
-    n_in_category: int | None = None,
-    slot_filter: str | None = None,
-    matched: int | None = None,
-    floor_number: int | None = None,
-) -> str:
-    summary = _bag_summary_line(count, bag_cat=bag_cat, floor_number=floor_number)
-    empty_hint = _bag_filter_empty_hint(
-        count,
-        bag_cat=bag_cat,
-        slot_filter=slot_filter,
-        matched=matched,
-        n_in_category=n_in_category,
+    ic = item_categories
+    title = ic.inv_section_title_ru(section)
+    summary = (
+        f"📊 В сумке всего: <b>{total_bag}</b> · в категории: <b>{n_in_section}</b> · "
+        f"этаж: <b>{int(floor_number)}</b>"
     )
     hint = (
-        "<i>Сначала редкие; по две кнопки в ряд — открой карточку. Номера ячеек не показываем.</i>\n"
+        "<i>Сортировка: выше редкость. До <b>8</b> предметов на экран; ◀️ ▶️ — страницы.</i>\n"
         "Выбери предмет:"
     )
-    if count <= 0:
+    if total_bag <= 0:
         return (
-            f"{INV_HEADER}🎒 <b>Сумка</b> пуста.\n{summary}\n\n"
-            "<i>Побеждай врагов и открывай лавки — добыча попадёт сюда.</i>"
+            f"{INV_HEADER}<i>Сумка пуста — побеждай врагов и открывай лавки.</i>\n{summary}"
         )
-    if slot_filter and slot_filter in equip_meta.EQUIP_ORDER:
-        lab = equip_meta.slot_label_ru(slot_filter)
-        m = int(matched) if matched is not None else 0
-        return (
-            f"{INV_HEADER}🎒 <b>Сумка</b> — слот <b>{html.escape(lab)}</b>: "
-            f"подходит <b>{m}</b> из <b>{count}</b>.\n"
-            f"{summary}\n{hint}"
-            f"{empty_hint}"
-        )
-    return f"{INV_HEADER}🎒 <b>Сумка</b>\n{summary}\n\n{hint}{empty_hint}"
+    if n_in_section <= 0:
+        return f"{INV_HEADER}<b>{title}</b>\n{summary}\n\n<i>В этой категории пока пусто.</i>"
+    return f"{INV_HEADER}<b>{title}</b>\n{summary}\n\n{hint}"
 
 
 def _eq_intro() -> str:
     return (
-        f"{INV_HEADER}⚔️ <b>Экипировка</b>\n"
-        "<i>Цветной маркер — редкость.</i> Нажми слот, чтобы снять или открыть карточку."
+        f"{INV_HEADER}⚔️ <b>Что надето</b>\n"
+        "<i>Цветной маркер — редкость. Пустой слот открывает сумку по этой категории.</i>"
     )
 
 
@@ -123,6 +116,39 @@ async def _load_character(session: AsyncSession, telegram_id: int):
         return None, None
     char = await character_repo.get_by_user_id(session, user.id)
     return user, char
+
+
+async def _show_bag_section(
+    *,
+    state: FSMContext,
+    bot,
+    chat_id: int,
+    message,
+    session: AsyncSession,
+    char,
+    section: str,
+    page: int,
+) -> None:
+    ic = item_categories
+    sec = section if section in ic.ALL_INV_SECTIONS else ic.INV_SEC_WEAPON
+    bag = await inventory_repo.list_bag_items(session, char.id)
+    filtered = [it for it in bag if ic.item_data_matches_inv_section(it.item_data, sec)]
+    max_page = max(0, (len(filtered) - 1) // BAG_PAGE_SIZE)
+    pg = max(0, min(int(page), max_page))
+    text = _section_bag_intro(
+        len(bag),
+        section=sec,
+        n_in_section=len(filtered),
+        floor_number=int(char.floor_number),
+    )
+    await push_game_ui(
+        state,
+        bot,
+        chat_id=chat_id,
+        text=text,
+        reply_markup=bag_tab_keyboard(bag, pg, section=sec),
+        target_message=message,
+    )
 
 
 @router.message(Command("inv"))
@@ -135,18 +161,77 @@ async def cmd_inventory(message: Message, session: AsyncSession, state: FSMConte
         if char is None:
             await message.answer("Сначала создай героя через /start.")
             return
-        bag = await inventory_repo.list_bag_items(session, char.id)
-        text = _bag_intro(len(bag), floor_number=int(char.floor_number))
+        text = _inventory_hub_text(int(char.floor_number))
         await push_game_ui(
             state,
             message.bot,
             chat_id=message.chat.id,
             text=text,
-            reply_markup=bag_tab_keyboard(bag, 0),
+            reply_markup=inventory_hub_keyboard(),
             fallback_message=message,
         )
     except Exception:
         logger.exception("Ошибка /inv")
+
+
+@router.callback_query(F.data == "inv:hub")
+async def inv_hub(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+        _, char = await _load_character(session, callback.from_user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_inventory_hub_text(int(char.floor_number)),
+            reply_markup=inventory_hub_keyboard(),
+            target_message=callback.message,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("inv:hub")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("inv:sec:"))
+async def inv_section_bag(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Сумка в выбранной секции и странице."""
+    try:
+        if callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+        parts = (callback.data or "").split(":")
+        if len(parts) < 4:
+            await callback.answer()
+            return
+        sec = parts[2]
+        page = int(parts[3])
+        _, char = await _load_character(session, callback.from_user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        if sec not in item_categories.ALL_INV_SECTIONS:
+            await callback.answer("Неизвестная категория.", show_alert=True)
+            return
+        await _show_bag_section(
+            state=state,
+            bot=callback.bot,
+            chat_id=callback.message.chat.id,
+            message=callback.message,
+            session=session,
+            char=char,
+            section=sec,
+            page=page,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("inv:sec")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data == "inv:noop")
@@ -168,83 +253,36 @@ async def inv_close(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-def _slot_from_inv_item_parts(parts: list[str]) -> str | None:
-    if len(parts) < 7:
-        return None
-    raw = str(parts[6]).strip()
-    return raw if raw in equip_meta.EQUIP_ORDER else None
-
-
 @router.callback_query(F.data.startswith("inv:sb:"))
-async def inv_slotbag(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    """Сумка, отфильтрованная по слоту экипировки (кнопка пустого слота)."""
+async def inv_slotbag_legacy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Старые кнопки inv:sb:* → секция сумки по слоту."""
     try:
         if callback.from_user is None or callback.message is None:
             await callback.answer()
             return
         parts = (callback.data or "").split(":")
-        if len(parts) < 5:
+        if len(parts) < 3:
             await callback.answer()
             return
         slot = parts[2]
         if slot not in equip_meta.EQUIP_ORDER:
             await callback.answer("Неизвестный слот.", show_alert=True)
             return
-        page = int(parts[3])
-        bag_cat = (
-            parts[4]
-            if parts[4]
-            in (
-                item_categories.BAG_CAT_ALL,
-                item_categories.BAG_CAT_EQUIP,
-                item_categories.BAG_CAT_USE,
-                item_categories.BAG_CAT_OTHER,
-            )
-            else item_categories.BAG_CAT_EQUIP
-        )
+        page = int(parts[3]) if len(parts) >= 4 else 0
+        sec = item_categories.equip_slot_to_inv_section(slot)
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
-        bag = await inventory_repo.list_bag_items(session, char.id)
-        matched = len(
-            [
-                it
-                for it in bag
-                if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)
-                and item_categories.item_data_matches_equip_slot(it.item_data, slot)
-            ],
-        )
-        max_page = max(
-            0,
-            (
-                len(
-                    [
-                        it
-                        for it in bag
-                        if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)
-                        and item_categories.item_data_matches_equip_slot(it.item_data, slot)
-                    ],
-                )
-                - 1
-            )
-            // BAG_PAGE_SIZE,
-        )
-        page = max(0, min(page, max_page))
-        await push_game_ui(
-            state,
-            callback.bot,
+        await _show_bag_section(
+            state=state,
+            bot=callback.bot,
             chat_id=callback.message.chat.id,
-            text=_bag_intro(
-                len(bag),
-                bag_cat=bag_cat,
-                n_in_category=matched,
-                slot_filter=slot,
-                matched=matched,
-                floor_number=int(char.floor_number),
-            ),
-            reply_markup=bag_tab_keyboard(bag, page, bag_cat=bag_cat, slot_target=slot),
-            target_message=callback.message,
+            message=callback.message,
+            session=session,
+            char=char,
+            section=sec,
+            page=page,
         )
         await callback.answer()
     except Exception:
@@ -265,34 +303,12 @@ async def inv_tab(callback: CallbackQuery, session: AsyncSession, state: FSMCont
             return
 
         if len(parts) >= 4 and parts[2] == "bag":
-            page = int(parts[3])
-            bag_cat = (
-                parts[4]
-                if len(parts) >= 5
-                and parts[4]
-                in (
-                    item_categories.BAG_CAT_ALL,
-                    item_categories.BAG_CAT_EQUIP,
-                    item_categories.BAG_CAT_USE,
-                    item_categories.BAG_CAT_OTHER,
-                )
-                else item_categories.BAG_CAT_ALL
-            )
-            bag = await inventory_repo.list_bag_items(session, char.id)
-            filtered = [it for it in bag if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)]
-            max_page = max(0, (len(filtered) - 1) // BAG_PAGE_SIZE)
-            page = max(0, min(page, max_page))
             await push_game_ui(
                 state,
                 callback.bot,
                 chat_id=callback.message.chat.id,
-                text=_bag_intro(
-                    len(bag),
-                    bag_cat=bag_cat,
-                    n_in_category=len(filtered),
-                    floor_number=int(char.floor_number),
-                ),
-                reply_markup=bag_tab_keyboard(bag, page, bag_cat=bag_cat),
+                text=_inventory_hub_text(int(char.floor_number)),
+                reply_markup=inventory_hub_keyboard(),
                 target_message=callback.message,
             )
         elif len(parts) >= 3 and parts[2] == "eq":
@@ -327,19 +343,9 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
         item_id = int(parts[2])
         from_bag = parts[3] == "b"
         bag_page = int(parts[4])
-        bag_cat = item_categories.BAG_CAT_ALL
-        if (
-            len(parts) >= 6
-            and parts[5]
-            in (
-                item_categories.BAG_CAT_ALL,
-                item_categories.BAG_CAT_EQUIP,
-                item_categories.BAG_CAT_USE,
-                item_categories.BAG_CAT_OTHER,
-            )
-        ):
-            bag_cat = parts[5]
-        slot_target = _slot_from_inv_item_parts(parts)
+        inv_section = item_categories.INV_SEC_WEAPON
+        if from_bag and len(parts) >= 6:
+            inv_section = _normalize_inv_section(parts[5])
 
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
@@ -381,10 +387,9 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             can_equip=can_equip,
             from_bag=from_bag,
             bag_page=bag_page,
-            bag_cat=bag_cat if from_bag else item_categories.BAG_CAT_ALL,
+            inv_section=inv_section if from_bag else item_categories.INV_SEC_WEAPON,
             show_ration_eat=show_ration,
             show_bread_eat=show_bread,
-            slot_target=slot_target,
         )
         raw_img = str(data.get("image_url") or "").strip()
         photo_arg = (
@@ -407,6 +412,13 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
         await callback.answer("Ошибка.", show_alert=True)
 
 
+def _parse_sec_from_equip_callback(data: str | None) -> str:
+    parts = (data or "").split(":")
+    if len(parts) >= 4 and parts[3] in item_categories.ALL_INV_SECTIONS:
+        return parts[3]
+    return item_categories.INV_SEC_WEAPON
+
+
 @router.callback_query(F.data.startswith("inv:eat:"))
 async def inv_eat_ration(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -422,14 +434,7 @@ async def inv_eat_ration(callback: CallbackQuery, session: AsyncSession, state: 
             return
         item_id = int(parts[2])
         bag_page = int(parts[3])
-        bag_cat = item_categories.BAG_CAT_ALL
-        if len(parts) >= 5 and parts[4] in (
-            item_categories.BAG_CAT_ALL,
-            item_categories.BAG_CAT_EQUIP,
-            item_categories.BAG_CAT_USE,
-            item_categories.BAG_CAT_OTHER,
-        ):
-            bag_cat = parts[4]
+        sec = _normalize_inv_section(parts[4]) if len(parts) >= 5 else item_categories.INV_SEC_CONSUMABLE
 
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
@@ -442,16 +447,19 @@ async def inv_eat_ration(callback: CallbackQuery, session: AsyncSession, state: 
             return
 
         bag = await inventory_repo.list_bag_items(session, char.id)
-        filtered = [it for it in bag if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)]
+        filtered = [it for it in bag if item_categories.item_data_matches_inv_section(it.item_data, sec)]
         max_page = max(0, (len(filtered) - 1) // BAG_PAGE_SIZE)
         safe_page = min(bag_page, max_page)
-        text = f"{_bag_intro(len(bag), bag_cat=bag_cat, n_in_category=len(filtered), floor_number=int(char.floor_number))}\n\n{msg}"
+        text = (
+            f"{_section_bag_intro(len(bag), section=sec, n_in_section=len(filtered), floor_number=int(char.floor_number))}"
+            f"\n\n{msg}"
+        )
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=bag_tab_keyboard(bag, safe_page, bag_cat=bag_cat),
+            reply_markup=bag_tab_keyboard(bag, safe_page, section=sec),
             target_message=callback.message,
         )
         await callback.answer("Приятного!")
@@ -475,14 +483,7 @@ async def inv_eat_bread(callback: CallbackQuery, session: AsyncSession, state: F
             return
         item_id = int(parts[2])
         bag_page = int(parts[3])
-        bag_cat = item_categories.BAG_CAT_ALL
-        if len(parts) >= 5 and parts[4] in (
-            item_categories.BAG_CAT_ALL,
-            item_categories.BAG_CAT_EQUIP,
-            item_categories.BAG_CAT_USE,
-            item_categories.BAG_CAT_OTHER,
-        ):
-            bag_cat = parts[4]
+        sec = _normalize_inv_section(parts[4]) if len(parts) >= 5 else item_categories.INV_SEC_CONSUMABLE
 
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
@@ -495,16 +496,19 @@ async def inv_eat_bread(callback: CallbackQuery, session: AsyncSession, state: F
             return
 
         bag = await inventory_repo.list_bag_items(session, char.id)
-        filtered = [it for it in bag if item_categories.item_data_matches_bag_category(it.item_data, bag_cat)]
+        filtered = [it for it in bag if item_categories.item_data_matches_inv_section(it.item_data, sec)]
         max_page = max(0, (len(filtered) - 1) // BAG_PAGE_SIZE)
         safe_page = min(bag_page, max_page)
-        text = f"{_bag_intro(len(bag), bag_cat=bag_cat, n_in_category=len(filtered), floor_number=int(char.floor_number))}\n\n{msg}"
+        text = (
+            f"{_section_bag_intro(len(bag), section=sec, n_in_section=len(filtered), floor_number=int(char.floor_number))}"
+            f"\n\n{msg}"
+        )
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=bag_tab_keyboard(bag, safe_page, bag_cat=bag_cat),
+            reply_markup=bag_tab_keyboard(bag, safe_page, section=sec),
             target_message=callback.message,
         )
         await callback.answer("Передышка!")
@@ -519,6 +523,7 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
         if callback.from_user is None or callback.message is None:
             await callback.answer()
             return
+        sec = _parse_sec_from_equip_callback(callback.data)
         item_id = int((callback.data or "").split(":")[2])
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
@@ -553,7 +558,7 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             can_equip=can_equip,
             from_bag=True,
             bag_page=0,
-            bag_cat=item_categories.BAG_CAT_ALL,
+            inv_section=sec,
             show_ration_eat=False,
             show_bread_eat=False,
         )
@@ -577,7 +582,8 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
         if callback.from_user is None or callback.message is None:
             await callback.answer()
             return
-        item_id = int((callback.data or "").split(":")[2])
+        parts = (callback.data or "").split(":")
+        item_id = int(parts[2])
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
@@ -601,6 +607,7 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
         data = item.item_data or {}
         can_equip = equip_meta.resolve_equip_slot_for_item_data(data) is not None
         utag = (item.item_data or {}).get("use_tag")
+        sec = infer_inv_section_from_item_data(dict(data))
         text = (
             f"{INV_HEADER}"
             f"{format_inventory_item_html(data)}\n\n"
@@ -612,7 +619,7 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
             can_equip=can_equip,
             from_bag=True,
             bag_page=0,
-            bag_cat=item_categories.BAG_CAT_ALL,
+            inv_section=sec,
             show_ration_eat=item.bag_slot is not None and utag == "stamina_flat",
             show_bread_eat=item.bag_slot is not None and utag == "heal_hp_flat",
         )

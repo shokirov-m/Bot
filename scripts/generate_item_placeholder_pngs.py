@@ -67,9 +67,6 @@ def all_stems() -> list[str]:
     s.extend(
         [
             "placeholder_item",
-            "starter_boots",
-            "starter_cloak",
-            "loot_cloak_mist",
             "loot_elixir_flat",
             "loot_mp_flat",
             "loot_pct_hp",
@@ -81,7 +78,6 @@ def all_stems() -> list[str]:
             "loot_moss_armor",
             "loot_cap",
             "loot_charm_amulet",
-            "loot_boots_wraps",
             "loot_rare_edge",
             "elite_weapon",
             "elite_armor",

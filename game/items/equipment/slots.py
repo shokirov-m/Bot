@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-# Порядок в UI: оружие, вторая рука, тело, поножи, голова, руки, два кольца, амулет, сапоги, плащ.
+# Порядок в UI: оружие, вторая рука, тело, поножи, голова, руки, два кольца, амулет.
 EQUIP_ORDER: tuple[str, ...] = (
     "weapon",
     "offhand",
@@ -18,8 +18,6 @@ EQUIP_ORDER: tuple[str, ...] = (
     "ring",
     "ring2",
     "amulet",
-    "boots",
-    "cloak",
 )
 
 SLOT_LABEL_RU: dict[str, str] = {
@@ -32,8 +30,6 @@ SLOT_LABEL_RU: dict[str, str] = {
     "ring": "💍 Кольцо I",
     "ring2": "💍 Кольцо II",
     "amulet": "📿 Амулет",
-    "boots": "👢 Сапоги",
-    "cloak": "🧥 Плащ",
 }
 
 # Тип предмета (kind) → слот по умолчанию (без учёта weapon hand / two_handed).
@@ -45,8 +41,6 @@ _KIND_TO_SLOT: dict[str, str] = {
     "gloves": "gloves",
     "ring": "ring",  # фактический слот ring / ring2 выбирается при надевании
     "amulet": "amulet",
-    "boots": "boots",
-    "cloak": "cloak",
     "shield": "offhand",
     "grimoire": "offhand",
     "tome": "offhand",
@@ -83,6 +77,8 @@ def resolve_equip_slot_for_item_data(data: dict[str, Any] | None) -> str | None:
     if not data:
         return None
     kind = str(data.get("kind") or "").lower()
+    if kind in ("boots", "cloak"):
+        return None
     if not kind:
         return None
     if kind == "weapon":
@@ -105,6 +101,8 @@ def equip_slot_for_kind(kind: str | None) -> str | None:
     if not kind:
         return None
     k = str(kind).lower()
+    if k in ("boots", "cloak"):
+        return None
     if k == "weapon":
         return "weapon"
     return _KIND_TO_SLOT.get(k)
@@ -122,8 +120,6 @@ _KIND_GEAR_ICON: dict[str, str] = {
     "gloves": "🧤",
     "ring": "💍",
     "amulet": "📿",
-    "boots": "👢",
-    "cloak": "🧥",
     "shield": "🛡️",
     "grimoire": "📕",
     "tome": "📘",

@@ -48,16 +48,6 @@ def charm_defense(fl: int) -> int:
     return max(1, 1 + f // 12)
 
 
-def boots_defense(fl: int) -> int:
-    f = _fl(fl)
-    return max(1, 1 + f // 14)
-
-
-def cloak_defense(fl: int) -> int:
-    f = _fl(fl)
-    return max(1, 1 + f // 16)
-
-
 def rare_edge_attack(fl: int) -> int:
     f = _fl(fl)
     return max(7, 6 + f // 2)

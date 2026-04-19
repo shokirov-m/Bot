@@ -30,6 +30,7 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
     global _apscheduler
     _apscheduler = scheduler
     regen_secs = max(60, int(settings.STAMINA_REGEN_INTERVAL))
+    passive_hp_mp_secs = max(60, int(settings.PASSIVE_HP_MP_INTERVAL_SECONDS))
 
     async def job_world_boss() -> None:
         try:
@@ -41,6 +42,12 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         task_stamina_regen,
         IntervalTrigger(seconds=regen_secs),
         id="tower_stamina_regen",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        task_passive_hp_mp_full,
+        IntervalTrigger(seconds=passive_hp_mp_secs),
+        id="tower_passive_hp_mp",
         replace_existing=True,
     )
     scheduler.add_job(
@@ -157,6 +164,32 @@ async def task_stamina_regen() -> None:
         logger.info("[STAMINA] Восстановлено у {} игроков", count)
     except Exception:
         logger.exception("[STAMINA] Ошибка задачи восстановления")
+
+
+async def task_passive_hp_mp_full() -> None:
+    """
+    Пассивное восстановление: периодически HP/MP → максимум (независимо от передышки).
+    Активный бой идёт в FSM; здесь обновляется только строка персонажа в БД.
+    """
+    from db.database import get_session_factory
+
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            res = await session.execute(
+                text(
+                    """
+                    UPDATE characters
+                    SET hp_current = hp_max, mp_current = mp_max
+                    WHERE hp_current < hp_max OR mp_current < mp_max
+                    """,
+                ),
+            )
+            await session.commit()
+            n = int(res.rowcount or 0)
+        logger.info("[HP_MP] Пассивное восстановление до макс.: {} персонажей", n)
+    except Exception:
+        logger.exception("[HP_MP] Ошибка задачи пассивной регенерации")
 
 
 async def task_daily_reset() -> None:

@@ -56,8 +56,13 @@ class Settings(BaseSettings):
     ADMIN_IDS: AdminIds = Field(default_factory=list)
     LOG_LEVEL: str = Field(default="INFO")
     STAMINA_REGEN_INTERVAL: int = Field(
-        default=3600,
-        description="Интервал восстановления 1 ед. стамины, секунды",
+        default=300,
+        description="Интервал восстановления 1 ед. стамины, секунды (300 = раз в 5 минут)",
+    )
+    PASSIVE_HP_MP_INTERVAL_SECONDS: int = Field(
+        default=300,
+        ge=60,
+        description="Интервал полного восстановления HP и MP всем персонажам (фоновая задача), секунды",
     )
     MAX_STAMINA: int = Field(default=20)
     ANTICHEAT_ENABLED: bool = Field(default=True)

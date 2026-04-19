@@ -19,6 +19,7 @@ def test_minutes_after_deadline_zero() -> None:
 
 def test_minutes_before_deadline_positive() -> None:
     now = datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC)
-    last = now - timedelta(seconds=1000)
+    # Интервал стамины из settings (напр. 300 с): «last» должен быть внутри текущего окна +interval.
+    last = now - timedelta(seconds=120)
     m = compute_minutes_to_next_regen(stamina=0, last_regen_at=last, now=now)
     assert m >= 1

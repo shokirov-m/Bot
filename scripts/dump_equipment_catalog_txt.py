@@ -68,8 +68,7 @@ def main() -> None:
     )
     lines.append("")
     lines.append(
-        "ПРИМЕЧАНИЕ: в catalog/ нет отдельных файлов boots и cloak — виды kind=boots и kind=cloak "
-        "используются в loot.py, starters.py, secret_gear.py.",
+        "ПРИМЕЧАНИЕ: слоты сапог и плаща убраны из игры; предметы kind=boots/cloak не надеваются.",
     )
     lines.append("")
 

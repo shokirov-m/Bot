@@ -29,9 +29,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_rest_btn_start": "🛏️ Передышка (1 мин)",
         "profile_rest_btn_wait": "🛏️ ~{sec} с до полного HP/MP",
         "rest_complete_notify": (
-            "🛏️ <b>Передышка окончена.</b> HP, MP и стамина восстановлены до максимума. "
+            "🛏️ <b>Передышка окончена.</b> HP и MP восстановлены до максимума. "
             "Открой /profile, если карточка ещё не обновилась."
         ),
+        "menu_home": "🏠 Дом",
         "menu_floor": "🗺️ Этаж",
         "menu_inv": "🎒 Инвентарь",
         "menu_titles": "🏆 Титулы",
@@ -353,9 +354,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_rest_btn_start": "🛏️ Rest (1 min)",
         "profile_rest_btn_wait": "🛏️ ~{sec}s to full HP/MP",
         "rest_complete_notify": (
-            "🛏️ <b>Rest finished.</b> HP, MP, and stamina are maxed. "
+            "🛏️ <b>Rest finished.</b> HP and MP are maxed. "
             "Open /profile if your status card still looks stale."
         ),
+        "menu_home": "🏠 Home",
         "menu_floor": "🗺️ Floor",
         "menu_inv": "🎒 Inventory",
         "menu_titles": "🏆 Titles",

@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import time
 
-from config import settings
 from db.models.character import Character
 
 REST_DURATION_SEC = 60
@@ -32,8 +31,6 @@ def apply_completed_rest_if_needed(character: Character) -> bool:
         return False
     character.hp_current = int(character.hp_max)
     character.mp_current = int(character.mp_max)
-    # Бета: после передышки полная стамина
-    character.stamina = int(settings.MAX_STAMINA)
     del mp[_META_KEY]
     character.meta_progress = mp
     return True
@@ -78,7 +75,7 @@ def try_begin_or_claim_rest(character: Character) -> tuple[bool, str, float | No
     if apply_completed_rest_if_needed(character):
         return (
             True,
-            "HP, MP и стамина восстановлены до максимума (бета: полная стамина после передышки).",
+            "HP и MP восстановлены до максимума.",
             None,
         )
 
@@ -99,7 +96,7 @@ def try_begin_or_claim_rest(character: Character) -> tuple[bool, str, float | No
     return (
         True,
         (
-            f"Передышка! Через {REST_DURATION_SEC} с HP, MP и стамина станут полными (бета) — "
+            f"Передышка! Через {REST_DURATION_SEC} с HP и MP восстановятся до максимума — "
             "снова нажми кнопку или открой профиль."
         ),
         until_ts,
@@ -113,11 +110,11 @@ def format_rest_status_line_html(character: Character) -> str:
     raw = mp.get(_META_KEY)
     if raw is None:
         return (
-            f"🛏️ <b>Передышка:</b> не активна — кнопка ниже ({REST_DURATION_SEC} с до полного HP/MP и стамины, бета)."
+            f"🛏️ <b>Передышка:</b> не активна — кнопка ниже ({REST_DURATION_SEC} с до полного HP/MP)."
         )
     try:
         until = float(raw)
     except (TypeError, ValueError):
         return "🛏️ <b>Передышка:</b> не активна — кнопка ниже."
     left = int(until - time.time())
-    return f"🛏️ <b>Передышка:</b> отдых… <b>~{max(0, left)}</b> с до полного HP/MP и стамины."
+    return f"🛏️ <b>Передышка:</b> отдых… <b>~{max(0, left)}</b> с до полного HP/MP."

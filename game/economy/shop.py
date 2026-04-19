@@ -89,6 +89,34 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
     ),
 )
 
+# Виртуальные товары (без ячейки сумки): разблокировка портрета в гардеробе дома.
+SHOP_PORTRAITS: tuple[ShopGood, ...] = (
+    ShopGood(
+        key="prt_noble",
+        name="Облик «дворянин»",
+        emoji="🖼",
+        price=160,
+        blurb="Открывает портрет <code>noble_1</code> в гардеробе (файл PNG в profile/).",
+        item_data={
+            "virtual_shop": "portrait_unlock",
+            "portrait_key": "noble_1",
+            "name": "Облик «дворянин»",
+        },
+    ),
+    ShopGood(
+        key="prt_arcane",
+        name="Облик «аркан»",
+        emoji="🖼",
+        price=220,
+        blurb="Открывает портрет <code>arcane_1</code> в гардеробе.",
+        item_data={
+            "virtual_shop": "portrait_unlock",
+            "portrait_key": "arcane_1",
+            "name": "Облик «аркан»",
+        },
+    ),
+)
+
 # Только этаж 3: простая экипировка за золото (лавка нижнего яруса).
 SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
     ShopGood(
@@ -143,10 +171,11 @@ SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
 
 
 def shop_goods_for_floor(floor_number: int) -> tuple[ShopGood, ...]:
-    """Расходники везде; снаряжение — только на 3 этаже."""
+    """Расходники везде; облики — везде; снаряжение этажа 3 — на 3 этаже."""
+    base = SHOP_GOODS + SHOP_PORTRAITS
     if int(floor_number) == 3:
-        return SHOP_GOODS + SHOP_FLOOR3_GEAR
-    return SHOP_GOODS
+        return base + SHOP_FLOOR3_GEAR
+    return base
 
 
 def good_by_key(key: str, *, floor_number: int) -> ShopGood | None:

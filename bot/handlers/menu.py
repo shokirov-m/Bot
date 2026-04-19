@@ -11,13 +11,13 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.handlers.inventory import _bag_intro
+from bot.handlers.inventory import _inventory_hub_text
 from bot.handlers.auction import _clear_auction_fsm_only, _shop_intro_html
 from bot.handlers.leaderboard import INTRO_HTML as TOP_INTRO_HTML
 from bot.handlers.profile import build_profile_html_async, clamp_profile_caption_for_photo
 from bot.handlers.titles import _screen_html as titles_screen_html
 from bot.keyboards.leaderboard_kb import leaderboard_categories_keyboard
-from bot.keyboards.inventory_kb import bag_tab_keyboard
+from bot.keyboards.inventory_kb import inventory_hub_keyboard
 from bot.keyboards.auction_kb import auction_hub_keyboard
 from bot.keyboards.daily_kb import daily_screen_keyboard
 from bot.keyboards.menu_kb import main_menu_keyboard, portal_screen_keyboard
@@ -26,7 +26,7 @@ from bot.keyboards.title_kb import titles_pick_keyboard
 from bot.states.combat_states import CombatStates
 from bot.i18n import get_locale, t
 from bot.utils.game_ui import push_game_ui
-from db.repository import character_repo, inventory_repo, user_repo
+from db.repository import character_repo, user_repo
 from bot.handlers.quests import render_quests_hub
 from services import daily_service, title_service
 from services.daily_service import build_daily_body_html
@@ -325,14 +325,13 @@ async def menu_inventory(callback: CallbackQuery, session: AsyncSession, state: 
         _, char = await _char_or_alert(session, callback)
         if char is None:
             return
-        bag = await inventory_repo.list_bag_items(session, char.id)
-        text = _bag_intro(len(bag), floor_number=int(char.floor_number))
+        text = _inventory_hub_text(int(char.floor_number))
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=bag_tab_keyboard(bag, 0),
+            reply_markup=inventory_hub_keyboard(),
             target_message=callback.message,
         )
         await callback.answer()

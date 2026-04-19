@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
 from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +27,7 @@ async def _load_char(session: AsyncSession, telegram_id: int):
 
 
 def _origin_ok(s: str) -> str:
-    return s if s in ("c", "f", "m") else "f"
+    return s if s in ("c", "f", "m", "h") else "f"
 
 
 @router.callback_query(F.data.startswith("shp:main:"))
@@ -45,11 +46,17 @@ async def shop_open(query: CallbackQuery, session: AsyncSession) -> None:
         if char.floor_number != floor_key:
             await query.answer("Ты не здесь. Обнови /floor.", show_alert=True)
             return
-        if not shop_data.shop_available_on_floor(char.floor_number):
+        if origin != "h" and not shop_data.shop_available_on_floor(char.floor_number):
             await query.answer("Здесь нет торговца.", show_alert=True)
             return
         text = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
-        await query.message.edit_text(text, reply_markup=shop_main_keyboard(char.floor_number, origin))
+        if origin == "h":
+            text = "🏠 <i>Заказ из дома</i> — те же цены по этажу героя.\n\n" + text
+        await query.message.edit_text(
+            text,
+            reply_markup=shop_main_keyboard(char.floor_number, origin),
+            parse_mode=ParseMode.HTML,
+        )
         await query.answer()
     except Exception:
         logger.exception("shp:main")
@@ -77,15 +84,25 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Этаж устарел.", show_alert=True)
             return
 
-        ok, payload = await shop_service.try_buy_good(session, char, good_key, expected_floor=floor_key)
+        allow_home = origin == "h"
+        ok, payload = await shop_service.try_buy_good(
+            session,
+            char,
+            good_key,
+            expected_floor=floor_key,
+            allow_remote_shop=allow_home,
+        )
         if not ok:
             await query.answer(payload[:180], show_alert=True)
             return
 
         header = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
+        if origin == "h":
+            header = "🏠 <i>Заказ из дома</i>\n\n" + header
         await query.message.edit_text(
             f"{header}\n\n{LINE_SEP}\n{payload}",
             reply_markup=shop_main_keyboard(char.floor_number, origin),
+            parse_mode=ParseMode.HTML,
         )
         await query.answer("Куплено!")
     except Exception:
@@ -116,6 +133,8 @@ async def shop_eat_ration(query: CallbackQuery, session: AsyncSession) -> None:
             return
 
         header = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
+        if origin == "h":
+            header = "🏠 <i>Заказ из дома</i>\n\n" + header
         await query.message.edit_text(
             f"{header}\n\n{LINE_SEP}\n{msg}",
             reply_markup=shop_main_keyboard(char.floor_number, origin),

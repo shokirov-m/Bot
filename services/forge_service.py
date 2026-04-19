@@ -19,7 +19,7 @@ from game.items import enchant as enchant_rules
 from game.items import equipment as equip_meta
 from game.items import runes as rune_sys
 from game.locations import forge as forge_loc
-from services import profession_service, title_service
+from services import home_service, profession_service, title_service
 from utils.ui import LINE_SEP, format_inventory_item_html, render_enchant_stars
 
 
@@ -178,7 +178,8 @@ async def try_enchant_equipped_in_slot(
 
     rolled = enchant_rules.roll_enchant_outcome(
         cur,
-        success_chance_bonus=profession_service.enchant_success_bonus_active(character),
+        success_chance_bonus=profession_service.enchant_success_bonus_active(character)
+        + home_service.workbench_enchant_bonus(character),
     )
     outcome = rolled
     ward_absorbed = False

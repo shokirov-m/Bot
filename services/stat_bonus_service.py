@@ -53,8 +53,8 @@ async def equipped_armor_hp_bonus_flat(session: AsyncSession, character_id: int)
 async def equipped_gear_stat_bonuses(session: AsyncSession, character_id: int) -> dict[str, int]:
     """
     Сумма плоских/вложенных статов со всех надетых предметов (любой ``equip_slot`` из
-    ``EQUIP_ORDER``: weapon, offhand, armor, pants, helmet, gloves, ring, ring2, amulet,
-    boots, cloak). Репозиторий не отфильтровывает второе кольцо и вторую руку.
+    ``EQUIP_ORDER``: weapon, offhand, armor, pants, helmet, gloves, ring, ring2, amulet).
+    Репозиторий не отфильтровывает второе кольцо и вторую руку.
     """
     total = empty_stat_bonus_map()
     items = await inventory_repo.list_equipped_items(session, character_id)

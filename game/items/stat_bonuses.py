@@ -51,8 +51,6 @@ def _enchant_flat_stat_bonus(out: dict[str, int], raw: dict[str, Any]) -> None:
         "pants",
         "helmet",
         "gloves",
-        "boots",
-        "cloak",
         "ring",
         "amulet",
     ):
