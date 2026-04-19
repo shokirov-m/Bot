@@ -173,7 +173,7 @@ def mini_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterT
     table: dict[str, MonsterTemplate] = {
         "forest_beginnings": MonsterTemplate(
             "mini_alpha_wolf",
-            "Алфа",
+            "Альфа",
             "🐺",
             "earth",
             "Дважды крупнее обычного волка.",
@@ -262,7 +262,7 @@ def major_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> Monster
             "Король леса",
             "🐻",
             "earth",
-            "Корни сковывают поле боя.",
+            "Истинный царь джунглей.",
         ),
         "rotten_swamps": MonsterTemplate(
             "boss_slime_king",
