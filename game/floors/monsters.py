@@ -167,7 +167,7 @@ def build_spawns_for_floor(floor_number: int) -> list[FloorMonsterSpawn]:
                     name=first.name,
                     emoji=first.emoji,
                     element=first.element,
-                    blurb=first.blurb + " (элита: +50% HP и урона)",
+                    blurb=first.blurb + " (элита: усилен; +~62% к HP и урону)",
                 ),
                 is_elite=True,
                 is_mini_boss=False,

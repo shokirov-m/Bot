@@ -14,7 +14,14 @@ from game.floors import floor_data
 # Явный путь, если файл назван иначе (редко).
 _BATTLE_PORTRAIT_OVERRIDES: dict[str, str] = {
     "golden_goblin": "assets/monsters/golden.png",
+    # Мини-босс болот (этаж 15): тот же арт, что у карточки короля слизней.
+    "mini_bog_queen": "assets/monsters/boss_slime_king.png",
+    # Мажор болот (этаж 20): файл спрайта называется snake.png.
+    "boss_slime_king": "assets/monsters/snake.png",
 }
+
+# «elite_» = 6 символов; срез [7:] ломал ключ (elite_orc → «rc») и портрет/каталог.
+_ELITE_PREFIX = "elite_"
 
 
 def tower_bot_root() -> Path:
@@ -76,7 +83,7 @@ def _monster_png_resolved(template_key: str, *, default_fallback: bool) -> Path 
         p = root / rel_ov
         if p.is_file():
             return p
-    base_k = k[7:] if k.startswith("elite_") else k
+    base_k = k[len(_ELITE_PREFIX) :] if k.startswith(_ELITE_PREFIX) else k
     mon_dir = root / "assets" / "monsters"
     for cand in (k, base_k):
         p = mon_dir / f"{cand}.png"

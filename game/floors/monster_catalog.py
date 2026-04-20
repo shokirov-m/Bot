@@ -14,11 +14,13 @@ from typing import Any
 
 from game.floors.monster_registry import get_all_definitions
 
+_ELITE_PREFIX = "elite_"
+
 
 def _base_template_key(template_key: str) -> str:
     k = (template_key or "").strip()
-    if k.startswith("elite_"):
-        return k[7:]
+    if k.startswith(_ELITE_PREFIX):
+        return k[len(_ELITE_PREFIX) :]
     return k
 
 

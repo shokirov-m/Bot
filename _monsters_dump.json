@@ -273,7 +273,7 @@
   },
   "mini_bog_queen": {
     "id": "mini_bog_queen",
-    "name": "👑 Болотная королева",
+    "name": "👑 Царь слизней",
     "level": 15,
     "reference_floor": 15,
     "hp": 1429,
@@ -302,7 +302,7 @@
     "phrases": [],
     "skills": [],
     "loot_table": "",
-    "image": "assets/monsters/snake_king.png",
+    "image": "assets/monsters/snake.png",
     "catalog_skip_spawn_mults": true
   },
   "bat_swarm": {

@@ -77,10 +77,13 @@ AI_PROFILES: dict[str, MonsterAIProfile] = {
 DEFAULT_PROFILE = MonsterAIProfile("aggressive", ("💥 Мощный удар", "⚠️ Особый приём"), True)
 
 
+_ELITE_PREFIX = "elite_"
+
+
 def _normalize_template_key(template_key: str) -> str:
     k = template_key.strip()
-    if k.startswith("elite_"):
-        return k[7:]
+    if k.startswith(_ELITE_PREFIX):
+        return k[len(_ELITE_PREFIX) :]
     return k
 
 

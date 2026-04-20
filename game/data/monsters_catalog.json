@@ -450,7 +450,7 @@
     },
     "mini_bog_queen": {
       "id": "mini_bog_queen",
-      "name": "👑 Болотная королева",
+      "name": "👑 Царь слизней",
       "level": 15,
       "reference_floor": 15,
       "hp": 1700,
@@ -462,12 +462,12 @@
       "phrases": [],
       "skills": [],
       "loot_table": "",
-      "image": "assets/monsters/mini_bog_queen.png",
+      "image": "assets/monsters/boss_slime_king.png",
       "catalog_skip_spawn_mults": true,
       "zone": "rotten_swamps",
-      "display_name": "Болотная королева",
+      "display_name": "Царь слизней",
       "emoji": "👑",
-      "blurb": "Трон из слизи и яда: бьёт сильно и отравляет."
+      "blurb": "Повелевает болотной тиной и ядом — бьёт тяжело и отравляет."
     },
     "boss_slime_king": {
       "id": "boss_slime_king",
@@ -483,7 +483,7 @@
       "phrases": [],
       "skills": [],
       "loot_table": "",
-      "image": "assets/monsters/snake_king.png",
+      "image": "assets/monsters/snake.png",
       "catalog_skip_spawn_mults": true,
       "zone": "rotten_swamps",
       "display_name": "Существо из глубин ада",
