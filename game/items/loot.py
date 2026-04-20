@@ -7,7 +7,7 @@ import random
 from typing import Any
 
 from game.floors.monsters import FloorMonsterSpawn
-from game.items import loot_scaling as ls
+from game.items import catalog_loot, loot_scaling as ls
 from utils.image_assets import item_gear_png
 
 _WEAPON_TYPES = ("blade", "staff", "bow", "dagger", "axe", "polearm", "hammer")
@@ -268,6 +268,9 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
             (0.07, focus_wand),
             (0.07, apprentice_grimoire),
         )
+    cat = catalog_loot.roll_catalog_item(fl, ["common", "uncommon"])
+    if cat is not None:
+        options = options + ((1.2, cat),)
     return _weighted_payload(options)
 
 
@@ -320,15 +323,17 @@ def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "summary": "В бою: восстановление MP в процентах.",
         "image_url": item_gear_png("elite_ether"),
     }
-    return _weighted_payload(
-        (
-            (1.0, weapon),
-            (0.95, armor),
-            (0.7, helm),
-            (0.85, elixir),
-            (0.55, ether),
-        ),
+    elite_options: tuple[tuple[float, dict[str, Any]], ...] = (
+        (1.0, weapon),
+        (0.95, armor),
+        (0.7, helm),
+        (0.85, elixir),
+        (0.55, ether),
     )
+    cat = catalog_loot.roll_catalog_item(fl, ["uncommon", "rare"])
+    if cat is not None:
+        elite_options = elite_options + ((1.0, cat),)
+    return _weighted_payload(elite_options)
 
 
 def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
@@ -379,15 +384,17 @@ def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "summary": "Мощное восстановление HP.",
         "image_url": item_gear_png("mini_bundle"),
     }
-    return _weighted_payload(
-        (
-            (1.0, weapon),
-            (0.92, armor),
-            (0.65, helm),
-            (0.92, gloves),
-            (0.45, bundle),
-        ),
+    mini_options: tuple[tuple[float, dict[str, Any]], ...] = (
+        (1.0, weapon),
+        (0.92, armor),
+        (0.65, helm),
+        (0.92, gloves),
+        (0.45, bundle),
     )
+    cat = catalog_loot.roll_catalog_item(fl, ["rare", "epic"])
+    if cat is not None:
+        mini_options = mini_options + ((1.2, cat),)
+    return _weighted_payload(mini_options)
 
 
 def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
@@ -439,12 +446,14 @@ def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         "summary": "В бою: мощное восстановление HP.",
         "image_url": item_gear_png("major_chest"),
     }
-    return _weighted_payload(
-        (
-            (1.0, weapon),
-            (0.95, armor),
-            (0.55, amulet),
-            (0.6, ring),
-            (0.56, chest),
-        ),
+    major_options: tuple[tuple[float, dict[str, Any]], ...] = (
+        (1.0, weapon),
+        (0.95, armor),
+        (0.55, amulet),
+        (0.6, ring),
+        (0.56, chest),
     )
+    cat = catalog_loot.roll_catalog_item(fl, ["epic", "legendary", "mythic"])
+    if cat is not None:
+        major_options = major_options + ((1.5, cat),)
+    return _weighted_payload(major_options)
