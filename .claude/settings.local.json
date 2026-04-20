@@ -4,7 +4,9 @@
       "Bash(python -m pytest tests/ -q)",
       "Bash(gh pr create --title 'Расширен каталог предметов, исправлена регистрация kind=dagger' --body ' *)",
       "Bash(where gh *)",
-      "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue\")"
+      "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue\")",
+      "Bash(xargs grep *)",
+      "Bash(python -c ' *)"
     ]
   }
 }
