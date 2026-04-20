@@ -24,7 +24,7 @@ class MonsterAIProfile:
 
 # Ключ — MonsterTemplate.key из monsters.py
 AI_PROFILES: dict[str, MonsterAIProfile] = {
-    "wolf": MonsterAIProfile("aggressive", ("🐺 Яростный рывок", "🦷 Укус альфы"), True),
+    "orc": MonsterAIProfile("aggressive", ("🪓 Рубящий удар", "👹 Натиск орка"), True),
     "spider": MonsterAIProfile("aggressive", ("🕸️ Паутина", "☠️ Укус ядом"), True),
     "goblin": MonsterAIProfile("aggressive", ("🪨 Бросок камня", "👺 Внезапный выпад"), False),
     "boar": MonsterAIProfile("berserk", ("🐗 Рывок", "💥 Таран"), False),
@@ -94,11 +94,11 @@ def taunts_for_monster(name: str, template_key: str = "") -> list[str]:
     key = _normalize_template_key(template_key.lower())
     pool: list[str] = []
 
-    if "волк" in low or key == "wolf":
+    if "орк" in low or key == "orc":
         pool.extend(
             [
-                "Ты пахнешь страхом!",
-                "Даже детёныши смеются над тобой!",
+                "Слабак идёт на мяснику!",
+                "Твоя броня — смешная!",
             ],
         )
     if "лед" in low or "мороз" in low or "снег" in low or "ice" in key or "frost" in key:

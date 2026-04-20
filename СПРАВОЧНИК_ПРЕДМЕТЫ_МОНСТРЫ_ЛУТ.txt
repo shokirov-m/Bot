@@ -42,7 +42,7 @@
 3. МОНСТРЫ ПО ЗОНАМ (обычный пул; key | имя | эмодзи | стихия | кратко)
 --------------------------------------------------------------------------------
   ЛЕС НАЧАЛ (1–10)
-    wolf          Серый волк            🐺  earth   Стая уверена в своей силе.
+    orc           Лесной орк            👹  earth   Грубая сила, дубина.
     spider        Паук-ткач             🕷️  earth   Ловит в нити слепых.
     goblin        Гоблин                👺  earth   Бросается камнями из кустов.
     boar          Кабан                 🐗  earth   Рывок и клыки.
@@ -143,7 +143,7 @@
 5. СИЛЬНЫЕ БОССЫ (×10 этажи; на 100 — см. выше)
 --------------------------------------------------------------------------------
   forest_beginnings   boss_ancient_treant  Древний древень      🌳  earth
-  rotten_swamps       boss_slime_king      Царь слизней         👑  poison
+  rotten_swamps       boss_slime_king      Змей Бездны          👑  poison
   shadow_caves        boss_night_stalker   Ночной охотник       🌑  dark
   icy_peaks           boss_glacier_king    Король ледников      🧊  ice
   desert_oblivion     boss_time_scarab     Скарабей времени     🪲  lightning
