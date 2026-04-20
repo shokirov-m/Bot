@@ -39,25 +39,28 @@ XP_MAJOR_MULT = 10
 XP_MINI_MULT = 5
 XP_ELITE_MULT = 2.2
 
-RUNE_CHANCE_NORMAL = 0.04
-RUNE_CHANCE_ELITE = 0.12
-RUNE_CHANCE_MINI = 0.22
-RUNE_CHANCE_MAJOR = 0.45
+RUNE_CHANCE_NORMAL = 0.04   # 4%
+RUNE_CHANCE_ELITE  = 0.08   # 8%
+RUNE_CHANCE_MINI   = 0.10   # 10%
+RUNE_CHANCE_MAJOR  = 0.15   # 15%
 
 # Доля золота, теряемая при смерти на этаже (после боя; не учебный бой).
 DEATH_GOLD_LOSS_FRACTION = 0.10
 # Верхний предел потери за одну смерть (после расчёта доли и обрезки по текущему балансу).
 MAX_DEATH_GOLD_LOSS = 8_000
 
-DROP_CHANCE_NORMAL = 0.15
-DROP_CHANCE_ELITE = 0.28
-DROP_CHANCE_MINI = 0.40
-DROP_CHANCE_MAJOR = 0.65
-
-# Дроп предмета в сумку: этажи 1–5 слабее, с 6-го сильнее (множитель к базовому шансу типа цели).
+# Шанс дропа предмета: этажи 1-5 / этажи 6+
 DROP_CHANCE_FLOOR_LOW_MAX = 5
-DROP_CHANCE_MULT_FLOORS_1_TO_5 = 0.50
-DROP_CHANCE_MULT_FLOOR_6_PLUS = 1.22
+
+DROP_CHANCE_NORMAL_LOW  = 0.045   # 4.5%
+DROP_CHANCE_ELITE_LOW   = 0.050   # 5.0%
+DROP_CHANCE_MINI_LOW    = 0.080   # 8.0%
+DROP_CHANCE_MAJOR_LOW   = 0.105   # 10.5%
+
+DROP_CHANCE_NORMAL_HIGH = 0.013   # 1.3%
+DROP_CHANCE_ELITE_HIGH  = 0.032   # 3.2%
+DROP_CHANCE_MINI_HIGH   = 0.058   # 5.8%
+DROP_CHANCE_MAJOR_HIGH  = 0.083   # 8.3%
 
 # --- Базовые статы монстра (до множителей типа элита/босс) ---
 MONSTER_HP_RAW_BASE = 36

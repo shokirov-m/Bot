@@ -7,13 +7,15 @@ from __future__ import annotations
 import random
 
 from game.balance import (
-    DROP_CHANCE_ELITE,
+    DROP_CHANCE_ELITE_HIGH,
+    DROP_CHANCE_ELITE_LOW,
     DROP_CHANCE_FLOOR_LOW_MAX,
-    DROP_CHANCE_MAJOR,
-    DROP_CHANCE_MINI,
-    DROP_CHANCE_MULT_FLOOR_6_PLUS,
-    DROP_CHANCE_MULT_FLOORS_1_TO_5,
-    DROP_CHANCE_NORMAL,
+    DROP_CHANCE_MAJOR_HIGH,
+    DROP_CHANCE_MAJOR_LOW,
+    DROP_CHANCE_MINI_HIGH,
+    DROP_CHANCE_MINI_LOW,
+    DROP_CHANCE_NORMAL_HIGH,
+    DROP_CHANCE_NORMAL_LOW,
     GOLD_BASE_OFFSET,
     GOLD_ELITE_EXTRA_RANGE,
     GOLD_ELITE_MULT,
@@ -73,22 +75,14 @@ def roll_rune_stone(spawn: FloorMonsterSpawn) -> bool:
     return random.random() < chance
 
 
-def _scale_item_drop_chance_for_floor(base: float, floor_number: int) -> float:
-    f = int(floor_number)
-    if f <= int(DROP_CHANCE_FLOOR_LOW_MAX):
-        return min(0.95, float(base) * float(DROP_CHANCE_MULT_FLOORS_1_TO_5))
-    if f >= 6:
-        return min(0.95, float(base) * float(DROP_CHANCE_MULT_FLOOR_6_PLUS))
-    return min(0.95, float(base))
-
-
 def roll_item_drop(spawn: FloorMonsterSpawn, floor_number: int) -> bool:
-    chance = DROP_CHANCE_NORMAL
-    if spawn.is_elite:
-        chance = DROP_CHANCE_ELITE
-    if spawn.is_mini_boss:
-        chance = DROP_CHANCE_MINI
+    is_low = int(floor_number) <= int(DROP_CHANCE_FLOOR_LOW_MAX)
     if spawn.is_major_boss:
-        chance = DROP_CHANCE_MAJOR
-    chance = _scale_item_drop_chance_for_floor(chance, floor_number)
-    return random.random() < chance
+        chance = DROP_CHANCE_MAJOR_LOW if is_low else DROP_CHANCE_MAJOR_HIGH
+    elif spawn.is_mini_boss:
+        chance = DROP_CHANCE_MINI_LOW if is_low else DROP_CHANCE_MINI_HIGH
+    elif spawn.is_elite:
+        chance = DROP_CHANCE_ELITE_LOW if is_low else DROP_CHANCE_ELITE_HIGH
+    else:
+        chance = DROP_CHANCE_NORMAL_LOW if is_low else DROP_CHANCE_NORMAL_HIGH
+    return random.random() < min(0.95, chance)

@@ -13,13 +13,15 @@ from pathlib import Path
 from typing import Any
 
 from game.balance import (
-    DROP_CHANCE_ELITE,
+    DROP_CHANCE_ELITE_HIGH,
+    DROP_CHANCE_ELITE_LOW,
     DROP_CHANCE_FLOOR_LOW_MAX,
-    DROP_CHANCE_MAJOR,
-    DROP_CHANCE_MINI,
-    DROP_CHANCE_MULT_FLOOR_6_PLUS,
-    DROP_CHANCE_MULT_FLOORS_1_TO_5,
-    DROP_CHANCE_NORMAL,
+    DROP_CHANCE_MAJOR_HIGH,
+    DROP_CHANCE_MAJOR_LOW,
+    DROP_CHANCE_MINI_HIGH,
+    DROP_CHANCE_MINI_LOW,
+    DROP_CHANCE_NORMAL_HIGH,
+    DROP_CHANCE_NORMAL_LOW,
     RUNE_CHANCE_ELITE,
     RUNE_CHANCE_MAJOR,
     RUNE_CHANCE_MINI,
@@ -303,13 +305,10 @@ LOOT_MINI_WEIGHTS = "Веса _mini_boss_loot: оружие 1.0 · латы 0.92
 LOOT_MAJOR_WEIGHTS = "Веса _major_boss_loot: оружие 1.0 · броня 0.95 · амулет 0.55 · кольцо 0.6 · сосуд 0.56"
 
 
-def _scaled_drop_chance(base: float, floor_number: int) -> float:
-    f = int(floor_number)
-    if f <= int(DROP_CHANCE_FLOOR_LOW_MAX):
-        return min(0.95, float(base) * float(DROP_CHANCE_MULT_FLOORS_1_TO_5))
-    if f >= 6:
-        return min(0.95, float(base) * float(DROP_CHANCE_MULT_FLOOR_6_PLUS))
-    return min(0.95, float(base))
+def _scaled_drop_chance(low: float, high: float, floor_number: int) -> float:
+    if int(floor_number) <= int(DROP_CHANCE_FLOOR_LOW_MAX):
+        return min(0.95, float(low))
+    return min(0.95, float(high))
 
 
 def _doc_loot_normal_sample(fl: int) -> str:
@@ -349,7 +348,6 @@ def _write_text(name: str, title: str, src: str, body: str) -> None:
 
 
 def _write_index() -> None:
-    ex10 = _scaled_drop_chance(float(DROP_CHANCE_NORMAL), 10)
     body = "\n".join(
         [
             "Содержимое папки (все предметы и источники)",
@@ -365,12 +363,10 @@ def _write_index() -> None:
             "  20     — мировое событие «Золотой гоблин»",
             "",
             "Шансы дропа предмета в сумку (если есть свободная ячейка):",
-            "  базовые константы в game/balance.py → DROP_CHANCE_*,",
-            f"  этажи 1–5: ×{DROP_CHANCE_MULT_FLOORS_1_TO_5},",
-            f"  с 6-го этажа: ×{DROP_CHANCE_MULT_FLOOR_6_PLUS}.",
-            "",
-            "Пример итогового шанса для обычной цели на этаже 10:",
-            f"  {DROP_CHANCE_NORMAL:.2f} × {DROP_CHANCE_MULT_FLOOR_6_PLUS:.2f} ≈ {ex10:.3f}",
+            f"  Обычный враг:   этажи 1–5 = {DROP_CHANCE_NORMAL_LOW*100:.1f}%,  этажи 6+ = {DROP_CHANCE_NORMAL_HIGH*100:.1f}%",
+            f"  Элита:          этажи 1–5 = {DROP_CHANCE_ELITE_LOW*100:.1f}%,  этажи 6+ = {DROP_CHANCE_ELITE_HIGH*100:.1f}%",
+            f"  Мини-босс:      этажи 1–5 = {DROP_CHANCE_MINI_LOW*100:.1f}%,  этажи 6+ = {DROP_CHANCE_MINI_HIGH*100:.1f}%",
+            f"  Главный босс:   этажи 1–5 = {DROP_CHANCE_MAJOR_LOW*100:.1f}%, этажи 6+ = {DROP_CHANCE_MAJOR_HIGH*100:.1f}%",
             "",
             "Рунный камень (⚗️ валюта кузницы): отдельный бросок RUNE_CHANCE_* по типу цели.",
             "",
@@ -381,13 +377,11 @@ def _write_index() -> None:
 
 
 def _write_loot_normal() -> str:
-    dc5 = _scaled_drop_chance(float(DROP_CHANCE_NORMAL), 5)
-    dc10 = _scaled_drop_chance(float(DROP_CHANCE_NORMAL), 10)
     parts = [
         "⚔️ УСЛОВИЕ",
         "• Победа над обычной целью на карте этажа (не элита, не мини-босс, не мажор-босс).",
         "• Срабатывает roll_item_drop из game/floors/rewards.py.",
-        f"• Базовый шанс предмета в сумку: ≈{DROP_CHANCE_NORMAL * 100:.0f}%; на этаже 5 ≈ {dc5 * 100:.1f}%; на этаже 10 ≈ {dc10 * 100:.1f}%.",
+        f"• Шанс предмета в сумку: этажи 1–5 = {DROP_CHANCE_NORMAL_LOW*100:.1f}%; этажи 6+ = {DROP_CHANCE_NORMAL_HIGH*100:.1f}%.",
         "• Дроп только если есть свободная ячейка сумки; имя предмета часто содержит номер этажа N.",
         "",
         "📍 Этажи получения: 1–100 (после победы над обычной целью на соответствующем этаже).",
@@ -422,10 +416,9 @@ def _elite_sample(fl: int) -> str:
 
 
 def _write_loot_elite() -> str:
-    dc = _scaled_drop_chance(float(DROP_CHANCE_ELITE), 10)
     parts = [
         "⭐ УСЛОВИЕ: победа над элитой на этаже.",
-        f"Шанс предмета в сумку: база ≈{DROP_CHANCE_ELITE * 100:.0f}%; на этаже 10 (с масштабом этажа) ≈ {dc * 100:.1f}%.",
+        f"Шанс предмета в сумку: этажи 1–5 = {DROP_CHANCE_ELITE_LOW*100:.1f}%; этажи 6+ = {DROP_CHANCE_ELITE_HIGH*100:.1f}%.",
         "",
         "📍 Этажи: любой этаж, где на карте есть элита.",
         "",
@@ -452,10 +445,9 @@ def _mini_sample(fl: int) -> str:
 
 
 def _write_loot_mini() -> str:
-    dc = _scaled_drop_chance(float(DROP_CHANCE_MINI), 15)
     parts = [
         "🗡️ УСЛОВИЕ: победа над мини-боссом (этажи 5, 15, 25, … — каждый 5-й, кроме 10, 20, …).",
-        f"Шанс предмета в сумку: база ≈{DROP_CHANCE_MINI * 100:.0f}%; на этаже 15 ≈ {dc * 100:.1f}%.",
+        f"Шанс предмета в сумку: этажи 1–5 = {DROP_CHANCE_MINI_LOW*100:.1f}%; этажи 6+ = {DROP_CHANCE_MINI_HIGH*100:.1f}%.",
         "",
         "📍 Этажи получения: 5, 15, 25, 35, … 95 (не 10, 20, …).",
         "",
@@ -480,10 +472,9 @@ def _major_sample(fl: int) -> str:
 
 
 def _write_loot_major() -> str:
-    dc = _scaled_drop_chance(float(DROP_CHANCE_MAJOR), 20)
     parts = [
         "👑 УСЛОВИЕ: победа над сильным боссом (каждый 10-й этаж: 10, 20, 30, …).",
-        f"Шанс предмета в сумку: база ≈{DROP_CHANCE_MAJOR * 100:.0f}%; на этаже 20 ≈ {dc * 100:.1f}%.",
+        f"Шанс предмета в сумку: этажи 1–5 = {DROP_CHANCE_MAJOR_LOW*100:.1f}%; этажи 6+ = {DROP_CHANCE_MAJOR_HIGH*100:.1f}%.",
         "",
         "📍 Этажи получения: 10, 20, 30, … 100.",
         "",
