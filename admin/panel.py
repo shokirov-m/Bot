@@ -82,6 +82,10 @@ def format_admin_player_snapshot_html(
     gold: int,
     unspent_stat_points: int = 0,
     equipped_lines: list[str],
+    account_created_at_utc: str,
+    hero_created_at_utc: str,
+    estimated_playtime_ru: str,
+    last_activity_utc: str,
 ) -> str:
     """Краткий статус героя и надетые вещи (админка)."""
     ban = "🚫 <b>бан</b>" if is_banned else "✅ активен"
@@ -89,10 +93,17 @@ def format_admin_player_snapshot_html(
     eq_block = "\n".join(equipped_lines) if equipped_lines else "<i>Ничего не надето.</i>"
     pts = int(unspent_stat_points)
     pts_line = f" · своб. очки стата: <b>{pts}</b> <i>(/stats)</i>"
+    activity_block = (
+        f"Аккаунт с: <b>{html.escape(account_created_at_utc)}</b> · герой с: <b>{html.escape(hero_created_at_utc)}</b>\n"
+        f"Время в игре (оценка): <b>{html.escape(estimated_playtime_ru)}</b>\n"
+        f"Последняя активность: <b>{html.escape(last_activity_utc)}</b>\n"
+        f"<i>Оценка времени — по апдейтам Telegram; между событиями не больше 12 мин за раз, перерыв &gt;48ч не суммируется.</i>\n\n"
+    )
     return (
         f"👤 <b>{html.escape(display_name)}</b>\n"
         f"TG <code>{telegram_id}</code> {un}\n"
         f"{ban} · ур. <b>{level}</b> · этаж <b>{floor_number}</b> · класс <code>{html.escape(class_key)}</code>{pts_line}\n"
         f"HP <b>{hp_current}</b>/<b>{hp_max}</b> · MP <b>{mp_current}</b>/<b>{mp_max}</b> · 💰 <b>{gold}</b>\n\n"
+        f"{activity_block}"
         f"<b>Надето:</b>\n{eq_block}"
     )

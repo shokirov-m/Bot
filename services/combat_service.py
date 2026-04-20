@@ -80,6 +80,7 @@ from services import (
     daily_service,
     floor10_pioneer_service,
     game_metrics_service,
+    golden_goblin_service,
     leaderboard_service,
     profession_service,
     quest_service,
@@ -677,6 +678,8 @@ async def start_combat(
     eff_stats = await stat_bonus_service.effective_primary_stats(session, character)
     combat_state = _build_combat_dict(character, spawn, monster, primary_stats=eff_stats)
     combat_state["night_battle"] = night_on
+    if str(spawn.slot_code) == golden_goblin_service.SLOT_CODE:
+        combat_state["golden_goblin_wave"] = await golden_goblin_service.current_wave(session)
     wa, wtype, wmult, w_item = await _weapon_profile(session, character)
     combat_state["weapon_attack"] = wa
     combat_state["player_weapon_type"] = wtype
@@ -1144,45 +1147,78 @@ async def _victory_sequence(
     rotten_swamps_mod.maybe_roll_leech_infection_after_swamp_win(character, battle_floor)
     await session.flush()
 
-    gross_gold = gold_reward(character.floor_number, spawn)
-    xp = experience_reward(character.floor_number, spawn)
-    cat_win = monster_catalog_mod.get_definition(str(spawn.template.key or ""))
-    if cat_win:
-        cg, cx = monster_catalog_mod.scaled_gold_exp(cat_win, battle_floor)
-        if cg is not None:
-            gross_gold = cg
-        if cx is not None:
-            xp = cx
-    if combat_state.get("night_battle"):
-        gross_gold = int(gross_gold * combat_night.REWARD_MULT)
-        xp = int(xp * combat_night.REWARD_MULT)
-    gm, xm = title_service.reward_bonus_multipliers(character)
-    esc_m = sink_rules.pop_next_win_xp_multiplier(character)
-    mp_xp = dict(character.meta_progress or {})
-    star_xp_mult = float(mp_xp.pop("next_battle_xp_mult", 1.0) or 1.0)
-    character.meta_progress = mp_xp
-    gross_gold = int(gross_gold * gm)
-    loc_victory = get_locale(character, message.from_user.language_code if message.from_user else None)
-    rank_gm, rank_xm, ranker_note_html = await leaderboard_service.victory_rank_reward_multipliers(
-        session,
-        character,
-        locale=loc_victory,
-    )
-    gross_gold = int(round(gross_gold * rank_gm))
-    ranker_note = ("\n" + ranker_note_html) if ranker_note_html else ""
-    xp = int(xp * xm * rank_xm * esc_m * max(0.1, star_xp_mult))
-    escape_xp_note = ""
-    if esc_m < 0.999:
-        escape_xp_note = (
-            f"\n<i>Опыт со скидкой {int(round((1.0 - esc_m) * 100))}% "
-            f"(недавний побег).</i>"
+    gg_first = False
+    if str(spawn.template.key or "") == golden_goblin_service.TEMPLATE_KEY:
+        gg_first = await golden_goblin_service.try_claim_first_blood(
+            session, int(combat_state.get("golden_goblin_wave") or 0)
         )
-    night_reward_note = ""
-    if combat_state.get("night_battle"):
-        night_reward_note = "\n<i>🌙 Ночной бой: к золоту и опыту уже учтён бонус +40%.</i>"
-    star_xp_note = ""
-    if star_xp_mult >= 1.45:
-        star_xp_note = "\n<i>⭐ Упавшая звезда: опыт этого боя ×1.5.</i>"
+
+    loc_victory = get_locale(character, message.from_user.language_code if message.from_user else None)
+
+    if gg_first:
+        gross_gold = random.randint(1000, 2000)
+        xp = 1000
+        ranker_note = ""
+        escape_xp_note = ""
+        night_reward_note = ""
+        star_xp_note = ""
+    else:
+        gross_gold = gold_reward(character.floor_number, spawn)
+        xp = experience_reward(character.floor_number, spawn)
+        cat_win = monster_catalog_mod.get_definition(str(spawn.template.key or ""))
+        if cat_win:
+            cg, cx = monster_catalog_mod.scaled_gold_exp(cat_win, battle_floor)
+            if cg is not None:
+                gross_gold = cg
+            if cx is not None:
+                xp = cx
+        if combat_state.get("night_battle"):
+            gross_gold = int(gross_gold * combat_night.REWARD_MULT)
+            xp = int(xp * combat_night.REWARD_MULT)
+        gm, xm = title_service.reward_bonus_multipliers(character)
+        esc_m = sink_rules.pop_next_win_xp_multiplier(character)
+        mp_xp = dict(character.meta_progress or {})
+        star_xp_mult = float(mp_xp.pop("next_battle_xp_mult", 1.0) or 1.0)
+        character.meta_progress = mp_xp
+        gross_gold = int(gross_gold * gm)
+        rank_gm, rank_xm, ranker_note_html = await leaderboard_service.victory_rank_reward_multipliers(
+            session,
+            character,
+            locale=loc_victory,
+        )
+        gross_gold = int(round(gross_gold * rank_gm))
+        ranker_note = ("\n" + ranker_note_html) if ranker_note_html else ""
+        xp = int(xp * xm * rank_xm * esc_m * max(0.1, star_xp_mult))
+        escape_xp_note = ""
+        if esc_m < 0.999:
+            escape_xp_note = (
+                f"\n<i>Опыт со скидкой {int(round((1.0 - esc_m) * 100))}% "
+                f"(недавний побег).</i>"
+            )
+        night_reward_note = ""
+        if combat_state.get("night_battle"):
+            night_reward_note = "\n<i>🌙 Ночной бой: к золоту и опыту уже учтён бонус +40%.</i>"
+        star_xp_note = ""
+        if star_xp_mult >= 1.45:
+            star_xp_note = "\n<i>⭐ Упавшая звезда: опыт этого боя ×1.5.</i>"
+
+    gg_kill_note = ""
+    if str(spawn.template.key or "") == golden_goblin_service.TEMPLATE_KEY:
+        if gg_first:
+            gg_kill_note = "\n🥇 <b>Мировой бонус:</b> ты первый, кто поймал золотого гоблина в этой волне!"
+        else:
+            gg_kill_note = "\n<i>Гоблин уже был обчищен другим героем — обычная добыча.</i>"
+
+    if gg_first and message.bot is not None:
+        from scheduler.tasks import broadcast_golden_goblin_slain
+
+        asyncio.create_task(
+            broadcast_golden_goblin_slain(
+                message.bot,
+                winner_display_name=str(character.display_name or "Герой"),
+                wave=int(combat_state.get("golden_goblin_wave") or 0),
+            )
+        )
 
     net_gold, ml_debt_note = sink_rules.garnish_victory_gold_for_debt(character, gross_gold)
 
@@ -1203,45 +1239,52 @@ async def _victory_sequence(
     await clan_service.on_monster_win_add_clan_xp(session, character, delta=5)
     refresh_global_passives(character)
 
-    if roll_rune_stone(spawn):
-        character.rune_stones = int(character.rune_stones) + 1
-        extra_rune = "\n⚗️ +1 рунный камень"
-    else:
+    if gg_first:
         extra_rune = ""
+        dropped = False
+        drop_label = ""
+        extra_drop = ""
+        extra_rune_item = ""
+    else:
+        if roll_rune_stone(spawn):
+            character.rune_stones = int(character.rune_stones) + 1
+            extra_rune = "\n⚗️ +1 рунный камень"
+        else:
+            extra_rune = ""
 
-    dropped = False
-    drop_label = ""
-    if roll_item_drop(spawn, int(character.floor_number)):
-        slot = await inventory_repo.first_free_bag_slot(session, character.id)
-        if slot is not None:
-            item_payload = loot_tables.roll_victory_item_payload(character.floor_number, spawn)
-            await inventory_repo.add_bag_item(
-                session,
-                character.id,
-                item_payload,
-                bag_slot=slot,
-            )
-            dropped = True
-            drop_label = str(item_payload.get("name", "Добыча"))
-
-    extra_drop = ""
-    if dropped:
-        extra_drop = f"\n📦 <b>{html.escape(drop_label)}</b> — в сумку"
-
-    extra_rune_item = ""
-    boss_like = spawn.is_mini_boss or spawn.is_major_boss
-    if spawn.is_elite or boss_like:
-        rd = rune_items.roll_rune_drop(int(character.floor_number), boss_like)
-        if rd is not None:
-            slot_r = await inventory_repo.first_free_bag_slot(session, character.id)
-            if slot_r is not None:
+        dropped = False
+        drop_label = ""
+        if roll_item_drop(spawn, int(character.floor_number)):
+            slot = await inventory_repo.first_free_bag_slot(session, character.id)
+            if slot is not None:
+                item_payload = loot_tables.roll_victory_item_payload(character.floor_number, spawn)
                 await inventory_repo.add_bag_item(
                     session,
                     character.id,
-                    copy.deepcopy(rune_items.rune_item_payload(rd)),
-                    bag_slot=slot_r,
+                    item_payload,
+                    bag_slot=slot,
                 )
-                extra_rune_item = f"\n💎 <b>{html.escape(rd.display_name)}</b> — в сумку"
+                dropped = True
+                drop_label = str(item_payload.get("name", "Добыча"))
+
+        extra_drop = ""
+        if dropped:
+            extra_drop = f"\n📦 <b>{html.escape(drop_label)}</b> — в сумку"
+
+        extra_rune_item = ""
+        boss_like = spawn.is_mini_boss or spawn.is_major_boss
+        if spawn.is_elite or boss_like:
+            rd = rune_items.roll_rune_drop(int(character.floor_number), boss_like)
+            if rd is not None:
+                slot_r = await inventory_repo.first_free_bag_slot(session, character.id)
+                if slot_r is not None:
+                    await inventory_repo.add_bag_item(
+                        session,
+                        character.id,
+                        copy.deepcopy(rune_items.rune_item_payload(rd)),
+                        bag_slot=slot_r,
+                    )
+                    extra_rune_item = f"\n💎 <b>{html.escape(rd.display_name)}</b> — в сумку"
 
     mname = html.escape(str(combat_state.get("monster", {}).get("name", "Враг")))
     floor_before = int(character.floor_number)
@@ -1344,6 +1387,7 @@ async def _victory_sequence(
                     + star_xp_note
                     + ranker_note
                     + pioneer_suffix
+                    + gg_kill_note
                 )
             gold_line = f"💰 +{net_gold} золота"
             if gross_gold != net_gold and is_last:
@@ -1373,6 +1417,8 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
     slot = str(combat_state.get("spawn_slot"))
     if slot == "tutorial":
         return TUTORIAL_SPAWN
+    if slot == golden_goblin_service.SLOT_CODE:
+        return golden_goblin_service.build_spawn()
     if slot in long_floor_mod.LONG_FLOOR_SLOTS:
         found_lf = long_floor_mod.spawn_by_slot(slot)
         if found_lf is not None:

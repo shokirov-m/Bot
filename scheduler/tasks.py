@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import random
 import time
 from datetime import UTC, datetime
@@ -66,6 +67,19 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         job_world_boss,
         CronTrigger(day_of_week="sun", hour=20, minute=0, timezone="UTC"),
         id="tower_world_boss_spawn",
+        replace_existing=True,
+    )
+
+    async def job_golden_goblin() -> None:
+        try:
+            await task_golden_goblin_tick(bot)
+        except Exception:
+            logger.exception("[GOLDEN_GOBLIN] Ошибка задачи")
+
+    scheduler.add_job(
+        job_golden_goblin,
+        IntervalTrigger(hours=3),
+        id="tower_golden_goblin",
         replace_existing=True,
     )
 
@@ -236,6 +250,72 @@ async def task_leaderboard_update() -> None:
         logger.info("[LEADERBOARD] Рейтинг обновлён")
     except Exception:
         logger.exception("[LEADERBOARD] Ошибка задачи")
+
+
+async def bootstrap_golden_goblin_if_needed(bot: Bot) -> None:
+    """При пустом app_global создаёт первую волну золотого гоблина и рассылает анонс."""
+    from db.database import get_session_factory
+    from services import golden_goblin_service
+
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            created, fl, wave = await golden_goblin_service.ensure_initial_spawn(session)
+            await session.commit()
+        if created and fl is not None and wave is not None:
+            await broadcast_golden_goblin_html(bot, int(fl), int(wave))
+            logger.info("[GOLDEN_GOBLIN] Стартовая волна {} на этаже {}", wave, fl)
+    except Exception:
+        logger.exception("[GOLDEN_GOBLIN] Bootstrap")
+
+
+async def broadcast_golden_goblin_html(bot: Bot, floor_n: int, wave: int) -> None:
+    """Оповещение всем игрокам: появился золотой гоблин."""
+    text_msg = (
+        "🔔 <b>Оповещение башни</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💰 <b>Золотой гоблин</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"Появился на <b>этаже {floor_n}</b>.\n"
+        "Первый победитель получит <b>1000–2000</b> 💰 и <b>1000</b> опыта.\n"
+        f"<i>Волна <code>{wave}</code>.</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
+    await _broadcast_html(bot, text_msg)
+
+
+async def broadcast_golden_goblin_slain(
+    bot: Bot,
+    *,
+    winner_display_name: str,
+    wave: int,
+) -> None:
+    """Оповещение всем: первый победитель (ник из игры), гоблин исчез."""
+    name_h = html.escape((winner_display_name or "").strip() or "Герой")
+    text_msg = (
+        "🔔 <b>Оповещение башни</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💰 <b>Золотой гоблин побеждён!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"Первым победил: <b>{name_h}</b> <i>(ник в игре)</i>.\n"
+        "Гоблин <b>исчез</b> — событие этой волны закрыто.\n"
+        f"<i>Волна <code>{wave}</code>.</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
+    await _broadcast_html(bot, text_msg)
+
+
+async def task_golden_goblin_tick(bot: Bot) -> None:
+    """Каждые 3 часа: новый случайный этаж 5–20 и рассылка."""
+    from db.database import get_session_factory
+    from services import golden_goblin_service
+
+    factory = get_session_factory()
+    async with factory() as session:
+        wave, fl = await golden_goblin_service.roll_next_spawn(session)
+        await session.commit()
+    await broadcast_golden_goblin_html(bot, int(fl), int(wave))
+    logger.info("[GOLDEN_GOBLIN] Новая волна {} на этаже {}", wave, fl)
 
 
 async def task_world_boss_spawn(bot: Bot) -> None:

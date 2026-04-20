@@ -12,7 +12,9 @@ from pathlib import Path
 from game.floors import floor_data
 
 # Явный путь, если файл назван иначе (редко).
-_BATTLE_PORTRAIT_OVERRIDES: dict[str, str] = {}
+_BATTLE_PORTRAIT_OVERRIDES: dict[str, str] = {
+    "golden_goblin": "assets/monsters/golden.png",
+}
 
 
 def tower_bot_root() -> Path:

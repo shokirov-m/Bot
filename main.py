@@ -25,7 +25,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
-from scheduler.tasks import setup_scheduler
+from scheduler.tasks import bootstrap_golden_goblin_if_needed, setup_scheduler
 
 from bot.handlers.admin import router as admin_router
 from bot.handlers.auction import router as auction_router
@@ -54,6 +54,7 @@ from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
 from bot.handlers.stats_alloc import router as stats_alloc_router
 from bot.handlers.tutorial import router as tutorial_router
+from bot.middlewares.activity import ActivityMiddleware
 from bot.middlewares.auth import RegistrationAuthMiddleware
 from bot.middlewares.database import DbSessionMiddleware
 from bot.middlewares.throttle import UserThrottleMiddleware
@@ -117,10 +118,11 @@ def _make_storage():
 
 
 def _register_update_middlewares(dp: Dispatcher) -> None:
-    """Порядок: throttle → сессия БД → регистрация пользователя."""
+    """Порядок: throttle → сессия БД → регистрация → учёт активности."""
     dp.update.middleware(UserThrottleMiddleware())
     dp.update.middleware(DbSessionMiddleware())
     dp.update.middleware(RegistrationAuthMiddleware())
+    dp.update.middleware(ActivityMiddleware())
 
 
 def _register_routers(dp: Dispatcher) -> None:
@@ -167,6 +169,7 @@ async def _polling_main() -> None:
     scheduler = AsyncIOScheduler(timezone=UTC)
     setup_scheduler(scheduler, bot)
     scheduler.start()
+    asyncio.create_task(bootstrap_golden_goblin_if_needed(bot))
 
     try:
         await dp.start_polling(bot)
@@ -205,6 +208,9 @@ def _webhook_main() -> None:
         )
         scheduler.start()
         logger.info("Webhook зарегистрирован у Telegram: {}", webhook_url)
+        from scheduler.tasks import bootstrap_golden_goblin_if_needed
+
+        asyncio.create_task(bootstrap_golden_goblin_if_needed(b))
 
     async def _stop_jobs(b: Bot) -> None:
         scheduler.shutdown(wait=False)

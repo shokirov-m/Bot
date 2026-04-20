@@ -43,6 +43,7 @@ from game.items.equipment import (
     try_roll_secret_gear_payload,
 )
 from game.floors.monsters import FloorMonsterSpawn, build_spawns_for_floor
+from services import golden_goblin_service
 from services import character_service, title_service
 from utils.game_images_prefs import game_images_enabled
 from services.tutorial_battle_service import tutorial_battle_pending
@@ -53,6 +54,15 @@ from utils.ui import LINE_SEP, LINE_SEP_CITY
 def get_spawns_for_character(character: Character) -> list[FloorMonsterSpawn]:
     """Варианты врагов на текущем этаже персонажа."""
     return build_spawns_for_floor(character.floor_number)
+
+
+async def get_spawns_for_character_session(
+    session: AsyncSession,
+    character: Character,
+) -> list[FloorMonsterSpawn]:
+    """Спавны этажа + золотой гоблин (если мировое событие активно здесь)."""
+    base = build_spawns_for_floor(character.floor_number)
+    return await golden_goblin_service.merge_spawns_if_active(session, character, base)
 
 
 async def defeated_slot_codes_for_floor(
@@ -77,7 +87,7 @@ async def floor_keyboard_for_character(
     long_floor_mod.ensure_long_floor_started(character)
     if long_floor_mod.is_long_floor_active(character):
         return long_floor_screen_keyboard(character)
-    spawns = get_spawns_for_character(character)
+    spawns = await get_spawns_for_character_session(session, character)
     defeated = await defeated_slot_codes_for_floor(session, character.id, character.floor_number)
     return floor_screen_keyboard(character, spawns, defeated_slots=defeated)
 
@@ -401,16 +411,20 @@ async def push_floor_screen_ui(
     n = int(character.floor_number)
     row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
     event_html = await maybe_roll_floor_entry_event(session, character, row)
+    gg_banner = await golden_goblin_service.html_banner_for_floor(session, n)
+    gg_photo = await golden_goblin_service.html_banner_photo_caption(session, n)
     zone = floor_data.get_zone_for_floor(n)
     room = floor_data.epithet_for_floor(zone, n)
     ex = dict(row.extra or {})
     splash_needed = int(row.visits) == 0 and not ex.get("_floor_intro_anim_v0")
-    full_body = format_floor_message(character) + event_html + text_suffix
+    full_body = format_floor_message(character) + gg_banner + event_html + text_suffix
     photo = location_image_for_floor(n) if game_images_enabled(character) else None
     if photo is None and game_images_enabled(character):
         photo = UI_PLACEHOLDER_IMAGE_URL
     body_for_ui = (
-        _clamp_telegram_caption(format_floor_message_photo_caption(character) + event_html + text_suffix)
+        _clamp_telegram_caption(
+            format_floor_message_photo_caption(character) + gg_photo + event_html + text_suffix
+        )
         if photo is not None
         else full_body
     )

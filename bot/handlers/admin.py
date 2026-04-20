@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+from datetime import datetime
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
@@ -35,6 +36,7 @@ from db.models.inventory import InventoryItem
 from db.repository import admin_log_repo, character_repo, inventory_repo, user_repo
 from game.items import equipment as equipment_mod
 from services import anticheat_service, character_service
+from services.activity_service import activity_admin_lines, format_dt_utc, format_duration_ru
 from services.admin_promo_service import handle_admin_promo, promo_help_html
 
 router = Router(name="admin")
@@ -112,6 +114,17 @@ async def _admin_player_snapshot_html(session: AsyncSession, character_id: int) 
         return None, None
     equipped = await inventory_repo.list_equipped_items(session, int(ch.id))
     lines = _admin_equipped_lines_from_items(equipped)
+    act = activity_admin_lines(ch)
+    est_play = format_duration_ru(act["play_sec"])
+    last_iso = act["last_activity_iso"]
+    if last_iso:
+        try:
+            dt = datetime.fromisoformat(last_iso.replace("Z", "+00:00"))
+            last_activity_utc = format_dt_utc(dt)
+        except ValueError:
+            last_activity_utc = str(last_iso)
+    else:
+        last_activity_utc = format_dt_utc(ch.updated_at)
     body = panel.format_admin_player_snapshot_html(
         telegram_id=int(u.telegram_id),
         username=u.username,
@@ -127,6 +140,10 @@ async def _admin_player_snapshot_html(session: AsyncSession, character_id: int) 
         gold=int(ch.gold),
         unspent_stat_points=int(ch.unspent_stat_points),
         equipped_lines=lines,
+        account_created_at_utc=format_dt_utc(u.created_at),
+        hero_created_at_utc=format_dt_utc(ch.created_at),
+        estimated_playtime_ru=est_play,
+        last_activity_utc=last_activity_utc,
     )
     return body, ch
 

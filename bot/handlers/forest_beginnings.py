@@ -25,7 +25,7 @@ from utils.ui import LINE_SEP
 router = Router(name="forest_beginnings")
 
 _CAMP = re.compile(r"^flf:camp:(\d+)$")
-_GMS = re.compile(r"^flf:gms:(\d+):([a-z0-9]+):(eat|poi)$")
+_GMS = re.compile(r"^flf:gms:(\d+):([a-z0-9]+):(eat|skip)$")
 _SPL = re.compile(r"^flf:spl:(\d+):([a-z0-9]+):([0-2])$")
 
 
@@ -177,7 +177,7 @@ async def on_forest_camp(
         await query.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.regexp(r"^flf:gms:(\d+):([a-z0-9]+):(eat|poi)$"))
+@router.callback_query(F.data.regexp(r"^flf:gms:(\d+):([a-z0-9]+):(eat|skip)$"))
 async def on_forest_mushroom(
     query: CallbackQuery,
     session: AsyncSession,
@@ -211,15 +211,20 @@ async def on_forest_mushroom(
             return
         mx = int(char.hp_max)
         cur = int(char.hp_current)
-        if act == "eat":
-            heal = 10 + fl + max(0, (mx - cur) // 12)
-            nh = min(mx, cur + heal)
-            char.hp_current = nh
-            note = f"🍄 Съел гриб: <b>+{nh - cur} HP</b>."
+        if act == "skip":
+            note = "🍄 Грибы обошёл — <b>без эффекта</b>."
         else:
-            dmg = 6 + fl // 2
-            char.hp_current = max(1, cur - dmg)
-            note = f"☠️ Яд обжёг: <b>−{dmg} HP</b>."
+            heal = 10 + fl + max(0, (mx - cur) // 12)
+            if random.random() < 0.5:
+                nh = min(mx, cur + heal)
+                char.hp_current = nh
+                note = f"🍄 Удача: гриб целебный — <b>+{nh - cur} HP</b>."
+            else:
+                # Урон по величине совпадает с возможным лечением (та же формула heal).
+                new_hp = max(1, cur - heal)
+                lost = cur - new_hp
+                char.hp_current = new_hp
+                note = f"☠️ Яд: гриб был ядовит — <b>−{lost} HP</b>."
         await session.flush()
         suffix = f"\n{LINE_SEP}\n{note}"
         await push_floor_screen_ui(

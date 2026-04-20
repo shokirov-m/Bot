@@ -26,10 +26,10 @@ from game.floors import floor_data
 from game.floors import wandering_npcs as wandering_npcs_mod
 from game.floors import forest_beginnings as fb
 from game.floors import long_floor as long_floor_mod
-from services import combat_service
+from services import combat_service, golden_goblin_service
 from services.floor_service import (
     floor_keyboard_for_character,
-    get_spawns_for_character,
+    get_spawns_for_character_session,
     push_floor_screen_ui,
     travel_by_delta,
     travel_to_floor,
@@ -488,7 +488,7 @@ async def on_floor_callback(
             await query.answer()
             return
 
-        spawns = get_spawns_for_character(char)
+        spawns = await get_spawns_for_character_session(session, char)
         chosen = next((s for s in spawns if s.slot_code == code), None)
         if chosen is None:
             await query.answer("Цель не найдена.", show_alert=True)
@@ -502,6 +502,7 @@ async def on_floor_callback(
             not long_floor_mod.is_long_floor_active(char)
             and fb.is_forest_beginnings_zone(int(char.floor_number))
             and fb.eligible_for_forest_tricks(chosen)
+            and str(chosen.slot_code) != golden_goblin_service.SLOT_CODE
         ):
             kind = fb.roll_prefight_kind(char)
             if kind == "mushroom":

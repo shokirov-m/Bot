@@ -14,12 +14,12 @@ def forest_mushroom_keyboard(floor_number: int, slot_code: str) -> InlineKeyboar
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🍄 Съесть (+HP)",
+                    text="🍄 Съесть (50/50)",
                     callback_data=f"flf:gms:{fl}:{sc}:eat",
                 ),
                 InlineKeyboardButton(
-                    text="☠️ Рискнуть (яд!)",
-                    callback_data=f"flf:gms:{fl}:{sc}:poi",
+                    text="🚶 Пропустить",
+                    callback_data=f"flf:gms:{fl}:{sc}:skip",
                 ),
             ],
             [
