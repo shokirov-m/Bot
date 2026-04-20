@@ -1,7 +1,7 @@
 {
   "pools": {
     "forest_beginnings": [
-      "wolf",
+      "orc",
       "spider",
       "goblin",
       "boar",
@@ -87,13 +87,13 @@
     ]
   },
   "monsters": {
-    "wolf": {
-      "id": "wolf",
-      "name": "🐺 Серый волк",
+    "orc": {
+      "id": "orc",
+      "name": "👹 Лесной орк",
       "level": 5,
       "reference_floor": 5,
-      "hp": 185,
-      "atk": 34,
+      "hp": 250,
+      "atk": 30,
       "def": 4,
       "exp": 32,
       "gold": 24,
@@ -101,12 +101,12 @@
       "phrases": [],
       "skills": [],
       "loot_table": "",
-      "image": "assets/monsters/wolf.png",
+      "image": "assets/monsters/orc.png",
       "catalog_skip_spawn_mults": false,
       "zone": "forest_beginnings",
-      "display_name": "Серый волк",
-      "emoji": "🐺",
-      "blurb": "Стая уверена в своей силе."
+      "display_name": "Лесной орк",
+      "emoji": "👹",
+      "blurb": "Грубая сила и тяжёлая дубина — типичный разбойник леса."
     },
     "spider": {
       "id": "spider",
@@ -450,7 +450,7 @@
     },
     "mini_bog_queen": {
       "id": "mini_bog_queen",
-      "name": "👑 Царь слизней",
+      "name": "👑 Болотная королева",
       "level": 15,
       "reference_floor": 15,
       "hp": 1700,
@@ -465,12 +465,12 @@
       "image": "assets/monsters/mini_bog_queen.png",
       "catalog_skip_spawn_mults": true,
       "zone": "rotten_swamps",
-      "display_name": "Царь слизней",
+      "display_name": "Болотная королева",
       "emoji": "👑",
       "blurb": "Трон из слизи и яда: бьёт сильно и отравляет."
     },
-    "snake_king": {
-      "id": "snake_king",
+    "boss_slime_king": {
+      "id": "boss_slime_king",
       "name": "👑 Змей Бездны",
       "level": 20,
       "reference_floor": 20,
