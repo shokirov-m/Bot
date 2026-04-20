@@ -7,12 +7,12 @@
       "boar",
       "sprite",
       "bandit",
-      "thorn_lurker"
+      "ent"
     ],
     "rotten_swamps": [
       "zombie",
       "slime",
-      "wyvern",
+      "siklop",
       "witch",
       "leech",
       "gas_frog",
@@ -238,7 +238,7 @@
       "emoji": "🗡️",
       "blurb": "Знает тропы и слабые места."
     },
-    "thorn_lurker": {
+    "ent": {
       "id": "ent",
       "name": "🌵 Энт",
       "level": 5,
@@ -343,7 +343,7 @@
       "emoji": "🫧",
       "blurb": "Разъедает броню."
     },
-    "wyvern": {
+    "siklop": {
       "id": "siklop",
       "name": "🧟 Циклоп",
       "level": 15,
@@ -469,7 +469,7 @@
       "emoji": "👑",
       "blurb": "Трон из слизи и яда: бьёт сильно и отравляет."
     },
-    "boss_slime_king": {
+    "snake_king": {
       "id": "snake_king",
       "name": "👑 Змей Бездны",
       "level": 20,
