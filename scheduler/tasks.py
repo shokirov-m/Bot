@@ -288,7 +288,6 @@ async def broadcast_golden_goblin_slain(
     bot: Bot,
     *,
     winner_display_name: str,
-    wave: int,
 ) -> None:
     """Оповещение всем: первый победитель (ник из игры), гоблин исчез."""
     name_h = html.escape((winner_display_name or "").strip() or "Герой")
@@ -297,9 +296,8 @@ async def broadcast_golden_goblin_slain(
         "━━━━━━━━━━━━━━━━━━━━\n"
         "💰 <b>Золотой гоблин побеждён!</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        f"Первым победил: <b>{name_h}</b> <i>(ник в игре)</i>.\n"
-        "Гоблин <b>исчез</b> — событие этой волны закрыто.\n"
-        f"<i>Волна <code>{wave}</code>.</i>\n"
+        f"Первым победил: {name_h}.\n"
+        "Гоблин исчез — событие закрыто.\n"
         "━━━━━━━━━━━━━━━━━━━━"
     )
     await _broadcast_html(bot, text_msg)

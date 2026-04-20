@@ -239,7 +239,7 @@
       "blurb": "Знает тропы и слабые места."
     },
     "thorn_lurker": {
-      "id": "thorn_lurker",
+      "id": "ent",
       "name": "🌵 Энт",
       "level": 5,
       "reference_floor": 5,
@@ -344,7 +344,7 @@
       "blurb": "Разъедает броню."
     },
     "wyvern": {
-      "id": "wyvern",
+      "id": "siklop",
       "name": "🧟 Циклоп",
       "level": 15,
       "reference_floor": 15,
@@ -470,13 +470,13 @@
       "blurb": "Трон из слизи и яда: бьёт сильно и отравляет."
     },
     "boss_slime_king": {
-      "id": "boss_slime_king",
+      "id": "snake_king",
       "name": "👑 Змей Бездны",
       "level": 20,
       "reference_floor": 20,
-      "hp": 10000,
+      "hp": 8000,
       "atk": 350,
-      "def": 40,
+      "def": 20,
       "exp": 900,
       "gold": 600,
       "element": "poison",

@@ -1216,7 +1216,6 @@ async def _victory_sequence(
             broadcast_golden_goblin_slain(
                 message.bot,
                 winner_display_name=str(character.display_name or "Герой"),
-                wave=int(combat_state.get("golden_goblin_wave") or 0),
             )
         )
 
@@ -1344,6 +1343,7 @@ async def _victory_sequence(
     )
 
     reward_frames = ("▓░░░░░░░░░", "▓▓▓▓▓░░░░░", "▓▓▓▓▓▓▓▓▓▓")
+    is_golden_goblin = str(spawn.template.key or "") == golden_goblin_service.TEMPLATE_KEY
     fl = int(character.floor_number)
     floor_rows: list[list[InlineKeyboardButton]] = [
         [
@@ -1357,51 +1357,83 @@ async def _victory_sequence(
     victory_kb = InlineKeyboardMarkup(inline_keyboard=floor_rows)
 
     try:
-        await _safe_edit_combat_message_text(
-            state,
-            message,
-            f"🏆 <b>Победа!</b> <b>{mname}</b>\n⚔️ <b>Удар!</b>",
-            reply_markup=None,
-        )
-        await asyncio.sleep(0.6)
-        await _safe_edit_combat_message_text(
-            state,
-            message,
-            f"🏆 <b>Победа!</b> <b>{mname}</b>\n💀 <b>Монстр повержен!</b>",
-            reply_markup=None,
-        )
-        await asyncio.sleep(0.5)
-
-        for i, label in enumerate(reward_frames):
-            is_last = i == len(reward_frames) - 1
-            suffix = ""
-            if is_last:
-                suffix = (
-                    floor_banner
-                    + level_battle_suffix
-                    + quest_suffix
-                    + city_suffix
-                    + title_suffix
-                    + escape_xp_note
-                    + night_reward_note
-                    + star_xp_note
-                    + ranker_note
-                    + pioneer_suffix
-                    + gg_kill_note
-                )
-            gold_line = f"💰 +{net_gold} золота"
-            if gross_gold != net_gold and is_last:
-                gold_line += f" <i>(до удержания долга: {gross_gold})</i>"
+        if is_golden_goblin:
+            gold_gg = f"💰 +{net_gold} золота"
+            if gross_gold != net_gold:
+                gold_gg += f" <i>(до удержания долга: {gross_gold})</i>"
+            gg_tail = (
+                level_battle_suffix
+                + quest_suffix
+                + city_suffix
+                + title_suffix
+                + escape_xp_note
+                + night_reward_note
+                + star_xp_note
+                + ranker_note
+                + pioneer_suffix
+                + gg_kill_note
+            )
+            gg_body = (
+                "🏆 <b>Победа!</b> 💰 Золотой гоблин\n"
+                "✨ Награда… ▓▓▓▓▓▓▓▓▓▓\n"
+                f"{gold_gg}\n"
+                f"📈 +{xp} опыта{extra_rune}{extra_drop}{extra_rune_item}"
+            )
+            if (floor_banner or "").strip():
+                gg_body += floor_banner
+            gg_body += f"{ml_debt_note}{gg_tail}"
             await _safe_edit_combat_message_text(
                 state,
                 message,
-                f"🏆 <b>Победа!</b> <b>{mname}</b>\n✨ Награда… {label}\n"
-                f"{gold_line}\n"
-                f"📈 +{xp} опыта{extra_rune}{extra_drop}{extra_rune_item}"
-                f"{ml_debt_note if is_last else ''}{suffix}",
-                reply_markup=victory_kb if is_last else None,
+                gg_body,
+                reply_markup=victory_kb,
             )
-            await asyncio.sleep(0.8)
+        else:
+            await _safe_edit_combat_message_text(
+                state,
+                message,
+                f"🏆 <b>Победа!</b> <b>{mname}</b>\n⚔️ <b>Удар!</b>",
+                reply_markup=None,
+            )
+            await asyncio.sleep(0.6)
+            await _safe_edit_combat_message_text(
+                state,
+                message,
+                f"🏆 <b>Победа!</b> <b>{mname}</b>\n💀 <b>Монстр повержен!</b>",
+                reply_markup=None,
+            )
+            await asyncio.sleep(0.5)
+
+            for i, label in enumerate(reward_frames):
+                is_last = i == len(reward_frames) - 1
+                suffix = ""
+                if is_last:
+                    suffix = (
+                        floor_banner
+                        + level_battle_suffix
+                        + quest_suffix
+                        + city_suffix
+                        + title_suffix
+                        + escape_xp_note
+                        + night_reward_note
+                        + star_xp_note
+                        + ranker_note
+                        + pioneer_suffix
+                        + gg_kill_note
+                    )
+                gold_line = f"💰 +{net_gold} золота"
+                if gross_gold != net_gold and is_last:
+                    gold_line += f" <i>(до удержания долга: {gross_gold})</i>"
+                await _safe_edit_combat_message_text(
+                    state,
+                    message,
+                    f"🏆 <b>Победа!</b> <b>{mname}</b>\n✨ Награда… {label}\n"
+                    f"{gold_line}\n"
+                    f"📈 +{xp} опыта{extra_rune}{extra_drop}{extra_rune_item}"
+                    f"{ml_debt_note if is_last else ''}{suffix}",
+                    reply_markup=victory_kb if is_last else None,
+                )
+                await asyncio.sleep(0.8)
     except Exception:
         logger.exception("victory UI: анимация награды")
     finally:
