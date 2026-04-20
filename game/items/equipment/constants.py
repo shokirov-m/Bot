@@ -12,6 +12,7 @@ RARITY_EMOJI: dict[str, str] = {
     "rare": "🔵",
     "epic": "🟣",
     "legendary": "🌟",
+    "mythic": "✴️",
 }
 
 RARITY_NAME_RU: dict[str, str] = {
@@ -20,6 +21,7 @@ RARITY_NAME_RU: dict[str, str] = {
     "rare": "Редкий",
     "epic": "Эпический",
     "legendary": "Легендарный",
+    "mythic": "Мифический",
 }
 
 SECRET_GEAR_MAX_FLOOR = 100

@@ -15,11 +15,12 @@ BAG_PAGE_SIZE = 8
 
 # Сортировка сумки: редкость (легендарные сверху), затем номер ячейки.
 _RARITY_SORT: dict[str, int] = {
-    "legendary": 0,
-    "epic": 1,
-    "rare": 2,
-    "uncommon": 3,
-    "common": 4,
+    "mythic": 0,
+    "legendary": 1,
+    "epic": 2,
+    "rare": 3,
+    "uncommon": 4,
+    "common": 5,
 }
 
 

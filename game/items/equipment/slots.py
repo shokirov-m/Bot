@@ -46,6 +46,7 @@ _KIND_TO_SLOT: dict[str, str] = {
     "tome": "offhand",
     "orb": "offhand",
     "focus": "offhand",
+    "dagger": "offhand",
 }
 
 
@@ -121,6 +122,7 @@ _KIND_GEAR_ICON: dict[str, str] = {
     "ring": "💍",
     "amulet": "📿",
     "shield": "🛡️",
+    "dagger": "🔪",
     "grimoire": "📕",
     "tome": "📘",
     "orb": "🔮",

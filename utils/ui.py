@@ -182,10 +182,9 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
         bd = int(defense)
         eff_def = scaled_armor_defense_value(bd, data) + armor_enchant_defensive_bonus(ench, data)
         lines.append(f"🛡️ Защита: <b>{eff_def}</b>")
-    if str(kind).lower() == "armor":
-        hpb = max(0, int(data.get("hp_bonus", 0) or 0))
-        if hpb > 0:
-            lines.append(f"❤️ Макс. HP: <b>+{hpb}</b>")
+    hpb = max(0, int(data.get("hp_bonus", 0) or 0))
+    if hpb > 0:
+        lines.append(f"❤️ Макс. HP: <b>+{hpb}</b>")
     if ench > 0:
         lines.append(f"✨ Заточка: {html.escape(render_enchant_stars(ench))}")
     st_line = format_item_stat_bonus_line(data)

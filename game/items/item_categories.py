@@ -124,6 +124,7 @@ EQUIP_KINDS: frozenset[str] = frozenset(
         "tome",
         "orb",
         "focus",
+        "dagger",
     },
 )
 

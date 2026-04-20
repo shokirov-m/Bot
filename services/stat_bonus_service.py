@@ -33,16 +33,17 @@ def _messenger_set_bonus_from_equipped(items: list[InventoryItem]) -> dict[str, 
 
 
 def armor_hp_bonus_from_item_data(data: dict[str, Any] | None) -> int:
-    """Плоский бонус к макс. HP только с нагрудника (kind == armor)."""
+    """Плоский бонус к макс. HP с экипировки (поле hp_bonus; не расходники/руны)."""
     if not data:
         return 0
-    if str(data.get("kind") or "").lower() != "armor":
+    k = str(data.get("kind") or "").lower()
+    if k in ("consumable", "rune"):
         return 0
     return max(0, int(data.get("hp_bonus", 0) or 0))
 
 
 async def equipped_armor_hp_bonus_flat(session: AsyncSession, character_id: int) -> int:
-    """Сумма hp_bonus с надетых предметов kind=armor (слот нагрудника)."""
+    """Сумма hp_bonus с надетой экипировки (броня, кольца и т.д.)."""
     total = 0
     items = await inventory_repo.list_equipped_items(session, character_id)
     for it in items:

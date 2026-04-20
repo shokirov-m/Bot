@@ -17,6 +17,7 @@ def test_max_rune_slots_by_rarity() -> None:
     assert max_rune_slots("rare") == 1
     assert max_rune_slots("epic") == 2
     assert max_rune_slots("legendary") == 3
+    assert max_rune_slots("mythic") == 4
 
 
 def test_weak_spot_multiplier() -> None:

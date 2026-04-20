@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-_VALID_RARITY = frozenset({"common", "uncommon", "rare", "epic", "legendary"})
+_VALID_RARITY = frozenset({"common", "uncommon", "rare", "epic", "legendary", "mythic"})
 
 _WEAPON_ATK_FLAT: dict[str, int] = {
     "common": 0,
@@ -14,6 +14,7 @@ _WEAPON_ATK_FLAT: dict[str, int] = {
     "rare": 7,
     "epic": 11,
     "legendary": 16,
+    "mythic": 21,
 }
 
 _WEAPON_ATK_MULT: dict[str, float] = {
@@ -22,6 +23,7 @@ _WEAPON_ATK_MULT: dict[str, float] = {
     "rare": 1.17,
     "epic": 1.25,
     "legendary": 1.37,
+    "mythic": 1.42,
 }
 
 _ARMOR_DEF_FLAT: dict[str, int] = {
@@ -30,6 +32,7 @@ _ARMOR_DEF_FLAT: dict[str, int] = {
     "rare": 12,
     "epic": 18,
     "legendary": 26,
+    "mythic": 34,
 }
 
 _ARMOR_DEF_MULT: dict[str, float] = {
@@ -38,6 +41,7 @@ _ARMOR_DEF_MULT: dict[str, float] = {
     "rare": 1.24,
     "epic": 1.34,
     "legendary": 1.46,
+    "mythic": 1.54,
 }
 
 # Уровень заточки (+0…+15): доп. защита на броне/бижутерии, сильнее на высокой редкости.
@@ -47,6 +51,7 @@ _ENCHANT_ARMOR_DEF_PER_LEVEL: dict[str, float] = {
     "rare": 1.85,
     "epic": 2.25,
     "legendary": 2.75,
+    "mythic": 3.1,
 }
 
 _ARMOR_KINDS: frozenset[str] = frozenset(
@@ -110,8 +115,8 @@ def apply_stored_gear_balance_boost_v3(item_data: dict[str, Any]) -> tuple[dict[
         return d, False
 
     r = _norm_rarity(d)
-    def_add = {"common": 1, "uncommon": 2, "rare": 4, "epic": 6, "legendary": 9}.get(r, 1)
-    stat_add = {"common": 0, "uncommon": 0, "rare": 1, "epic": 2, "legendary": 3}.get(r, 0)
+    def_add = {"common": 1, "uncommon": 2, "rare": 4, "epic": 6, "legendary": 9, "mythic": 11}.get(r, 1)
+    stat_add = {"common": 0, "uncommon": 0, "rare": 1, "epic": 2, "legendary": 3, "mythic": 4}.get(r, 0)
 
     changed = False
     for key in ("defense", "armor"):
@@ -155,5 +160,6 @@ def extra_stat_points_for_rarity_on_item(item_data: dict[str, Any] | None) -> in
             "rare": 6,
             "epic": 9,
             "legendary": 12,
+            "mythic": 15,
         }.get(_norm_rarity(item_data), 0),
     )

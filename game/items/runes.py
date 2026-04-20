@@ -101,6 +101,7 @@ def max_rune_slots(rarity: str) -> int:
         "rare": 1,
         "epic": 2,
         "legendary": 3,
+        "mythic": 4,
     }
     return int(m.get((rarity or "common").lower(), 0))
 
