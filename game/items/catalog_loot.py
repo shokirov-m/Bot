@@ -55,12 +55,41 @@ def _parse_floor_note(note: str) -> tuple[int, int]:
     return n, n
 
 
-def roll_catalog_item(floor: int, rarities: list[str]) -> dict[str, Any] | None:
-    """Случайный предмет из каталога, подходящий для данного этажа и редкостей.
+def rarities_for_floor(floor: int) -> list[str]:
+    """Редкости из каталога, доступные на данном этаже.
 
+    Схема дропа:
+      Обычный    1-20
+      Необычный  11-30
+      Редкий     21-50
+      Эпический  41-80
+      Легендарный 70-90
+      Мифический  90+
+    """
+    f = int(floor)
+    result: list[str] = []
+    if f <= 20:
+        result.append("common")
+    if 11 <= f <= 30:
+        result.append("uncommon")
+    if 21 <= f <= 50:
+        result.append("rare")
+    if 41 <= f <= 80:
+        result.append("epic")
+    if 70 <= f <= 90:
+        result.append("legendary")
+    if f >= 90:
+        result.append("mythic")
+    return result
+
+
+def roll_catalog_item(floor: int, rarities: list[str] | None = None) -> dict[str, Any] | None:
+    """Случайный предмет из каталога для данного этажа.
+
+    Если rarities не передан — используется rarities_for_floor(floor).
     Возвращает глубокую копию словаря предмета или None если пул пуст.
     """
-    rarity_set = set(r.lower() for r in rarities)
+    rarity_set = set(r.lower() for r in (rarities if rarities is not None else rarities_for_floor(floor)))
     pool: list[dict[str, Any]] = []
     for item in _get_catalog():
         if str(item.get("rarity") or "common").lower() not in rarity_set:

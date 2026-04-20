@@ -268,7 +268,7 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
             (0.07, focus_wand),
             (0.07, apprentice_grimoire),
         )
-    cat = catalog_loot.roll_catalog_item(fl, ["common", "uncommon"])
+    cat = catalog_loot.roll_catalog_item(fl)
     if cat is not None:
         options = options + ((1.2, cat),)
     return _weighted_payload(options)
@@ -330,7 +330,7 @@ def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         (0.85, elixir),
         (0.55, ether),
     )
-    cat = catalog_loot.roll_catalog_item(fl, ["uncommon", "rare"])
+    cat = catalog_loot.roll_catalog_item(fl)
     if cat is not None:
         elite_options = elite_options + ((1.0, cat),)
     return _weighted_payload(elite_options)
@@ -391,7 +391,7 @@ def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         (0.92, gloves),
         (0.45, bundle),
     )
-    cat = catalog_loot.roll_catalog_item(fl, ["rare", "epic"])
+    cat = catalog_loot.roll_catalog_item(fl)
     if cat is not None:
         mini_options = mini_options + ((1.2, cat),)
     return _weighted_payload(mini_options)
@@ -453,7 +453,7 @@ def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
         (0.6, ring),
         (0.56, chest),
     )
-    cat = catalog_loot.roll_catalog_item(fl, ["epic", "legendary", "mythic"])
+    cat = catalog_loot.roll_catalog_item(fl)
     if cat is not None:
         major_options = major_options + ((1.5, cat),)
     return _weighted_payload(major_options)
