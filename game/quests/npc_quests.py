@@ -182,11 +182,7 @@ def template_by_key(quest_key: str) -> QuestTemplate | None:
     return None
 
 
-def quest_bonus_item_payload(floor: int) -> dict:
-    """Предмет за редкий дроп с квеста."""
-    return {
-        "name": f"Дар заказчика ({floor})",
-        "kind": "misc",
-        "rarity": "rare",
-        "summary": "Награда за трудное поручение у NPC.",
-    }
+def quest_bonus_item_payload(floor: int) -> dict | None:
+    """Предмет из каталога за выполнение квеста NPC."""
+    from game.items.catalog_loot import roll_catalog_item
+    return roll_catalog_item(floor)

@@ -41,13 +41,6 @@ def city_quest_template(floor_number: int) -> CityQuestTemplate | None:
     reward_gear: dict[str, Any] | None = None
     if cf == 3:
         need, rg, rx = 2, 28, 18
-        reward_gear = {
-            "name": "Плащ ополчения деревни",
-            "kind": "armor",
-            "rarity": "common",
-            "defense": 3,
-            "summary": "Подарок старосты за отражение тварей у окраины башни.",
-        }
         intro = (
             f"{role_esc} <b>{name_esc}</b> беспокоится: "
             "«У окраины башни шебуршат твари — небольшая угроза деревне. "

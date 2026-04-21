@@ -117,65 +117,9 @@ SHOP_PORTRAITS: tuple[ShopGood, ...] = (
     ),
 )
 
-# Только этаж 3: простая экипировка за золото (лавка нижнего яруса).
-SHOP_FLOOR3_GEAR: tuple[ShopGood, ...] = (
-    ShopGood(
-        key="f3_ring_str",
-        name="Кольцо яруса",
-        emoji="💍",
-        price=55,
-        blurb="⚪ Обычное · +1 удача, +1 защита.",
-        item_data={
-            "name": "Кольцо кольца",
-            "kind": "ring",
-            "rarity": "common",
-            "defense": 1,
-            "luck": 1,
-            "summary": "Простая оправа — чуть увереннее шаг по ступеням башни.",
-            "image_url": item_gear_png("shop_f3_ring"),
-        },
-    ),
-    ShopGood(
-        key="f3_gloves_dex",
-        name="Перчатки",
-        emoji="🧤",
-        price=48,
-        blurb="⚪ Обычное · +1 ловкость.",
-        item_data={
-            "name": "Перчатки",
-            "kind": "gloves",
-            "rarity": "common",
-            "defense": 1,
-            "dex": 1,
-            "summary": "Обмотки для рук — меньше скольжения на мокром камне.",
-            "image_url": item_gear_png("shop_f3_gloves"),
-        },
-    ),
-    ShopGood(
-        key="f3_amulet_vit",
-        name="Жетон",
-        emoji="📿",
-        price=62,
-        blurb="⚪ Обычное · +1 выносливость.",
-        item_data={
-            "name": "Жетон",
-            "kind": "amulet",
-            "rarity": "common",
-            "defense": 1,
-            "vit": 1,
-            "summary": "Холодный камень у сердца — дышать ровнее в бою.",
-            "image_url": item_gear_png("shop_f3_amulet"),
-        },
-    ),
-)
-
-
 def shop_goods_for_floor(floor_number: int) -> tuple[ShopGood, ...]:
-    """Расходники у торговца на этаже / в городе; облики профиля — только в главном меню «Магазин» → облики; снаряжение этажа 3 — на этаже 3."""
-    base = SHOP_GOODS
-    if int(floor_number) == 3:
-        return base + SHOP_FLOOR3_GEAR
-    return base
+    """Расходники у торговца на этаже / в городе."""
+    return SHOP_GOODS
 
 
 def good_by_key(key: str, *, floor_number: int) -> ShopGood | None:

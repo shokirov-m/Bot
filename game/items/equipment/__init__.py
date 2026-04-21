@@ -17,7 +17,7 @@ from game.items.equipment.constants import (
     UI_PLACEHOLDER_IMAGE_URL,
 )
 from game.items.equipment.defaults import apply_item_payload_defaults
-from game.items.equipment.secret_gear import SECRET_GEAR_ITEMS, try_roll_secret_gear_payload
+from game.items.equipment.secret_gear import try_roll_secret_gear_payload
 from game.items.equipment.slots import (
     EQUIP_ORDER,
     SLOT_LABEL_RU,
@@ -55,7 +55,6 @@ __all__ = [
     "SECRET_GEAR_MAX_FLOOR",
     "SECRET_GEAR_DROP_CHANCE",
     "SECRET_GEAR_EARLY_MAX_FLOOR",
-    "SECRET_GEAR_ITEMS",
     "EQUIP_ORDER",
     "SLOT_LABEL_RU",
     "equip_slot_for_kind",
