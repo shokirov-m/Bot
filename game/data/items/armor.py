@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from game.data.items._finalize import finalize_stub_list
-from utils.image_assets import item_gear_png
+from utils.image_assets import item_gear_png, item_gear_png_rarity
 
 
 def armor_examples() -> list[dict[str, Any]]:
@@ -22,7 +22,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "vit": 3,
             "hp_bonus": 30,
             "summary": "Простые, но надежные кольца. Спасут от удара когтей низшего монстра.",
-            "image_url": item_gear_png("militiaman_hauberk"),
+            "image_url": item_gear_png_rarity("militiaman_hauberk", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -32,7 +32,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "defense": 20,
             "dex": 4,
             "summary": "Пластины вшиты внутрь кожи. Не гремит и не стесняет движений.",
-            "image_url": item_gear_png("silent_step_brigandine"),
+            "image_url": item_gear_png_rarity("silent_step_brigandine", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -41,7 +41,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "rarity": "common",
             "defense": 10,
             "summary": "Многослойная простеганная ткань. Легкий и теплый, немного смягчает удары. Сопротивление урону +10%.",
-            "image_url": item_gear_png("quilted_gambeson"),
+            "image_url": item_gear_png_rarity("quilted_gambeson", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -51,7 +51,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "defense": 18,
             "luck": 3,
             "summary": "Вываренная кожа с множеством карманов для полезных мелочей.",
-            "image_url": item_gear_png("wanderer_leather_armor"),
+            "image_url": item_gear_png_rarity("wanderer_leather_armor", "common"),
             "export_floor_note": "1–20",
         },
         # НЕОБЫЧНЫЕ (11-30)
@@ -63,7 +63,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "str": 6,
             "vit": 5,
             "summary": "Стальной нагрудник, выдержавший не один штурм лестницы. Снижение физического урона +5%.",
-            "image_url": item_gear_png("vanguard_cuirass"),
+            "image_url": item_gear_png_rarity("vanguard_cuirass", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -74,7 +74,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "int": 10,
             "vit": 5,
             "summary": "Ткань пропитана защитными эфирными маслами. Немного смягчает магические атаки. Сопротивление магии +8%.",
-            "image_url": item_gear_png("acolyte_robe"),
+            "image_url": item_gear_png_rarity("acolyte_robe", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -84,7 +84,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "defense": 30,
             "luck": 8,
             "summary": "Лоскуты знамен поверх металла. Говорят, они приносят удачу тем, кто идет до конца. Шанс найти редкие предметы +5%.",
-            "image_url": item_gear_png("old_banners_armor"),
+            "image_url": item_gear_png_rarity("old_banners_armor", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -94,7 +94,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "defense": 30,
             "dex": 8,
             "summary": "Переливающаяся чешуя гигантской змеи. Гибкая и прочная, устойчива к ядам. Сопротивление яду +25%. Шанс уклонения +2%.",
-            "image_url": item_gear_png("serpent_scale_armor"),
+            "image_url": item_gear_png_rarity("serpent_scale_armor", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -105,7 +105,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "str": 8,
             "vit": 6,
             "summary": "Клепаный доспех наемника. Усилен в области сердца, но не стесняет движений рук.",
-            "image_url": item_gear_png("free_spear_chestplate"),
+            "image_url": item_gear_png_rarity("free_spear_chestplate", "uncommon"),
             "export_floor_note": "11–30",
         },
         # РЕДКИЕ (21-50)
@@ -117,7 +117,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "str": 11,
             "vit": 11,
             "summary": "Тяжелая броня для защиты узких коридоров. Вес компенсируется живучестью.",
-            "image_url": item_gear_png("boundary_guard_plate"),
+            "image_url": item_gear_png_rarity("boundary_guard_plate", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -128,7 +128,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "str": 15,
             "vit": 15,
             "summary": "Вороненая сталь с зазубринами от когтей. Внушает уважение и ужас. Аура устрашения (снижение урона врагов на 5%).",
-            "image_url": item_gear_png("fallen_knight_armor"),
+            "image_url": item_gear_png_rarity("fallen_knight_armor", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -138,7 +138,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "defense": 75,
             "dex": 15,
             "summary": "Невероятно легкая и прочная кольчуга из мифрила. Почти не ощущается на теле. Сопротивление магии +15%.",
-            "image_url": item_gear_png("mithril_hauberk"),
+            "image_url": item_gear_png_rarity("mithril_hauberk", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -148,7 +148,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "defense": 100,
             "vit": 25,
             "summary": "Каменные пластины, скрепленные магическими рунами. Тяжелый, но невероятно прочный.",
-            "image_url": item_gear_png("stone_guard_carapace"),
+            "image_url": item_gear_png_rarity("stone_guard_carapace", "rare"),
             "export_floor_note": "21–50",
         },
         # ЭПИЧЕСКИЕ (41-80)
@@ -161,7 +161,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "vit": 30,
             "luck": 10,
             "summary": "Сияющий доспех, в котором отражается свет будущей победы. Значительно снижает весь входящий урон. Снижение всего входящего урона +10%.",
-            "image_url": item_gear_png("golden_bastion"),
+            "image_url": item_gear_png_rarity("golden_bastion", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -171,7 +171,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "defense": 150,
             "dex": 25,
             "summary": "Гладкий черный доспех без единого шва. Поглощает свет и внимание врагов. Скрытность +30%. Шанс игнорирования агро +20%. Эффект: Невидимость на 3 сек при получении урона (перезарядка 1 мин).",
-            "image_url": item_gear_png("faceless_armor"),
+            "image_url": item_gear_png_rarity("faceless_armor", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -182,7 +182,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "int": 30,
             "vit": 20,
             "summary": "Чешуя, мерцающая звездным светом. Существует одновременно в нескольких измерениях. Шанс уклонения от магии +15%. Эффект: Фазовый сдвиг (шанс 10% игнорировать любой урон).",
-            "image_url": item_gear_png("astral_dragon_scale"),
+            "image_url": item_gear_png_rarity("astral_dragon_scale", "epic"),
             "export_floor_note": "41–80",
         },
         # ЛЕГЕНДАРНЫЕ (70-90)
@@ -194,7 +194,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "str": 35,
             "vit": 55,
             "summary": "Чешуя, сброшенная Древним Драконом у основания Башни. Непробиваем. Снижение физического урона +20%. Иммунитет к критическим ударам.",
-            "image_url": item_gear_png("first_guardian_carapace"),
+            "image_url": item_gear_png_rarity("first_guardian_carapace", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -205,7 +205,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "str": 45,
             "vit": 60,
             "summary": "Доспех из застывшей лавы и обсидиана. Пульсирует внутренним жаром земли. Аура огня (10% урона атакующим в ближнем бою). Сопротивление огню +40%.",
-            "image_url": item_gear_png("mountain_heart"),
+            "image_url": item_gear_png_rarity("mountain_heart", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -219,7 +219,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "vit": 20,
             "luck": 20,
             "summary": "Тканый доспех, побывавший во всех уголках Башни. Хранит память о миллионах шагов. Скорость передвижения +15%. Регенерация выносливости +25%. Эффект: Неутомимость (бесконечная выносливость вне боя).",
-            "image_url": item_gear_png("eternal_wanderer_mantle"),
+            "image_url": item_gear_png_rarity("eternal_wanderer_mantle", "legendary"),
             "export_floor_note": "70–90",
         },
         # МИФИЧЕСКИЕ (90+)
@@ -234,7 +234,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "vit": 35,
             "luck": 35,
             "summary": "Легендарный доспех, выкованный в самом сердце Башни для ее истинного хозяина. Адаптируется к стилю боя. Поглощение душ: +1 к случайной характеристике за 100 убийств (макс. 50). Эффект: Адаптивная защита (+30% сопротивления к последнему типу урона).",
-            "image_url": item_gear_png("tower_lord_armor"),
+            "image_url": item_gear_png_rarity("tower_lord_armor", "mythic"),
             "export_floor_note": "90+",
         },
         {
@@ -245,7 +245,7 @@ def armor_examples() -> list[dict[str, Any]]:
             "int": 70,
             "vit": 50,
             "summary": "Доспех из самой ткани пустоты между этажами. Не отражает свет — поглощает его полностью. Эффект: Абсолютная невидимость на 5 сек (перезарядка 3 мин). Игнорирование физических преград.",
-            "image_url": item_gear_png("void_shell"),
+            "image_url": item_gear_png_rarity("void_shell", "mythic"),
             "export_floor_note": "90+",
         },
     ]
@@ -263,7 +263,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 10,
             "dex": 5,
             "summary": "Прячет лицо от ветра и чужих взглядов.",
-            "image_url": item_gear_png("pilgrim_hood"),
+            "image_url": item_gear_png_rarity("pilgrim_hood", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -273,7 +273,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 14,
             "str": 5,
             "summary": "Простой железный горшок. Но голову бережет.",
-            "image_url": item_gear_png("militia_helmet"),
+            "image_url": item_gear_png_rarity("militia_helmet", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -283,7 +283,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 8,
             "luck": 4,
             "summary": "Потертый капюшон, повидавший немало дорог. Слегка повышает удачу в поиске припасов.",
-            "image_url": item_gear_png("vagabond_hood"),
+            "image_url": item_gear_png_rarity("vagabond_hood", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -293,7 +293,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 6,
             "int": 6,
             "summary": "Простой железный обруч, помогающий сосредоточиться на простых заклинаниях.",
-            "image_url": item_gear_png("concentration_circlet"),
+            "image_url": item_gear_png_rarity("concentration_circlet", "common"),
             "export_floor_note": "1–20",
         },
         # НЕОБЫЧНЫЕ (11-30)
@@ -304,7 +304,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 25,
             "int": 18,
             "summary": "Узкий серебряный обруч. Помогает не сбиться с заклинания в пылу боя.",
-            "image_url": item_gear_png("concentration_diadem"),
+            "image_url": item_gear_png_rarity("concentration_diadem", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -315,7 +315,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "vit": 12,
             "dex": 5,
             "summary": "Крепкая сталь с мягким подшлемником. Позволяет видеть в темноте.",
-            "image_url": item_gear_png("night_watch_helmet"),
+            "image_url": item_gear_png_rarity("night_watch_helmet", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -325,7 +325,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 28,
             "dex": 20,
             "summary": "Закрывает лицо полностью, оставляя лишь прорезь для глаз. Шанс нанести критический удар +5%.",
-            "image_url": item_gear_png("silence_mask"),
+            "image_url": item_gear_png_rarity("silence_mask", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -335,7 +335,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 32,
             "str": 10,
             "summary": "Открытый шлем с наносником. Обеспечивает хороший обзор и неплохую защиту.",
-            "image_url": item_gear_png("mercenary_helmet"),
+            "image_url": item_gear_png_rarity("mercenary_helmet", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -345,7 +345,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 22,
             "dex": 22,
             "summary": "Черный капюшон, скрывающий черты лица. Увеличивает скрытность и урон первой атаки.",
-            "image_url": item_gear_png("assassin_hood"),
+            "image_url": item_gear_png_rarity("assassin_hood", "uncommon"),
             "export_floor_note": "11–30",
         },
         # РЕДКИЕ (21-50)
@@ -357,7 +357,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "str": 25,
             "vit": 10,
             "summary": "Тяжелый, с гребнем. Идеален для таранных ударов головой. Урон от тарана +50%.",
-            "image_url": item_gear_png("hurricane_helmet"),
+            "image_url": item_gear_png_rarity("hurricane_helmet", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -368,7 +368,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "int": 20,
             "luck": 15,
             "summary": "Мелкие кристаллы-осколки мерцают в полумраке, подпитывая владельца маной. Регенерация маны +20%.",
-            "image_url": item_gear_png("fallen_star_crown"),
+            "image_url": item_gear_png_rarity("fallen_star_crown", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -378,7 +378,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "defense": 70,
             "vit": 25,
             "summary": "Закрытый шлем с забралом в виде решетки. Невероятно прочный. Сопротивление оглушению +30%.",
-            "image_url": item_gear_png("deep_guard_helmet"),
+            "image_url": item_gear_png_rarity("deep_guard_helmet", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -389,7 +389,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "int": 25,
             "dex": 10,
             "summary": "Живой венец из ветвей и листьев. Усиливает магию природы и регенерацию здоровья.",
-            "image_url": item_gear_png("forest_spirit_crown"),
+            "image_url": item_gear_png_rarity("forest_spirit_crown", "rare"),
             "export_floor_note": "21–50",
         },
         # ЭПИЧЕСКИЕ (41-80)
@@ -402,7 +402,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "vit": 25,
             "int": 15,
             "summary": "Гудит от напряжения. При получении урона выпускает электрический разряд в обидчика (урон 50% от интеллекта).",
-            "image_url": item_gear_png("sky_thunder_helmet"),
+            "image_url": item_gear_png_rarity("sky_thunder_helmet", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -413,7 +413,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "dex": 35,
             "luck": 15,
             "summary": "Полупрозрачная маска, позволяющая проходить сквозь врагов и некоторые препятствия. Шанс уклонения +10%.",
-            "image_url": item_gear_png("ghost_mask"),
+            "image_url": item_gear_png_rarity("ghost_mask", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -424,7 +424,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "int": 40,
             "vit": 15,
             "summary": "Корона из нетающего льда. Усиливает магию льда на 25% и создает ледяную ауру.",
-            "image_url": item_gear_png("eternal_ice_crown"),
+            "image_url": item_gear_png_rarity("eternal_ice_crown", "epic"),
             "export_floor_note": "41–80",
         },
         # ЛЕГЕНДАРНЫЕ (70-90)
@@ -436,7 +436,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "luck": 40,
             "int": 35,
             "summary": "Смотря на эту маску, враги забывают, зачем они сюда пришли. Шанс наложить «Смятение» при ударе 15%.",
-            "image_url": item_gear_png("faceless_god_mask"),
+            "image_url": item_gear_png_rarity("faceless_god_mask", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -447,7 +447,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "str": 55,
             "vit": 35,
             "summary": "Шлем в форме головы дракона. Увеличивает весь наносимый урон на 15%, но повышает получаемый на 10%.",
-            "image_url": item_gear_png("dragon_fury_helmet"),
+            "image_url": item_gear_png_rarity("dragon_fury_helmet", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -458,7 +458,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "int": 60,
             "luck": 25,
             "summary": "Позволяет видеть скрытое: ловушки, невидимых врагов и слабые места противников. Критический урон +30%.",
-            "image_url": item_gear_png("all_seeing_crown"),
+            "image_url": item_gear_png_rarity("all_seeing_crown", "legendary"),
             "export_floor_note": "70–90",
         },
         # МИФИЧЕСКИЕ (90+)
@@ -473,7 +473,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "vit": 40,
             "luck": 40,
             "summary": "Корона истинного правителя Башни. Дарует +2 к уровню всех умений и снижает все входящие перезарядки на 20%.",
-            "image_url": item_gear_png("tower_lord_crown"),
+            "image_url": item_gear_png_rarity("tower_lord_crown", "mythic"),
             "export_floor_note": "90+",
         },
         {
@@ -484,7 +484,7 @@ def helmet_examples() -> list[dict[str, Any]]:
             "int": 80,
             "vit": 45,
             "summary": "Шлем с единственным глазом в центре лба. Позволяет видеть будущее на 2 секунды вперед, автоматически уклоняясь от смертельных атак.",
-            "image_url": item_gear_png("abyss_eye_helmet"),
+            "image_url": item_gear_png_rarity("abyss_eye_helmet", "mythic"),
             "export_floor_note": "90+",
         },
     ]
@@ -502,7 +502,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 10,
             "vit": 5,
             "summary": "Крепкая ткань и кожаные вставки на коленях.",
-            "image_url": item_gear_png("novice_pants"),
+            "image_url": item_gear_png_rarity("novice_pants", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -512,7 +512,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 12,
             "dex": 8,
             "summary": "Не стесняют движений при беге по спиральным лестницам.",
-            "image_url": item_gear_png("pathfinder_legs"),
+            "image_url": item_gear_png_rarity("pathfinder_legs", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -522,7 +522,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 8,
             "hp_bonus": 30,
             "summary": "Теплые стеганые штаны. Немного увеличивают запас здоровья.",
-            "image_url": item_gear_png("quilted_legs"),
+            "image_url": item_gear_png_rarity("quilted_legs", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -532,7 +532,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 11,
             "luck": 4,
             "summary": "Удобные штаны с множеством карманов для мелочей.",
-            "image_url": item_gear_png("wanderer_legs"),
+            "image_url": item_gear_png_rarity("wanderer_legs", "common"),
             "export_floor_note": "1–20",
         },
         # НЕОБЫЧНЫЕ (11-30)
@@ -544,7 +544,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "int": 12,
             "vit": 6,
             "summary": "В швах мерцают руны ускорения мысли.",
-            "image_url": item_gear_png("magister_legs"),
+            "image_url": item_gear_png_rarity("magister_legs", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -555,7 +555,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "dex": 15,
             "luck": 5,
             "summary": "Идеальное сцепление с любой поверхностью. Невозможно поскользнуться.",
-            "image_url": item_gear_png("climber_wraps"),
+            "image_url": item_gear_png_rarity("climber_wraps", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -566,7 +566,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "str": 10,
             "vit": 5,
             "summary": "Множество карманов для метательных ножей и зелий.",
-            "image_url": item_gear_png("bounty_hunter_legs"),
+            "image_url": item_gear_png_rarity("bounty_hunter_legs", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -577,7 +577,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "dex": 10,
             "vit": 5,
             "summary": "Гибкие поножи из змеиной чешуи. Сопротивление яду +15%.",
-            "image_url": item_gear_png("serpent_scale_legs"),
+            "image_url": item_gear_png_rarity("serpent_scale_legs", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -587,7 +587,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 33,
             "str": 12,
             "summary": "Простые, но надежные стальные набедренники.",
-            "image_url": item_gear_png("mercenary_legs"),
+            "image_url": item_gear_png_rarity("mercenary_legs", "uncommon"),
             "export_floor_note": "11–30",
         },
         # РЕДКИЕ (21-50)
@@ -598,7 +598,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 70,
             "vit": 25,
             "summary": "Надежная защита бедер и голени. Выдерживают прямой удар копьем.",
-            "image_url": item_gear_png("watch_chainmail_legs"),
+            "image_url": item_gear_png_rarity("watch_chainmail_legs", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -609,7 +609,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "str": 20,
             "vit": 15,
             "summary": "Бурые разводы на стали — напоминание о пройденных битвах. Увеличивает сопротивление кровотечению +50%.",
-            "image_url": item_gear_png("blood_harvest_legs"),
+            "image_url": item_gear_png_rarity("blood_harvest_legs", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -619,7 +619,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 65,
             "dex": 20,
             "summary": "Легкие и прочные поножи из мифрила. Скорость передвижения +10%.",
-            "image_url": item_gear_png("mithril_legs"),
+            "image_url": item_gear_png_rarity("mithril_legs", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -629,7 +629,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 85,
             "vit": 30,
             "summary": "Тяжелые каменные пластины на ногах. Сопротивление оглушению +25%.",
-            "image_url": item_gear_png("stone_guard_legs"),
+            "image_url": item_gear_png_rarity("stone_guard_legs", "rare"),
             "export_floor_note": "21–50",
         },
         # ЭПИЧЕСКИЕ (41-80)
@@ -641,7 +641,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "dex": 30,
             "vit": 20,
             "summary": "Серебряные нити вплетены в ткань. Позволяют совершать короткий рывок (перезарядка 5 сек).",
-            "image_url": item_gear_png("dimensional_step_legs"),
+            "image_url": item_gear_png_rarity("dimensional_step_legs", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -651,7 +651,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "defense": 130,
             "dex": 35,
             "summary": "Черные поножи, не издающие ни звука при ходьбе. Скрытность +40%. Шанс уклонения +8%.",
-            "image_url": item_gear_png("faceless_legs"),
+            "image_url": item_gear_png_rarity("faceless_legs", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -662,7 +662,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "int": 25,
             "dex": 25,
             "summary": "Мерцающие поножи из чешуи астрального дракона. Шанс игнорирования магии +10%.",
-            "image_url": item_gear_png("astral_dragon_legs"),
+            "image_url": item_gear_png_rarity("astral_dragon_legs", "epic"),
             "export_floor_note": "41–80",
         },
         # ЛЕГЕНДАРНЫЕ (70-90)
@@ -674,7 +674,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "str": 35,
             "vit": 45,
             "summary": "Кажется, что они весят целую тонну, но для владельца они легче пуха. Стойкость несгибаема. Сопротивление всем видам контроля +40%.",
-            "image_url": item_gear_png("mountain_king_legs"),
+            "image_url": item_gear_png_rarity("mountain_king_legs", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -685,7 +685,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "str": 50,
             "vit": 50,
             "summary": "Поножи из застывшей лавы. Наносят урон огнем атакующим в ближнем бою (5% от силы).",
-            "image_url": item_gear_png("mountain_heart_legs"),
+            "image_url": item_gear_png_rarity("mountain_heart_legs", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -696,7 +696,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "dex": 45,
             "luck": 30,
             "summary": "Удобные штаны, идеально подходящие для долгих путешествий. Скорость передвижения +20%. Восстановление выносливости +30%.",
-            "image_url": item_gear_png("eternal_wanderer_pants"),
+            "image_url": item_gear_png_rarity("eternal_wanderer_pants", "legendary"),
             "export_floor_note": "70–90",
         },
         # МИФИЧЕСКИЕ (90+)
@@ -711,7 +711,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "vit": 45,
             "luck": 45,
             "summary": "Поножи истинного правителя Башни. Даруют способность левитировать на короткое время и игнорировать замедление.",
-            "image_url": item_gear_png("tower_lord_legs"),
+            "image_url": item_gear_png_rarity("tower_lord_legs", "mythic"),
             "export_floor_note": "90+",
         },
         {
@@ -722,7 +722,7 @@ def pants_examples() -> list[dict[str, Any]]:
             "dex": 70,
             "int": 50,
             "summary": "Поножи из ткани пустоты. Позволяют проходить сквозь стены на 3 секунды (перезарядка 2 минуты).",
-            "image_url": item_gear_png("void_legs"),
+            "image_url": item_gear_png_rarity("void_legs", "mythic"),
             "export_floor_note": "90+",
         },
     ]
@@ -740,7 +740,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "defense": 8,
             "str": 5,
             "summary": "Грубая кожа. Крепко держат рукоять меча или кирку. Урон ближнего боя +3%.",
-            "image_url": item_gear_png("workers_gloves"),
+            "image_url": item_gear_png_rarity("workers_gloves", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -750,7 +750,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "defense": 6,
             "dex": 8,
             "summary": "Обрезаны на пальцах для лучшего контакта с тетивой. Урон дальнего боя +3%.",
-            "image_url": item_gear_png("archer_mittens"),
+            "image_url": item_gear_png_rarity("archer_mittens", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -760,7 +760,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "defense": 4,
             "luck": 4,
             "summary": "Теплые вязаные варежки. Согревают руки в холодных коридорах Башни и помогают нащупать скрытые предметы. Сопротивление холоду +10%.",
-            "image_url": item_gear_png("seekers_mittens"),
+            "image_url": item_gear_png_rarity("seekers_mittens", "common"),
             "export_floor_note": "1–20",
         },
         # НЕОБЫЧНЫЕ (11-30)
@@ -772,7 +772,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "dex": 5,
             "luck": 5,
             "summary": "Тонкая выделка позволяет чувствовать малейшие вибрации ловушек. Обнаружение ловушек +15%.",
-            "image_url": item_gear_png("jeweler_gloves"),
+            "image_url": item_gear_png_rarity("jeweler_gloves", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -782,7 +782,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "defense": 18,
             "int": 10,
             "summary": "Руны на тыльной стороне ладони загораются при произнесении заклинания. Скорость каста +5%.",
-            "image_url": item_gear_png("rune_reader_gloves"),
+            "image_url": item_gear_png_rarity("rune_reader_gloves", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -793,7 +793,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "str": 6,
             "vit": 6,
             "summary": "Металлические накладки на пальцах. Увеличивают урон от рукопашного боя без оружия. Урон без оружия +25%.",
-            "image_url": item_gear_png("predator_claws"),
+            "image_url": item_gear_png_rarity("predator_claws", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -803,7 +803,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "defense": 15,
             "dex": 10,
             "summary": "Легкие перчатки с прорезиненными вставками на ладонях. Обеспечивают надежный хват при кувырках и лазании. Шанс уклонения +3%. Скорость перезарядки кувырка +10%.",
-            "image_url": item_gear_png("acrobat_gloves"),
+            "image_url": item_gear_png_rarity("acrobat_gloves", "uncommon"),
             "export_floor_note": "11–30",
         },
         # РЕДКИЕ (21-50)
@@ -815,7 +815,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "str": 10,
             "dex": 10,
             "summary": "Сегментированная броня, не сковывающая движений кисти. Снижение урона от физических атак +5%.",
-            "image_url": item_gear_png("steel_beetle_gloves"),
+            "image_url": item_gear_png_rarity("steel_beetle_gloves", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -826,7 +826,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "int": 10,
             "vit": 10,
             "summary": "Не боятся огня. Увеличивают мощь огненных заклинаний на 10%. Урон огненных заклинаний +10%. Иммунитет к горению рук.",
-            "image_url": item_gear_png("white_flame_gauntlets"),
+            "image_url": item_gear_png_rarity("white_flame_gauntlets", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -836,7 +836,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "defense": 45,
             "dex": 15,
             "summary": "Черные перчатки, которые словно поглощают свет вокруг. Увеличивают урон от атак со спины и из невидимости. Критический урон +30%. Шанс критического удара из скрытности +10%.",
-            "image_url": item_gear_png("shadow_grasp"),
+            "image_url": item_gear_png_rarity("shadow_grasp", "rare"),
             "export_floor_note": "21–50",
         },
         # ЭПИЧЕСКИЕ (41-80)
@@ -848,7 +848,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "int": 20,
             "luck": 20,
             "summary": "Каждый палец украшен кольцом с символом элемента. Сокращает время каста заклинаний. Скорость каста +15%. Снижение затрат маны +10%.",
-            "image_url": item_gear_png("seven_elements_seal"),
+            "image_url": item_gear_png_rarity("seven_elements_seal", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -859,7 +859,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "str": 30,
             "vit": 15,
             "summary": "Массивные стальные перчатки с утяжелителями. Каждый удар сотрясает землю, нанося урон по площади. Урон ближнего боя +20%. Эффект: Ударная волна (урон по площади 30% от основного).",
-            "image_url": item_gear_png("titan_fists"),
+            "image_url": item_gear_png_rarity("titan_fists", "epic"),
             "export_floor_note": "41–80",
         },
         # ЛЕГЕНДАРНЫЕ (70-90)
@@ -871,7 +871,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "str": 45,
             "int": 30,
             "summary": "Эти перчатки касались ткани мироздания. Позволяют использовать навык «Захват Заклинания». Эффект: 20% шанс на возврат 50% использованной маны при использовании навыка.",
-            "image_url": item_gear_png("creator_palms"),
+            "image_url": item_gear_png_rarity("creator_palms", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -882,7 +882,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "dex": 50,
             "int": 35,
             "summary": "Перчатки, сотканные из нитей судьбы. Позволяют владельцу на короткое время ускорять собственное время, замедляя мир вокруг. Эффект: Замедление времени на 3 секунды (перезарядка 2 минуты). Скорость передвижения +10%.",
-            "image_url": item_gear_png("fingers_of_time"),
+            "image_url": item_gear_png_rarity("fingers_of_time", "legendary"),
             "export_floor_note": "70–90",
         },
         # МИФИЧЕСКИЕ (90+)
@@ -897,7 +897,7 @@ def gloves_examples() -> list[dict[str, Any]]:
             "vit": 30,
             "luck": 30,
             "summary": "Легендарная правая перчатка, которой бог коснулся первого человека. Дарует благословение на критические удары и неуязвимость на короткое время. Шанс критического удара +15%. Эффект: Неуязвимость на 2 секунды при получении смертельного урона (перезарядка 5 минут).",
-            "image_url": item_gear_png("gods_right_hand"),
+            "image_url": item_gear_png_rarity("gods_right_hand", "mythic"),
             "export_floor_note": "90+",
         },
     ]

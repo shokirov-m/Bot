@@ -38,6 +38,11 @@ def item_gear_png(stem: str) -> str:
     return str(item_images_dir() / f"{stem}.png")
 
 
+def item_gear_png_rarity(stem: str, rarity: str) -> str:
+    """Путь к ``assets/items/{rarity}/{stem}.png`` — каталожные предметы, разложенные по редкости."""
+    return str(item_images_dir() / rarity / f"{stem}.png")
+
+
 def procedural_secret_gear_image(kind: str) -> str:
     """Тайник на высоких этажах: одна заглушка на вид экипировки."""
     k = (kind or "armor").lower()

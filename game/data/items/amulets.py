@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from game.data.items._finalize import finalize_stub_list
-from utils.image_assets import item_gear_png
+from utils.image_assets import item_gear_png, item_gear_png_rarity
 
 
 def amulet_examples() -> list[dict[str, Any]]:
@@ -19,7 +19,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "int": 3,
             "mp_bonus": 30,
             "summary": "Внутри маленькой колбы — пыль первого этажа. Слабый источник магии.",
-            "image_url": item_gear_png("dusty_echo_pendant"),
+            "image_url": item_gear_png_rarity("dusty_echo_pendant", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -30,7 +30,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "vit": 2,
             "hp_bonus": 40,
             "summary": "Теплый металл успокаивает сердцебиение при виде монстра.",
-            "image_url": item_gear_png("medallion_of_endurance"),
+            "image_url": item_gear_png_rarity("medallion_of_endurance", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -40,7 +40,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "defense": 3,
             "str": 2,
             "summary": "Засушенный клык крысы или волка с нижних этажей. Внушает владельцу ложное чувство храбрости. Мин. урон +2.",
-            "image_url": item_gear_png("first_beast_fang"),
+            "image_url": item_gear_png_rarity("first_beast_fang", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -50,7 +50,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "defense": 2,
             "luck": 5,
             "summary": "Кусочек светящегося мха, залитый смолой. Помогает разглядеть блеск монет в темноте.",
-            "image_url": item_gear_png("miners_charm"),
+            "image_url": item_gear_png_rarity("miners_charm", "common"),
             "export_floor_note": "1–20",
         },
         # НЕОБЫЧНЫЕ (11-30)
@@ -61,7 +61,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "defense": 15,
             "int": 8,
             "summary": "Три лунных камня, символизирующих фазы подъема. Регенерация маны +15%.",
-            "image_url": item_gear_png("three_moons_amulet"),
+            "image_url": item_gear_png_rarity("three_moons_amulet", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -71,7 +71,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "defense": 12,
             "luck": 12,
             "summary": "Потертая монетка на шнурке. Иногда она падает нужной стороной. Золото +5%.",
-            "image_url": item_gear_png("lucky_charm_pendant"),
+            "image_url": item_gear_png_rarity("lucky_charm_pendant", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -81,7 +81,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "defense": 18,
             "dex": 6,
             "summary": "Переливается всеми цветами радуги. Увеличивает сопротивление ядам. Сопротивление яду +20%.",
-            "image_url": item_gear_png("scale_necklace"),
+            "image_url": item_gear_png_rarity("scale_necklace", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -91,7 +91,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "defense": 20,
             "vit": 8,
             "summary": "Эмалевый медальон с изображением щита. Укрепляет дух перед лицом боли. Снижение урона от обычных атак +3.",
-            "image_url": item_gear_png("squires_heart"),
+            "image_url": item_gear_png_rarity("squires_heart", "uncommon"),
             "export_floor_note": "11–30",
         },
         # РЕДКИЕ (21-50)
@@ -106,7 +106,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "dex": 3,
             "luck": 3,
             "summary": "Не открывает двери, но открывает скрытые резервы организма. Все характеристики +3.",
-            "image_url": item_gear_png("key_core_amulet"),
+            "image_url": item_gear_png_rarity("key_core_amulet", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -117,7 +117,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "int": 20,
             "luck": 8,
             "summary": "Содержит свиток с заклинанием абсолютной защиты. Один раз в бою блокирует летальный урон (перезарядка 5 минут).",
-            "image_url": item_gear_png("elder_mages_phylactery"),
+            "image_url": item_gear_png_rarity("elder_mages_phylactery", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -127,7 +127,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "defense": 30,
             "dex": 20,
             "summary": "В центре амулета застыл электрический разряд. Ускоряет движения и атаки владельца. Шанс уклонения +2%.",
-            "image_url": item_gear_png("storm_eye_amulet"),
+            "image_url": item_gear_png_rarity("storm_eye_amulet", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -138,7 +138,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "str": 12,
             "vit": 8,
             "summary": "Темный амулет в форме когтя летучей мыши. Превращает часть нанесенного урона в здоровье. Вампиризм +4%.",
-            "image_url": item_gear_png("vampire_claw"),
+            "image_url": item_gear_png_rarity("vampire_claw", "rare"),
             "export_floor_note": "21–50",
         },
         # ЭПИЧЕСКИЕ (41-80)
@@ -153,7 +153,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "dex": 5,
             "luck": 5,
             "summary": "Крошечная часть ядра Башни. Значительно усиливает все параметры владельца. Все характеристики +5.",
-            "image_url": item_gear_png("tower_heart_shard"),
+            "image_url": item_gear_png_rarity("tower_heart_shard", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -164,7 +164,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "str": 20,
             "int": 20,
             "summary": "Звенья цепи слегка вибрируют от накопленной энергии. Ваши атаки с шансом поражают врагов цепной молнией. Шанс удара молнией 15%.",
-            "image_url": item_gear_png("thunderers_chain"),
+            "image_url": item_gear_png_rarity("thunderers_chain", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -174,7 +174,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "defense": 60,
             "vit": 25,
             "summary": "Гравировка стерта временем, но сила осталась. Увеличивает длительность эффектов контроля на врагах и уменьшает их на вас.",
-            "image_url": item_gear_png("forgotten_name_amulet"),
+            "image_url": item_gear_png_rarity("forgotten_name_amulet", "epic"),
             "export_floor_note": "41–80",
         },
         # ЛЕГЕНДАРНЫЕ (70-90)
@@ -187,7 +187,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "vit": 40,
             "luck": 20,
             "summary": "Огромный черный алмаз, в глубине которого видна спираль уходящих душ. Позволяет воскрешать поверженных врагов как союзников (раз в день).",
-            "image_url": item_gear_png("abyss_eye_amulet"),
+            "image_url": item_gear_png_rarity("abyss_eye_amulet", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -199,7 +199,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "dex": 35,
             "int": 35,
             "summary": "Часть цепи, которой были скованы древние правители этажей. Передает часть их силы владельцу. Урон по боссам +15%.",
-            "image_url": item_gear_png("kings_binding_link"),
+            "image_url": item_gear_png_rarity("kings_binding_link", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -210,7 +210,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "vit": 70,
             "hp_bonus": 500,
             "summary": "Изумруд, в котором застыло изображение Древа Мира. Значительно увеличивает максимальный запас здоровья и его восполнение. Регенерация ХП +50 HP/мин.",
-            "image_url": item_gear_png("echo_of_life"),
+            "image_url": item_gear_png_rarity("echo_of_life", "legendary"),
             "export_floor_note": "70–90",
         },
         # МИФИЧЕСКИЕ (90+)
@@ -225,7 +225,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "vit": 25,
             "luck": 25,
             "summary": "Амулет горячий на ощупь. Если владелец умирает, амулет взрывается огнем, нанося урон вокруг, и воскрешает владельца с 30% здоровья (перезарядка 1 час).",
-            "image_url": item_gear_png("phoenix_heart_amulet"),
+            "image_url": item_gear_png_rarity("phoenix_heart_amulet", "mythic"),
             "export_floor_note": "90+",
         },
         {
@@ -236,7 +236,7 @@ def amulet_examples() -> list[dict[str, Any]]:
             "dex": 60,
             "luck": 60,
             "summary": "Хрустальный шар на цепочке, показывающий обрывки будущего. Шанс уклонения увеличен до 50%, если у вас меньше 20% здоровья.",
-            "image_url": item_gear_png("tower_oracle"),
+            "image_url": item_gear_png_rarity("tower_oracle", "mythic"),
             "export_floor_note": "90+",
         },
     ]

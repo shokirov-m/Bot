@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from game.data.items._finalize import finalize_stub_list
-from utils.image_assets import item_gear_png
+from utils.image_assets import item_gear_png, item_gear_png_rarity
 
 
 def weapon_main_examples() -> list[dict[str, Any]]:
@@ -20,7 +20,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "attack": 15,
             "weapon_type": "blade",
             "summary": "Первый клинок, прошедший закалку у врат Башни. Надежен и остр.",
-            "image_url": item_gear_png("novice_path"),
+            "image_url": item_gear_png_rarity("novice_path", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -31,7 +31,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "attack": 18,
             "weapon_type": "polearm",
             "summary": "Длинное древко с вороненым наконечником. Держит врага на дистанции удара сердца.",
-            "image_url": item_gear_png("watchman_spear"),
+            "image_url": item_gear_png_rarity("watchman_spear", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -42,7 +42,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "attack": 16,
             "weapon_type": "hammer",
             "summary": "Тяжелое навершие на крепкой рукояти. Хорошо пробивает доспехи.",
-            "image_url": item_gear_png("guardian_mace"),
+            "image_url": item_gear_png_rarity("guardian_mace", "common"),
             "export_floor_note": "1–20",
         },
         # НЕОБЫЧНЫЕ (11-30)
@@ -54,7 +54,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "attack": 35,
             "weapon_type": "axe",
             "summary": "Тяжелое лезвие, способное пробить как хитин монстра, так и дубовую дверь.",
-            "image_url": item_gear_png("tower_cleaver"),
+            "image_url": item_gear_png_rarity("tower_cleaver", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -65,7 +65,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "attack": 40,
             "weapon_type": "hammer",
             "summary": "Каждый удар отдается глухим эхом в костях противника. Шанс оглушить цель 10%.",
-            "image_url": item_gear_png("thunder_hammer"),
+            "image_url": item_gear_png_rarity("thunder_hammer", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -77,7 +77,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "dex": 8,
             "weapon_type": "blade",
             "summary": "Изогнутый меч с черным лезвием. Увеличивает шанс критического удара на 5%.",
-            "image_url": item_gear_png("raven_blade"),
+            "image_url": item_gear_png_rarity("raven_blade", "uncommon"),
             "export_floor_note": "11–30",
         },
         # РЕДКИЕ (21-50) — с эффектами
@@ -91,7 +91,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "mp_bonus": 100,
             "weapon_type": "staff",
             "summary": "По древку бегут трещины чистой энергии. Увеличивает резерв маны. Эффект: +15% к урону магией молнии.",
-            "image_url": item_gear_png("rift_staff"),
+            "image_url": item_gear_png_rarity("rift_staff", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -103,7 +103,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "str": 10,
             "weapon_type": "axe",
             "summary": "Лезвие пахнет озоном и старой кровью. Эффект: Кровотечение (урон 20% от атаки за 5 сек, шанс 15%).",
-            "image_url": item_gear_png("doom_axe"),
+            "image_url": item_gear_png_rarity("doom_axe", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -115,7 +115,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "dex": 15,
             "weapon_type": "whip",
             "summary": "Кнут, сплетенный из огненных волокон. Эффект: Урон огнем +10, шанс поджечь цель 20% (горение 3 сек).",
-            "image_url": item_gear_png("fire_scourge"),
+            "image_url": item_gear_png_rarity("fire_scourge", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -127,7 +127,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "int": 10,
             "weapon_type": "polearm",
             "summary": "Наконечник из вечного льда. Эффект: Урон льдом +12, шанс заморозить цель 10% (замедление 50% на 2 сек).",
-            "image_url": item_gear_png("ice_spear"),
+            "image_url": item_gear_png_rarity("ice_spear", "rare"),
             "export_floor_note": "21–50",
         },
         # ЭПИЧЕСКИЕ (41-80) — с сильными эффектами
@@ -140,7 +140,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "int": 25,
             "weapon_type": "blade",
             "summary": "Клинок из чистого света. Рассекает не только плоть, но и магические щиты. Эффект: Игнорирование 30% магической защиты, урон светом +25.",
-            "image_url": item_gear_png("absolute_radiance"),
+            "image_url": item_gear_png_rarity("absolute_radiance", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -152,7 +152,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "str": 30,
             "weapon_type": "hammer",
             "summary": "При ударе призывает молнию с небес. Эффект: Цепная молния (урон 40% от атаки до 3 целей, шанс 25%).",
-            "image_url": item_gear_png("sky_judgment_hammer"),
+            "image_url": item_gear_png_rarity("sky_judgment_hammer", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -165,7 +165,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "vit": 15,
             "weapon_type": "polearm",
             "summary": "Коса, пожирающая души. Эффект: Вампиризм 8% от урона, при убийстве восстанавливает 5% макс. здоровья.",
-            "image_url": item_gear_png("soul_reaper_scythe"),
+            "image_url": item_gear_png_rarity("soul_reaper_scythe", "epic"),
             "export_floor_note": "41–80",
         },
         # ЛЕГЕНДАРНЫЕ (70-90) — с мощными эффектами
@@ -179,7 +179,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "vit": 30,
             "weapon_type": "blade",
             "summary": "Выкован в сердце умирающей звезды. Эффект: Аура разрушения (враги в радиусе 3м получают 5% от атаки уроном тьмы каждую секунду).",
-            "image_url": item_gear_png("worlds_end"),
+            "image_url": item_gear_png_rarity("worlds_end", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -191,7 +191,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "str": 50,
             "weapon_type": "axe",
             "summary": "Никогда не гаснущее пламя. Эффект: Урон огнем +50, горение 100% (урон 30% от атаки за 5 сек), иммунитет к холоду.",
-            "image_url": item_gear_png("eternal_flame_axe"),
+            "image_url": item_gear_png_rarity("eternal_flame_axe", "legendary"),
             "export_floor_note": "70–90",
         },
         # МИФИЧЕСКИЕ (90+) — с уникальными эффектами
@@ -206,7 +206,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "int": 60,
             "weapon_type": "blade",
             "summary": "Оружие, которым был сотворен мир. Эффект: Все стихии (каждая атака наносит дополнительный урон случайной стихией: огонь, лед, молния, тьма, свет — 50% от атаки).",
-            "image_url": item_gear_png("creator_blade"),
+            "image_url": item_gear_png_rarity("creator_blade", "mythic"),
             "export_floor_note": "90+",
         },
         {
@@ -219,7 +219,7 @@ def weapon_main_examples() -> list[dict[str, Any]]:
             "mp_bonus": 500,
             "weapon_type": "staff",
             "summary": "Посох, управляющий самим временем. Эффект: Замедление времени в радиусе 5м на 3 сек (перезарядка 30 сек), +40% к урону всеми заклинаниями.",
-            "image_url": item_gear_png("time_lord_staff"),
+            "image_url": item_gear_png_rarity("time_lord_staff", "mythic"),
             "export_floor_note": "90+",
         },
     ]
@@ -238,7 +238,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "attack": 12,
             "weapon_type": "dagger",
             "summary": "Лёгкий клинок для левой руки. Идеален для парирования и неожиданных выпадов.",
-            "image_url": item_gear_png("shadow_shank"),
+            "image_url": item_gear_png_rarity("shadow_shank", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -249,7 +249,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "attack": 14,
             "weapon_type": "dagger",
             "summary": "Узкое лезвие с серрейтором. Перерезает веревки и сухожилия как масло.",
-            "image_url": item_gear_png("ropewalker_dirk"),
+            "image_url": item_gear_png_rarity("ropewalker_dirk", "common"),
             "export_floor_note": "1–20",
         },
         # НЕОБЫЧНЫЕ (11-30)
@@ -262,7 +262,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "dex": 8,
             "weapon_type": "dagger",
             "summary": "Невесомый клинок. При атаке со спины игнорирует 15% брони цели.",
-            "image_url": item_gear_png("silence_stiletto"),
+            "image_url": item_gear_png_rarity("silence_stiletto", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -274,7 +274,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "str": 5,
             "weapon_type": "dagger",
             "summary": "Изогнутая сталь. Цепляет врага, замедляя его на 20% при ударе.",
-            "image_url": item_gear_png("butcher_hook"),
+            "image_url": item_gear_png_rarity("butcher_hook", "uncommon"),
             "export_floor_note": "11–30",
         },
         # РЕДКИЕ (21-50) — с эффектами
@@ -287,7 +287,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "dex": 12,
             "weapon_type": "dagger",
             "summary": "Желобок на лезвии всегда влажный. Эффект: Отравление (урон 15% от атаки за 4 сек, шанс 20%).",
-            "image_url": item_gear_png("cursed_blood_dagger"),
+            "image_url": item_gear_png_rarity("cursed_blood_dagger", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -299,7 +299,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "int": 10,
             "weapon_type": "dagger",
             "summary": "Кинжал из чистого льда. Эффект: Урон льдом +8, шанс заморозить 10%.",
-            "image_url": item_gear_png("ice_shard"),
+            "image_url": item_gear_png_rarity("ice_shard", "rare"),
             "export_floor_note": "21–50",
         },
         # ЭПИЧЕСКИЕ (41-80) — с сильными эффектами
@@ -313,7 +313,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "luck": 20,
             "weapon_type": "dagger",
             "summary": "Лезвие не отбрасывает бликов. Эффект: Шанс уклониться от атаки +15%, при уклонении — контратака с +50% урона.",
-            "image_url": item_gear_png("distortion_dagger"),
+            "image_url": item_gear_png_rarity("distortion_dagger", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -325,7 +325,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "dex": 25,
             "weapon_type": "dagger",
             "summary": "Кинжал, пропитанный смертельным ядом. Эффект: Смертельный яд (урон 40% от атаки за 6 сек, шанс 25%, при смерти от яда — взрыв).",
-            "image_url": item_gear_png("manticore_sting"),
+            "image_url": item_gear_png_rarity("manticore_sting", "epic"),
             "export_floor_note": "41–80",
         },
         # ЛЕГЕНДАРНЫЕ (70-90) — с мощными эффектами
@@ -338,7 +338,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "dex": 40,
             "weapon_type": "dagger",
             "summary": "Вырван у Древнего Змея. Эффект: Вампиризм 12% от урона, при ударе со спины — критический удар +100%.",
-            "image_url": item_gear_png("abyss_fang"),
+            "image_url": item_gear_png_rarity("abyss_fang", "legendary"),
             "export_floor_note": "70–90",
         },
         # МИФИЧЕСКИЕ (90+) — с уникальными эффектами
@@ -352,7 +352,7 @@ def weapon_offhand_examples() -> list[dict[str, Any]]:
             "luck": 50,
             "weapon_type": "dagger",
             "summary": "Кинжал, существующий на грани реальности. Эффект: Мгновенное убийство целей с менее чем 15% здоровья (кроме боссов), неуязвимость на 1 сек после убийства.",
-            "image_url": item_gear_png("last_whisper"),
+            "image_url": item_gear_png_rarity("last_whisper", "mythic"),
             "export_floor_note": "90+",
         },
     ]
@@ -372,7 +372,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "attack": 22,
             "weapon_type": "blade",
             "summary": "Тяжелый клинок, требующий двух рук. Учит воина держать строй.",
-            "image_url": item_gear_png("recruit_brand"),
+            "image_url": item_gear_png_rarity("recruit_brand", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -384,7 +384,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "attack": 20,
             "weapon_type": "staff",
             "summary": "Крепкое дерево. Помогает и в бою, и в долгом пути по этажам.",
-            "image_url": item_gear_png("wanderer_staff"),
+            "image_url": item_gear_png_rarity("wanderer_staff", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -396,7 +396,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "attack": 24,
             "weapon_type": "bow",
             "summary": "Простой, но надежный лук. Хорош для охоты на мелких монстров.",
-            "image_url": item_gear_png("hunter_longbow"),
+            "image_url": item_gear_png_rarity("hunter_longbow", "common"),
             "export_floor_note": "1–20",
         },
         # НЕОБЫЧНЫЕ (11-30)
@@ -409,7 +409,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "attack": 45,
             "weapon_type": "axe",
             "summary": "Огромное лезвие на длинной рукояти. Сносит любые преграды.",
-            "image_url": item_gear_png("gate_axe"),
+            "image_url": item_gear_png_rarity("gate_axe", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -421,7 +421,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "attack": 42,
             "weapon_type": "bow",
             "summary": "Изготовлен из кости ледяного дракона. Стрелы замедляют цель на 20%.",
-            "image_url": item_gear_png("snow_peak_bow"),
+            "image_url": item_gear_png_rarity("snow_peak_bow", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -433,7 +433,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "attack": 48,
             "weapon_type": "polearm",
             "summary": "Широкий взмах срезает все живое на своем пути. Урон по области +30%.",
-            "image_url": item_gear_png("reaper_scythe"),
+            "image_url": item_gear_png_rarity("reaper_scythe", "uncommon"),
             "export_floor_note": "11–30",
         },
         # РЕДКИЕ (21-50) — с эффектами
@@ -447,7 +447,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "str": 15,
             "weapon_type": "hammer",
             "summary": "Ударная волна дробит камень. Эффект: Оглушение цели на 1.5 сек (шанс 20%), урон по площади 40% от атаки.",
-            "image_url": item_gear_png("tectonic_hammer"),
+            "image_url": item_gear_png_rarity("tectonic_hammer", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -460,7 +460,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "int": 12,
             "weapon_type": "blade",
             "summary": "Лезвие переливается зеленым и синим. Эффект: Урон льдом +15, шанс заморозить 15%.",
-            "image_url": item_gear_png("aurora_claymore"),
+            "image_url": item_gear_png_rarity("aurora_claymore", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -473,7 +473,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "dex": 15,
             "weapon_type": "crossbow",
             "summary": "Стреляет молниями вместо болтов. Эффект: Урон молнией +20, цепная молния до 2 целей (шанс 20%).",
-            "image_url": item_gear_png("storm_cloud_crossbow"),
+            "image_url": item_gear_png_rarity("storm_cloud_crossbow", "rare"),
             "export_floor_note": "21–50",
         },
         # ЭПИЧЕСКИЕ (41-80) — с сильными эффектами
@@ -488,7 +488,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "vit": 20,
             "weapon_type": "blade",
             "summary": "Каждая зарубка — поверженный Хранитель. Эффект: +2% урона за каждое убийство босса (макс. 20%), кровотечение 25% шанс.",
-            "image_url": item_gear_png("hundred_scars"),
+            "image_url": item_gear_png_rarity("hundred_scars", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -501,7 +501,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "dex": 40,
             "weapon_type": "bow",
             "summary": "Стрелы исчезают в полете. Эффект: Игнорирование 25% брони, при критическом ударе — дополнительная стрела (50% урона).",
-            "image_url": item_gear_png("eclipse_bow"),
+            "image_url": item_gear_png_rarity("eclipse_bow", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -515,7 +515,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "int": 20,
             "weapon_type": "polearm",
             "summary": "При взмахе оставляет огненный след. Эффект: Урон огнем +35, поджигает всех врагов в радиусе 2м (горение 4 сек).",
-            "image_url": item_gear_png("firestorm_halberd"),
+            "image_url": item_gear_png_rarity("firestorm_halberd", "epic"),
             "export_floor_note": "41–80",
         },
         # ЛЕГЕНДАРНЫЕ (70-90) — с мощными эффектами
@@ -530,7 +530,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "vit": 40,
             "weapon_type": "axe",
             "summary": "Топор, которым был срублен Иггдрасиль. Эффект: Игнорирование 50% брони, ударная волна (урон 60% от атаки всем врагам в радиусе 4м).",
-            "image_url": item_gear_png("tower_breaker"),
+            "image_url": item_gear_png_rarity("tower_breaker", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -544,7 +544,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "mp_bonus": 300,
             "weapon_type": "staff",
             "summary": "Посох из сердца ледяного элементаля. Эффект: Заморозка всех врагов в радиусе 3м при получении урона (шанс 30%, перезарядка 15 сек), +40% к урону льдом.",
-            "image_url": item_gear_png("eternal_ice_staff"),
+            "image_url": item_gear_png_rarity("eternal_ice_staff", "legendary"),
             "export_floor_note": "70–90",
         },
         # МИФИЧЕСКИЕ (90+) — с уникальными эффектами
@@ -559,7 +559,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "vit": 60,
             "weapon_type": "hammer",
             "summary": "Молот конца времен. Эффект: При ударе с шансом 20% вызывает метеоритный дождь (урон 200% от атаки всем врагам в области), неуязвимость на 2 сек после убийства.",
-            "image_url": item_gear_png("ragnarok_hammer"),
+            "image_url": item_gear_png_rarity("ragnarok_hammer", "mythic"),
             "export_floor_note": "90+",
         },
         {
@@ -573,7 +573,7 @@ def two_handed_weapon_examples() -> list[dict[str, Any]]:
             "luck": 70,
             "weapon_type": "bow",
             "summary": "Стрелы этого лука всегда находят цель. Эффект: 100% точность, стрелы преследуют цель, при критическом ударе — мгновенное убийство обычных врагов (шанс 10%).",
-            "image_url": item_gear_png("fate_bow"),
+            "image_url": item_gear_png_rarity("fate_bow", "mythic"),
             "export_floor_note": "90+",
         },
     ]

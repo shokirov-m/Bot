@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from game.data.items._finalize import finalize_stub_list
-from utils.image_assets import item_gear_png
+from utils.image_assets import item_gear_png, item_gear_png_rarity
 
 
 def ring_examples() -> list[dict[str, Any]]:
@@ -17,7 +17,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "defense": 8,
             "luck": 2,
             "summary": "Первое кольцо, которое получает восходящий. Символ контракта с Башней.",
-            "image_url": item_gear_png("tower_wedding_ring"),
+            "image_url": item_gear_png_rarity("tower_wedding_ring", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -28,7 +28,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "vit": 1,
             "ring_slot": 2,
             "summary": "Простое, но тяжелое. Постоянно напоминает о себе на пальце.",
-            "image_url": item_gear_png("endurance_ring"),
+            "image_url": item_gear_png_rarity("endurance_ring", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -38,7 +38,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "defense": 5,
             "hp_bonus": 50,
             "summary": "Стертое медное кольцо, найденное у подножия лестницы. Немного согревает в холоде Башни.",
-            "image_url": item_gear_png("copper_travelers_band"),
+            "image_url": item_gear_png_rarity("copper_travelers_band", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -47,7 +47,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "rarity": "common",
             "defense": 15,
             "summary": "Свинцовое кольцо с грубой гравировкой. Позволяет унести чуть больше добычи, но давит на плечи.",
-            "image_url": item_gear_png("heavy_burden_ring"),
+            "image_url": item_gear_png_rarity("heavy_burden_ring", "common"),
             "export_floor_note": "1–20",
         },
         {
@@ -57,7 +57,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "defense": 15,
             "dex": 5,
             "summary": "Узор на камне движется, когда рядом опасность.",
-            "image_url": item_gear_png("tricksters_signet"),
+            "image_url": item_gear_png_rarity("tricksters_signet", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -67,7 +67,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "defense": 15,
             "int": 5,
             "summary": "Покалывает кожу. Ускоряет восстановление маны.",
-            "image_url": item_gear_png("blue_spark_ring"),
+            "image_url": item_gear_png_rarity("blue_spark_ring", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -78,7 +78,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "str": 5,
             "vit": 5,
             "summary": "Хватка становится железной, рука не дрогнет. (Перенесено из старого списка для баланса необычных предметов).",
-            "image_url": item_gear_png("iron_will_band"),
+            "image_url": item_gear_png_rarity("iron_will_band", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -87,7 +87,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "rarity": "uncommon",
             "defense": 12,
             "summary": "Черный агат в оправе из вороненой стали. Иногда владелец слышит шепот о скрытых ловушках и тайниках. Шанс уклонения +3%.",
-            "image_url": item_gear_png("whispering_shadows_ring"),
+            "image_url": item_gear_png_rarity("whispering_shadows_ring", "uncommon"),
             "export_floor_note": "11–30",
         },
         {
@@ -98,7 +98,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "dex": 8,
             "luck": 8,
             "summary": "Внутри кольца спрятано еще одно. Шанс найти дополнительный лут увеличен.",
-            "image_url": item_gear_png("false_bottom_ring"),
+            "image_url": item_gear_png_rarity("false_bottom_ring", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -109,7 +109,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "str": 10,
             "vit": 5,
             "summary": "Рубин в оправе пульсирует в такт сердцу владельца. Вампиризм 5%.",
-            "image_url": item_gear_png("crimson_blood_ring"),
+            "image_url": item_gear_png_rarity("crimson_blood_ring", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -119,7 +119,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "defense": 25,
             "luck": 10,
             "summary": "В центре кольца вправлена линза, напоминающая глаз. Позволяет точнее целиться в слабые места врагов. Шанс критического удара +5%.",
-            "image_url": item_gear_png("cyclops_eye_ring"),
+            "image_url": item_gear_png_rarity("cyclops_eye_ring", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -130,7 +130,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "vit": 15,
             "hp_bonus": 200,
             "summary": "Кольцо словно срослось из мелких чешуек горной породы. Медленно восстанавливает прочность брони владельца.",
-            "image_url": item_gear_png("golem_core_ring"),
+            "image_url": item_gear_png_rarity("golem_core_ring", "rare"),
             "export_floor_note": "21–50",
         },
         {
@@ -142,7 +142,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "vit": 15,
             "luck": 15,
             "summary": "Легенда гласит, что оно было создано из слез Хранителя 100-го этажа.",
-            "image_url": item_gear_png("hundred_trials_ring"),
+            "image_url": item_gear_png_rarity("hundred_trials_ring", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -152,7 +152,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "defense": 70,
             "int": 30,
             "summary": "Сложная вязь рун на мифриле. Снижает затраты маны на все заклинания на 15%. Максимальная мана +100 (учёт в бою при необходимости — см. код).",
-            "image_url": item_gear_png("archmages_seal"),
+            "image_url": item_gear_png_rarity("archmages_seal", "epic"),
             "export_floor_note": "41–80",
             "mp_bonus": 100,
         },
@@ -164,7 +164,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "str": 25,
             "dex": 15,
             "summary": 'Внутри куска вечного льда заключена синяя искра. Атаки владельца с 10% шансом замедляют противника («Обморожение», замедление 30%).',
-            "image_url": item_gear_png("northern_lords_ring"),
+            "image_url": item_gear_png_rarity("northern_lords_ring", "epic"),
             "export_floor_note": "41–80",
         },
         {
@@ -176,7 +176,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "vit": 50,
             "luck": 50,
             "summary": "Золотое кольцо без единого шва. Не дает владельцу умереть, один раз в день восстанавливая 50% здоровья при смертельном ударе.",
-            "image_url": item_gear_png("eternity_ring"),
+            "image_url": item_gear_png_rarity("eternity_ring", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -187,7 +187,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "str": 40,
             "vit": 60,
             "summary": "Кольцо из кости древнего дракона. Увеличивает весь получаемый отхил на 40% и добавляет 10% вампиризма.",
-            "image_url": item_gear_png("ring_of_dominion"),
+            "image_url": item_gear_png_rarity("ring_of_dominion", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -197,7 +197,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "defense": 220,
             "int": 45,
             "summary": "Камень в кольце поглощает свет, оставляя лишь ощущение пустоты. Шанс игнорировать любой магический урон 20%. Сопротивление магии +30%.",
-            "image_url": item_gear_png("abyss_tear_ring"),
+            "image_url": item_gear_png_rarity("abyss_tear_ring", "legendary"),
             "export_floor_note": "70–90",
         },
         {
@@ -211,7 +211,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "vit": 20,
             "luck": 20,
             "summary": "Говорят, это осколок самого ядра Башни. Дарует +1 к уровню всех активных навыков владельца.",
-            "image_url": item_gear_png("creators_crown_ring"),
+            "image_url": item_gear_png_rarity("creators_crown_ring", "mythic"),
             "export_floor_note": "90+",
         },
         {
@@ -222,7 +222,7 @@ def ring_examples() -> list[dict[str, Any]]:
             "vit": 50,
             "str": 50,
             "summary": "Холодное платиновое кольцо, которое не отражается в зеркалах. Если владелец умирает, он воскресает с 100% здоровья, но кольцо ломается (разрушаемый предмет).",
-            "image_url": item_gear_png("dead_gods_ring"),
+            "image_url": item_gear_png_rarity("dead_gods_ring", "mythic"),
             "export_floor_note": "90+",
         },
     ]
