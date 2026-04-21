@@ -75,6 +75,12 @@ def _load_home(character: Character) -> tuple[dict[str, Any], dict[str, Any]]:
 def _save_home(character: Character, mp: dict[str, Any], home: dict[str, Any]) -> None:
     mp[META_HOME] = home
     character.meta_progress = mp
+    # Явно помечаем JSON-колонку как изменённую (SQLAlchemy не всегда отслеживает мутации dict).
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(character, "meta_progress")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +290,11 @@ def try_use_library(character: Character, stat_key: str) -> tuple[bool, str]:
     mp = dict(character.meta_progress or {})
     mp[_LIBRARY_META_KEY] = datetime.now(UTC).isoformat()
     character.meta_progress = mp
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(character, "meta_progress")
+    except Exception:
+        pass
 
     stat_name = _STAT_NAMES[stat_key]
     return True, (

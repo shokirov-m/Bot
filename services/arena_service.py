@@ -276,6 +276,79 @@ async def run_shadow_match(
     )
 
 
+# ── Фантомы Топ-10 ─────────────────────────────────────────────────────────
+
+async def top10_phantoms(
+    session: AsyncSession,
+    actor_id: int,
+) -> list[tuple[Character, float, str]]:
+    """
+    Список до 10 сильнейших игроков (по мощи арены) кроме самого актора.
+    Возвращает список (Character, power, name).
+    """
+    from db.repository import leaderboard_repo
+    candidates: list[Character] = await leaderboard_repo.top_by_stat_sum(session, limit=20)
+    result: list[tuple[Character, float, str]] = []
+    for c in candidates:
+        if int(c.id) == int(actor_id):
+            continue
+        p, n = await _power_label(session, c)
+        result.append((c, p, n))
+        if len(result) >= 10:
+            break
+    return result
+
+
+async def prepare_phantom_fight(
+    session: AsyncSession,
+    character: Character,
+    phantom_char: Character,
+) -> tuple[str, dict]:
+    """
+    Подготовка пошаговой дуэли с фантомом (без начисления наград и учёта лимита).
+    Возвращает: banner_html, initial_state.
+    """
+    import html as _html
+    p_pow, _ = await _power_label(session, phantom_char)
+    gid = int(phantom_char.game_id) if phantom_char.game_id is not None else 0
+    name = (phantom_char.display_name or "Странник")[:32]
+    banner = (
+        "👻 <i>Тренировочный бой с фантомом <b>"
+        f"{_html.escape(name)}</b> (ID <b>{gid}</b>).</i>\n"
+        "<i>Награды нет — это только тренировка.</i>\n\n"
+    )
+    st = build_turn_duel_open_state(
+        character=character,
+        opponent=phantom_char,
+        opponent_name=name,
+        opponent_power=p_pow,
+        banner_html=banner,
+        win_bonus=0,
+        is_npc=True,  # is_npc=True → нет золота при победе/поражении
+    )
+    # Помечаем как фантомный бой (не считается в дневной лимит)
+    st["is_phantom"] = True
+    st["hist"] = []
+    return banner, st
+
+
+def finish_phantom_duel_no_economy(
+    state: dict,
+) -> str:
+    """Итог боя с фантомом — только текст, без изменения золота/лимита."""
+    p_hp = int(state.get("p_hp", 0))
+    o_hp = int(state.get("o_hp", 0))
+    if p_hp <= 0:
+        return "👻 Тренировка завершена: <b>поражение</b>. Фантом оказался сильнее!"
+    if o_hp <= 0:
+        return "👻 Тренировка завершена: <b>победа!</b> Фантом побеждён — но золото не начислено."
+    if p_hp > o_hp:
+        return "👻 Тренировка (лимит раундов): <b>ты впереди по HP</b>."
+    if p_hp < o_hp:
+        return "👻 Тренировка (лимит раундов): <b>фантом впереди по HP</b>."
+    return "👻 Тренировка: <b>ничья</b>."
+
+
 # Обратная совместимость для тестов
 async def player_power(session: AsyncSession, character: Character) -> float:
     return await character_arena_power(session, character)

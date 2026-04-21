@@ -171,11 +171,22 @@ def advance_phase_after_wave(character: Character, slot: str) -> None:
 
 
 def spawns_for_tower_progress(character: Character, floor_number: int) -> list[FloorMonsterSpawn]:
-    """Слоты для учёта «все цели этажа» — на пилотном этаже три слота сценария."""
+    """Слоты для учёта «все цели этажа» — на особых этажах возвращает слоты сценария."""
     from game.floors.monsters import build_spawns_for_floor
 
     if floor_number == PILOT_FLOOR and is_long_floor_scenario_active(character):
         return all_long_floor_spawns()
+
+    # Этаж 5 — зачистка комнат
+    from game.floors import room_clear_floor as rc_mod
+    if rc_mod.is_room_clear_floor(floor_number):
+        return rc_mod.all_room_clear_spawns()
+
+    # Этаж 10 — волны вторжения
+    from game.floors import wave_floor as wv_mod
+    if wv_mod.is_wave_floor(floor_number):
+        return wv_mod.all_wave_floor_spawns()
+
     return build_spawns_for_floor(floor_number)
 
 

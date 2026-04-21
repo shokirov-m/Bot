@@ -21,7 +21,8 @@ from services import arena_service
 router = Router(name="arena")
 
 
-def _arena_turn_keyboard() -> InlineKeyboardMarkup:
+def _arena_turn_keyboard(*, is_phantom: bool = False) -> InlineKeyboardMarkup:
+    back_cb = "arn:phantoms" if is_phantom else "mnu:arn"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -29,8 +30,13 @@ def _arena_turn_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🛡️ Защита", callback_data="arn:mv:def"),
             ],
             [InlineKeyboardButton(text="🏳️ Сдаться", callback_data="arn:mv:forfeit")],
+            [InlineKeyboardButton(text="📋 Меню", callback_data=back_cb)],
         ],
     )
+
+
+def _phantom_turn_keyboard() -> InlineKeyboardMarkup:
+    return _arena_turn_keyboard(is_phantom=True)
 
 
 def _parse_arena_target(
@@ -82,17 +88,18 @@ async def _start_turn_duel_for_character(
     await state.update_data(arn_duel=st)
     body = arena_service.format_turn_duel_screen_html(st, log_lines=st["hist"])
     text = f"{t(locale, 'arena_title')}\n\n{body}"
+    kb = _arena_turn_keyboard()
     if target_message is not None:
         await target_message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=_arena_turn_keyboard(),
+            reply_markup=kb,
         )
     elif reply_message is not None:
         await reply_message.answer(
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=_arena_turn_keyboard(),
+            reply_markup=kb,
         )
 
 
@@ -256,8 +263,14 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
                 ],
                 [
                     InlineKeyboardButton(
-                        text="✏️ Ввести ID соперника",
+                        text="⚔️ Вызов по игровому ID (ПвП)",
                         callback_data="arn:wait",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="👻 Фантомы Топ-10 (тренировка)",
+                        callback_data="arn:phantoms",
                     ),
                 ],
                 [
@@ -380,6 +393,106 @@ async def arena_random_duel(callback: CallbackQuery, session: AsyncSession, stat
         await callback.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data == "arn:phantoms")
+async def arena_phantoms_list(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Список фантомов Топ-10 — выбор соперника для тренировочного боя."""
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer(t("ru", "arena_busy"), show_alert=True)
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Сначала создай героя.", show_alert=True)
+            return
+
+        phantoms = await arena_service.top10_phantoms(session, char.id)
+        if not phantoms:
+            await callback.answer("Пока нет других игроков в базе.", show_alert=True)
+            return
+
+        lines = ["👻 <b>Фантомы Топ-10</b> — тренировочные бои без наград\n"]
+        rows: list[list[InlineKeyboardButton]] = []
+        for i, (phchar, pow_, name) in enumerate(phantoms, 1):
+            gid = int(phchar.game_id) if phchar.game_id is not None else 0
+            lines.append(
+                f"<b>{i}.</b> {name} · 🏰 эт.{phchar.floor_number} · ⭐lv.{phchar.level} · 💪{int(pow_)}"
+            )
+            rows.append([
+                InlineKeyboardButton(
+                    text=f"⚔️ #{i} {name[:20]} (lv.{phchar.level})",
+                    callback_data=f"arn:phantom:{phchar.id}",
+                )
+            ])
+        rows.append([InlineKeyboardButton(text="⬅️ Арена", callback_data="mnu:arn")])
+        rows.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
+
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text="\n".join(lines),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("arn:phantoms")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("arn:phantom:"))
+async def arena_phantom_fight(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Начать тренировочный бой с фантомом (без наград, без учёта лимита)."""
+    try:
+        if callback.from_user is None or callback.message is None or callback.data is None or callback.bot is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer(t("ru", "arena_busy"), show_alert=True)
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Сначала создай героя.", show_alert=True)
+            return
+
+        raw_id = callback.data.split(":")[-1]
+        if not raw_id.isdigit():
+            await callback.answer("Неверный ID.", show_alert=True)
+            return
+        phantom_char = await character_repo.get_by_id(session, int(raw_id))
+        if phantom_char is None or int(phantom_char.id) == int(char.id):
+            await callback.answer("Фантом не найден.", show_alert=True)
+            return
+
+        loc = get_locale(char, callback.from_user.language_code)
+        _, st = await arena_service.prepare_phantom_fight(session, char, phantom_char)
+        await state.set_state(ArenaTurnStates.in_duel)
+        await state.update_data(arn_duel=st)
+        body = arena_service.format_turn_duel_screen_html(st, log_lines=[])
+        text = f"👻 <b>Тренировочный бой</b>\n\n{body}"
+        await callback.message.edit_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=_phantom_turn_keyboard(),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("arn:phantom")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("arn:mv:"))
 async def arena_turn_move(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -417,15 +530,36 @@ async def arena_turn_move(callback: CallbackQuery, session: AsyncSession, state:
 
         loc = get_locale(char, callback.from_user.language_code)
 
+        is_phantom = bool(st.get("is_phantom"))
+        kb_now = _phantom_turn_keyboard() if is_phantom else _arena_turn_keyboard()
+
         if outcome is None:
             await state.update_data(arn_duel=st)
             body = arena_service.format_turn_duel_screen_html(st, log_lines=st.get("hist"))
-            text = f"{t(loc, 'arena_title')}\n\n{body}"
+            title = "👻 <b>Тренировочный бой</b>" if is_phantom else t(loc, "arena_title")
+            text = f"{title}\n\n{body}"
             await callback.message.edit_text(
                 text,
                 parse_mode=ParseMode.HTML,
-                reply_markup=_arena_turn_keyboard(),
+                reply_markup=kb_now,
             )
+            await callback.answer()
+            await session.commit()
+            return
+
+        await state.clear()
+        body = arena_service.format_turn_duel_screen_html(st, log_lines=st.get("hist"))
+
+        if is_phantom:
+            # Тренировка — без награды, без лимита
+            footer = arena_service.finish_phantom_duel_no_economy(st)
+            back_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👻 Топ-10 фантомов", callback_data="arn:phantoms")],
+                [InlineKeyboardButton(text="🏟️ Арена", callback_data="mnu:arn")],
+                [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
+            ])
+            full = f"👻 <b>Тренировочный бой</b>\n\n{body}\n\n{footer}"
+            await callback.message.edit_text(full, parse_mode=ParseMode.HTML, reply_markup=back_kb)
             await callback.answer()
             await session.commit()
             return
@@ -436,7 +570,6 @@ async def arena_turn_move(callback: CallbackQuery, session: AsyncSession, state:
             is_npc=bool(st.get("is_npc")),
             win_bonus=int(st.get("win_bonus") or 0),
         )
-        await state.clear()
         header = t(loc, "arena_title")
         if out == "win":
             footer = t(loc, "arena_result_win", gold=gold_delta)
@@ -447,9 +580,12 @@ async def arena_turn_move(callback: CallbackQuery, session: AsyncSession, state:
                 footer = t(loc, "arena_result_lose_no_gold")
         else:
             footer = t(loc, "arena_draw")
-        body = arena_service.format_turn_duel_screen_html(st, log_lines=st.get("hist"))
+        back_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🏟️ Арена", callback_data="mnu:arn")],
+            [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
+        ])
         full = f"{header}\n\n{body}\n\n{rep}\n\n{footer}"
-        await callback.message.edit_text(full, parse_mode=ParseMode.HTML, reply_markup=None)
+        await callback.message.edit_text(full, parse_mode=ParseMode.HTML, reply_markup=back_kb)
         await callback.answer()
         await session.commit()
     except Exception:

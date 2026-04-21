@@ -363,11 +363,12 @@ async def menu_auction(callback: CallbackQuery, session: AsyncSession, state: FS
         _, char = await _char_or_alert(session, callback)
         if char is None:
             return
+        fl = int(char.floor_number) if char else 1
         await _edit_same_message(
             callback,
             state,
             _shop_intro_html(),
-            auction_hub_keyboard(),
+            auction_hub_keyboard(fl),
         )
         await callback.answer()
     except Exception:

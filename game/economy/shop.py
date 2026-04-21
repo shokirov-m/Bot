@@ -101,28 +101,28 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
 VIP_STAR_GOODS: tuple[ShopGood, ...] = (
     ShopGood(
         key="prt_noble",
-        name="Облик «Дворянин»",
-        emoji="🖼️",
+        name="👑 Владыка Башни",
+        emoji="👑",
         price=0,
         stars_price=30,
-        blurb="Сдержанный придворный облик для профиля.",
+        blurb="Аристократ, покоривший вершины Башни. Редкий облик для профиля.",
         item_data={
             "virtual_shop": "portrait_unlock",
             "portrait_key": "noble_1",
-            "name": "Дворянин",
+            "name": "👑 Владыка Башни",
         },
     ),
     ShopGood(
         key="prt_arcane",
-        name="Облик «Арканист»",
-        emoji="🖼️",
+        name="⭐ Хранитель Архива",
+        emoji="⭐",
         price=0,
         stars_price=30,
-        blurb="Образ знатока тайных искусств.",
+        blurb="Хранитель запретных знаний архивов. Редкий облик для профиля.",
         item_data={
             "virtual_shop": "portrait_unlock",
             "portrait_key": "arcane_1",
-            "name": "Арканист",
+            "name": "⭐ Хранитель Архива",
         },
     ),
 )

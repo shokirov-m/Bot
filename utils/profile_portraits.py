@@ -82,14 +82,25 @@ def portrait_key_from_slot(slot: int) -> str | None:
 
 # Отображаемые названия (без технических ключей и путей к файлам).
 _PORTRAIT_TITLE_RU: dict[str, str] = {
-    "male_1": "Страж I",
-    "male_2": "Страж II",
-    "male_3": "Страж III",
-    "female_1": "Леди I",
-    "female_2": "Леди II",
-    "female_3": "Леди III",
-    "noble_1": "Дворянин",
-    "arcane_1": "Арканист",
+    "male_1":   "🗡️ Клинок Бездны",
+    "male_2":   "🔥 Воин Пламени",
+    "male_3":   "🌑 Охотник Теней",
+    "female_1": "🌙 Лунная Ведьма",
+    "female_2": "🌸 Алый Цветок",
+    "female_3": "💫 Дева Звёзд",
+    "noble_1":  "👑 Владыка Башни",
+    "arcane_1": "⭐ Хранитель Архива",
+}
+
+_PORTRAIT_BLURB_RU: dict[str, str] = {
+    "male_1":   "Молчаливый страж, прошедший сотни этажей.",
+    "male_2":   "Боец, закалённый огнём подземелий.",
+    "male_3":   "Следопыт, растворяющийся во мраке башни.",
+    "female_1": "Колдунья, черпающая силу из ночи.",
+    "female_2": "Воительница с лепестком на клинке.",
+    "female_3": "Мистик, видящий судьбы в звёздах.",
+    "noble_1":  "Аристократ, покоривший вершины Башни.",
+    "arcane_1": "Хранитель запретных знаний архивов.",
 }
 
 
@@ -98,7 +109,13 @@ def portrait_title_ru(key: str) -> str:
     k = str(key or "").strip()
     if not k:
         return "Облик"
-    return _PORTRAIT_TITLE_RU.get(k, "Особый облик")
+    return _PORTRAIT_TITLE_RU.get(k, "✨ Особый облик")
+
+
+def portrait_blurb_ru(key: str) -> str:
+    """Короткое описание облика."""
+    k = str(key or "").strip()
+    return _PORTRAIT_BLURB_RU.get(k, "Редкий облик для профиля героя.")
 
 
 def portrait_label_ru(key: str) -> str:

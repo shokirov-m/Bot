@@ -371,15 +371,24 @@ async def home_workbench(callback: CallbackQuery, session: AsyncSession, state: 
         wt = home_service.workbench_tier(char)
         cost = home_service.upgrade_workbench_cost_gold(wt)
         can = cost is not None and int(char.gold) >= cost
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=home_service.format_workbench_html(char),
-            reply_markup=workbench_keyboard(can_upgrade=can),
-            target_message=callback.message,
-            photo_path=None,
-        )
+        text = home_service.format_workbench_html(char)
+        kb = workbench_keyboard(can_upgrade=can)
+        from aiogram.enums import ParseMode
+        from aiogram.exceptions import TelegramBadRequest
+        try:
+            if callback.message.photo:
+                await callback.message.delete()
+                await callback.bot.send_message(
+                    callback.message.chat.id, text,
+                    parse_mode=ParseMode.HTML, reply_markup=kb,
+                )
+            else:
+                await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+        except TelegramBadRequest:
+            await callback.bot.send_message(
+                callback.message.chat.id, text,
+                parse_mode=ParseMode.HTML, reply_markup=kb,
+            )
         await callback.answer()
     except Exception:
         logger.exception("hom:bench")
@@ -402,15 +411,16 @@ async def home_workbench_upgrade(callback: CallbackQuery, session: AsyncSession,
         cost = home_service.upgrade_workbench_cost_gold(wt)
         can_up = cost is not None and int(char.gold) >= int(cost)
         text = home_service.format_workbench_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=workbench_keyboard(can_upgrade=can_up),
-            target_message=callback.message,
-            photo_path=None,
-        )
+        kb = workbench_keyboard(can_upgrade=can_up)
+        from aiogram.enums import ParseMode
+        from aiogram.exceptions import TelegramBadRequest
+        try:
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+        except TelegramBadRequest:
+            await callback.bot.send_message(
+                callback.message.chat.id, text,
+                parse_mode=ParseMode.HTML, reply_markup=kb,
+            )
         if ok:
             await callback.answer("Улучшено!")
         else:

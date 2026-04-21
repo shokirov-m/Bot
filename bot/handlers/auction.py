@@ -19,9 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.auction_kb import (
     auction_cancel_create_keyboard,
     auction_hub_keyboard,
-    auction_portrait_preview_keyboard,
-    auction_portraits_keyboard,
-    auction_portraits_screen_html,
+    auction_vip_portrait_preview_keyboard,
+    auction_vip_portraits_keyboard,
+    auction_vip_portraits_screen_html,
     auction_lots_page_keyboard,
     auction_my_lots_keyboard,
     auction_reprice_cancel_keyboard,
@@ -55,12 +55,14 @@ async def _clear_auction_fsm_only(state: FSMContext) -> None:
 
 def _shop_intro_html() -> str:
     return (
-        "🛒 <b>Магазин</b>\n"
-        "🖼 <b>Облики профиля</b> за золото — отдельная кнопка ниже (разблокировка в гардеробе дома).\n\n"
-        f"Из сумки · до <b>{LOT_DURATION_DAYS}</b> дн. · налог с продажи <b>10%</b> · активных лотов — до <b>5</b>.\n"
-        "Публичные лоты — <b>фиксированная цена</b>, покупка сразу.\n"
-        "🎯 <b>Игроку по ID</b> — личное предложение по <b>игровому номеру</b> из профиля: "
-        "адресат получит сообщение и сможет купить за указанную цену или отказаться."
+        "🛒 <b>Магазин</b>\n\n"
+        "🛒 <b>Обычный магазин</b> — расходники и зелья за 💰 золото.\n"
+        "⭐ <b>VIP-магазин</b> — эксклюзивные облики за Telegram Stars.\n\n"
+        "──────────────────\n"
+        "<b>Торговля между игроками:</b>\n"
+        f"Из сумки · до <b>{LOT_DURATION_DAYS}</b> дн. · налог <b>10%</b> · до <b>5</b> активных лотов.\n"
+        "Лоты — фиксированная цена, покупка мгновенно.\n"
+        "🎯 <b>Игроку по ID</b> — личное предложение адресату."
     )
 
 
@@ -241,10 +243,11 @@ async def cmd_auction(message: Message, session: AsyncSession, state: FSMContext
         if char is None:
             await message.answer("Сначала создай героя через /start.")
             return
+        fl = int(char.floor_number) if char else 1
         await message.answer(
             _shop_intro_html(),
             parse_mode=ParseMode.HTML,
-            reply_markup=auction_hub_keyboard(),
+            reply_markup=auction_hub_keyboard(fl),
         )
     except Exception:
         logger.exception("cmd_auction")
@@ -262,11 +265,12 @@ async def auc_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCont
         if char is None:
             await callback.answer("Нет доступа.", show_alert=True)
             return
+        fl = int(char.floor_number) if char else 1
         try:
             await callback.message.edit_text(
                 _shop_intro_html(),
                 parse_mode=ParseMode.HTML,
-                reply_markup=auction_hub_keyboard(),
+                reply_markup=auction_hub_keyboard(fl),
             )
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e).lower():
@@ -279,7 +283,7 @@ async def auc_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCont
 
 @router.callback_query(F.data == "auc:prt")
 async def auc_portraits(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    """Покупка обликов профиля за золото (те же позиции, что раньше в лавке)."""
+    """VIP-магазин: облики за Telegram Stars."""
     try:
         await _clear_auction_fsm_only(state)
         if callback.message is None or callback.from_user is None:
@@ -291,9 +295,9 @@ async def auc_portraits(callback: CallbackQuery, session: AsyncSession, state: F
             return
         try:
             await callback.message.edit_text(
-                auction_portraits_screen_html(char),
+                auction_vip_portraits_screen_html(char),
                 parse_mode=ParseMode.HTML,
-                reply_markup=auction_portraits_keyboard(int(char.floor_number)),
+                reply_markup=auction_vip_portraits_keyboard(int(char.floor_number)),
             )
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e).lower():
@@ -304,9 +308,9 @@ async def auc_portraits(callback: CallbackQuery, session: AsyncSession, state: F
         await callback.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("auc:prv:"))
-async def auc_portrait_preview(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    """Предпросмотр PNG облика перед покупкой."""
+@router.callback_query(F.data.startswith("auc:vpr:"))
+async def auc_vip_portrait_preview(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Предпросмотр VIP-облика перед покупкой за Stars."""
     try:
         await _clear_auction_fsm_only(state)
         if callback.message is None or callback.from_user is None or callback.data is None:
@@ -322,39 +326,38 @@ async def auc_portrait_preview(callback: CallbackQuery, session: AsyncSession, s
         if char is None:
             await callback.answer("Нет доступа.", show_alert=True)
             return
-        if int(char.floor_number) != fl:
-            await callback.answer("Этаж устарел.", show_alert=True)
-            return
-        from game.economy.shop import effective_good_price, good_by_key
+        from game.economy.shop import vip_good_by_key
+        from utils.profile_portraits import portrait_blurb_ru, portrait_path_if_exists, portrait_title_ru
 
-        g = good_by_key(gk, floor_number=fl)
-        if g is None or str(g.item_data.get("virtual_shop") or "") != "portrait_unlock":
+        g = vip_good_by_key(gk)
+        if g is None:
             await callback.answer("Облик не найден.", show_alert=True)
             return
         pk = str(g.item_data.get("portrait_key") or "").strip()
-        price = effective_good_price(g.price, fl)
         already_owned = bool(pk and home_service.has_portrait_unlock(char, pk))
-        from utils.profile_portraits import portrait_path_if_exists
-
         img = portrait_path_if_exists(pk) if pk else None
+
+        name = html.escape(portrait_title_ru(pk) if pk else g.name)
+        blurb = html.escape(portrait_blurb_ru(pk) if pk else g.blurb)
         cap_lines = [
-            f"🖼 <b>{html.escape(g.name)}</b>",
-            f"<i>{g.blurb}</i>",
+            f"🖼 <b>{name}</b>",
+            f"<i>{blurb}</i>",
             "",
-            f"Цена: <b>{price}</b> 💰",
+            f"Цена: <b>{g.stars_price} ⭐ Telegram Stars</b>",
         ]
-        if img is None:
-            cap_lines.extend(["", "⚠️ <i>Превью пока недоступно.</i>"])
+        if already_owned:
+            cap_lines.append("\n✅ <i>Уже в твоём гардеробе.</i>")
+        elif img is None:
+            cap_lines.append("\n⚠️ <i>Изображение пока не загружено.</i>")
         caption = "\n".join(cap_lines)
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text=caption,
-            reply_markup=auction_portrait_preview_keyboard(
-                fl,
-                g.key,
-                price=price,
+            reply_markup=auction_vip_portrait_preview_keyboard(
+                fl, g.key,
+                stars_price=g.stars_price,
                 already_owned=already_owned,
             ),
             target_message=callback.message,
@@ -362,8 +365,19 @@ async def auc_portrait_preview(callback: CallbackQuery, session: AsyncSession, s
         )
         await callback.answer()
     except Exception:
-        logger.exception("auc:prv")
+        logger.exception("auc:vpr")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+# Оставляем auc:prv: для обратной совместимости — перенаправляем на vpr
+@router.callback_query(F.data.startswith("auc:prv:"))
+async def auc_portrait_preview_legacy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Редирект со старого колбэка на новый VIP-превью."""
+    if callback.data:
+        # auc:prv:{fl}:{key} → auc:vpr:{fl}:{key}
+        new_data = callback.data.replace("auc:prv:", "auc:vpr:", 1)
+        callback.data = new_data
+    await auc_vip_portrait_preview(callback, session, state)
 
 
 @router.callback_query(F.data == "auc:prvown")

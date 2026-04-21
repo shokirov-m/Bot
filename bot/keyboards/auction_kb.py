@@ -12,38 +12,40 @@ from game.items.equipment import RARITY_EMOJI, gear_icon_for_item_data
 from utils.ui import LINE_SEP, format_number
 
 
-def auction_portraits_screen_html(character: Character) -> str:
-    """Экран покупки обликов профиля (раздел «Магазин» главного меню)."""
-    import html
+def auction_vip_portraits_screen_html(character: Character) -> str:
+    """VIP-экран обликов за Telegram Stars."""
+    import html as _html
 
-    from game.economy.shop import SHOP_PORTRAITS, effective_good_price
+    from game.economy.shop import VIP_STAR_GOODS
+    from services.home_service import has_portrait_unlock
 
-    fl = int(character.floor_number)
     lines = [
-        "🖼 <b>Облики для профиля</b>",
-        "<i>Нажми на облик — превью и покупка. После покупки — в <b>Дом → Гардероб</b>.</i>",
+        "⭐ <b>VIP-магазин — Облики профиля</b>",
+        "<i>Уникальные облики за Telegram Stars. После покупки — в <b>Дом → Гардероб</b>.</i>",
+        "<i>Нажми на облик — превью и кнопка покупки.</i>",
         LINE_SEP,
-        f"💰 Золото: <b>{int(character.gold):,}</b>",
-        LINE_SEP,
-        "<b>Товары:</b>",
     ]
-    for g in SHOP_PORTRAITS:
-        p = effective_good_price(g.price, fl)
-        lines.append(
-            f"{g.emoji} <b>{html.escape(g.name)}</b> — {p} 💰"
-            f"{f' <i>(база {g.price})</i>' if p != g.price else ''}\n<i>{g.blurb}</i>",
-        )
+    for g in VIP_STAR_GOODS:
+        pk = str(g.item_data.get("portrait_key", ""))
+        owned = has_portrait_unlock(character, pk)
+        status = " ✅ <i>уже куплен</i>" if owned else f" — <b>{g.stars_price} ⭐</b>"
+        lines.append(f"{g.emoji} <b>{_html.escape(g.name)}</b>{status}\n<i>{_html.escape(g.blurb)}</i>")
     return "\n".join(lines)
 
 
-def auction_portrait_preview_keyboard(
+# Оставляем для обратной совместимости
+def auction_portraits_screen_html(character: Character) -> str:
+    return auction_vip_portraits_screen_html(character)
+
+
+def auction_vip_portrait_preview_keyboard(
     floor_number: int,
     good_key: str,
     *,
-    price: int,
+    stars_price: int,
     already_owned: bool,
 ) -> InlineKeyboardMarkup:
-    """После предпросмотра облика в магазине: купить (если ещё нет) и назад."""
+    """Предпросмотр VIP-облика: купить за Stars (если ещё нет) и назад."""
     fl = int(floor_number)
     gk = good_key.strip()[:32]
     rows: list[list[InlineKeyboardButton]] = []
@@ -51,35 +53,48 @@ def auction_portrait_preview_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🛒 Купить · {price}💰"[:64],
-                    callback_data=f"shp:buy:{fl}:{gk}:a",
+                    text=f"⭐ Купить · {stars_price} Telegram Stars"[:64],
+                    callback_data=f"shp:vbuy:{fl}:{gk}:a",
                 ),
             ],
         )
     else:
         rows.append(
-            [InlineKeyboardButton(text="✓ Уже в гардеробе", callback_data="auc:prvown")],
+            [InlineKeyboardButton(text="✅ Уже в гардеробе", callback_data="auc:prvown")],
         )
     rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data="auc:prt")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def auction_portraits_keyboard(floor_number: int) -> InlineKeyboardMarkup:
-    from game.economy.shop import SHOP_PORTRAITS, effective_good_price
+# Обратная совместимость
+def auction_portrait_preview_keyboard(
+    floor_number: int,
+    good_key: str,
+    *,
+    price: int,
+    already_owned: bool,
+) -> InlineKeyboardMarkup:
+    return auction_vip_portrait_preview_keyboard(
+        floor_number, good_key, stars_price=price, already_owned=already_owned
+    )
+
+
+def auction_vip_portraits_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+    """Список VIP-обликов за Stars — каждая кнопка ведёт на превью."""
+    from game.economy.shop import VIP_STAR_GOODS
 
     rows: list[list[InlineKeyboardButton]] = []
     fl = int(floor_number)
-    for g in SHOP_PORTRAITS:
-        price = effective_good_price(g.price, fl)
-        label = f"{g.emoji} {g.name} · {price}💰"
+    for g in VIP_STAR_GOODS:
+        label = f"{g.emoji} {g.name} · {g.stars_price} ⭐"
         if len(label) > 64:
             label = label[:61] + "…"
         rows.append(
             [
                 InlineKeyboardButton(
                     text=label,
-                    callback_data=f"auc:prv:{fl}:{g.key}",
+                    callback_data=f"auc:vpr:{fl}:{g.key}",
                 ),
             ],
         )
@@ -88,23 +103,34 @@ def auction_portraits_keyboard(floor_number: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+# Обратная совместимость
+def auction_portraits_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+    return auction_vip_portraits_keyboard(floor_number)
+
+
 def _rarity_emoji_from_item_data(item_data: dict | None) -> str:
     r = str((item_data or {}).get("rarity") or "common").lower()
     return RARITY_EMOJI.get(r, "⚪")
 
 
-def auction_hub_keyboard() -> InlineKeyboardMarkup:
+def auction_hub_keyboard(floor_number: int = 1) -> InlineKeyboardMarkup:
+    fl = max(1, int(floor_number))
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🖼 Облики профиля", callback_data="auc:prt")],
-            [InlineKeyboardButton(text="📤 Выставить", callback_data="auc:create")],
-            [
-                InlineKeyboardButton(
-                    text="🎯 Игроку по ID",
-                    callback_data="auc:direct",
-                ),
-            ],
-            [InlineKeyboardButton(text="🛒 Каталог", callback_data="auc:browse:0")],
+            # ── Обычный магазин ──
+            [InlineKeyboardButton(
+                text="🛒 Обычный магазин (золото)",
+                callback_data=f"shp:main:{fl}:u",
+            )],
+            # ── VIP-магазин ──
+            [InlineKeyboardButton(
+                text="⭐ VIP-магазин (Telegram Stars)",
+                callback_data="auc:prt",
+            )],
+            # ── Торговля между игроками ──
+            [InlineKeyboardButton(text="📤 Выставить лот", callback_data="auc:create")],
+            [InlineKeyboardButton(text="🎯 Предложить игроку", callback_data="auc:direct")],
+            [InlineKeyboardButton(text="🛍 Каталог лотов", callback_data="auc:browse:0")],
             [InlineKeyboardButton(text="📋 Мои лоты", callback_data="auc:my")],
             menu_nav_button_row(),
         ],

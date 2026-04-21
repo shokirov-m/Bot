@@ -26,6 +26,8 @@ from game.floors import floor_data
 from game.floors import wandering_npcs as wandering_npcs_mod
 from game.floors import forest_beginnings as fb
 from game.floors import long_floor as long_floor_mod
+from game.floors import room_clear_floor as rc_mod
+from game.floors import wave_floor as wv_mod
 from services import combat_service, golden_goblin_service
 from services.floor_service import (
     floor_keyboard_for_character,
@@ -209,6 +211,11 @@ async def on_scrap_merchant_callback(
     except Exception:
         logger.exception("scr callback")
         await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "wv:locked")
+async def on_wave_locked(query: CallbackQuery, **_: object) -> None:
+    await query.answer("Сначала победи предыдущую волну.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("fl:"))
@@ -408,6 +415,75 @@ async def on_floor_callback(
                 target_message=query.message,
             )
             await query.answer(f"Этаж {char.floor_number}")
+            return
+
+        # ── Этаж 5: зачистка комнат ─────────────────────────────────────────
+        if code in rc_mod.ROOM_CLEAR_ALL_SLOTS:
+            if not rc_mod.is_room_clear_floor(floor):
+                await query.answer("Этот сценарий только на 5-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            # Получаем cleared_slots из floor_progress
+            from db.repository import floor_progress_repo as fpr
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+            spawn = rc_mod.spawn_by_slot(code)
+            if spawn is None:
+                await query.answer("Цель не найдена.", show_alert=True)
+                return
+            # Босс только после зачистки всех комнат
+            if code == rc_mod.SLOT_BOSS and not rc_mod.is_boss_unlocked(_beaten):
+                await query.answer("Сначала зачисти все 5 комнат.", show_alert=True)
+                return
+            if code in rc_mod.SLOT_ROOMS and code in _beaten:
+                await query.answer("Эта комната уже зачищена.", show_alert=True)
+                return
+            await combat_service.start_combat(
+                query=query,
+                session=session,
+                state=state,
+                character=char,
+                spawn=spawn,
+            )
+            return
+
+        # ── Этаж 10: волны вторжения ────────────────────────────────────────
+        if code in wv_mod.WAVE_FLOOR_ALL_SLOTS or code == "wv:locked":
+            if code == "wv:locked":
+                await query.answer("Сначала победи предыдущую волну.", show_alert=True)
+                return
+            if not wv_mod.is_wave_floor(floor):
+                await query.answer("Этот сценарий только на 10-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from db.repository import floor_progress_repo as fpr
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+            spawn = wv_mod.spawn_by_slot(code)
+            if spawn is None:
+                await query.answer("Цель не найдена.", show_alert=True)
+                return
+            # Проверяем последовательность волн
+            current_slot = wv_mod.current_available_slot(_beaten)
+            if code != current_slot:
+                if code in _beaten:
+                    await query.answer("Эта волна уже отбита.", show_alert=True)
+                else:
+                    await query.answer("Сначала победи предыдущую волну.", show_alert=True)
+                return
+            await combat_service.start_combat(
+                query=query,
+                session=session,
+                state=state,
+                character=char,
+                spawn=spawn,
+            )
             return
 
         if code in ("lf_keys", "lf_npc", "lf_w1", "lf_w2", "lf_boss"):
