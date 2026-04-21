@@ -39,6 +39,9 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="📈 Уровень по Telegram ID", callback_data="adm:lv_id"),
             ],
+            [
+                InlineKeyboardButton(text="🗑 Очистить инвентарь", callback_data="adm:clear_inv"),
+            ],
         ],
     )
 

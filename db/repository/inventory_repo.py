@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import random
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.inventory import InventoryItem
@@ -215,6 +215,24 @@ async def get_equipped_weapon(session: AsyncSession, character_id: int) -> Inven
 
 async def delete_inventory_item(session: AsyncSession, item: InventoryItem) -> None:
     await session.delete(item)
+
+
+async def wipe_inventory(session: AsyncSession, character_id: int) -> int:
+    """Удалить все предметы персонажа (и в сумке, и в экипировке).
+    Возвращает количество удалённых записей."""
+    result = await session.execute(
+        delete(InventoryItem).where(InventoryItem.character_id == character_id),
+    )
+    await session.flush()
+    return result.rowcount or 0
+
+
+async def wipe_all_inventories(session: AsyncSession) -> int:
+    """Удалить ВСЕ предметы у ВСЕХ персонажей.
+    Возвращает количество удалённых записей."""
+    result = await session.execute(delete(InventoryItem))
+    await session.flush()
+    return result.rowcount or 0
 
 
 async def pick_random_bag_item(session: AsyncSession, character_id: int) -> InventoryItem | None:

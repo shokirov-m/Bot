@@ -282,6 +282,15 @@ async def cmd_admin(message: Message, session: AsyncSession, command: CommandObj
         )
         return
 
+    if sub == "clear_inv" and len(parts) >= 2:
+        await _do_wipe_inventory(
+            message,
+            session,
+            parts[1],
+            actor_telegram_id=message.from_user.id,
+        )
+        return
+
     await message.answer(
         "Неизвестная подкоманда. Отправь <code>/admin</code> без аргументов — откроется панель.",
         parse_mode=ParseMode.HTML,
@@ -802,6 +811,84 @@ async def cb_admin_unban(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "adm:clear_inv", IsAdmin())
+async def cb_admin_clear_inv(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="clear_inv",
+        html_text=(
+            "🗑 <b>Очистить инвентарь</b>\n\n"
+            "Введи <b>Telegram ID</b> игрока — удалить всё только у него.\n"
+            "Или напиши <code>all</code> — удалить предметы <b>у всех игроков</b>.\n\n"
+            "⚠️ Это действие <b>необратимо</b>."
+        ),
+    )
+    await callback.answer()
+
+
+async def _do_wipe_inventory(
+    message: Message,
+    session: AsyncSession,
+    text: str,
+    *,
+    actor_telegram_id: int,
+) -> None:
+    """Логика очистки инвентаря: одного игрока или всех."""
+    if text.lower() == "all":
+        count = await inventory_repo.wipe_all_inventories(session)
+        await anticheat_service.log_admin_action(
+            session,
+            actor_telegram_id=actor_telegram_id,
+            target_user_id=None,
+            action="admin_wipe_all_inventories",
+            message=f"Удалено предметов: {count}",
+            payload={"deleted_count": count},
+        )
+        await session.commit()
+        await message.answer(
+            f"✅ Инвентари <b>всех игроков</b> очищены. Удалено записей: <b>{count}</b>.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    if not text.isdigit():
+        await message.answer(
+            "Нужен числовой <b>Telegram ID</b> или слово <code>all</code>.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    tid = int(text)
+    u = await user_repo.get_by_telegram_id(session, tid)
+    if u is None:
+        await message.answer(f"Нет пользователя <code>{tid}</code>.", parse_mode=ParseMode.HTML)
+        return
+    ch = await character_repo.get_by_user_id(session, u.id)
+    if ch is None:
+        await message.answer("У пользователя нет персонажа.", parse_mode=ParseMode.HTML)
+        return
+
+    count = await inventory_repo.wipe_inventory(session, int(ch.id))
+    await anticheat_service.log_admin_action(
+        session,
+        actor_telegram_id=actor_telegram_id,
+        target_user_id=int(u.id),
+        action="admin_wipe_inventory",
+        message=f"Удалено предметов: {count}",
+        payload={"telegram_id": tid, "character_id": int(ch.id), "deleted_count": count},
+    )
+    await session.commit()
+    await message.answer(
+        f"✅ Инвентарь <b>{html.escape(ch.display_name)}</b> (TG <code>{tid}</code>) очищен. "
+        f"Удалено записей: <b>{count}</b>.",
+        parse_mode=ParseMode.HTML,
+    )
+
+
 @router.callback_query(F.data == "adm:broadcast", IsAdmin())
 async def cb_admin_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
@@ -951,6 +1038,11 @@ async def admin_fsm_text(message: Message, session: AsyncSession, state: FSMCont
             ok_n, fail_n = await _run_broadcast(message, session, text, actor_telegram_id=actor_id)
             await _try_restore_hub_from_state(message.bot, state)
             await message.answer(f"Готово: доставлено ~<b>{ok_n}</b>, ошибок <b>{fail_n}</b>.")
+            return
+
+        if kind == "clear_inv":
+            await _do_wipe_inventory(message, session, text, actor_telegram_id=actor_id)
+            await _try_restore_hub_from_state(message.bot, state)
             return
 
         if kind == "promo_cmd":
