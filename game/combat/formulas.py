@@ -12,15 +12,14 @@ def clamp(value: float, lo: float, hi: float) -> float:
 
 
 def crit_chance_percent(luck: int, *, crit_bonus_flat: float = 0.0) -> float:
-    """Крит: УДА * 0.5%, макс 50%. crit_bonus_flat — доля (0.2 = +20 п.п. к базе в долях — упрощаем как +к шансу)."""
-    base = luck * 0.5 / 100.0
-    base = clamp(base + crit_bonus_flat, 0.0, 0.50)
-    return base
+    """Крит: каждые 5 УДА = +1%, макс 40%. crit_bonus_flat — плоская добавка в долях."""
+    base = (int(luck) // 5) * 0.01
+    return clamp(base + crit_bonus_flat, 0.0, 0.40)
 
 
 def dodge_chance_percent(dexterity: int, *, dodge_bonus_flat: float = 0.0) -> float:
-    """Уклонение: ЛОВ * 0.4%, макс 40%."""
-    base = dexterity * 0.4 / 100.0
+    """Уклонение: каждые 5 ЛОВ = +1%, макс 40%."""
+    base = (int(dexterity) // 5) * 0.01
     return clamp(base + dodge_bonus_flat, 0.0, 0.40)
 
 
