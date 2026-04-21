@@ -44,8 +44,8 @@ TAVERN_MENU: tuple[TavernOffer, ...] = (
         key="lodging",
         name="Ночлег",
         emoji="🛏️",
-        price=55,
-        blurb="+3 стамины (не выше максимума).",
+        price=1200,
+        blurb="+3 стамины (не выше максимума). Макс. 5 раз в сутки.",
     ),
 )
 

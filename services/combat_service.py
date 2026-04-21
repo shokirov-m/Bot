@@ -66,7 +66,7 @@ from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawn
 from game.economy import sinks as sink_rules
 from game.floors.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
 from game.items import enchant as enchant_rules
-from game.items.rarity_scaling import armor_enchant_defensive_bonus, scaled_armor_defense_value
+from game.items.rarity_scaling import scaled_armor_defense_value
 from game.items import loot as loot_tables
 from game.characters.global_passives import refresh_global_passives
 from utils.game_images_prefs import game_images_enabled
@@ -392,7 +392,7 @@ def _apply_weapon_runes_to_state(
 
 
 async def _equipped_gear_defense_total(session: AsyncSession, character_id: int) -> int:
-    """Сумма defense с надетых предметов; заточка даёт +def на всём, кроме оружия (там +к атаке)."""
+    """Сумма defense с надетых предметов; заточка даёт +5%/ур. к scaled защите."""
     items = await inventory_repo.list_equipped_items(session, character_id)
     total = 0
     for it in items:
@@ -400,11 +400,8 @@ async def _equipped_gear_defense_total(session: AsyncSession, character_id: int)
         base_def = int(data.get("defense", data.get("armor", 0)) or 0)
         def_val = scaled_armor_defense_value(base_def, data)
         ench = enchant_rules.current_enchant_level(data)
-        base_atk = int(data.get("attack", data.get("atk", 0)) or 0)
-        if base_atk > 0:
-            total += def_val
-        else:
-            total += def_val + armor_enchant_defensive_bonus(ench, data)
+        mult = enchant_rules.enchant_stat_multiplier(ench)
+        total += max(0, int(round(def_val * mult)))
     return total
 
 
@@ -1189,6 +1186,17 @@ async def _victory_sequence(
         gross_gold = int(round(gross_gold * rank_gm))
         ranker_note = ("\n" + ranker_note_html) if ranker_note_html else ""
         xp = int(xp * xm * rank_xm * esc_m * max(0.1, star_xp_mult))
+        # Бонусы дома
+        try:
+            from services.home_service import home_gold_bonus_pct, home_xp_bonus_pct
+            _hg = home_gold_bonus_pct(character)
+            _hx = home_xp_bonus_pct(character)
+            if _hg > 0:
+                gross_gold = int(round(gross_gold * (1.0 + _hg)))
+            if _hx > 0:
+                xp = int(round(xp * (1.0 + _hx)))
+        except Exception:
+            pass
         escape_xp_note = ""
         if esc_m < 0.999:
             escape_xp_note = (
@@ -1253,7 +1261,16 @@ async def _victory_sequence(
 
         dropped = False
         drop_label = ""
-        if roll_item_drop(spawn, int(character.floor_number)):
+        _home_loot_extra = 0.0
+        try:
+            from services.home_service import home_loot_bonus_pct
+            _home_loot_extra = home_loot_bonus_pct(character)
+        except Exception:
+            pass
+        _drop_triggered = roll_item_drop(spawn, int(character.floor_number)) or (
+            _home_loot_extra > 0 and random.random() < _home_loot_extra
+        )
+        if _drop_triggered:
             slot = await inventory_repo.first_free_bag_slot(session, character.id)
             if slot is not None:
                 item_payload = loot_tables.roll_victory_item_payload(character.floor_number, spawn)
@@ -1284,6 +1301,16 @@ async def _victory_sequence(
                         bag_slot=slot_r,
                     )
                     extra_rune_item = f"\n💎 <b>{html.escape(rd.display_name)}</b> — в сумку"
+
+        # Трофей босса: 5% шанс с монстров boss_* (нужен для улучшения дома 3-5 ур.)
+        _tkey = str(spawn.template.key or "")
+        if _tkey.startswith("boss_") and random.random() < 0.05:
+            try:
+                from services.forge_service import add_boss_trophy_to_bag
+                await add_boss_trophy_to_bag(session, character.id, count=1)
+                extra_rune_item += "\n🏆 <b>Трофей босса</b> — в сумку"
+            except Exception:
+                pass
 
     mname = html.escape(str(combat_state.get("monster", {}).get("name", "Враг")))
     floor_before = int(character.floor_number)

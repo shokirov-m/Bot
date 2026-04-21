@@ -1,5 +1,5 @@
 """
-Кузница: экран заточки надетого оружия, списание золота, учёт попыток, варка расходника.
+Кузница: заточка надетой экипировки, разбор на материалы, варка расходника.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ from game.floors import floor_data
 from game.items import enchant as enchant_rules
 from game.items import equipment as equip_meta
 from game.items import runes as rune_sys
+from game.items import materials as mat_sys
+from game.items.rarity_scaling import scaled_armor_defense_value, scaled_weapon_attack_value
 from game.locations import forge as forge_loc
 from services import home_service, profession_service, title_service
 from utils.ui import LINE_SEP, format_inventory_item_html, render_enchant_stars
@@ -63,20 +65,31 @@ def format_equipped_slot_block_html(equip_slot: str, item: InventoryItem | None)
         return f"{label}: <i>пусто</i>"
     data = item.item_data or {}
     lv = enchant_rules.current_enchant_level(data)
-    atk = data.get("attack", data.get("atk"))
-    dfn = data.get("defense", data.get("armor"))
+    mult = enchant_rules.enchant_stat_multiplier(lv)
+    atk_raw = data.get("attack", data.get("atk"))
+    dfn_raw = data.get("defense", data.get("armor"))
     stat_s = ""
-    if atk is not None and int(atk or 0) > 0:
-        eff = int(atk) + lv
-        stat_s = f"\n⚔️ Атака в бою: <b>{eff}</b> (база {int(atk)} +{lv} от заточки)"
-    elif dfn is not None and int(dfn or 0) > 0:
-        eff = int(dfn) + lv
-        stat_s = f"\n🛡️ Защита в бою: <b>{eff}</b> (база {int(dfn)} +{lv} от заточки)"
-    cost = enchant_rules.enchant_attempt_cost_gold(lv)
+    if atk_raw is not None and int(atk_raw or 0) > 0:
+        scaled = scaled_weapon_attack_value(int(atk_raw), data)
+        eff = max(1, int(round(scaled * mult)))
+        pct = lv * 5
+        stat_s = f"\n⚔️ Атака: <b>{eff}</b> (база {scaled} +{pct}% от заточки)"
+    elif dfn_raw is not None and int(dfn_raw or 0) > 0:
+        scaled = scaled_armor_defense_value(int(dfn_raw), data)
+        eff = max(0, int(round(scaled * mult)))
+        pct = lv * 5
+        stat_s = f"\n🛡️ Защита: <b>{eff}</b> (база {scaled} +{pct}% от заточки)"
+    rarity = str(data.get("rarity") or "common").lower()
     if lv >= enchant_rules.MAX_ENCHANT:
-        next_hint = "\n✨ Заточка на максимуме (+15)."
+        next_hint = f"\n✨ Максимальная заточка (+{enchant_rules.MAX_ENCHANT})."
     else:
-        next_hint = f"\n💰 Следующая попытка: <b>{cost}</b> золота."
+        gold_cost = enchant_rules.enchant_attempt_cost_gold(lv)
+        mat_cost = enchant_rules.enchant_material_cost(lv)
+        mat_name = mat_sys.material_name(rarity)
+        next_hint = (
+            f"\n💰 Следующая: <b>{gold_cost}</b> золота + "
+            f"<b>{mat_cost}</b> {html.escape(mat_name)}"
+        )
     card = format_inventory_item_html(data)
     extra_runes = (
         "".join(_rune_lines_for_weapon_data(data))
@@ -103,10 +116,21 @@ async def build_forge_message_html(session: AsyncSession, character: Character) 
         blocks.append(format_equipped_slot_block_html(slot, it))
     block = "\n\n".join(blocks)
     stones = int(character.rune_stones)
+    bag = await inventory_repo.list_bag_items(session, character.id)
+    mat_lines: list[str] = []
+    for rar in ("common", "uncommon", "rare", "epic", "legendary", "mythic"):
+        cnt = mat_sys.total_materials_in_bag(bag, rar)
+        if cnt > 0:
+            mat_lines.append(f"{mat_sys.material_name(rar)}: <b>{cnt}</b>")
+    mat_s = "\n".join(mat_lines) if mat_lines else "<i>нет материалов</i>"
+    trophies = mat_sys.total_boss_trophies_in_bag(bag)
+    trophy_line = f"\n🏆 Трофеев босса: <b>{trophies}</b>" if trophies > 0 else ""
     gold_line = (
         f"\n{LINE_SEP}\n"
         f"💰 У тебя: <b>{int(character.gold):,}</b> золота\n"
-        f"⚗️ Рунные камни: <b>{stones}</b>"
+        f"⚗️ Рунные камни: <b>{stones}</b>\n"
+        f"🔧 Материалы заточки:\n{mat_s}"
+        f"{trophy_line}"
     )
     return f"{intro}\n\n{block}{gold_line}"
 
@@ -157,20 +181,34 @@ async def try_enchant_equipped_in_slot(
 
     data = dict(item.item_data or {})
     cur = enchant_rules.current_enchant_level(data)
+    rarity = str(data.get("rarity") or "common").lower()
 
     if cur >= enchant_rules.MAX_ENCHANT:
         return False, [f"Уже максимальная заточка (+{enchant_rules.MAX_ENCHANT})."]
 
-    cost = enchant_rules.enchant_attempt_cost_gold(cur)
-    if int(character.gold) < cost:
-        return False, [f"Недостаточно золота. Нужно {cost}, у тебя {int(character.gold):,}."]
+    gold_cost = enchant_rules.enchant_attempt_cost_gold(cur)
+    mat_cost = enchant_rules.enchant_material_cost(cur)
+    mat_name = mat_sys.material_name(rarity)
+
+    if int(character.gold) < gold_cost:
+        return False, [f"Недостаточно золота. Нужно {gold_cost}, у тебя {int(character.gold):,}."]
+
+    bag = await inventory_repo.list_bag_items(session, character.id)
+    available_mats = mat_sys.total_materials_in_bag(bag, rarity)
+    if available_mats < mat_cost:
+        return False, [
+            f"Нужно {mat_cost} {html.escape(mat_name)}, у тебя {available_mats}.\n"
+            f"Получи материалы, разобрав ненужную экипировку в кузнице."
+        ]
 
     if rune_ward:
         if int(character.rune_stones) < 1:
             return False, ["Нужен 1 рунный камень для рунной подстраховки."]
 
-    character.gold = int(character.gold) - cost
+    character.gold = int(character.gold) - gold_cost
     character.enchant_attempts = int(character.enchant_attempts) + 1
+    # списываем материалы
+    await _consume_materials(session, character.id, rarity, mat_cost)
     if rune_ward:
         character.rune_stones = int(character.rune_stones) - 1
     title_service.refresh_unlocks(character)
@@ -208,10 +246,130 @@ async def try_enchant_equipped_in_slot(
     if ward_absorbed:
         lines.append("⚗️ <b>Руна сдержала поломку</b> — уровень заточки не упал.")
 
-    lines.append(f"−{cost} золота.")
+    lines.append(f"−{gold_cost} 💰, −{mat_cost} {html.escape(mat_name)}.")
     if rune_ward:
         lines.append("−1 рунный камень.")
     return True, lines
+
+
+async def _consume_materials(
+    session: AsyncSession,
+    character_id: int,
+    rarity: str,
+    count: int,
+) -> None:
+    """Списать ``count`` материалов нужной редкости из сумки (стаки)."""
+    bag = await inventory_repo.list_bag_items(session, character_id)
+    r = str(rarity or "common").lower()
+    stacks = [
+        it for it in bag
+        if str((it.item_data or {}).get("kind")) == "material"
+        and str((it.item_data or {}).get("rarity")) == r
+    ]
+    remaining = count
+    for it in stacks:
+        if remaining <= 0:
+            break
+        d = dict(it.item_data or {})
+        cur = max(1, int(d.get("count", 1)))
+        if cur <= remaining:
+            remaining -= cur
+            await inventory_repo.delete_inventory_item(session, it)
+        else:
+            d["count"] = cur - remaining
+            it.item_data = d
+            remaining = 0
+    await session.flush()
+
+
+async def add_materials_to_bag(
+    session: AsyncSession,
+    character_id: int,
+    rarity: str,
+    count: int,
+) -> None:
+    """Добавить материалы в сумку — стаковать в существующий слот или создать новый."""
+    bag = await inventory_repo.list_bag_items(session, character_id)
+    r = str(rarity or "common").lower()
+    for it in bag:
+        d = it.item_data or {}
+        if str(d.get("kind")) == "material" and str(d.get("rarity")) == r:
+            nd = dict(d)
+            nd["count"] = max(1, int(nd.get("count", 1))) + count
+            it.item_data = nd
+            await session.flush()
+            return
+    # нет существующего стака — создать новый
+    free = await inventory_repo.first_free_bag_slot(session, character_id)
+    if free is None:
+        return  # сумка полна — материалы теряются (редкий случай)
+    payload = mat_sys.material_payload(r, count)
+    await inventory_repo.add_bag_item(session, character_id, payload, bag_slot=free)
+    await session.flush()
+
+
+async def add_boss_trophy_to_bag(
+    session: AsyncSession,
+    character_id: int,
+    count: int = 1,
+) -> None:
+    """Добавить трофеи босса в сумку — стаковать или создать новый слот."""
+    bag = await inventory_repo.list_bag_items(session, character_id)
+    for it in bag:
+        d = it.item_data or {}
+        if str(d.get("kind")) == "boss_trophy":
+            nd = dict(d)
+            nd["count"] = max(1, int(nd.get("count", 1))) + count
+            it.item_data = nd
+            await session.flush()
+            return
+    free = await inventory_repo.first_free_bag_slot(session, character_id)
+    if free is None:
+        return
+    payload = mat_sys.boss_trophy_payload(count)
+    await inventory_repo.add_bag_item(session, character_id, payload, bag_slot=free)
+    await session.flush()
+
+
+async def try_disassemble_bag_item(
+    session: AsyncSession,
+    character: Character,
+    item_id: int,
+) -> tuple[bool, str]:
+    """
+    Разобрать предмет из сумки → материалы заточки той же редкости.
+    Расходники, руны и материалы разобрать нельзя.
+    На ур.5 дома +1 доп. материал.
+    """
+    if not forge_loc.forge_available_on_floor(character.floor_number):
+        return False, "Разбор — только в кузнице города."
+
+    it = await inventory_repo.get_item_for_character(session, character.id, item_id)
+    if it is None or it.is_equipped or it.bag_slot is None:
+        return False, "Предмет не в сумке."
+
+    data = dict(it.item_data or {})
+    kind = str(data.get("kind") or "").lower()
+    if kind in ("consumable", "rune", "material", "boss_trophy", "misc"):
+        return False, "Этот тип предметов нельзя разобрать."
+
+    rarity = str(data.get("rarity") or "common").lower()
+    count = mat_sys.disassemble_material_count(rarity)
+    # Бонус дома ур.5: +1 материал
+    home_bonus = home_service.home_disassemble_bonus(character)
+    count += home_bonus
+
+    name = html.escape(str(data.get("name", "Предмет")))
+    mat_name = html.escape(mat_sys.material_name(rarity))
+
+    await inventory_repo.delete_inventory_item(session, it)
+    await add_materials_to_bag(session, character.id, rarity, count)
+
+    bonus_note = " <i>(+1 бонус дома)</i>" if home_bonus else ""
+    return True, (
+        f"🔨 <b>Разобрано:</b> {name}\n"
+        f"+{count} {mat_name} → сумка.{bonus_note}"
+    )
 
 
 async def try_enchant_equipped_weapon(

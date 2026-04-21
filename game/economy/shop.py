@@ -1,11 +1,11 @@
 """
-Торговец за золото: ассортимент расходников (сумка). Цены базовые, без аукциона.
+Торговец: ассортимент расходников за золото + VIP-раздел за Telegram Stars.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from game.floors import floor_data
@@ -17,10 +17,15 @@ class ShopGood:
     key: str
     name: str
     emoji: str
-    price: int
+    price: int              # цена в золоте (0 — только за звёзды)
     blurb: str
     item_data: dict[str, Any]
+    stars_price: int = 0    # цена в Telegram Stars (0 — не продаётся за звёзды)
 
+
+# ---------------------------------------------------------------------------
+# Обычный магазин — расходники за золото
+# ---------------------------------------------------------------------------
 
 SHOP_GOODS: tuple[ShopGood, ...] = (
     ShopGood(
@@ -89,14 +94,18 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
     ),
 )
 
-# Виртуальные товары (без ячейки сумки): разблокировка портрета в гардеробе дома.
-SHOP_PORTRAITS: tuple[ShopGood, ...] = (
+# ---------------------------------------------------------------------------
+# VIP-магазин — облики за Telegram Stars ⭐
+# ---------------------------------------------------------------------------
+
+VIP_STAR_GOODS: tuple[ShopGood, ...] = (
     ShopGood(
         key="prt_noble",
-        name="Дворянин",
-        emoji="🖼",
-        price=160,
-        blurb="Сдержанный придворный облик.",
+        name="Облик «Дворянин»",
+        emoji="🖼️",
+        price=0,
+        stars_price=30,
+        blurb="Сдержанный придворный облик для профиля.",
         item_data={
             "virtual_shop": "portrait_unlock",
             "portrait_key": "noble_1",
@@ -105,9 +114,10 @@ SHOP_PORTRAITS: tuple[ShopGood, ...] = (
     ),
     ShopGood(
         key="prt_arcane",
-        name="Арканист",
-        emoji="🖼",
-        price=220,
+        name="Облик «Арканист»",
+        emoji="🖼️",
+        price=0,
+        stars_price=30,
         blurb="Образ знатока тайных искусств.",
         item_data={
             "virtual_shop": "portrait_unlock",
@@ -116,6 +126,10 @@ SHOP_PORTRAITS: tuple[ShopGood, ...] = (
         },
     ),
 )
+
+# Обратная совместимость (аукцион и другие места)
+SHOP_PORTRAITS = VIP_STAR_GOODS
+
 
 def shop_goods_for_floor(floor_number: int) -> tuple[ShopGood, ...]:
     """Расходники у торговца на этаже / в городе."""
@@ -127,23 +141,28 @@ def good_by_key(key: str, *, floor_number: int) -> ShopGood | None:
     for g in shop_goods_for_floor(floor_number):
         if g.key == k:
             return g
-    for g in SHOP_PORTRAITS:
+    for g in VIP_STAR_GOODS:
+        if g.key == k:
+            return g
+    return None
+
+
+def vip_good_by_key(key: str) -> ShopGood | None:
+    k = key.strip().lower()
+    for g in VIP_STAR_GOODS:
         if g.key == k:
             return g
     return None
 
 
 def effective_good_price(base_price: int, floor_number: int) -> int:
-    """
-    Цена с наценкой за высоту башни: +1.5% за этаж до 50, дальше плато.
-    """
+    """Цена с наценкой за высоту башни: +1.5% за этаж до 50."""
     f = max(1, min(100, int(floor_number)))
     mult = 1.0 + min(f, 50) * 0.015
     return max(1, math.ceil(base_price * mult - 1e-9))
 
 
 def shop_available_on_floor(floor_number: int) -> bool:
-    """Лавка на городских этажах и на каждом 5-м (флаг торговца)."""
     if floor_data.get_city_for_floor(floor_number) is not None:
         return True
     return floor_data.has_trader(floor_number)

@@ -171,10 +171,11 @@ def weapon_attack_value_from_item_data(
     """Базовая атака оружия (как в бою и в профиле). Без мастерства."""
     if item_data is None:
         return 5 + int(level) + int(floor_number) // 10
+    from game.items.enchant import enchant_stat_multiplier
     base = int(item_data.get("attack", item_data.get("atk", 8)))
     ench = int(item_data.get("enchant", item_data.get("plus", 0)) or 0)
     atk = scaled_weapon_attack_value(base, item_data)
-    return atk + max(0, ench)
+    return max(1, int(round(atk * enchant_stat_multiplier(ench))))
 
 
 async def equipped_weapon_attack_value(session: AsyncSession, character: Character) -> int:

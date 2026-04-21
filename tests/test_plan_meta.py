@@ -107,12 +107,14 @@ def test_meta_migration_strips_path_titles_and_rank_active_title() -> None:
 def test_weapon_attack_value_matches_unarmed_and_enchant() -> None:
     n = character_service.weapon_attack_value_from_item_data(None, level=5, floor_number=20)
     assert n == 5 + 5 + 2
+    # новая формула: scaled_atk × (1 + enchant × 0.05)
+    # base=10, rarity=common → scaled=10, enchant=2 → 10 × 1.10 = 11
     w = character_service.weapon_attack_value_from_item_data(
         {"attack": 10, "enchant": 2},
         level=1,
         floor_number=1,
     )
-    assert w == 12
+    assert w == 11
 
 
 def test_combat_use_tag_normalizes_case() -> None:

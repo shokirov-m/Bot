@@ -1,4 +1,4 @@
-"""Экран «Дом»: гардероб, верстак, алхимия."""
+"""Экран «Дом»: гардероб, верстак, алхимия, библиотека, улучшение."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.home_kb import (
     alchemy_keyboard,
     home_main_keyboard,
+    library_keyboard,
     wardrobe_keyboard,
     wardrobe_preview_keyboard,
     workbench_keyboard,
@@ -33,6 +34,10 @@ async def _char(callback: CallbackQuery, session: AsyncSession):
         return None
     return await character_repo.get_by_user_id(session, user.id)
 
+
+# ---------------------------------------------------------------------------
+# Главный экран дома
+# ---------------------------------------------------------------------------
 
 @router.callback_query(F.data == "hom:hub")
 async def home_hub(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
@@ -59,6 +64,10 @@ async def home_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
         logger.exception("hom:hub")
         await callback.answer("Ошибка.", show_alert=True)
 
+
+# ---------------------------------------------------------------------------
+# Гардероб
+# ---------------------------------------------------------------------------
 
 @router.callback_query(F.data == "hom:ward")
 async def home_wardrobe(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
@@ -90,9 +99,12 @@ async def home_wardrobe(callback: CallbackQuery, session: AsyncSession, state: F
         await callback.answer("Ошибка.", show_alert=True)
 
 
+# ---------------------------------------------------------------------------
+# Передышка
+# ---------------------------------------------------------------------------
+
 @router.callback_query(F.data == "hom:rest")
 async def home_rest(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    """Передышка: полное восстановление HP/MP по таймеру (раньше была в профиле)."""
     try:
         if callback.from_user is None or callback.message is None or callback.bot is None:
             await callback.answer()
@@ -126,6 +138,10 @@ async def home_rest(callback: CallbackQuery, session: AsyncSession, state: FSMCo
         await callback.answer("Ошибка.", show_alert=True)
 
 
+# ---------------------------------------------------------------------------
+# Улучшение уровня дома
+# ---------------------------------------------------------------------------
+
 @router.callback_query(F.data == "hom:lvup")
 async def home_level_upgrade(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -136,7 +152,37 @@ async def home_level_upgrade(callback: CallbackQuery, session: AsyncSession, sta
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
-        ok, msg = home_service.try_upgrade_home_level(char)
+
+        # Считаем трофеев в сумке (если нужны)
+        trophy_count = 0
+        trophy_needed = home_service.next_home_trophy_cost(char)
+        if trophy_needed > 0:
+            from db.repository import inventory_repo
+            from game.items.materials import total_boss_trophies_in_bag
+            bag_items = await inventory_repo.list_bag_items(session, char.id)
+            trophy_count = total_boss_trophies_in_bag(bag_items)
+
+        ok, msg, trophies_to_consume = home_service.try_upgrade_home_level(char, trophy_count)
+
+        # Списываем трофеи из сумки
+        if ok and trophies_to_consume > 0:
+            from db.repository import inventory_repo
+            bag_items = await inventory_repo.list_bag_items(session, char.id)
+            remaining = trophies_to_consume
+            for it in bag_items:
+                if remaining <= 0:
+                    break
+                d = it.item_data or {}
+                if str(d.get("kind")) == "boss_trophy":
+                    cnt = max(1, int(d.get("count", 1)))
+                    if cnt <= remaining:
+                        remaining -= cnt
+                        await session.delete(it)
+                    else:
+                        d["count"] = cnt - remaining
+                        it.item_data = d
+                        remaining = 0
+
         await session.flush()
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
         body = home_service.format_home_main_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
@@ -154,6 +200,75 @@ async def home_level_upgrade(callback: CallbackQuery, session: AsyncSession, sta
         logger.exception("hom:lvup")
         await callback.answer("Ошибка.", show_alert=True)
 
+
+# ---------------------------------------------------------------------------
+# Библиотека (ур.4+)
+# ---------------------------------------------------------------------------
+
+@router.callback_query(F.data == "hom:lib")
+async def home_library(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        if not home_service.can_access_library(char):
+            await callback.answer("Библиотека откроется на ур. 4 дома.", show_alert=True)
+            return
+        ready = home_service.library_hours_until_ready(char) == 0
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=home_service.format_library_html(char),
+            reply_markup=library_keyboard(ready=ready),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:lib")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:lib:"))
+async def home_library_apply(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        stat_key = callback.data.removeprefix("hom:lib:").strip()
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+
+        ok, msg = home_service.try_use_library(char, stat_key)
+        await session.flush()
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        ready = home_service.library_hours_until_ready(char) == 0
+        body = home_service.format_library_html(char) + f"\n\n{msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=body,
+            reply_markup=library_keyboard(ready=ready),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer("Готово!" if ok else msg[:180], show_alert=not ok)
+    except Exception:
+        logger.exception("hom:lib:stat")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+# ---------------------------------------------------------------------------
+# Портреты
+# ---------------------------------------------------------------------------
 
 @router.callback_query(F.data == "hom:pvcur")
 async def home_portrait_already_equipped(callback: CallbackQuery) -> None:
@@ -233,6 +348,10 @@ async def home_set_portrait(callback: CallbackQuery, session: AsyncSession, stat
         await callback.answer("Ошибка.", show_alert=True)
 
 
+# ---------------------------------------------------------------------------
+# Верстак
+# ---------------------------------------------------------------------------
+
 @router.callback_query(F.data == "hom:bench")
 async def home_workbench(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -300,6 +419,10 @@ async def home_workbench_upgrade(callback: CallbackQuery, session: AsyncSession,
         logger.exception("hom:wb:up")
         await callback.answer("Ошибка.", show_alert=True)
 
+
+# ---------------------------------------------------------------------------
+# Алхимия
+# ---------------------------------------------------------------------------
 
 @router.callback_query(F.data == "hom:alch")
 async def home_alchemy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:

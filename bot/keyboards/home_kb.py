@@ -1,4 +1,4 @@
-"""Клавиатуры экрана «Дом»."""
+"""Клавиатуры экрана «Дом» (5 уровней)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from db.models.character import Character
 
 
 def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKeyboardMarkup:
-    """Гардероб и передышка всегда; верстак и алхимия по уровню дома."""
     from services import home_service
     from services.rest_service import apply_completed_rest_if_needed, rest_seconds_left
 
@@ -21,23 +20,37 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
 
     rows: list[list[InlineKeyboardButton]] = []
 
+    # Гардероб всегда
     rows.append([InlineKeyboardButton(text="🪞 Гардероб", callback_data="hom:ward")])
+    # Передышка всегда
     rows.append([InlineKeyboardButton(text=rest_txt[:64], callback_data="hom:rest")])
 
-    cost = home_service.next_home_upgrade_cost(character)
-    if cost is not None:
-        hl = home_service.home_level(character)
+    # Кнопка улучшения дома
+    hl = home_service.home_level(character)
+    cost_gold = home_service.next_home_upgrade_cost(character)
+    cost_trophy = home_service.next_home_trophy_cost(character)
+    if cost_gold is not None:
+        trophy_part = f" + {cost_trophy}🏆" if cost_trophy > 0 else ""
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"🏡 Улучшить дом ({cost} 💰) · ур.{hl}→{hl + 1}"[:64],
+                    text=f"🏡 Улучшить дом ({cost_gold:,}💰{trophy_part}) ур.{hl}→{hl+1}"[:64],
                     callback_data="hom:lvup",
                 ),
             ],
         )
 
+    # Библиотека (ур.4+)
+    if home_service.can_access_library(character):
+        h_left = home_service.library_hours_until_ready(character)
+        lib_label = "🔬 Библиотека (+1 стат)" if h_left == 0 else f"🔬 Библиотека (~{int(h_left)}ч)"
+        rows.append([InlineKeyboardButton(text=lib_label[:64], callback_data="hom:lib")])
+
+    # Верстак (ур.2+)
     if home_service.can_access_workbench(character):
         rows.append([InlineKeyboardButton(text="🛠 Верстак", callback_data="hom:bench")])
+
+    # Алхимия (ур.3+)
     if home_service.can_access_alchemy(character):
         rows.append([InlineKeyboardButton(text="⚗️ Алхимия", callback_data="hom:alch")])
 
@@ -45,8 +58,27 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def library_keyboard(*, ready: bool) -> InlineKeyboardMarkup:
+    """Меню библиотеки: выбор стата (если готова) или только «назад»."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if ready:
+        rows.append([
+            InlineKeyboardButton(text="⚔️ Сила", callback_data="hom:lib:str"),
+            InlineKeyboardButton(text="🏹 Ловкость", callback_data="hom:lib:dex"),
+        ])
+        rows.append([
+            InlineKeyboardButton(text="🔮 Интеллект", callback_data="hom:lib:int"),
+            InlineKeyboardButton(text="❤️ Тело", callback_data="hom:lib:vit"),
+        ])
+        rows.append([
+            InlineKeyboardButton(text="🍀 Удача", callback_data="hom:lib:luck"),
+        ])
+    rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def wardrobe_keyboard(portrait_keys: list[str], *, current_key: str) -> InlineKeyboardMarkup:
-    """Одна кнопка на облик — открывает превью (там «Надеть» / «Надет» и «Назад»)."""
     from utils.profile_portraits import portrait_label_ru
 
     rows: list[list[InlineKeyboardButton]] = []

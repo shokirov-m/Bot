@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import html
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,11 +16,38 @@ from game.locations import tavern as tavern_loc
 from services import title_service
 from utils.ui import LINE_SEP_TAVERN
 
+LODGING_DAILY_LIMIT = 5
+_LODGING_META = "lodging_daily_v1"
+
+
+def _lodging_uses_today(character: Character) -> int:
+    """Сколько раз куплен ночлег сегодня (UTC)."""
+    mp = character.meta_progress or {}
+    raw = mp.get(_LODGING_META)
+    if not isinstance(raw, dict):
+        return 0
+    today = datetime.now(UTC).date().isoformat()
+    if raw.get("date") != today:
+        return 0
+    return int(raw.get("count", 0))
+
+
+def _increment_lodging_uses(character: Character) -> None:
+    mp = dict(character.meta_progress or {})
+    today = datetime.now(UTC).date().isoformat()
+    raw = mp.get(_LODGING_META)
+    if not isinstance(raw, dict) or raw.get("date") != today:
+        raw = {"date": today, "count": 0}
+    raw["count"] = int(raw.get("count", 0)) + 1
+    mp[_LODGING_META] = raw
+    character.meta_progress = mp
+
 
 def format_tavern_welcome_html(character: Character) -> str:
     city = floor_data.get_city_for_floor(character.floor_number)
     cname = html.escape(city.name) if city else "Город"
     cem = city.emoji if city else "🏠"
+    lodging_uses = _lodging_uses_today(character)
     lines = [
         f"{cem} <b>Таверна «У усталого стража»</b> — {cname}",
         "<i>Хозяин кивает: «Этаж не прощает слабых. Поешь — и снова в бой.»</i>",
@@ -32,8 +60,12 @@ def format_tavern_welcome_html(character: Character) -> str:
         "<b>Меню:</b>",
     ]
     for o in tavern_loc.TAVERN_MENU:
+        extra = ""
+        if o.key == "lodging":
+            left = LODGING_DAILY_LIMIT - lodging_uses
+            extra = f" <i>({left} из {LODGING_DAILY_LIMIT} ночлегов осталось сегодня)</i>"
         lines.append(
-            f"{o.emoji} <b>{html.escape(o.name)}</b> — {o.price} 💰\n"
+            f"{o.emoji} <b>{html.escape(o.name)}</b> — {o.price} 💰{extra}\n"
             f"<i>{html.escape(o.blurb)}</i>",
         )
     return "\n".join(lines)
@@ -66,10 +98,17 @@ async def try_buy_offer(
 
     price = offer.price
     if int(character.gold) < price:
-        return False, f"Недостаточно золота. Нужно {price}."
+        return False, f"Недостаточно золота. Нужно {price:,} 💰."
 
-    if offer.key == "lodging" and int(character.stamina) >= settings.MAX_STAMINA:
-        return False, "Стамина уже полная — ночлег не нужен."
+    if offer.key == "lodging":
+        if int(character.stamina) >= settings.MAX_STAMINA:
+            return False, "Стамина уже полная — ночлег не нужен."
+        uses_today = _lodging_uses_today(character)
+        if uses_today >= LODGING_DAILY_LIMIT:
+            return False, (
+                f"Лимит ночлегов на сегодня исчерпан ({LODGING_DAILY_LIMIT}/{LODGING_DAILY_LIMIT}). "
+                "Возвращайся завтра."
+            )
 
     character.gold = int(character.gold) - price
     character.tavern_visits = int(character.tavern_visits) + 1
@@ -98,9 +137,15 @@ async def try_buy_offer(
         before = int(character.stamina)
         character.stamina = min(mx, before + 3)
         gained = int(character.stamina) - before
-        msg = f"🛏️ Выспался в общежитии. Стамина <b>+{gained}</b> (сейчас {character.stamina}/{mx})."
+        _increment_lodging_uses(character)
+        uses_now = _lodging_uses_today(character)
+        left = LODGING_DAILY_LIMIT - uses_now
+        msg = (
+            f"🛏️ Выспался. Стамина <b>+{gained}</b> (сейчас {character.stamina}/{mx}).\n"
+            f"<i>Ночлегов осталось сегодня: {left}/{LODGING_DAILY_LIMIT}.</i>"
+        )
     else:
         return False, "Внутренняя ошибка меню."
 
     await session.flush()
-    return True, f"−{price} 💰\n{msg}"
+    return True, f"−{price:,} 💰\n{msg}"

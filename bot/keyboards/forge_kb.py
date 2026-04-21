@@ -10,6 +10,7 @@ from bot.keyboards.menu_kb import menu_nav_button_row
 __all__ = [
     "city_hub_keyboard",
     "forge_actions_keyboard",
+    "forge_dis_bag_keyboard",
     "forge_enchant_slots_keyboard",
     "forge_rune_bag_pick_keyboard",
     "forge_rune_menu_keyboard",
@@ -99,6 +100,22 @@ def forge_enchant_slots_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def forge_dis_bag_keyboard(
+    floor_number: int,
+    items: list[tuple[int, str]],
+) -> InlineKeyboardMarkup:
+    """Список предметов для разбора (item_id, label)."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for item_id, label in items[:16]:
+        short = label if len(label) <= 38 else label[:35] + "…"
+        rows.append(
+            [InlineKeyboardButton(text=short, callback_data=f"frg:disx:{floor_number}:{item_id}")]
+        )
+    rows.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -109,6 +126,7 @@ def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
                     callback_data=f"frg:enchw:{floor_number}",
                 ),
             ],
+            [InlineKeyboardButton(text="🔨 Разобрать предмет", callback_data=f"frg:dis:{floor_number}")],
             [InlineKeyboardButton(text="💎 Руны на оружии", callback_data=f"frg:rnm:{floor_number}")],
             [InlineKeyboardButton(text="🧪 Сварить настой (HP)", callback_data=f"frg:brew:{floor_number}")],
             [InlineKeyboardButton(text="⬅ В город", callback_data=f"frg:city:{floor_number}")],

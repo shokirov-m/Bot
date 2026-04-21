@@ -7,7 +7,9 @@
       "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue\")",
       "Bash(xargs grep *)",
       "Bash(python -c ' *)",
-      "Bash(findstr -i \"pillow\\\\|PIL\\\\|image\")"
+      "Bash(findstr -i \"pillow\\\\|PIL\\\\|image\")",
+      "Bash(python -m pytest tests/ -x -q)",
+      "Bash(python -c 'import sys; sys.path.insert\\(0,'\\\\''.'\\\\''\\) *)"
     ]
   }
 }

@@ -1,5 +1,5 @@
 """
-Покупка товаров у торговца: золото → предмет в сумку; походный паёк вне боя.
+Покупка товаров у торговца: золото → предмет в сумку; VIP-раздел за Telegram Stars.
 """
 
 from __future__ import annotations
@@ -28,20 +28,20 @@ def format_shop_welcome_html(character: Character, *, from_city: bool) -> str:
         place = "у придорожного лотка"
     if from_city:
         if fln == 3:
-            where_ru = "ты у лотка на <b>рынке</b> деревни (те же цены, что и у придорожного торговца)"
+            where_ru = "ты у лотка на <b>рынке</b> деревни"
         else:
-            where_ru = "ты открыл лавку <b>из города</b> (те же цены и товар, что у лотка на этом этаже)"
+            where_ru = "ты открыл лавку <b>из города</b>"
     else:
-        where_ru = "ты у торговца <b>на боевом этаже</b> (не через экран города)"
+        where_ru = "ты у торговца <b>на боевом этаже</b>"
     shop_title = "🏛️ <b>Рынок — лавка</b>" if (from_city and fln == 3) else "🏪 <b>Лавка торговца</b>"
     lines = [
         f"{shop_title} {place}",
-        f"<i>Ассортимент и наценка считаются по этажу героя: <b>{fln}</b>. Сейчас {where_ru}.</i>",
+        f"<i>Ассортимент и наценка по этажу героя: <b>{fln}</b>. Сейчас {where_ru}.</i>",
         "<i>«Всё лучшее с нижних колец башни… наличные только золотом.»</i>",
         LINE_SEP,
         f"💰 Золото: <b>{int(character.gold):,}</b>",
         LINE_SEP,
-        "<b>Товар:</b>",
+        "🛒 <b>Товар (обычный):</b>",
     ]
     fl = int(character.floor_number)
     for g in shop_data.shop_goods_for_floor(fl):
@@ -54,6 +54,31 @@ def format_shop_welcome_html(character: Character, *, from_city: bool) -> str:
     return "\n".join(lines)
 
 
+def format_vip_shop_html(character: Character) -> str:
+    """VIP-раздел магазина: облики за Telegram Stars."""
+    lines = [
+        "⭐ <b>VIP-магазин</b>",
+        "<i>Особые облики для профиля — покупаются за Telegram Stars.</i>",
+        "<i>Звёзды — внутренняя валюта Telegram, купить можно прямо в приложении.</i>",
+        LINE_SEP,
+        "🖼️ <b>Облики:</b>",
+    ]
+    for g in shop_data.VIP_STAR_GOODS:
+        pk = g.item_data.get("portrait_key", "")
+        already = home_service.has_portrait_unlock(character, pk)
+        status = " ✅ <i>уже куплен</i>" if already else f" — <b>{g.stars_price} ⭐</b>"
+        lines.append(
+            f"{g.emoji} <b>{html.escape(g.name)}</b>{status}\n"
+            f"<i>{html.escape(g.blurb)}</i>"
+        )
+    lines.append(LINE_SEP)
+    lines.append(
+        "<i>💡 После оплаты облик сразу появится в "
+        "<b>Дом → Гардероб</b>.</i>"
+    )
+    return "\n".join(lines)
+
+
 async def try_buy_good(
     session: AsyncSession,
     character: Character,
@@ -62,10 +87,7 @@ async def try_buy_good(
     expected_floor: int,
     allow_remote_shop: bool = False,
 ) -> tuple[bool, str]:
-    """
-    Покупка в сумку. (False, plain) для alert или (True, HTML блок результата).
-    allow_remote_shop — заказ из дома (лава ок без торговца на текущем этаже).
-    """
+    """Покупка за золото. (False, plain) или (True, HTML)."""
     if character.floor_number != expected_floor:
         return False, "Ты не на этом этаже."
 
@@ -103,12 +125,8 @@ async def try_buy_good(
             left = int((character.meta_progress or {}).get("merchant_discount_charges") or 0)
             note = f"\n<i>🏪 Скидка торговца: осталось ходов со скидкой — {left}.</i>"
         from utils.profile_portraits import portrait_title_ru
-
         disp = html.escape(portrait_title_ru(pk))
-        return (
-            True,
-            f"−{price} 💰\nОблик «{disp}» открыт в <b>Дом → Гардероб</b>.{note}",
-        )
+        return True, f"−{price} 💰\nОблик «{disp}» открыт в <b>Дом → Гардероб</b>.{note}"
 
     free = await inventory_repo.first_free_bag_slot(session, character.id)
     if free is None:
@@ -126,8 +144,21 @@ async def try_buy_good(
     note = ""
     if used_discount:
         left = int((character.meta_progress or {}).get("merchant_discount_charges") or 0)
-        note = f"\n<i>🏪 Скидка торговца: осталось ходов со скидкой — {left}.</i>"
+        note = f"\n<i>🏪 Скидка: осталось ходов со скидкой — {left}.</i>"
     return True, f"−{price} 💰\nКуплено: <b>{name}</b> (ячейка сумки {free}).{note}"
+
+
+def apply_stars_portrait_unlock(character: Character, portrait_key: str) -> tuple[bool, str]:
+    """Разблокировать облик после успешной оплаты Stars (вызывается из successful_payment)."""
+    pk = str(portrait_key).strip()
+    if not pk:
+        return False, "Некорректный ключ."
+    if home_service.has_portrait_unlock(character, pk):
+        return False, "Этот облик уже открыт."
+    home_service.unlock_portrait(character, pk)
+    from utils.profile_portraits import portrait_title_ru
+    disp = portrait_title_ru(pk)
+    return True, f"⭐ Облик «{html.escape(disp)}» открыт в <b>Дом → Гардероб</b>."
 
 
 async def try_use_bag_ration_by_id(
@@ -135,7 +166,7 @@ async def try_use_bag_ration_by_id(
     character: Character,
     item_id: int,
 ) -> tuple[bool, str]:
-    """Съесть конкретный паёк из сумки (+стамина). Plain text для alert и HTML для сообщения."""
+    """Съесть конкретный паёк из сумки (+стамина)."""
     item = await inventory_repo.get_item_for_character(session, character.id, item_id)
     if item is None or item.is_equipped:
         return False, "Предмет не найден."
@@ -163,7 +194,7 @@ async def try_use_bag_bread_by_id(
     character: Character,
     item_id: int,
 ) -> tuple[bool, str]:
-    """Съесть хлеб из сумки (+HP). HTML для сообщения."""
+    """Съесть хлеб из сумки (+HP)."""
     item = await inventory_repo.get_item_for_character(session, character.id, item_id)
     if item is None or item.is_equipped:
         return False, "Предмет не найден."

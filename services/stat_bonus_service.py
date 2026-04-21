@@ -14,7 +14,7 @@ from db.models.inventory import InventoryItem
 from db.repository import inventory_repo
 from game.characters.titles import TITLE_BY_KEY
 from game.items import enchant as enchant_rules
-from game.items.rarity_scaling import armor_enchant_defensive_bonus, scaled_armor_defense_value
+from game.items.rarity_scaling import scaled_armor_defense_value
 from game.items.stat_bonuses import STAT_KEYS, empty_stat_bonus_map, stat_bonuses_from_item_data
 from services import profession_service, title_service
 
@@ -117,7 +117,7 @@ def merge_stat_maps(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
 
 
 async def equipped_gear_defense_total(session: AsyncSession, character_id: int) -> int:
-    """Суммарная защита (defense) со всей надетой экипировки, с учётом заточки."""
+    """Суммарная защита (defense) со всей надетой экипировки, с учётом заточки (+5%/ур.)."""
     items = await inventory_repo.list_equipped_items(session, character_id)
     total = 0
     for it in items:
@@ -125,11 +125,8 @@ async def equipped_gear_defense_total(session: AsyncSession, character_id: int) 
         base_def = int(data.get("defense", data.get("armor", 0)) or 0)
         def_val = scaled_armor_defense_value(base_def, data)
         ench = enchant_rules.current_enchant_level(data)
-        base_atk = int(data.get("attack", data.get("atk", 0)) or 0)
-        if base_atk > 0:
-            total += def_val
-        else:
-            total += def_val + armor_enchant_defensive_bonus(ench, data)
+        mult = enchant_rules.enchant_stat_multiplier(ench)
+        total += max(0, int(round(def_val * mult)))
     return total
 
 

@@ -90,13 +90,20 @@ def try_begin_or_claim_rest(character: Character) -> tuple[bool, str, float | No
         if now < until:
             return False, f"Отдых… осталось {int(until - now)} с.", None
 
-    until_ts = now + REST_DURATION_SEC
+    # Учитываем бонус дома (−25% на ур.3+, −50% на ур.5)
+    try:
+        from services.home_service import home_rest_duration_sec
+        duration = home_rest_duration_sec(character, REST_DURATION_SEC)
+    except Exception:
+        duration = REST_DURATION_SEC
+
+    until_ts = now + duration
     mp[_META_KEY] = until_ts
     character.meta_progress = mp
     return (
         True,
         (
-            f"Передышка! Через {REST_DURATION_SEC} с HP и MP восстановятся до максимума — "
+            f"Передышка! Через {duration} с HP и MP восстановятся до максимума — "
             "снова нажми кнопку или открой профиль."
         ),
         until_ts,
@@ -106,11 +113,16 @@ def try_begin_or_claim_rest(character: Character) -> tuple[bool, str, float | No
 def format_rest_status_line_html(character: Character) -> str:
     """Строка для карточки профиля (HTML)."""
     apply_completed_rest_if_needed(character)
+    try:
+        from services.home_service import home_rest_duration_sec
+        duration_hint = home_rest_duration_sec(character, REST_DURATION_SEC)
+    except Exception:
+        duration_hint = REST_DURATION_SEC
     mp = character.meta_progress or {}
     raw = mp.get(_META_KEY)
     if raw is None:
         return (
-            f"🛏️ <b>Передышка:</b> не активна — кнопка ниже ({REST_DURATION_SEC} с до полного HP/MP)."
+            f"🛏️ <b>Передышка:</b> не активна — кнопка ниже ({duration_hint} с до полного HP/MP)."
         )
     try:
         until = float(raw)
