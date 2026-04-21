@@ -6,7 +6,8 @@
       "Bash(where gh *)",
       "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue\")",
       "Bash(xargs grep *)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(findstr -i \"pillow\\\\|PIL\\\\|image\")"
     ]
   }
 }
