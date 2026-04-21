@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from game.items.equipment import promo_starter_armor_amulet_payloads
+from game.items.equipment import hunter_set_uncommon_payloads, promo_starter_armor_amulet_payloads
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +30,8 @@ PROMO_REWARDS: dict[str, PromoReward] = {
     "BASEKIT26": PromoReward(gold=30, xp=40, rune_stones=0),
     # Одно использование: редкий питомец «Осколок пустоты» + немного золота и опыта.
     "VOIDPROMO26": PromoReward(gold=80, xp=120, rune_stones=1),
+    # Набор Охотника (9 необычных предметов): нужны 9 свободных ячеек в сумке.
+    "HUNTERSET": PromoReward(gold=120, xp=80, rune_stones=0),
 }
 
 
@@ -41,6 +43,8 @@ def bag_payloads_for_code(normalized: str) -> tuple[dict[str, Any], ...] | None:
     """Доп. предметы в сумку по статическому коду (копии для каждой выдачи)."""
     if normalized == "BASEKIT26":
         return promo_starter_armor_amulet_payloads()
+    if normalized == "HUNTERSET":
+        return hunter_set_uncommon_payloads()
     return None
 
 

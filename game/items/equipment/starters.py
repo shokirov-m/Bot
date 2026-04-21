@@ -121,6 +121,107 @@ def promo_starter_armor_amulet_payloads() -> tuple[dict[str, Any], dict[str, Any
     return a, b
 
 
+def hunter_set_uncommon_payloads() -> tuple[dict[str, Any], ...]:
+    """Набор Охотника (9 предметов) — награда за промокод HUNTERSET."""
+    items: list[dict[str, Any]] = [
+        {
+            "name": "Клинок Охотника",
+            "kind": "weapon",
+            "hand": "main",
+            "rarity": "uncommon",
+            "attack": 28,
+            "dex": 6,
+            "weapon_type": "blade",
+            "summary": "Изогнутый клинок, отточенный для охоты на монстров Башни.",
+            "image_url": item_gear_png("hunter_blade"),
+        },
+        {
+            "name": "Кинжал Охотника",
+            "kind": "weapon",
+            "hand": "off",
+            "rarity": "uncommon",
+            "attack": 24,
+            "dex": 4,
+            "weapon_type": "dagger",
+            "summary": "Лёгкий кинжал для левой руки — быстр и точен.",
+            "image_url": item_gear_png("hunter_dagger"),
+        },
+        {
+            "name": "Броня Охотника",
+            "kind": "armor",
+            "rarity": "uncommon",
+            "defense": 30,
+            "dex": 5,
+            "vit": 3,
+            "summary": "Кожаный доспех с металлическими вставками. Не сковывает движений.",
+            "image_url": item_gear_png("hunter_armor"),
+        },
+        {
+            "name": "Капюшон Охотника",
+            "kind": "helmet",
+            "rarity": "uncommon",
+            "defense": 18,
+            "dex": 8,
+            "summary": "Скрывает лицо и заглушает шаги. Любимый выбор следопытов.",
+            "image_url": item_gear_png("hunter_hood"),
+        },
+        {
+            "name": "Поножи Охотника",
+            "kind": "pants",
+            "rarity": "uncommon",
+            "defense": 22,
+            "dex": 5,
+            "summary": "Удобные поножи с кожаными ремешками. Идеальны для долгой погони.",
+            "image_url": item_gear_png("hunter_legs"),
+        },
+        {
+            "name": "Перчатки Охотника",
+            "kind": "gloves",
+            "rarity": "uncommon",
+            "defense": 12,
+            "dex": 6,
+            "summary": "Тонкая кожа с обрезанными пальцами. Точный хват, быстрый выпад.",
+            "image_url": item_gear_png("hunter_gloves"),
+        },
+        {
+            "name": "Кольцо Охотника",
+            "kind": "ring",
+            "rarity": "uncommon",
+            "defense": 8,
+            "dex": 4,
+            "luck": 2,
+            "summary": "Простое кольцо с выгравированным следом зверя. Приносит удачу в охоте.",
+            "image_url": item_gear_png("hunter_ring"),
+        },
+        {
+            "name": "Кольцо Следопыта",
+            "kind": "ring",
+            "rarity": "uncommon",
+            "defense": 6,
+            "dex": 3,
+            "ring_slot": 2,
+            "summary": "Парное кольцо охотника — носится на второй руке.",
+            "image_url": item_gear_png("tracker_ring"),
+        },
+        {
+            "name": "Амулет Охотника",
+            "kind": "amulet",
+            "rarity": "uncommon",
+            "defense": 10,
+            "dex": 3,
+            "vit": 2,
+            "summary": "Клык зверя на кожаном шнурке. Охотник надевает его перед каждой вылазкой.",
+            "image_url": item_gear_png("hunter_amulet"),
+        },
+    ]
+    result = []
+    for d in items:
+        x = copy.deepcopy(d)
+        apply_item_payload_defaults(x)
+        result.append(x)
+    return tuple(result)
+
+
 def referral_inviter_gear_payloads() -> tuple[dict[str, Any], dict[str, Any]]:
     a = copy.deepcopy(
         {

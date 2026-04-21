@@ -29,6 +29,7 @@ from game.items.equipment.slots import (
     slot_label_ru,
 )
 from game.items.equipment.starters import (
+    hunter_set_uncommon_payloads,
     promo_starter_armor_amulet_payloads,
     referral_inviter_epic_necklace_payload,
     referral_inviter_gear_payloads,
@@ -68,6 +69,7 @@ __all__ = [
     "starter_weapon_payload",
     "starter_pants_payload",
     "starter_offhand_dagger_payload",
+    "hunter_set_uncommon_payloads",
     "promo_starter_armor_amulet_payloads",
     "referral_inviter_gear_payloads",
     "referral_inviter_epic_necklace_payload",
