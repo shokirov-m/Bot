@@ -138,6 +138,7 @@ def _build_profile_text(
     effective_stats: dict[str, int] | None = None,
     ranker_name_prefix: str = "",
     locale: str = "ru",
+    gear_defense: int = 0,
 ) -> str:
     cls = get_class_or_none(char.class_key)
     if cls:
@@ -252,6 +253,7 @@ def _build_profile_text(
                 f"⚔️ СИЛ: {_fmt_stat_plain(char.stat_strength, str_e)}    🏃 ЛОВ: {_fmt_stat_plain(char.stat_dexterity, dex_e)}",
                 f"🔮 ИНТ: {_fmt_stat_plain(char.stat_intelligence, int_e)}    🛡️ ВЫН: {_fmt_stat_plain(char.stat_vitality, vit_e)}",
                 f"🍀 УДА: {_fmt_stat_plain(char.stat_luck, luck_e)}",
+                f"🛡️ Защита (броня): <b>{gear_defense}</b>",
                 LINE_SEP,
             ],
         )
@@ -330,6 +332,7 @@ def _build_profile_text(
             f"⚔️ СИЛ: {_fmt_stat_plain(char.stat_strength, str_e)}    🏃 ЛОВ: {_fmt_stat_plain(char.stat_dexterity, dex_e)}",
             f"🔮 ИНТ: {_fmt_stat_plain(char.stat_intelligence, int_e)}    🛡️ ВЫН: {_fmt_stat_plain(char.stat_vitality, vit_e)}",
             f"🍀 УДА: {_fmt_stat_plain(char.stat_luck, luck_e)}",
+            f"🛡️ Защита (броня): <b>{gear_defense}</b>",
             LINE_SEP,
         ],
     )
@@ -369,6 +372,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
     gp = format_unlocked_global_passives_ru(char)
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
+    gear_def = await stat_bonus_service.equipped_gear_defense_total(session, char.id)
     loc = get_locale(char, None)
     lb_rank = await leaderboard_service.best_leaderboard_rank(session, char)
     rp = t(loc, "profile_ranker_name_badge") if lb_rank is not None else ""
@@ -383,6 +387,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
         effective_stats=eff,
         ranker_name_prefix=rp,
         locale=loc,
+        gear_defense=gear_def,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=True)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"
@@ -399,6 +404,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     gp = format_unlocked_global_passives_ru(char)
     gear_b, title_b = await stat_bonus_service.extra_stat_bonuses(session, char)
     eff = await stat_bonus_service.effective_primary_stats(session, char)
+    gear_def = await stat_bonus_service.equipped_gear_defense_total(session, char.id)
     loc = get_locale(char, None)
     lb_rank = await leaderboard_service.best_leaderboard_rank(session, char)
     rp = t(loc, "profile_ranker_name_badge") if lb_rank is not None else ""
@@ -413,6 +419,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         effective_stats=eff,
         ranker_name_prefix=rp,
         locale=loc,
+        gear_defense=gear_def,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=False)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"
