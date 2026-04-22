@@ -978,7 +978,10 @@ async def _apply_tower_progress_after_victory(
 
     all_spawns = long_floor_mod.spawns_for_tower_progress(character, cur)
     needed = {s.slot_code for s in all_spawns}
-    if set(cleared) < needed:
+    # needed.issubset(cleared) == True только когда ВСЕ нужные слоты зачищены.
+    # Старый вариант (set(cleared) < needed) давал False при любом «чужом» слоте
+    # (напр. "gg" золотого гоблина), что ошибочно триггерило подъём на следующий этаж.
+    if not needed.issubset(set(cleared)):
         return ""
 
     if cur >= 100:
@@ -1243,7 +1246,42 @@ async def _victory_sequence(
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
     daily_service.record_kill(character)
-    await clan_service.on_monster_win_add_clan_xp(session, character, delta=5)
+    # Вклад зависит от типа врага: обычный +1, элитный +3, босс +5/+10
+    _clan_delta = 1
+    if spawn.is_mini_boss:
+        _clan_delta = 5
+    elif spawn.is_major_boss:
+        _clan_delta = 10
+    elif spawn.is_elite:
+        _clan_delta = 3
+    await clan_service.on_monster_win_add_clan_xp(session, character, delta=_clan_delta)
+
+    # Дроп клановых материалов: 🪵 с лесных/растительных, 🪨 с каменных/голем, 🌿 с болотных
+    try:
+        _tkey2 = str(spawn.template.key or "")
+        _mat_drop: str | None = None
+        _mat_chance = 0.15  # базовый шанс 15%
+        if spawn.is_major_boss:
+            _mat_chance = 1.0  # боссы гарантировано дают
+        elif spawn.is_mini_boss:
+            _mat_chance = 0.5
+        elif spawn.is_elite:
+            _mat_chance = 0.3
+        # Определяем тип материала по зоне монстра
+        from game.data.monsters import KEY_TO_ZONE
+        _zone = KEY_TO_ZONE.get(_tkey2, "")
+        if _zone in ("forest_beginnings",) or "ent" in _tkey2 or "treant" in _tkey2 or "vine" in _tkey2:
+            _mat_drop = "wood"
+        elif _zone in ("shadow_caves", "volcanic_ruins") or "golem" in _tkey2 or "stone" in _tkey2 or "sentinel" in _tkey2:
+            _mat_drop = "stone"
+        elif _zone in ("rotten_swamps",) or "swamp" in _tkey2 or "troll" in _tkey2 or "bog" in _tkey2:
+            _mat_drop = "herbs"
+        if _mat_drop and random.random() < _mat_chance:
+            _mat_amount = 1 if not (spawn.is_mini_boss or spawn.is_major_boss) else random.randint(3, 8)
+            clan_service.add_material_drop(character, _mat_drop, _mat_amount)
+    except Exception:
+        pass
+
     refresh_global_passives(character)
 
     if gg_first:

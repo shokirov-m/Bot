@@ -109,9 +109,13 @@ async def merge_spawns_if_active(
     character: Character,
     spawns: list[FloorMonsterSpawn],
 ) -> list[FloorMonsterSpawn]:
+    # Не добавляем гоблина на этажах со своим сценарием — там своя клавиатура.
     if long_floor_mod.is_long_floor_active(character):
         return spawns
     fl = int(character.floor_number)
+    from game.floors import room_clear_floor as rc_mod, wave_floor as wv_mod
+    if rc_mod.is_room_clear_floor(fl) or wv_mod.is_wave_floor(fl):
+        return spawns
     if fl < FLOOR_MIN or fl > FLOOR_MAX:
         return spawns
     if not await is_active_on_floor(session, fl):

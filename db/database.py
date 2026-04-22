@@ -439,6 +439,72 @@ def patch_sqlite_clans_tables() -> None:
         logger.exception("Патч SQLite (clans) не удался: {}", p)
 
 
+def patch_sqlite_clans_extended_columns() -> None:
+    """Расширенные колонки кланов: tag, description, payload, contribution_points, joined_at, last_active_at."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            # --- clans ---
+            row = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='clans'"
+            ).fetchone()
+            if row is None:
+                return  # таблица ещё не создана — patch_sqlite_clans_tables сделает это
+            cols = {r[1] for r in con.execute("PRAGMA table_info(clans)").fetchall()}
+            if "tag" not in cols:
+                con.execute("ALTER TABLE clans ADD COLUMN tag VARCHAR(5)")
+                con.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_clans_tag ON clans (tag)"
+                )
+                con.commit()
+                logger.info("Патч SQLite: clans.tag")
+            if "description" not in cols:
+                con.execute("ALTER TABLE clans ADD COLUMN description TEXT")
+                con.commit()
+                logger.info("Патч SQLite: clans.description")
+            if "payload" not in cols:
+                con.execute("ALTER TABLE clans ADD COLUMN payload JSON NOT NULL DEFAULT '{}'")
+                con.commit()
+                logger.info("Патч SQLite: clans.payload")
+            if "created_at" not in cols:
+                con.execute("ALTER TABLE clans ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+                con.commit()
+                logger.info("Патч SQLite: clans.created_at")
+
+            # --- clan_memberships ---
+            row2 = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='clan_memberships'"
+            ).fetchone()
+            if row2 is None:
+                return
+            mcols = {r[1] for r in con.execute("PRAGMA table_info(clan_memberships)").fetchall()}
+            if "contribution_points" not in mcols:
+                con.execute(
+                    "ALTER TABLE clan_memberships ADD COLUMN contribution_points BIGINT NOT NULL DEFAULT 0"
+                )
+                con.commit()
+                logger.info("Патч SQLite: clan_memberships.contribution_points")
+            if "joined_at" not in mcols:
+                con.execute("ALTER TABLE clan_memberships ADD COLUMN joined_at DATETIME")
+                con.commit()
+                logger.info("Патч SQLite: clan_memberships.joined_at")
+            if "last_active_at" not in mcols:
+                con.execute("ALTER TABLE clan_memberships ADD COLUMN last_active_at DATETIME")
+                con.commit()
+                logger.info("Патч SQLite: clan_memberships.last_active_at")
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (clans extended) не удался: {}", p)
+
+
 def patch_sqlite_stored_gear_boost_v3() -> None:
     """
     Одноразово усилить defense и статы в JSON экипировки в сумке/слотах и на лотах аукциона.
@@ -618,6 +684,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_promo_redemptions_table()
     patch_sqlite_promo_offers_table()
     patch_sqlite_clans_tables()
+    patch_sqlite_clans_extended_columns()
     patch_sqlite_stored_gear_boost_v3()
     patch_sqlite_unequip_boots_cloak()
     had_users = False
