@@ -947,8 +947,17 @@ async def msg_clan_tag(message: Message, session: AsyncSession, state: FSMContex
         data = await state.get_data()
         name = data.get("clan_name", "")
         ok, msg = await clan_service.try_create_clan(session, char, name, tag)
-        await message.answer(msg, parse_mode=ParseMode.HTML)
         await state.clear()
+        if ok:
+            # Показываем результат с кнопкой перехода к клану
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⚔️ Открыть клан", callback_data="cln:hub")],
+                [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
+            ])
+            await message.answer(msg, parse_mode=ParseMode.HTML, reply_markup=kb)
+        else:
+            await message.answer(msg, parse_mode=ParseMode.HTML)
     except Exception:
         logger.exception("msg_clan_tag")
         await message.answer("Ошибка.", parse_mode=ParseMode.HTML)
@@ -956,6 +965,27 @@ async def msg_clan_tag(message: Message, session: AsyncSession, state: FSMContex
 
 
 # ─────────────────────────── cln:join (FSM) ──────────────────────────────────
+
+@router.callback_query(F.data == "cln:join")
+async def cb_clan_join_legacy(
+    callback: CallbackQuery, session: AsyncSession, state: FSMContext
+) -> None:
+    """Обратная совместимость: старая кнопка 'cln:join' → перенаправляем в cln:nohub."""
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        await _edit(
+            callback, state,
+            "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.\n"
+            "<i>Создай клан или найди существующий в списке.</i>",
+            clan_no_hub_keyboard(),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("cln:join legacy")
+        await callback.answer("Ошибка.", show_alert=True)
+
 
 @router.callback_query(F.data == "cln:join:prompt")
 async def cb_clan_join_by_id_prompt(
@@ -999,8 +1029,16 @@ async def msg_join_by_id(message: Message, session: AsyncSession, state: FSMCont
             await message.answer("Введи числовой ID клана.", parse_mode=ParseMode.HTML)
             return
         ok, msg = await clan_service.try_join_clan(session, char, cid)
-        await message.answer(msg, parse_mode=ParseMode.HTML)
         await state.clear()
+        if ok:
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⚔️ Открыть клан", callback_data="cln:hub")],
+                [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
+            ])
+            await message.answer(msg, parse_mode=ParseMode.HTML, reply_markup=kb)
+        else:
+            await message.answer(msg, parse_mode=ParseMode.HTML)
     except Exception:
         logger.exception("msg_join_by_id")
         await message.answer("Ошибка.", parse_mode=ParseMode.HTML)
@@ -1279,9 +1317,11 @@ async def cb_clan_join_by_id(callback: CallbackQuery, session: AsyncSession, sta
             return
         clan_id = int((callback.data or "").split(":")[-1])
         ok, msg = await clan_service.try_join_clan(session, char, clan_id)
-        await callback.answer(msg, show_alert=not ok)
-        if ok:
-            await _clan_hub_screen(callback, state, session)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        # При успехе — показываем хаб клана (он сам вызывает callback.answer)
+        await _clan_hub_screen(callback, state, session)
     except Exception:
         logger.exception("cln:join:N")
         await callback.answer("Ошибка.", show_alert=True)

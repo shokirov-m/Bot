@@ -60,6 +60,8 @@ from game.floors import floor_data
 from game.floors import long_floor as long_floor_mod
 from game.floors import monster_catalog as monster_catalog_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
+from game.floors import room_clear_floor as room_clear_mod
+from game.floors import wave_floor as wave_floor_mod
 from utils.image_assets import combat_monster_portrait_path
 from game.floors.monster_stat_formula import compute_formula_stat_bundle, monster_strike_ailment
 from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawns_for_floor
@@ -1501,6 +1503,16 @@ async def _victory_sequence(
                 await asyncio.sleep(0.8)
     except Exception:
         logger.exception("victory UI: анимация награды")
+        # Гарантируем, что кнопки победы всегда появятся, даже если анимация упала
+        try:
+            await _safe_edit_combat_message_text(
+                state,
+                message,
+                "🏆 <b>Победа!</b> Награда получена.",
+                reply_markup=victory_kb,
+            )
+        except Exception:
+            logger.debug("victory UI: резервная клавиатура не отображена")
     finally:
         await character_service.refresh_hp_mp_from_effective(session, character)
         character.hp_current = min(int(character.hp_max), int(combat_state["player_hp"]))
@@ -1521,6 +1533,16 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
         if found_lf is not None:
             return found_lf
     battle_floor = int(combat_state.get("floor", character.floor_number))
+    # Room-clear floors (rc_r0…rc_r4, rc_boss)
+    if slot in room_clear_mod.ROOM_CLEAR_ALL_SLOTS:
+        found_rc = room_clear_mod.spawn_by_slot(slot)
+        if found_rc is not None:
+            return found_rc
+    # Wave floors (wv_w1, wv_w2, wv_w3, wv_boss)
+    if slot in wave_floor_mod.WAVE_FLOOR_ALL_SLOTS:
+        found_wv = wave_floor_mod.spawn_by_slot(slot)
+        if found_wv is not None:
+            return found_wv
     spawns = build_spawns_for_floor(battle_floor)
     found = next((s for s in spawns if s.slot_code == slot), None)
     if found is None:
