@@ -23,7 +23,7 @@ class PromoReward:
 
 # Публичные коды для игроков; при необходимости добавляй новые.
 PROMO_REWARDS: dict[str, PromoReward] = {
-    "TOWER2026": PromoReward(gold=500, xp=200),
+    "TOWER2026": PromoReward(gold=15000, xp=2000),
     "START": PromoReward(gold=150, xp=80),
     "WELCOME": PromoReward(gold=80, xp=40, rune_stones=1),
     # Одно использование на аккаунт + броня и амулет в сумку (нужны 2 свободные ячейки).
