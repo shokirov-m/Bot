@@ -15,6 +15,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.clan_kb import (
+    clan_browse_keyboard,
     clan_building_detail_keyboard,
     clan_buildings_keyboard,
     clan_capture_keyboard,
@@ -23,15 +24,22 @@ from bot.keyboards.clan_kb import (
     clan_member_actions_keyboard,
     clan_members_keyboard,
     clan_no_clan_keyboard,
+    clan_no_hub_keyboard,
     clan_panel_keyboard,
     clan_panel_members_keyboard,
     clan_relics_keyboard,
+    clan_settings_keyboard,
     clan_treasury_keyboard,
     clan_war_keyboard,
     confirm_leave_keyboard,
     confirm_levelup_keyboard,
 )
-from bot.states.clan_states import ClanCreateStates, ClanDonateStates, ClanWarDeclareStates
+from bot.states.clan_states import (
+    ClanCreateStates,
+    ClanDonateStates,
+    ClanSettingsStates,
+    ClanWarDeclareStates,
+)
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, clan_repo, user_repo
 from services import clan_service
@@ -43,7 +51,9 @@ from services.clan_service import (
     _war,
     check_and_complete_buildings,
     format_buildings_html,
+    format_clan_browse_html,
     format_clan_card_html,
+    format_clan_settings_html,
     format_members_list_html,
     format_relics_html,
     format_war_html,
@@ -102,12 +112,21 @@ async def _clan_hub_screen(
         return
     m = await clan_repo.get_membership(session, int(char.id))
     if m is None:
-        await _edit(callback, state, "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.", clan_no_clan_keyboard())
+        await _edit(
+            callback, state,
+            "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.\n"
+            "<i>Создай клан или найди существующий в списке.</i>",
+            clan_no_hub_keyboard(),
+        )
         await callback.answer()
         return
     clan = await clan_repo.get_clan(session, int(m.clan_id))
     if clan is None:
-        await _edit(callback, state, "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.", clan_no_clan_keyboard())
+        await _edit(
+            callback, state,
+            "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.",
+            clan_no_hub_keyboard(),
+        )
         await callback.answer()
         return
     payload = _payload(clan)
@@ -850,8 +869,8 @@ async def cb_clan_leave_do(
         if ok:
             await _edit(
                 callback, state,
-                "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.",
-                clan_no_clan_keyboard(),
+                "⚔️ <b>Кланы</b>\n\nТы покинул клан.",
+                clan_no_hub_keyboard(),
             )
     except Exception:
         logger.exception("cln:leave:yes")
@@ -938,10 +957,11 @@ async def msg_clan_tag(message: Message, session: AsyncSession, state: FSMContex
 
 # ─────────────────────────── cln:join (FSM) ──────────────────────────────────
 
-@router.callback_query(F.data == "cln:join")
-async def cb_clan_join_start(
+@router.callback_query(F.data == "cln:join:prompt")
+async def cb_clan_join_by_id_prompt(
     callback: CallbackQuery, session: AsyncSession, state: FSMContext
 ) -> None:
+    """Вступить по ID вручную (FSM)."""
     try:
         _, char = await _get_char(session, callback)
         if char is None:
@@ -949,6 +969,7 @@ async def cb_clan_join_start(
         if await clan_repo.get_membership(session, int(char.id)) is not None:
             await callback.answer("Ты уже в клане.", show_alert=True)
             return
+        await state.set_state(ClanSettingsStates.waiting_join_id)
         await callback.answer()
         if callback.message:
             await callback.message.answer(
@@ -956,8 +977,34 @@ async def cb_clan_join_start(
                 parse_mode=ParseMode.HTML,
             )
     except Exception:
-        logger.exception("cln:join")
+        logger.exception("cln:join:prompt")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.message(ClanSettingsStates.waiting_join_id)
+async def msg_join_by_id(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if message.from_user is None:
+            return
+        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
+        if user is None:
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            return
+        raw = (message.text or "").strip()
+        try:
+            cid = int(raw)
+        except ValueError:
+            await message.answer("Введи числовой ID клана.", parse_mode=ParseMode.HTML)
+            return
+        ok, msg = await clan_service.try_join_clan(session, char, cid)
+        await message.answer(msg, parse_mode=ParseMode.HTML)
+        await state.clear()
+    except Exception:
+        logger.exception("msg_join_by_id")
+        await message.answer("Ошибка.", parse_mode=ParseMode.HTML)
+        await state.clear()
 
 
 # ─────────────────────────── cln:panel ──────────────────────────────────────
@@ -1135,3 +1182,328 @@ async def cb_clan_kick(callback: CallbackQuery, session: AsyncSession, state: FS
     except Exception:
         logger.exception("cln:kick")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+# ─────────────────────────── Браузер кланов ─────────────────────────────────
+
+_BROWSE_PAGE_SIZE = 8
+
+
+@router.callback_query(F.data == "cln:nohub")
+async def cb_clan_nohub(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Экран «ты не в клане»."""
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        await _edit(
+            callback, state,
+            "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.\n"
+            "<i>Создай клан или найди существующий в списке.</i>",
+            clan_no_hub_keyboard(),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("cln:nohub")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^cln:browse:\d+$"))
+async def cb_clan_browse(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Список всех кланов постранично."""
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        page = int((callback.data or "cln:browse:0").split(":")[-1])
+        in_clan = await clan_repo.get_membership(session, int(char.id)) is not None
+        clans, total = await clan_service.browse_clans_page(session, page, _BROWSE_PAGE_SIZE)
+        text = format_clan_browse_html(clans, page, total, _BROWSE_PAGE_SIZE)
+        kb = clan_browse_keyboard(clans, page, total, _BROWSE_PAGE_SIZE, in_clan)
+        await _edit(callback, state, text, kb)
+        await callback.answer()
+    except Exception:
+        logger.exception("cln:browse")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^cln:browse:view:\d+$"))
+async def cb_clan_browse_view(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Просмотр карточки конкретного клана из списка."""
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        clan_id = int((callback.data or "").split(":")[-1])
+        clan = await clan_repo.get_clan(session, clan_id)
+        if clan is None:
+            await callback.answer("Клан не найден.", show_alert=True)
+            return
+        from services.clan_service import _payload as _p, _mat, _treasury_gold, _treasury_limit, _has_building
+        payload = _p(clan)
+        n = await clan_repo.count_members(session, int(clan.id))
+        max_m = max_members_for_level(int(clan.clan_level))
+        if _has_building(payload, "barracks"):
+            max_m += 5
+        tag_str = f" [{html.escape(clan.tag)}]" if clan.tag else ""
+        desc_str = f"\n\n📝 {html.escape(clan.description)}" if clan.description else ""
+        chat_str = f'\n💬 <a href="{html.escape(clan.chat_url)}">Чат клана</a>' if clan.chat_url else ""
+        in_clan = await clan_repo.get_membership(session, int(char.id)) is not None
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        btns: list[list[InlineKeyboardButton]] = []
+        if not in_clan and n < max_m:
+            btns.append([InlineKeyboardButton(text="➕ Вступить", callback_data=f"cln:join:{clan.id}")])
+        btns.append([
+            InlineKeyboardButton(text="◀️ К списку", callback_data="cln:browse:0"),
+            InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),
+        ])
+        text = (
+            f"⚔️ <b>{html.escape(clan.name)}</b>{tag_str} · ID <code>{clan.id}</code>\n"
+            f"📊 Ур. <b>{clan.clan_level}/10</b> · 👥 {n}/{max_m}"
+            f"{desc_str}"
+            f"{chat_str}"
+        )
+        await _edit(callback, state, text, InlineKeyboardMarkup(inline_keyboard=btns))
+        await callback.answer()
+    except Exception:
+        logger.exception("cln:browse:view")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^cln:join:\d+$"))
+async def cb_clan_join_by_id(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Вступление в клан по ID (из браузера или карточки)."""
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        clan_id = int((callback.data or "").split(":")[-1])
+        ok, msg = await clan_service.try_join_clan(session, char, clan_id)
+        await callback.answer(msg, show_alert=not ok)
+        if ok:
+            await _clan_hub_screen(callback, state, session)
+    except Exception:
+        logger.exception("cln:join:N")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+# ─────────────────────────── Настройки клана ────────────────────────────────
+
+@router.callback_query(F.data == "cln:settings")
+async def cb_clan_settings(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        m = await clan_repo.get_membership(session, int(char.id))
+        if m is None:
+            await callback.answer("Ты не в клане.", show_alert=True)
+            return
+        if m.role not in ("leader", "officer"):
+            await callback.answer("Только лидер или офицер.", show_alert=True)
+            return
+        clan = await clan_repo.get_clan(session, int(m.clan_id))
+        if clan is None:
+            await callback.answer("Клан не найден.", show_alert=True)
+            return
+        text = format_clan_settings_html(clan)
+        await _edit(callback, state, text, clan_settings_keyboard(m.role))
+        await callback.answer()
+    except Exception:
+        logger.exception("cln:settings")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+# --- Изменить описание ---
+
+@router.callback_query(F.data == "cln:set:desc")
+async def cb_set_desc_start(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        m = await clan_repo.get_membership(session, int(char.id))
+        if m is None or m.role not in ("leader", "officer"):
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        await state.set_state(ClanSettingsStates.waiting_description)
+        await callback.answer()
+        if callback.message:
+            await callback.message.answer(
+                "📝 Введи новое описание клана (до 200 символов).\n"
+                "Отправь <code>-</code> чтобы удалить описание.",
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception:
+        logger.exception("cln:set:desc")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.message(ClanSettingsStates.waiting_description)
+async def msg_set_desc(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if message.from_user is None:
+            return
+        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
+        if user is None:
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            return
+        raw = (message.text or "").strip()
+        text = "" if raw == "-" else raw
+        ok, msg = await clan_service.try_set_description(session, char, text)
+        await message.answer(msg, parse_mode=ParseMode.HTML)
+        await state.clear()
+    except Exception:
+        logger.exception("msg_set_desc")
+        await message.answer("Ошибка.", parse_mode=ParseMode.HTML)
+        await state.clear()
+
+
+# --- Изменить тег ---
+
+@router.callback_query(F.data == "cln:set:tag")
+async def cb_set_tag_start(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        m = await clan_repo.get_membership(session, int(char.id))
+        if m is None or m.role != "leader":
+            await callback.answer("Только лидер.", show_alert=True)
+            return
+        await state.set_state(ClanSettingsStates.waiting_tag)
+        await callback.answer()
+        if callback.message:
+            await callback.message.answer(
+                "🏷️ Введи новый тег клана (2–5 символов, напр. <code>WOLF</code>).\n"
+                "Отправь <code>-</code> чтобы убрать тег.",
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception:
+        logger.exception("cln:set:tag")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.message(ClanSettingsStates.waiting_tag)
+async def msg_set_tag(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if message.from_user is None:
+            return
+        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
+        if user is None:
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            return
+        raw = (message.text or "").strip()
+        ok, msg = await clan_service.try_set_tag(session, char, raw)
+        await message.answer(msg, parse_mode=ParseMode.HTML)
+        await state.clear()
+    except Exception:
+        logger.exception("msg_set_tag")
+        await message.answer("Ошибка.", parse_mode=ParseMode.HTML)
+        await state.clear()
+
+
+# --- Переименование ---
+
+@router.callback_query(F.data == "cln:set:name")
+async def cb_set_name_start(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        m = await clan_repo.get_membership(session, int(char.id))
+        if m is None or m.role != "leader":
+            await callback.answer("Только лидер.", show_alert=True)
+            return
+        await state.set_state(ClanSettingsStates.waiting_name)
+        await callback.answer()
+        if callback.message:
+            await callback.message.answer(
+                "📛 Введи новое название клана (2–40 символов).\n"
+                "<i>Стоимость переименования: 5 000 💰.</i>",
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception:
+        logger.exception("cln:set:name")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.message(ClanSettingsStates.waiting_name)
+async def msg_set_name(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if message.from_user is None:
+            return
+        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
+        if user is None:
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            return
+        # Проверяем, что мы не в процессе создания клана (у ClanCreateStates тоже waiting_name)
+        raw = (message.text or "").strip()
+        ok, msg = await clan_service.try_rename_clan(session, char, raw)
+        await message.answer(msg, parse_mode=ParseMode.HTML)
+        await state.clear()
+    except Exception:
+        logger.exception("msg_set_name (rename)")
+        await message.answer("Ошибка.", parse_mode=ParseMode.HTML)
+        await state.clear()
+
+
+# --- Ссылка на чат ---
+
+@router.callback_query(F.data == "cln:set:chat")
+async def cb_set_chat_start(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        m = await clan_repo.get_membership(session, int(char.id))
+        if m is None or m.role not in ("leader", "officer"):
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        await state.set_state(ClanSettingsStates.waiting_chat_url)
+        await callback.answer()
+        if callback.message:
+            await callback.message.answer(
+                "💬 Введи ссылку на чат клана (https://t.me/... или t.me/...).\n"
+                "Отправь <code>-</code> чтобы убрать ссылку.",
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception:
+        logger.exception("cln:set:chat")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.message(ClanSettingsStates.waiting_chat_url)
+async def msg_set_chat(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if message.from_user is None:
+            return
+        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
+        if user is None:
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            return
+        raw = (message.text or "").strip()
+        if raw == "-":
+            m = await clan_repo.get_membership(session, int(char.id))
+            if m:
+                clan = await clan_repo.get_clan(session, int(m.clan_id))
+                if clan:
+                    clan.chat_url = None
+                    await session.flush()
+            await message.answer("Ссылка на чат удалена.", parse_mode=ParseMode.HTML)
+        else:
+            ok, msg = await clan_service.try_set_clan_chat(session, char, raw)
+            await message.answer(msg, parse_mode=ParseMode.HTML)
+        await state.clear()
+    except Exception:
+        logger.exception("msg_set_chat")
+        await message.answer("Ошибка.", parse_mode=ParseMode.HTML)
+        await state.clear()

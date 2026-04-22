@@ -1,4 +1,4 @@
-"""FSM: создание клана и объявление войны."""
+"""FSM: создание клана, объявление войны, редактирование профиля."""
 
 from __future__ import annotations
 
@@ -16,3 +16,11 @@ class ClanWarDeclareStates(StatesGroup):
 
 class ClanDonateStates(StatesGroup):
     waiting_amount = State()
+
+
+class ClanSettingsStates(StatesGroup):
+    waiting_description = State()
+    waiting_tag = State()
+    waiting_name = State()
+    waiting_chat_url = State()
+    waiting_join_id = State()   # ввод ID вручную при вступлении

@@ -29,7 +29,7 @@ from db.repository import clan_repo
 
 # ─────────────────────────── Константы ─────────────────────────────────────
 
-CLAN_CREATE_COST_GOLD = 50_000
+CLAN_CREATE_COST_GOLD = 20_000
 
 _NAME_RE = re.compile(r"^[\w\s\-\.А-Яа-яЁё]{2,40}$")
 _TAG_RE = re.compile(r"^[A-Za-zА-Яа-яЁё0-9]{2,5}$")
@@ -1179,3 +1179,146 @@ def format_relics_html(payload: dict[str, Any], has_alchemy_lab: bool) -> str:
     else:
         lines.append("\n<i>Для крафта реликвий нужна ⚗️ Алхимическая лаборатория.</i>")
     return "\n".join(lines)
+
+
+# ─────────────────────────── Список кланов (браузер) ────────────────────────
+
+async def browse_clans_page(
+    session: AsyncSession, page: int = 0, page_size: int = 8
+) -> tuple[list[tuple[Clan, int]], int]:
+    """Постраничный список кланов. Возвращает ([(clan, member_count)], total_count)."""
+    from sqlalchemy import func as sqlfunc
+    from sqlalchemy import select as sqlsel
+    from db.models.clan import ClanMembership as CM
+
+    # Общее количество
+    total_res = await session.execute(sqlsel(sqlfunc.count()).select_from(Clan))
+    total = int(total_res.scalar() or 0)
+
+    # Постраничная выборка — сортировка по уровню клана, затем по XP
+    res = await session.execute(
+        sqlsel(Clan)
+        .order_by(Clan.clan_level.desc(), Clan.clan_xp.desc(), Clan.id.asc())
+        .limit(page_size)
+        .offset(page * page_size)
+    )
+    clans = list(res.scalars().all())
+
+    result: list[tuple[Clan, int]] = []
+    for c in clans:
+        cnt = await clan_repo.count_members(session, int(c.id))
+        result.append((c, cnt))
+    return result, total
+
+
+def format_clan_browse_html(
+    clans: list[tuple[Clan, int]], page: int, total: int, page_size: int
+) -> str:
+    if not clans:
+        return "⚔️ <b>Все кланы</b>\n\n<i>Кланов пока нет. Создай первый!</i>"
+    lines = [f"⚔️ <b>Все кланы</b> (стр. {page + 1})\n"]
+    for clan, cnt in clans:
+        tag_str = f" [{html.escape(clan.tag)}]" if clan.tag else ""
+        desc_str = f"\n   <i>{html.escape(clan.description[:60])}…</i>" if clan.description else ""
+        max_m = max_members_for_level(int(clan.clan_level))
+        lines.append(
+            f"• <b>{html.escape(clan.name)}</b>{tag_str} · ID <code>{clan.id}</code>\n"
+            f"   Ур.<b>{clan.clan_level}</b> · 👥 {cnt}/{max_m}"
+            f"{desc_str}"
+        )
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    lines.append(f"\n<i>Всего кланов: {total}. Страница {page + 1}/{total_pages}.</i>")
+    return "\n".join(lines)
+
+
+# ─────────────────────────── Редактирование профиля клана ───────────────────
+
+_DESC_MAX = 200
+
+async def try_set_description(
+    session: AsyncSession, character: Character, text: str
+) -> tuple[bool, str]:
+    text = (text or "").strip()
+    if len(text) > _DESC_MAX:
+        return False, f"Описание не должно превышать {_DESC_MAX} символов."
+    m = await clan_repo.get_membership(session, int(character.id))
+    if m is None or m.role not in ("leader", "officer"):
+        return False, "Только лидер или офицер могут изменить описание."
+    clan = await clan_repo.get_clan(session, int(m.clan_id))
+    if clan is None:
+        return False, "Клан не найден."
+    clan.description = text if text else None
+    await session.flush()
+    payload = _payload(clan)
+    _add_event(payload, f"Описание клана обновлено ({m.role}: {html.escape(character.display_name)})")
+    await clan_repo.update_payload(session, clan, payload)
+    return True, "✅ Описание клана обновлено."
+
+
+async def try_set_tag(
+    session: AsyncSession, character: Character, raw_tag: str
+) -> tuple[bool, str]:
+    tag = (raw_tag or "").strip().upper()
+    if tag == "-":
+        tag = ""
+    if tag and not _TAG_RE.match(tag):
+        return False, "Тег: 2–5 символов (буквы, цифры). Например: WOLF"
+    m = await clan_repo.get_membership(session, int(character.id))
+    if m is None or m.role != "leader":
+        return False, "Только лидер может менять тег клана."
+    clan = await clan_repo.get_clan(session, int(m.clan_id))
+    if clan is None:
+        return False, "Клан не найден."
+    if tag:
+        existing = await clan_repo.get_clan_by_tag(session, tag)
+        if existing and int(existing.id) != int(clan.id):
+            return False, f"Тег [{tag}] уже занят другим кланом."
+    clan.tag = tag if tag else None
+    await session.flush()
+    payload = _payload(clan)
+    _add_event(payload, f"Тег клана изменён на [{tag or 'убран'}]")
+    await clan_repo.update_payload(session, clan, payload)
+    return True, f"✅ Тег клана: {'[' + tag + ']' if tag else 'убран'}."
+
+
+async def try_rename_clan(
+    session: AsyncSession, character: Character, new_name: str
+) -> tuple[bool, str]:
+    name = (new_name or "").strip()
+    if not _NAME_RE.match(name):
+        return False, "Имя клана: 2–40 символов (буквы, цифры, пробел, дефис)."
+    m = await clan_repo.get_membership(session, int(character.id))
+    if m is None or m.role != "leader":
+        return False, "Только лидер может переименовать клан."
+    clan = await clan_repo.get_clan(session, int(m.clan_id))
+    if clan is None:
+        return False, "Клан не найден."
+    existing = await clan_repo.get_clan_by_name(session, name)
+    if existing and int(existing.id) != int(clan.id):
+        return False, "Такое имя уже занято другим кланом."
+    # Переименование стоит золото (анти-спам)
+    RENAME_COST = 5_000
+    if int(character.gold) < RENAME_COST:
+        return False, f"Переименование стоит {RENAME_COST:,} 💰."
+    character.gold = int(character.gold) - RENAME_COST
+    old_name = clan.name
+    clan.name = name[:64]
+    await session.flush()
+    payload = _payload(clan)
+    _add_event(payload, f"Клан переименован: «{html.escape(old_name)}» → «{html.escape(name)}»")
+    await clan_repo.update_payload(session, clan, payload)
+    return True, f"✅ Клан переименован в <b>{html.escape(name)}</b>."
+
+
+def format_clan_settings_html(clan: Clan) -> str:
+    tag_str = f"[{html.escape(clan.tag)}]" if clan.tag else "<i>не задан</i>"
+    desc_str = html.escape(clan.description) if clan.description else "<i>не задано</i>"
+    chat_str = f'<a href="{html.escape(clan.chat_url)}">открыть</a>' if clan.chat_url else "<i>не задана</i>"
+    return (
+        f"⚙️ <b>Настройки клана «{html.escape(clan.name)}»</b>\n\n"
+        f"📛 Название: <b>{html.escape(clan.name)}</b>\n"
+        f"🏷️ Тег: {tag_str}\n"
+        f"📝 Описание: {desc_str}\n"
+        f"💬 Ссылка на чат: {chat_str}\n\n"
+        f"<i>Нажми кнопку, чтобы изменить соответствующее поле.</i>"
+    )

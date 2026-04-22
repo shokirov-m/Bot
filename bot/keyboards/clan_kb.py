@@ -54,6 +54,8 @@ def clan_hub_keyboard(role: str, war_status: str | None = None) -> InlineKeyboar
         ],
         [InlineKeyboardButton(text="⚔️ Войны", callback_data="cln:war")],
     ]
+    if role in ("leader", "officer"):
+        rows.append([InlineKeyboardButton(text="⚙️ Настройки клана", callback_data="cln:settings")])
     if role == "leader":
         rows.append([InlineKeyboardButton(text="👑 Панель лидера", callback_data="cln:panel")])
     rows.append([
@@ -279,5 +281,65 @@ def clan_members_keyboard(role: str) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if role == "leader":
         rows.append([InlineKeyboardButton(text="👑 Управление", callback_data="cln:panel:members")])
+    rows.append([_back_clan(), _menu_btn()])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+# ─────────────────────────── Браузер кланов ─────────────────────────────────
+
+def clan_browse_keyboard(
+    clans: list, page: int, total: int, page_size: int, in_clan: bool
+) -> InlineKeyboardMarkup:
+    """Список кланов с кнопками «Вступить» и пагинацией."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for clan, cnt in clans:
+        max_m_val = __import__("services.clan_service", fromlist=["max_members_for_level"]).max_members_for_level(int(clan.clan_level))
+        tag_part = f"[{clan.tag}] " if clan.tag else ""
+        label = f"{tag_part}{clan.name[:22]} Ур.{clan.clan_level} ({cnt}/{max_m_val})"
+        if not in_clan and cnt < max_m_val:
+            rows.append([InlineKeyboardButton(
+                text=f"➕ {label}", callback_data=f"cln:join:{clan.id}"
+            )])
+        else:
+            rows.append([InlineKeyboardButton(
+                text=f"🔍 {label}", callback_data=f"cln:browse:view:{clan.id}"
+            )])
+
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    nav: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav.append(InlineKeyboardButton(text="◀️", callback_data=f"cln:browse:{page - 1}"))
+    if page < total_pages - 1:
+        nav.append(InlineKeyboardButton(text="▶️", callback_data=f"cln:browse:{page + 1}"))
+    if nav:
+        rows.append(nav)
+
+    back_cb = "cln:hub" if in_clan else "cln:nohub"
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data=back_cb), _menu_btn()])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def clan_no_hub_keyboard() -> InlineKeyboardMarkup:
+    """Для незарегистрированного в клане — только Create/Browse/Menu."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Создать клан", callback_data="cln:create")],
+            [InlineKeyboardButton(text="🔍 Найти и вступить", callback_data="cln:browse:0")],
+            [InlineKeyboardButton(text="🆔 Вступить по ID", callback_data="cln:join:prompt")],
+            [_menu_btn()],
+        ]
+    )
+
+
+# ─────────────────────────── Настройки клана (для лидера/офицера) ───────────
+
+def clan_settings_keyboard(role: str) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="📝 Изменить описание", callback_data="cln:set:desc")],
+        [InlineKeyboardButton(text="💬 Ссылка на чат", callback_data="cln:set:chat")],
+    ]
+    if role == "leader":
+        rows.insert(0, [InlineKeyboardButton(text="🏷️ Изменить тег", callback_data="cln:set:tag")])
+        rows.insert(0, [InlineKeyboardButton(text="📛 Переименовать (5 000 💰)", callback_data="cln:set:name")])
     rows.append([_back_clan(), _menu_btn()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
