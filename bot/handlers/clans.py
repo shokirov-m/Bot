@@ -664,46 +664,89 @@ async def cb_clan_relic_craft(
 
 # ─────────────────────────── cln:cap ────────────────────────────────────────
 
+_CAPTURE_PAGE_SIZE = 12
+
+
+def _build_capture_screen(
+    callback_data: str | None, page: int = 0
+) -> int:
+    """Извлечь номер страницы из callback_data вида cln:cap:pg:{n}."""
+    if callback_data and callback_data.startswith("cln:cap:pg:"):
+        try:
+            return int(callback_data.split(":")[-1])
+        except ValueError:
+            pass
+    return page
+
+
+async def _show_capture_screen(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession, page: int = 0
+) -> None:
+    from services.clan_service import (
+        _captured_floors, _fmt_ts, CAPTURABLE_FLOORS,
+        CAPTURE_INCOME_PER_HOUR, CAPTURE_LIMIT_PER_CLAN_LEVEL, _floor_capture_active,
+    )
+    from datetime import datetime, UTC
+    _, char = await _get_char(session, callback)
+    if char is None:
+        return
+    m = await clan_repo.get_membership(session, int(char.id))
+    if m is None:
+        await callback.answer("Ты не в клане.", show_alert=True)
+        return
+    clan = await clan_repo.get_clan(session, int(m.clan_id))
+    if clan is None:
+        await callback.answer("Клан не найден.", show_alert=True)
+        return
+    payload = _payload(clan)
+    caps = _captured_floors(payload)
+    now = datetime.now(UTC)
+    clan_lv = int(clan.clan_level)
+    cap_limit = CAPTURE_LIMIT_PER_CLAN_LEVEL.get(clan_lv, 2)
+    active_count = sum(1 for v in caps.values() if _floor_capture_active(v, now))
+
+    # Текст: показываем только активно захваченные этажи
+    lines = [f"🗺️ <b>Захват этажей</b>\n"]
+    lines.append(
+        f"📊 Захвачено: <b>{active_count}/{cap_limit}</b> (ур. клана {clan_lv})\n"
+        f"Доход: <b>{CAPTURE_INCOME_PER_HOUR}💰/ч</b> с каждого этажа\n"
+    )
+    active_entries = [(fl, v) for fl, v in caps.items() if _floor_capture_active(v, now)]
+    if active_entries:
+        for fl_key, entry in sorted(active_entries, key=lambda x: int(x[0])):
+            lines.append(f"✅ Этаж {fl_key} — до {_fmt_ts(entry['expires_at'])}")
+    else:
+        lines.append("<i>Нет захваченных этажей.</i>")
+    lines.append(
+        f"\n<i>Этажи для захвата: каждые 5 начиная с 13 (13, 18, 23…)\n"
+        f"Нажми кнопку этажа, чтобы инициировать захват.</i>"
+    )
+    await _edit(
+        callback, state, "\n".join(lines),
+        clan_capture_keyboard(
+            m.role, active_caps=caps, cap_limit=cap_limit,
+            page=page, page_size=_CAPTURE_PAGE_SIZE,
+        ),
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "cln:cap")
 async def cb_clan_capture(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        _, char = await _get_char(session, callback)
-        if char is None:
-            return
-        m = await clan_repo.get_membership(session, int(char.id))
-        if m is None:
-            await callback.answer("Ты не в клане.", show_alert=True)
-            return
-        clan = await clan_repo.get_clan(session, int(m.clan_id))
-        if clan is None:
-            await callback.answer("Клан не найден.", show_alert=True)
-            return
-        payload = _payload(clan)
-        from services.clan_service import _captured_floors, _fmt_ts, CAPTURABLE_FLOORS, CAPTURE_INCOME_PER_HOUR
-        from datetime import datetime, UTC
-        caps = _captured_floors(payload)
-        now = datetime.now(UTC)
-        lines = [f"🗺️ <b>Захват этажей</b>\n"]
-        lines.append(
-            f"<i>Захватываемые этажи: {', '.join(str(f) for f in CAPTURABLE_FLOORS)}.\n"
-            f"Доход: {CAPTURE_INCOME_PER_HOUR}💰/ч с каждого захваченного этажа.</i>\n"
-        )
-        for fl in CAPTURABLE_FLOORS:
-            fl_key = str(fl)
-            entry = caps.get(fl_key)
-            if entry:
-                try:
-                    exp = datetime.fromisoformat(entry["expires_at"])
-                    if now < exp:
-                        lines.append(f"✅ Этаж {fl} — захвачен до {_fmt_ts(entry['expires_at'])}")
-                        continue
-                except Exception:
-                    pass
-            lines.append(f"⬜ Этаж {fl} — свободен")
-        await _edit(callback, state, "\n".join(lines), clan_capture_keyboard(m.role))
-        await callback.answer()
+        await _show_capture_screen(callback, state, session, page=0)
     except Exception:
         logger.exception("cln:cap")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^cln:cap:pg:\d+$"))
+async def cb_clan_cap_page(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        page = int((callback.data or "cln:cap:pg:0").split(":")[-1])
+        await _show_capture_screen(callback, state, session, page=page)
+    except Exception:
+        logger.exception("cln:cap:pg")
         await callback.answer("Ошибка.", show_alert=True)
 
 
@@ -716,6 +759,8 @@ async def cb_clan_cap_floor(callback: CallbackQuery, session: AsyncSession, stat
         fl = int((callback.data or "").split(":")[-1])
         ok, msg = await clan_service.try_capture_floor(session, char, fl)
         await callback.answer(msg, show_alert=True)
+        if ok:
+            await _show_capture_screen(callback, state, session, page=0)
     except Exception:
         logger.exception("cln:cap:fl")
         await callback.answer("Ошибка.", show_alert=True)

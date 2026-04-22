@@ -195,16 +195,46 @@ RELIC_DEFS: dict[str, dict[str, Any]] = {
 
 # ─────────────────────────── Захват этажей ──────────────────────────────────
 
-CAPTURABLE_FLOORS: list[int] = [15, 25, 35, 45, 55]
+# Этажи, доступные для захвата кланом: каждые 5 этажей начиная с 13-го
+CAPTURABLE_FLOORS: list[int] = list(range(13, 100, 5))  # 13, 18, 23, 28, ..., 98
+
 CAPTURE_DURATION_HOURS = 72          # базовая длительность захвата
 CAPTURE_INCOME_PER_HOUR = 50         # золото в казну / час
 CAPTURE_INCOME_INTERVAL_HOURS = 1
+
+# Максимальное кол-во одновременно захваченных этажей по уровню клана
+CAPTURE_LIMIT_PER_CLAN_LEVEL: dict[int, int] = {
+    1: 2,
+    2: 3,
+    3: 4,
+    4: 5,
+    5: 6,
+    6: 8,
+    7: 10,
+    8: 12,
+    9: 15,
+    10: 18,  # = все возможные этажи
+}
+
 CAPTURE_GUARDIAN_BOSS_KEYS: dict[int, str] = {
-    15: "boss_forest_warden",
-    25: "boss_stone_golem_guardian",
-    35: "boss_swamp_troll_warden",
-    45: "boss_iron_sentinel",
-    55: "boss_crystal_titan",
+    13: "boss_forest_warden",
+    18: "boss_stone_golem_guardian",
+    23: "boss_swamp_troll_warden",
+    28: "boss_iron_sentinel",
+    33: "boss_crystal_titan",
+    38: "boss_shadow_lord",
+    43: "boss_bone_colossus",
+    48: "boss_void_herald",
+    53: "boss_storm_wyrm",
+    58: "boss_lava_titan",
+    63: "boss_elder_lich",
+    68: "boss_sea_leviathan",
+    73: "boss_forest_warden",       # повторяемые ключи для высоких этажей
+    78: "boss_stone_golem_guardian",
+    83: "boss_iron_sentinel",
+    88: "boss_crystal_titan",
+    93: "boss_void_herald",
+    98: "boss_elder_lich",
 }
 
 # ─────────────────────────── Войны ──────────────────────────────────────────
@@ -252,6 +282,15 @@ def _relics(payload: dict[str, Any]) -> list[str]:
 
 def _captured_floors(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return dict(payload.get("captured_floors") or {})
+
+
+def _floor_capture_active(entry: dict[str, Any], now: datetime) -> bool:
+    """Возвращает True если захват этажа ещё активен (не истёк)."""
+    try:
+        expires = datetime.fromisoformat(entry["expires_at"])
+        return now < expires
+    except Exception:
+        return False
 
 
 def _war(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -556,18 +595,22 @@ def check_and_complete_buildings(payload: dict[str, Any]) -> list[str]:
 async def try_capture_floor(
     session: AsyncSession, character: Character, floor_number: int
 ) -> tuple[bool, str]:
-    """Персонаж заявляет захват этажа (нужны 3 участника клана — упрощённо: флаг в payload)."""
+    """Персонаж заявляет захват этажа."""
     if floor_number not in CAPTURABLE_FLOORS:
-        return False, f"Этаж {floor_number} нельзя захватить. Захватываемые: {CAPTURABLE_FLOORS}."
+        nearest = sorted(CAPTURABLE_FLOORS, key=lambda x: abs(x - floor_number))[:3]
+        return False, f"Этаж {floor_number} нельзя захватить. Ближайшие: {nearest}."
     m = await clan_repo.get_membership(session, int(character.id))
     if m is None:
         return False, "Ты не в клане."
+    if m.role not in ("leader", "officer"):
+        return False, "Только лидер или офицер клана может инициировать захват."
     clan = await clan_repo.get_clan(session, int(m.clan_id))
     if clan is None:
         return False, "Клан не найден."
     payload = _payload(clan)
     caps = _captured_floors(payload)
     fl_key = str(floor_number)
+    # Проверка: этаж уже захвачен этим кланом
     if fl_key in caps:
         entry = caps[fl_key]
         try:
@@ -576,6 +619,19 @@ async def try_capture_floor(
                 return False, f"Этаж {floor_number} уже захвачен вашим кланом до {_fmt_ts(entry['expires_at'])}."
         except Exception:
             pass
+    # Проверка лимита захватов по уровню клана
+    clan_lv = int(clan.clan_level)
+    cap_limit = CAPTURE_LIMIT_PER_CLAN_LEVEL.get(clan_lv, 2)
+    now = datetime.now(UTC)
+    active_caps = sum(
+        1 for k, v in caps.items()
+        if k != fl_key and _floor_capture_active(v, now)
+    )
+    if active_caps >= cap_limit:
+        return False, (
+            f"Лимит захватов для клана ур. {clan_lv}: <b>{cap_limit}</b>.\n"
+            f"Сейчас активных захватов: {active_caps}. Повысь уровень клана или дождись истечения."
+        )
     # Записываем заявку на захват — окончательно закрепляется после победы стража
     pending_key = f"capture_pending_{fl_key}"
     pending = payload.get("capture_pending") or {}

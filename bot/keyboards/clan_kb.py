@@ -161,20 +161,59 @@ def clan_relics_keyboard(
 
 # ─────────────────────────── Захват этажей ──────────────────────────────────
 
-def clan_capture_keyboard(role: str) -> InlineKeyboardMarkup:
-    from services.clan_service import CAPTURABLE_FLOORS
+def clan_capture_keyboard(
+    role: str,
+    active_caps: dict[str, Any] | None = None,
+    cap_limit: int = 2,
+    page: int = 0,
+    page_size: int = 12,
+) -> InlineKeyboardMarkup:
+    from services.clan_service import CAPTURABLE_FLOORS, _floor_capture_active
+    from datetime import datetime, UTC
     rows: list[list[InlineKeyboardButton]] = []
+
+    now = datetime.now(UTC)
+    ac = active_caps or {}
+    active_count = sum(1 for v in ac.values() if _floor_capture_active(v, now))
+
+    # Пагинация по этажам
+    total = len(CAPTURABLE_FLOORS)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(0, min(page, total_pages - 1))
+    visible = CAPTURABLE_FLOORS[page * page_size:(page + 1) * page_size]
+
     if can_manage(role):
         row: list[InlineKeyboardButton] = []
-        for fl in CAPTURABLE_FLOORS:
-            row.append(InlineKeyboardButton(
-                text=f"⚔️ Эт.{fl}", callback_data=f"cln:cap:{fl}"
-            ))
-            if len(row) == 3:
+        for fl in visible:
+            fl_key = str(fl)
+            if fl_key in ac and _floor_capture_active(ac[fl_key], now):
+                label = f"✅ Эт.{fl}"
+            elif active_count >= cap_limit:
+                label = f"🔒 Эт.{fl}"
+            else:
+                label = f"⚔️ Эт.{fl}"
+            row.append(InlineKeyboardButton(text=label, callback_data=f"cln:cap:{fl}"))
+            if len(row) == 4:
                 rows.append(row)
                 row = []
         if row:
             rows.append(row)
+
+        # Навигация по страницам
+        nav: list[InlineKeyboardButton] = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(text="◀️", callback_data=f"cln:cap:pg:{page-1}"))
+        if page < total_pages - 1:
+            nav.append(InlineKeyboardButton(text="▶️", callback_data=f"cln:cap:pg:{page+1}"))
+        if nav:
+            rows.append(nav)
+
+    rows.append([
+        InlineKeyboardButton(
+            text=f"📊 Захвачено: {active_count}/{cap_limit}",
+            callback_data="cln:cap",
+        ),
+    ])
     rows.append([_back_clan(), _menu_btn()])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

@@ -382,14 +382,20 @@ def room_clear_floor_keyboard(
     rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
-    # Кнопки комнат
-    room_labels = ["Первая комната", "Вторая комната", "Третья комната", "Четвёртая комната", "Пятая комната"]
+    # Кнопки комнат — по одной на комнату, с прогрессом внутри
+    room_names = ["Комната 1", "Комната 2", "Комната 3", "Комната 4", "Комната 5"]
     buf: list[InlineKeyboardButton] = []
-    for i, slot in enumerate(rc_mod.SLOT_ROOMS):
-        label = f"🌿 {room_labels[i]}"
-        if slot in beaten:
-            label = f"✅ {room_labels[i]}"
-        buf.append(InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, slot)))
+    for i, btn_code in enumerate(rc_mod.ROOM_BUTTON_CODES):
+        room_slots = rc_mod.ROOM_GROUPS[i]
+        done = sum(1 for s in room_slots if s in beaten)
+        total = len(room_slots)
+        if done == total:
+            label = f"✅ {room_names[i]}"
+        elif done == 0:
+            label = f"🌿 {room_names[i]} [0/{total}]"
+        else:
+            label = f"⚔️ {room_names[i]} [{done}/{total}]"
+        buf.append(InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, btn_code)))
         if len(buf) >= 2:
             rows.append(buf)
             buf = []
