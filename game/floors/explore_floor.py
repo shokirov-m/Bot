@@ -36,8 +36,8 @@ SLOT_ENCOUNTER = "exp_encounter"
 EXPLORE_ALL_SLOTS: frozenset[str] = frozenset({SLOT_BOSS, SLOT_ENCOUNTER})
 
 # Вероятности событий при исследовании
-_EVENT_TYPES = ("monster", "gold", "merchant", "mystical", "rare_item")
-_EVENT_WEIGHTS = (0.70, 0.12, 0.08, 0.07, 0.03)
+_EVENT_TYPES = ("monster", "gold", "merchant", "mystical", "rare_item", "trap", "ancient_inscription")
+_EVENT_WEIGHTS = (0.60, 0.11, 0.07, 0.07, 0.03, 0.07, 0.05)
 
 # ── Шаблоны монстров ───────────────────────────────────────────────────────────
 _MONSTER_TEMPLATES: list[MonsterTemplate] = [

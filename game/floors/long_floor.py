@@ -187,10 +187,10 @@ def spawns_for_tower_progress(character: Character, floor_number: int) -> list[F
     if exp_mod.is_explore_floor(floor_number):
         return [exp_mod.SPAWN_BOSS]
 
-    # Этаж 10 — волны вторжения
-    from game.floors import wave_floor as wv_mod
-    if wv_mod.is_wave_floor(floor_number):
-        return wv_mod.all_wave_floor_spawns()
+    # Этаж 10 — тёмные катакомбы (зачистка комнат)
+    from game.floors import room_clear_floor_10 as rc10_mod
+    if rc10_mod.is_room_clear_floor_10(floor_number):
+        return rc10_mod.all_room_clear_spawns()
 
     return build_spawns_for_floor(floor_number)
 

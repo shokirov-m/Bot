@@ -95,7 +95,7 @@ def render_mp_bar(
 
 def render_stamina_bar(
     current: int,
-    max_stam: int = 20,
+    max_stam: int = 30,
     length: int = 10,
     *,
     minutes_to_next: int | None = None,

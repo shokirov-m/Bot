@@ -27,6 +27,7 @@ from game.floors import wandering_npcs as wandering_npcs_mod
 from game.floors import forest_beginnings as fb
 from game.floors import long_floor as long_floor_mod
 from game.floors import room_clear_floor as rc_mod
+from game.floors import room_clear_floor_10 as rc10_mod
 from game.floors import wave_floor as wv_mod
 from game.floors import explore_floor as exp_mod
 from services import combat_service, golden_goblin_service
@@ -222,6 +223,11 @@ async def on_wave_locked(query: CallbackQuery, **_: object) -> None:
 @router.callback_query(F.data == "rc:locked")
 async def on_room_locked(query: CallbackQuery, **_: object) -> None:
     await query.answer("Сначала зачисти предыдущую комнату.", show_alert=True)
+
+
+@router.callback_query(F.data == "rc10:locked")
+async def on_room_10_locked(query: CallbackQuery, **_: object) -> None:
+    await query.answer("Сначала зачисти предыдущую комнату. 🔒", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("fl:"))
@@ -468,16 +474,77 @@ async def on_floor_callback(
             if spawn is None:
                 await query.answer("Цель не найдена.", show_alert=True)
                 return
+            # Монстры 2+ в одной комнате — стамина уже потрачена на вход
+            _rc_mi = rc_mod.slot_room_and_monster_index(_actual_slot)
+            _rc_free_stam = (_rc_mi is not None and _rc_mi[1] > 0)
             await combat_service.start_combat(
                 query=query,
                 session=session,
                 state=state,
                 character=char,
                 spawn=spawn,
+                free_stamina=_rc_free_stam,
             )
             return
 
-        # ── Этаж 10: волны вторжения ────────────────────────────────────────
+        # ── Этаж 10: тёмные катакомбы (зачистка комнат) ─────────────────────
+        if code in rc10_mod.ROOM_CLEAR_10_ALL_SLOTS:
+            if not rc10_mod.is_room_clear_floor_10(floor):
+                await query.answer("Этот сценарий только на 10-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from db.repository import floor_progress_repo as fpr
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+
+            # Кнопка комнаты (r10_r0..r10_r4) → определяем следующего монстра
+            _actual_slot = code
+            _room_idx = rc10_mod.room_index_for_button(code)
+            if _room_idx is not None:
+                if rc10_mod.is_room_complete(_room_idx, _beaten):
+                    await query.answer("Эта комната уже зачищена. ✅", show_alert=True)
+                    return
+                _next = rc10_mod.next_slot_in_room(_room_idx, _beaten)
+                if _next is None:
+                    await query.answer("Нет доступных целей.", show_alert=True)
+                    return
+                _actual_slot = _next
+
+            # Босс только после зачистки всех комнат
+            if _actual_slot == rc10_mod.SLOT_BOSS and not rc10_mod.is_boss_unlocked(_beaten):
+                rooms_left = rc10_mod.TOTAL_ROOMS - rc10_mod.rooms_cleared_count(_beaten)
+                await query.answer(
+                    f"Сначала зачисти все комнаты. Осталось: {rooms_left}.",
+                    show_alert=True,
+                )
+                return
+
+            # Уже побеждённый монстр (прямой слот из FSM)
+            if _actual_slot in rc10_mod.SLOT_ROOMS and _actual_slot in _beaten:
+                await query.answer("Этот монстр уже побеждён.", show_alert=True)
+                return
+
+            spawn = rc10_mod.spawn_by_slot(_actual_slot)
+            if spawn is None:
+                await query.answer("Цель не найдена.", show_alert=True)
+                return
+            # Монстры 2+ в одной комнате — стамина уже потрачена на вход
+            _r10_mi = rc10_mod.slot_room_and_monster_index(_actual_slot)
+            _r10_free_stam = (_r10_mi is not None and _r10_mi[1] > 0)
+            await combat_service.start_combat(
+                query=query,
+                session=session,
+                state=state,
+                character=char,
+                spawn=spawn,
+                free_stamina=_r10_free_stam,
+            )
+            return
+
+        # ── Этаж 10: волны вторжения (легаси) ────────────────────────────────
         if code in wv_mod.WAVE_FLOOR_ALL_SLOTS or code == "wv:locked":
             if code == "wv:locked":
                 await query.answer("Сначала победи предыдущую волну.", show_alert=True)
@@ -672,6 +739,48 @@ async def on_floor_callback(
                     _gold_myst = 8 + floor
                     cs.add_gold(char, _gold_myst)
                     event_html = f"🌟 <b>Благословение странника!</b>\nНайдено немного золота (+{_gold_myst}) среди костей путника."
+                await session.flush()
+            elif event_type == "trap":
+                # Ловушка — небольшой урон, утешительное золото
+                _trap_dmg = max(1, int(char.hp_max * random.uniform(0.07, 0.13)))
+                char.hp_current = max(1, int(char.hp_current) - _trap_dmg)
+                _trap_gold = random.randint(5, 12) + floor
+                cs.add_gold(char, _trap_gold)
+                await session.flush()
+                event_html = (
+                    f"🪤 <b>Ловушка!</b>\n"
+                    f"Ты задел натянутую струну — острые шипы царапают кожу. "
+                    f"−{_trap_dmg} HP. Зато среди обломков нашёл +{_trap_gold} монет."
+                )
+            elif event_type == "ancient_inscription":
+                # Древняя надпись — рандомный малый бонус
+                _insc_roll = random.randint(0, 2)
+                if _insc_roll == 0:
+                    # +1 рунный камень
+                    char.rune_stones = int(char.rune_stones or 0) + 1
+                    event_html = (
+                        "📜 <b>Древняя надпись!</b>\n"
+                        "Руны на стене пульсируют и втягиваются в твою ладонь — "
+                        "<b>+1 рунный камень</b>."
+                    )
+                elif _insc_roll == 1:
+                    # +50% MP (не больше max)
+                    _mp_gain = max(1, int(char.mp_max * 0.5))
+                    char.mp_current = min(int(char.mp_max), int(char.mp_current) + _mp_gain)
+                    event_html = (
+                        f"📜 <b>Древняя надпись!</b>\n"
+                        f"Манускрипт светится мистическим светом — "
+                        f"<b>+{_mp_gain} MP</b> восстановлено."
+                    )
+                else:
+                    # +25% HP (не больше max)
+                    _hp_gain = max(1, int(char.hp_max * 0.25))
+                    char.hp_current = min(int(char.hp_max), int(char.hp_current) + _hp_gain)
+                    event_html = (
+                        f"📜 <b>Древняя надпись!</b>\n"
+                        f"Лечебное заклинание проходит сквозь камень и касается твоей кожи — "
+                        f"<b>+{_hp_gain} HP</b> восстановлено."
+                    )
                 await session.flush()
             else:  # rare_item
                 from game.items import loot as loot_tables

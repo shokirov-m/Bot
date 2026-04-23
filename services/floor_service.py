@@ -22,6 +22,7 @@ from bot.keyboards.floor_kb import (
     floor_screen_keyboard,
     long_floor_screen_keyboard,
     room_clear_floor_keyboard,
+    room_clear_floor_10_keyboard,
     wave_floor_screen_keyboard,
 )
 from bot.utils.game_ui import push_game_ui, remember_game_ui_anchor
@@ -35,6 +36,7 @@ from game.locations import cities as city_locations
 from game.floors import long_floor as long_floor_mod
 from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import room_clear_floor as rc_mod
+from game.floors import room_clear_floor_10 as rc10_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import wave_floor as wv_mod
 from game.floors import wandering_npcs as wandering_npcs_mod
@@ -107,11 +109,11 @@ async def floor_keyboard_for_character(
         _extra = dict(row.extra or {})
         return explore_floor_keyboard(character, extra=_extra)
 
-    # Этаж 10 — волны вторжения
-    if wv_mod.is_wave_floor(n):
-        wv_mod.ensure_started(character)
+    # Этаж 10 — тёмные катакомбы (зачистка комнат)
+    if rc10_mod.is_room_clear_floor_10(n):
+        rc10_mod.ensure_started(character)
         defeated = await defeated_slot_codes_for_floor(session, character.id, n)
-        return wave_floor_screen_keyboard(character, defeated_slots=defeated)
+        return room_clear_floor_10_keyboard(character, defeated_slots=defeated)
 
     long_floor_mod.ensure_long_floor_started(character)
     if long_floor_mod.is_long_floor_active(character):
@@ -232,6 +234,10 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(rc_mod.format_room_clear_banner_html(_ds))
 
+    if rc10_mod.is_room_clear_floor_10(int(n)):
+        _ds = defeated_slots if defeated_slots is not None else frozenset()
+        lines.append(rc10_mod.format_room_clear_banner_html(_ds))
+
     if wv_mod.is_wave_floor(int(n)):
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(wv_mod.format_wave_floor_banner_html(_ds))
@@ -314,6 +320,9 @@ def format_floor_message_photo_caption(character: Character) -> str:
         lines.append(b if len(b) <= 120 else b[:117] + "…")
     if rc_mod.is_room_clear_floor(int(n)):
         b = rc_mod.format_room_clear_banner_html(frozenset())
+        lines.append(b if len(b) <= 120 else b[:117] + "…")
+    if rc10_mod.is_room_clear_floor_10(int(n)):
+        b = rc10_mod.format_room_clear_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
     if exp_mod.is_explore_floor(int(n)):
         lines.append("🔍 Исследование · нажми кнопку ниже")
@@ -434,7 +443,7 @@ async def push_floor_screen_ui(
     splash_needed = int(row.visits) == 0 and not ex.get("_floor_intro_anim_v0")
     # Для баннеров с прогрессом — читаем cleared slots
     _cleared_slots: frozenset[str] = frozenset()
-    if rc_mod.is_room_clear_floor(n) or wv_mod.is_wave_floor(n):
+    if rc_mod.is_room_clear_floor(n) or rc10_mod.is_room_clear_floor_10(n) or wv_mod.is_wave_floor(n):
         _raw_cleared = list((ex.get("slots_cleared") or []))
         _cleared_slots = frozenset(str(x) for x in _raw_cleared)
     # Баннер прогресса исследования (этаж 8)

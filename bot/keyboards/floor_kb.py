@@ -13,6 +13,7 @@ from game.floors import floor_data
 from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import long_floor as long_floor_mod
 from game.floors import room_clear_floor as rc_mod
+from game.floors import room_clear_floor_10 as rc10_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import wave_floor as wv_mod
 from game.floors import wandering_npcs as wandering_npcs_mod
@@ -464,6 +465,63 @@ def wave_floor_screen_keyboard(
             rows.append([InlineKeyboardButton(text="✅ 🌲 Древний Трент", callback_data=_cb(floor_number, wv_mod.SLOT_BOSS))])
         else:
             rows.append([InlineKeyboardButton(text="🌲 Древний Трент (БОСС)", callback_data=_cb(floor_number, wv_mod.SLOT_BOSS))])
+
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    if floor_data.get_city_for_floor(floor_number):
+        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+
+    nav: list[InlineKeyboardButton] = []
+    if floor_number < highest:
+        nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
+    if floor_number > 1:
+        nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
+    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    rows.append(nav)
+
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def room_clear_floor_10_keyboard(
+    character: Character,
+    *,
+    defeated_slots: frozenset[str] | None = None,
+) -> InlineKeyboardMarkup:
+    """Клавиатура этажа 10 — Тёмные Катакомбы (зачистка комнат)."""
+    floor_number = int(character.floor_number)
+    highest = int(character.highest_floor_reached)
+    beaten = defeated_slots if defeated_slots is not None else frozenset()
+    rows: list[list[InlineKeyboardButton]] = []
+
+    rows.extend(_class_arc_rows(character))
+    rows.extend(_pet_rows(character, floor_number))
+
+    room_names = ["Склеп", "Тёмный коридор", "Лаборатория", "Тронный зал", "Покои Лорда"]
+    available_idx = rc10_mod.next_available_room_index(beaten)
+    for i, btn_code in enumerate(rc10_mod.ROOM_BUTTON_CODES):
+        room_slots = rc10_mod.ROOM_GROUPS[i]
+        done = sum(1 for s in room_slots if s in beaten)
+        total = len(room_slots)
+        if done == total:
+            label = f"✅ {room_names[i]}"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, btn_code))])
+        elif i == available_idx:
+            if done == 0:
+                label = f"⚔️ {room_names[i]} [0/{total}]"
+            else:
+                label = f"⚔️ {room_names[i]} [{done}/{total}]"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, btn_code))])
+        else:
+            label = f"🔒 {room_names[i]}"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data="rc10:locked")])
+
+    # Кнопка босса — только если все комнаты зачищены
+    if rc10_mod.is_boss_unlocked(beaten):
+        boss_label = "✅ 👑 Лорд Тьмы" if rc10_mod.SLOT_BOSS in beaten else "👑 Лорд Тьмы (БОСС)"
+        rows.append([InlineKeyboardButton(text=boss_label, callback_data=_cb(floor_number, rc10_mod.SLOT_BOSS))])
 
     pend = tower_next_floor_pending(character)
     if pend is not None:

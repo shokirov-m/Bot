@@ -61,6 +61,7 @@ from game.floors import long_floor as long_floor_mod
 from game.floors import monster_catalog as monster_catalog_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import room_clear_floor as room_clear_mod
+from game.floors import room_clear_floor_10 as room_clear_10_mod
 from game.floors import wave_floor as wave_floor_mod
 from game.floors import explore_floor as explore_floor_mod
 from utils.image_assets import combat_monster_portrait_path
@@ -610,11 +611,15 @@ async def start_combat(
     state: FSMContext,
     character: Character,
     spawn: FloorMonsterSpawn,
+    free_stamina: bool = False,
 ) -> bool:
-    """Начать бой. True если бой начат."""
-    if not can_start_combat(character, settings.MAX_STAMINA):
-        await query.answer("Недостаточно стамины (нужна 1).", show_alert=True)
-        return False
+    """Начать бой. True если бой начат.
+    free_stamina=True — не списывать стамину (бой в рамках той же комнаты/серии).
+    """
+    if not free_stamina:
+        if not can_start_combat(character, settings.MAX_STAMINA):
+            await query.answer("Недостаточно стамины (нужна 1).", show_alert=True)
+            return False
 
     if rest_service.apply_completed_rest_if_needed(character):
         await session.flush()
@@ -631,10 +636,11 @@ async def start_combat(
         await query.answer("Ты уже в бою.", show_alert=True)
         return False
 
-    spent = await spend_stamina(session, int(character.id))
-    if not spent:
-        await query.answer("Не удалось списать стамину. Попробуй ещё раз.", show_alert=True)
-        return False
+    if not free_stamina:
+        spent = await spend_stamina(session, int(character.id))
+        if not spent:
+            await query.answer("Не удалось списать стамину. Попробуй ещё раз.", show_alert=True)
+            return False
     await session.refresh(character)
     if pets_mod.repair_pet_meta_if_needed(character):
         await session.flush()
@@ -1304,7 +1310,8 @@ async def _victory_sequence(
                 _mat_amount = random.randint(1, 2)
             clan_service.add_material_drop(character, _mat_drop, _mat_amount)
             _mat_icons = {"wood": "🪵", "stone": "🪨", "herbs": "🌿"}
-            _mat_note = f"\n{_mat_icons.get(_mat_drop, '📦')} +{_mat_amount} {_mat_drop} (клан)"
+            _mat_ru = {"wood": "дерево", "stone": "камень", "herbs": "травы"}
+            _mat_note = f"\n{_mat_icons.get(_mat_drop, '📦')} +{_mat_amount} {_mat_ru.get(_mat_drop, _mat_drop)} (клан)"
         else:
             _mat_note = ""
     except Exception:
@@ -1439,17 +1446,22 @@ async def _victory_sequence(
     reward_frames = ("▓░░░░░░░░░", "▓▓▓▓▓░░░░░", "▓▓▓▓▓▓▓▓▓▓")
     is_golden_goblin = str(spawn.template.key or "") == golden_goblin_service.TEMPLATE_KEY
     fl = int(character.floor_number)
-    # Этаж 5: если только что победили монстра в комнате и следующий монстр есть — вместо
+    # Этажи 5 и 10: если победили монстра в комнате и следующий монстр есть — вместо
     # «На этаж» показываем кнопку «Следующий противник» (игрок не уходит с экрана боя).
     _next_rc_slot: str | None = None
+    _next_rc_mod = None  # ссылка на нужный модуль (floor 5 или floor 10)
     if spawn.slot_code in room_clear_mod.SLOT_ROOMS:
         _next_rc_slot = room_clear_mod.next_slot_after_defeat(spawn.slot_code)
-    if _next_rc_slot is not None:
-        _next_rc_spawn = room_clear_mod.spawn_by_slot(_next_rc_slot)
+        _next_rc_mod = room_clear_mod
+    elif spawn.slot_code in room_clear_10_mod.SLOT_ROOMS:
+        _next_rc_slot = room_clear_10_mod.next_slot_after_defeat(spawn.slot_code)
+        _next_rc_mod = room_clear_10_mod
+    if _next_rc_slot is not None and _next_rc_mod is not None:
+        _next_rc_spawn = _next_rc_mod.spawn_by_slot(_next_rc_slot)
         _next_name = _next_rc_spawn.display_name if _next_rc_spawn else "Следующий"
-        _room_info = room_clear_mod.slot_room_and_monster_index(spawn.slot_code)
+        _room_info = _next_rc_mod.slot_room_and_monster_index(spawn.slot_code)
         _room_idx, _mon_idx = _room_info if _room_info else (0, 0)
-        _total_in_room = len(room_clear_mod.ROOM_GROUPS[_room_idx])
+        _total_in_room = len(_next_rc_mod.ROOM_GROUPS[_room_idx])
         _next_label = f"⚔️ {_next_name} ({_mon_idx + 2}/{_total_in_room})"
         floor_rows: list[list[InlineKeyboardButton]] = [
             [InlineKeyboardButton(text=_next_label[:36], callback_data=f"fl:{fl}:{_next_rc_slot}")],
@@ -1574,11 +1586,16 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
         if found_lf is not None:
             return found_lf
     battle_floor = int(combat_state.get("floor", character.floor_number))
-    # Room-clear floors (rc_r0…rc_r4, rc_boss)
+    # Room-clear floor 5 (rc_r0…rc_r4, rc_boss)
     if slot in room_clear_mod.ROOM_CLEAR_ALL_SLOTS:
         found_rc = room_clear_mod.spawn_by_slot(slot)
         if found_rc is not None:
             return found_rc
+    # Room-clear floor 10 (r10_r0…r10_r4, r10_boss)
+    if slot in room_clear_10_mod.ROOM_CLEAR_10_ALL_SLOTS:
+        found_rc10 = room_clear_10_mod.spawn_by_slot(slot)
+        if found_rc10 is not None:
+            return found_rc10
     # Wave floors (wv_w1, wv_w2, wv_w3, wv_boss)
     if slot in wave_floor_mod.WAVE_FLOOR_ALL_SLOTS:
         found_wv = wave_floor_mod.spawn_by_slot(slot)

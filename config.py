@@ -64,7 +64,7 @@ class Settings(BaseSettings):
         ge=60,
         description="Интервал полного восстановления HP и MP всем персонажам (фоновая задача), секунды",
     )
-    MAX_STAMINA: int = Field(default=20)
+    MAX_STAMINA: int = Field(default=30)
     ANTICHEAT_ENABLED: bool = Field(default=True)
     SEASON_DURATION_DAYS: int = Field(default=30)
     DISPLAY_NAME_CHANGE_GOLD: int = Field(

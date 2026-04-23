@@ -60,7 +60,7 @@ CLAN_LEVEL_DEFS: list[dict[str, Any]] = [
     # уровень 1 — стартовый, бесплатно
     {"level": 1,  "max_members": 5,   "cost_gold": 0,       "cost_wood": 0,    "cost_stone": 0,   "cost_herbs": 0},
     # уровень 2
-    {"level": 2,  "max_members": 10,  "cost_gold": 5_000,   "cost_wood": 300,  "cost_stone": 0,   "cost_herbs": 0},
+    {"level": 2,  "max_members": 10,  "cost_gold": 5_000,   "cost_wood": 100,  "cost_stone": 0,   "cost_herbs": 0},
     # уровень 3
     {"level": 3,  "max_members": 20,  "cost_gold": 10_000,  "cost_wood": 500,  "cost_stone": 200, "cost_herbs": 0},
     # уровень 4
