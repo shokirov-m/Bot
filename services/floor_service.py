@@ -159,24 +159,18 @@ def _format_floor3_city_only(character: Character) -> str:
         lines.append(
             "🌑 <b>[НОЧЬ UTC]</b> <i>На боевых ярусах враги сильнее; здесь — безопасная зона.</i>",
         )
-    lines.append(f"{zone.emoji} <b>{html.escape(zone.name)}</b> · этаж <b>{n}</b>/100")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  {zone.emoji} <b>{html.escape(zone.name)}</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if city:
         lines.append(
-            f"{city.emoji} <b>{html.escape(city.name)}</b> — <b>мирный хаб</b>: без боёв на площади. "
-            "Зайди в <b>Город</b> — кузница, таверна, <b>рынок</b> (лавка, скупщик, банк, храм призыва), NPC.",
+            f"{city.emoji} <b>{html.escape(city.name)}</b> — мирный хаб. "
+            "Зайди в «Город»: кузница, таверна, рынок (лавка, скупщик, банк, храм призыва).",
         )
-    lines.append("🌲 Дальше по башне (4–10) — обычные цели, привал и тайники по правилам леса.")
     hi = int(character.highest_floor_reached)
-    lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️ · на этом ярусе нет врагов для боя.")
+    lines.append(f"🧭 Открыто 1–{hi}")
     pend = tower_next_floor_pending(character)
     if pend is not None:
-        lines.append(
-            f"✅ <b>Можно подняться</b> на этаж <b>{pend}</b> — кнопка «Этаж {pend}» или «⬆️ Выше».",
-        )
-    else:
-        lines.append("⬆️ Когда будешь готов к лесу — поднимись на следующий ярус.")
-    lines.append("<i>Боёв на этом экране нет (−0 ⚡).</i>")
+        lines.append(f"✅ <b>Можно подняться</b> на этаж <b>{pend}</b>.")
     return "\n".join(lines)
 
 
@@ -191,7 +185,7 @@ def _format_explore_floor_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"🗻 <b>Пещера Первородных</b> · этаж <b>{n}</b>/100")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  🗻 <b>Пещера Первородных</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
         "<i>Тёмная пещера скрывает множество тайн. Исследуй каждый угол, "
@@ -224,7 +218,7 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>. Играй с оглядкой.</i>",
         )
-    lines.append(f"{zone.emoji} <b>{html.escape(zone.name)}</b> · этаж <b>{n}</b>/100")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  {zone.emoji} <b>{html.escape(zone.name)}</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if not long_floor_mod.is_long_floor_active(character):
         zd = zone.description
@@ -313,7 +307,7 @@ def format_floor_message_photo_caption(character: Character) -> str:
     lines: list[str] = []
     if combat_night.is_night_utc():
         lines.append("🌑 <b>[НОЧЬ]</b> <i>+20% твари · +40% награда</i>")
-    lines.append(f"{zone.emoji} <b>{html.escape(zone.name)}</b> · <b>{n}</b>/100")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b>  {zone.emoji} <b>{html.escape(zone.name)}</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if long_floor_mod.is_long_floor_active(character):
         b = long_floor_mod.format_long_floor_banner_html()

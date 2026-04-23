@@ -17,7 +17,8 @@
       "Bash(python -c \"import bot.handlers.floor; print\\('floor handler OK'\\)\")",
       "Bash(python -c \"import services.combat_service; print\\('combat_service OK'\\)\")",
       "Bash(python -c \"import services.floor_service; import bot.handlers.floor; import bot.keyboards.floor_kb; import game.floors.explore_floor; print\\('All OK'\\)\")",
-      "Bash(python -c \"import services.floor_service; import services.combat_service; import bot.handlers.floor; print\\('All OK'\\)\")"
+      "Bash(python -c \"import services.floor_service; import services.combat_service; import bot.handlers.floor; print\\('All OK'\\)\")",
+      "Bash(python -c \"import services.floor_service; import services.combat_service; print\\('All OK'\\)\")"
     ]
   }
 }

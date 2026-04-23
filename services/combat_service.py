@@ -551,13 +551,13 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     if taunt_raw:
         taunt_line = taunt_raw if taunt_raw.startswith("💬") else f"💬 «{taunt_raw}»"
     if log_lines and taunt_line:
-        log_block = f"{log_lines}\n{taunt_line}"
+        log_block = f"{log_lines}\n\n{taunt_line}"
     elif log_lines:
         log_block = log_lines
     elif taunt_line:
         log_block = taunt_line
     else:
-        log_block = ""
+        log_block = "<i>—</i>"
 
     fln = int(state.get("floor", 0))
     sep = LINE_SEP_BATTLE
@@ -567,23 +567,30 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
             "<i>🌑 Ночь UTC: враг +20% HP/ATK, победа +40% золото и опыт.</i>\n"
         )
 
-    title = f"⚔️ <b>Этаж {fln}</b>"
+    title = f"⚔️ <b>— ЭТАЖ {fln} —</b>"
     if state.get("night_battle"):
         title += " 🌑"
 
-    log_section = f"{sep}\n{log_block}" if log_block else ""
     return (
+        f"{sep}\n"
         f"{title}\n"
+        f"{sep}\n"
         f"{night_note}"
+        f"<b>▸ ВРАГ</b>\n"
         f"{enemy_line}\n"
         f"{hp_mon}\n"
         f"{buff_line}"
         f"\n"
+        f"<b>▸ ИГРОК</b>\n"
         f"{php_line}\n"
+        f"\n"
         f"{mp_line}\n"
         f"{shield_p}"
         f"{pet_p}"
-        f"{log_section}"
+        f"{sep}\n"
+        f"📜 Лог хода:\n"
+        f"{log_block}\n"
+        f"{sep}"
     )
 
 
@@ -1432,15 +1439,27 @@ async def _victory_sequence(
     reward_frames = ("▓░░░░░░░░░", "▓▓▓▓▓░░░░░", "▓▓▓▓▓▓▓▓▓▓")
     is_golden_goblin = str(spawn.template.key or "") == golden_goblin_service.TEMPLATE_KEY
     fl = int(character.floor_number)
-    floor_rows: list[list[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(
-                text="🗺️ На этаж",
-                callback_data=f"fl:{fl}:return",
-            ),
-        ],
-        menu_nav_button_row(),
-    ]
+    # Этаж 5: если только что победили монстра в комнате и следующий монстр есть — вместо
+    # «На этаж» показываем кнопку «Следующий противник» (игрок не уходит с экрана боя).
+    _next_rc_slot: str | None = None
+    if spawn.slot_code in room_clear_mod.SLOT_ROOMS:
+        _next_rc_slot = room_clear_mod.next_slot_after_defeat(spawn.slot_code)
+    if _next_rc_slot is not None:
+        _next_rc_spawn = room_clear_mod.spawn_by_slot(_next_rc_slot)
+        _next_name = _next_rc_spawn.display_name if _next_rc_spawn else "Следующий"
+        _room_info = room_clear_mod.slot_room_and_monster_index(spawn.slot_code)
+        _room_idx, _mon_idx = _room_info if _room_info else (0, 0)
+        _total_in_room = len(room_clear_mod.ROOM_GROUPS[_room_idx])
+        _next_label = f"⚔️ {_next_name} ({_mon_idx + 2}/{_total_in_room})"
+        floor_rows: list[list[InlineKeyboardButton]] = [
+            [InlineKeyboardButton(text=_next_label[:36], callback_data=f"fl:{fl}:{_next_rc_slot}")],
+            menu_nav_button_row(),
+        ]
+    else:
+        floor_rows = [
+            [InlineKeyboardButton(text="🗺️ На этаж", callback_data=f"fl:{fl}:return")],
+            menu_nav_button_row(),
+        ]
     victory_kb = InlineKeyboardMarkup(inline_keyboard=floor_rows)
 
     try:

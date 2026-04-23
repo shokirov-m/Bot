@@ -219,6 +219,11 @@ async def on_wave_locked(query: CallbackQuery, **_: object) -> None:
     await query.answer("Сначала победи предыдущую волну.", show_alert=True)
 
 
+@router.callback_query(F.data == "rc:locked")
+async def on_room_locked(query: CallbackQuery, **_: object) -> None:
+    await query.answer("Сначала зачисти предыдущую комнату.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("fl:"))
 async def on_floor_callback(
     query: CallbackQuery,

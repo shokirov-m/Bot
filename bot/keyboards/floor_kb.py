@@ -383,25 +383,25 @@ def room_clear_floor_keyboard(
     rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
-    # Кнопки комнат — по одной на комнату, с прогрессом внутри
+    # Кнопки комнат — последовательная блокировка
     room_names = ["Комната 1", "Комната 2", "Комната 3", "Комната 4", "Комната 5"]
-    buf: list[InlineKeyboardButton] = []
+    available_idx = rc_mod.next_available_room_index(beaten)
     for i, btn_code in enumerate(rc_mod.ROOM_BUTTON_CODES):
         room_slots = rc_mod.ROOM_GROUPS[i]
         done = sum(1 for s in room_slots if s in beaten)
         total = len(room_slots)
         if done == total:
             label = f"✅ {room_names[i]}"
-        elif done == 0:
-            label = f"🌿 {room_names[i]} [0/{total}]"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, btn_code))])
+        elif i == available_idx:
+            if done == 0:
+                label = f"⚔️ {room_names[i]} [0/{total}]"
+            else:
+                label = f"⚔️ {room_names[i]} [{done}/{total}]"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, btn_code))])
         else:
-            label = f"⚔️ {room_names[i]} [{done}/{total}]"
-        buf.append(InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, btn_code)))
-        if len(buf) >= 2:
-            rows.append(buf)
-            buf = []
-    if buf:
-        rows.append(buf)
+            label = f"🔒 {room_names[i]}"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data="rc:locked")])
 
     # Кнопка босса — только если все комнаты зачищены
     if rc_mod.is_boss_unlocked(beaten):

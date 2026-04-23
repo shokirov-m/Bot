@@ -189,6 +189,35 @@ def is_boss_unlocked(defeated_slots: frozenset[str]) -> bool:
     return all(is_room_complete(i, defeated_slots) for i in range(TOTAL_ROOMS))
 
 
+def next_available_room_index(beaten: frozenset[str]) -> int:
+    """Индекс первой незачищенной комнаты. Если все очищены — возвращает TOTAL_ROOMS."""
+    for i in range(TOTAL_ROOMS):
+        if not is_room_complete(i, beaten):
+            return i
+    return TOTAL_ROOMS
+
+
+def slot_room_and_monster_index(slot: str) -> tuple[int, int] | None:
+    """Возвращает (room_idx, monster_idx) для слота монстра, или None."""
+    for room_idx, room_slots in enumerate(ROOM_GROUPS):
+        for monster_idx, s in enumerate(room_slots):
+            if s == slot:
+                return room_idx, monster_idx
+    return None
+
+
+def next_slot_after_defeat(slot: str) -> str | None:
+    """Следующий слот монстра в той же комнате после победы, или None если комната зачищена."""
+    result = slot_room_and_monster_index(slot)
+    if result is None:
+        return None
+    room_idx, monster_idx = result
+    room_slots = ROOM_GROUPS[room_idx]
+    if monster_idx + 1 < len(room_slots):
+        return room_slots[monster_idx + 1]
+    return None
+
+
 def ensure_started(character: Character) -> None:
     if int(character.floor_number) != ROOM_CLEAR_FLOOR:
         return
