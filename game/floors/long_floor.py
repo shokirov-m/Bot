@@ -182,6 +182,11 @@ def spawns_for_tower_progress(character: Character, floor_number: int) -> list[F
     if rc_mod.is_room_clear_floor(floor_number):
         return rc_mod.all_room_clear_spawns()
 
+    # Этаж 8 — исследование пещеры (для подъёма нужен только босс)
+    from game.floors import explore_floor as exp_mod
+    if exp_mod.is_explore_floor(floor_number):
+        return [exp_mod.SPAWN_BOSS]
+
     # Этаж 10 — волны вторжения
     from game.floors import wave_floor as wv_mod
     if wv_mod.is_wave_floor(floor_number):

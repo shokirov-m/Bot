@@ -16,6 +16,7 @@ from game.floors import room_clear_floor as rc_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import wave_floor as wv_mod
 from game.floors import wandering_npcs as wandering_npcs_mod
+from game.floors import explore_floor as exp_mod
 from game.floors.monsters import FloorMonsterSpawn
 from game.floors.tower_ascent import tower_next_floor_pending
 from services.tutorial_battle_service import tutorial_battle_pending
@@ -463,6 +464,58 @@ def wave_floor_screen_keyboard(
             rows.append([InlineKeyboardButton(text="✅ 🌲 Древний Трент", callback_data=_cb(floor_number, wv_mod.SLOT_BOSS))])
         else:
             rows.append([InlineKeyboardButton(text="🌲 Древний Трент (БОСС)", callback_data=_cb(floor_number, wv_mod.SLOT_BOSS))])
+
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    if floor_data.get_city_for_floor(floor_number):
+        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+
+    nav: list[InlineKeyboardButton] = []
+    if floor_number < highest:
+        nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
+    if floor_number > 1:
+        nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
+    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    rows.append(nav)
+
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def explore_floor_keyboard(
+    character: Character,
+    *,
+    extra: dict | None = None,
+) -> InlineKeyboardMarkup:
+    """Клавиатура этажа 8 — механика исследования пещеры."""
+    floor_number = int(character.floor_number)
+    highest = int(character.highest_floor_reached)
+    _extra = extra if extra is not None else {}
+    beaten = frozenset(str(x) for x in _extra.get("slots_cleared") or [])
+    rows: list[list[InlineKeyboardButton]] = []
+
+    rows.extend(_class_arc_rows(character))
+    rows.extend(_pet_rows(character, floor_number))
+
+    count = exp_mod.get_explore_count(_extra)
+    target = exp_mod.get_explore_target(_extra)
+    pct = exp_mod.progress_percent(count, target)
+    boss_done = exp_mod.SLOT_BOSS in beaten
+    boss_available = exp_mod.is_boss_available(_extra)
+
+    # Кнопка исследования (скрывается после победы над боссом)
+    if not boss_done:
+        explore_label = f"🔍 Исследовать [{pct}%]"
+        rows.append([InlineKeyboardButton(text=explore_label, callback_data=_cb(floor_number, "exp_explore"))])
+
+    # Кнопка босса — только если 100% достигнуто
+    if boss_available:
+        if boss_done:
+            rows.append([InlineKeyboardButton(text="✅ 🗿 Хранитель Пещеры", callback_data=_cb(floor_number, exp_mod.SLOT_BOSS))])
+        else:
+            rows.append([InlineKeyboardButton(text="🗿 Хранитель Пещеры (БОСС)", callback_data=_cb(floor_number, exp_mod.SLOT_BOSS))])
 
     pend = tower_next_floor_pending(character)
     if pend is not None:

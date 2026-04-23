@@ -75,7 +75,12 @@ def roll_rune_stone(spawn: FloorMonsterSpawn) -> bool:
     return random.random() < chance
 
 
-def roll_item_drop(spawn: FloorMonsterSpawn, floor_number: int) -> bool:
+def luck_drop_bonus(stat_luck: int) -> float:
+    """Бонус к шансу дропа от удачи: каждые 10 удачи = +1.5%, максимум +15% при 100+."""
+    return min(0.15, (int(stat_luck) // 10) * 0.015)
+
+
+def roll_item_drop(spawn: FloorMonsterSpawn, floor_number: int, stat_luck: int = 0) -> bool:
     is_low = int(floor_number) <= int(DROP_CHANCE_FLOOR_LOW_MAX)
     if spawn.is_major_boss:
         chance = DROP_CHANCE_MAJOR_LOW if is_low else DROP_CHANCE_MAJOR_HIGH
@@ -85,4 +90,5 @@ def roll_item_drop(spawn: FloorMonsterSpawn, floor_number: int) -> bool:
         chance = DROP_CHANCE_ELITE_LOW if is_low else DROP_CHANCE_ELITE_HIGH
     else:
         chance = DROP_CHANCE_NORMAL_LOW if is_low else DROP_CHANCE_NORMAL_HIGH
+    chance += luck_drop_bonus(stat_luck)
     return random.random() < min(0.95, chance)

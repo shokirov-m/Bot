@@ -62,6 +62,7 @@ from game.floors import monster_catalog as monster_catalog_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import room_clear_floor as room_clear_mod
 from game.floors import wave_floor as wave_floor_mod
+from game.floors import explore_floor as explore_floor_mod
 from utils.image_assets import combat_monster_portrait_path
 from game.floors.monster_stat_formula import compute_formula_stat_bundle, monster_strike_ailment
 from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawns_for_floor
@@ -973,6 +974,15 @@ async def _apply_tower_progress_after_victory(
 
     extra = dict(row.extra or {})
     cleared: list[str] = list(extra.get("slots_cleared", []))
+
+    # Этаж 8: бой-исследование инкрементирует счётчик (не добавляется в slots_cleared как обычный слот)
+    if spawn.slot_code == explore_floor_mod.SLOT_ENCOUNTER:
+        extra = explore_floor_mod.increment_explore_count(extra)
+        extra["slots_cleared"] = cleared
+        row.extra = extra
+        await session.flush()
+        return ""
+
     if spawn.slot_code not in cleared:
         cleared.append(spawn.slot_code)
     extra["slots_cleared"] = cleared
@@ -998,6 +1008,9 @@ async def _apply_tower_progress_after_victory(
     set_tower_ascent_pending(character, nxt)
     character.highest_floor_reached = max(int(character.highest_floor_reached), nxt)
     extra["slots_cleared"] = []
+    # Сбрасываем прогресс исследования при подъёме с 8-го этажа
+    if cur == explore_floor_mod.EXPLORE_FLOOR:
+        extra = explore_floor_mod.reset_explore_state(extra)
     row.extra = extra
     zone_next = floor_data.get_zone_for_floor(nxt)
     room_next = floor_data.epithet_for_floor(zone_next, nxt)
@@ -1259,16 +1272,17 @@ async def _victory_sequence(
     await clan_service.on_monster_win_add_clan_xp(session, character, delta=_clan_delta)
 
     # Дроп клановых материалов: 🪵 с лесных/растительных, 🪨 с каменных/голем, 🌿 с болотных
+    # Шансы повышены на ~35% относительно исходных
     try:
         _tkey2 = str(spawn.template.key or "")
         _mat_drop: str | None = None
-        _mat_chance = 0.15  # базовый шанс 15%
+        _mat_chance = 0.20  # базовый шанс: было 15% → 20%
         if spawn.is_major_boss:
-            _mat_chance = 1.0  # боссы гарантировано дают
+            _mat_chance = 1.0   # боссы гарантированно дают
         elif spawn.is_mini_boss:
-            _mat_chance = 0.5
+            _mat_chance = 0.65  # было 50% → 65%
         elif spawn.is_elite:
-            _mat_chance = 0.3
+            _mat_chance = 0.40  # было 30% → 40%
         # Определяем тип материала по зоне монстра
         from game.data.monsters import KEY_TO_ZONE
         _zone = KEY_TO_ZONE.get(_tkey2, "")
@@ -1278,11 +1292,23 @@ async def _victory_sequence(
             _mat_drop = "stone"
         elif _zone in ("rotten_swamps",) or "swamp" in _tkey2 or "troll" in _tkey2 or "bog" in _tkey2:
             _mat_drop = "herbs"
+        # Монстры 5-го этажа (комнаты rc_*) тоже дают дерево
+        elif str(spawn.slot_code or "").startswith("rc_r"):
+            _mat_drop = "wood"
         if _mat_drop and random.random() < _mat_chance:
-            _mat_amount = 1 if not (spawn.is_mini_boss or spawn.is_major_boss) else random.randint(3, 8)
+            if spawn.is_major_boss:
+                _mat_amount = random.randint(5, 12)
+            elif spawn.is_mini_boss:
+                _mat_amount = random.randint(3, 7)
+            else:
+                _mat_amount = random.randint(1, 2)
             clan_service.add_material_drop(character, _mat_drop, _mat_amount)
+            _mat_icons = {"wood": "🪵", "stone": "🪨", "herbs": "🌿"}
+            _mat_note = f"\n{_mat_icons.get(_mat_drop, '📦')} +{_mat_amount} {_mat_drop} (клан)"
+        else:
+            _mat_note = ""
     except Exception:
-        pass
+        _mat_note = ""
 
     refresh_global_passives(character)
 
@@ -1307,7 +1333,8 @@ async def _victory_sequence(
             _home_loot_extra = home_loot_bonus_pct(character)
         except Exception:
             pass
-        _drop_triggered = roll_item_drop(spawn, int(character.floor_number)) or (
+        _luck = int(character.stat_luck or 0)
+        _drop_triggered = roll_item_drop(spawn, int(character.floor_number), stat_luck=_luck) or (
             _home_loot_extra > 0 and random.random() < _home_loot_extra
         )
         if _drop_triggered:
@@ -1439,6 +1466,7 @@ async def _victory_sequence(
                 + ranker_note
                 + pioneer_suffix
                 + gg_kill_note
+                + _mat_note
             )
             gg_body = (
                 "🏆 <b>Победа!</b> 💰 Золотой гоблин\n"
@@ -1487,6 +1515,7 @@ async def _victory_sequence(
                         + ranker_note
                         + pioneer_suffix
                         + gg_kill_note
+                        + _mat_note
                     )
                 gold_line = f"💰 +{net_gold} золота"
                 if gross_gold != net_gold and is_last:
@@ -1543,6 +1572,11 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
         found_wv = wave_floor_mod.spawn_by_slot(slot)
         if found_wv is not None:
             return found_wv
+    # Explore floor (exp_encounter, exp_boss)
+    if slot in explore_floor_mod.EXPLORE_ALL_SLOTS:
+        found_exp = explore_floor_mod.spawn_by_slot(slot)
+        if found_exp is not None:
+            return found_exp
     spawns = build_spawns_for_floor(battle_floor)
     found = next((s for s in spawns if s.slot_code == slot), None)
     if found is None:

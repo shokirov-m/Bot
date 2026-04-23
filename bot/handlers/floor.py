@@ -28,6 +28,7 @@ from game.floors import forest_beginnings as fb
 from game.floors import long_floor as long_floor_mod
 from game.floors import room_clear_floor as rc_mod
 from game.floors import wave_floor as wv_mod
+from game.floors import explore_floor as exp_mod
 from services import combat_service, golden_goblin_service
 from services.floor_service import (
     floor_keyboard_for_character,
@@ -430,16 +431,37 @@ async def on_floor_callback(
             _row = await fpr.ensure_floor_row(session, char.id, floor)
             _ex = dict(_row.extra or {})
             _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
-            spawn = rc_mod.spawn_by_slot(code)
+
+            # Кнопка комнаты (rc_r0..rc_r4) → определяем следующего монстра
+            _actual_slot = code
+            _room_idx = rc_mod.room_index_for_button(code)
+            if _room_idx is not None:
+                if rc_mod.is_room_complete(_room_idx, _beaten):
+                    await query.answer("Эта комната уже зачищена. ✅", show_alert=True)
+                    return
+                _next = rc_mod.next_slot_in_room(_room_idx, _beaten)
+                if _next is None:
+                    await query.answer("Нет доступных целей.", show_alert=True)
+                    return
+                _actual_slot = _next
+
+            # Босс только после зачистки всех комнат
+            if _actual_slot == rc_mod.SLOT_BOSS and not rc_mod.is_boss_unlocked(_beaten):
+                rooms_left = rc_mod.TOTAL_ROOMS - rc_mod.rooms_cleared_count(_beaten)
+                await query.answer(
+                    f"Сначала зачисти все комнаты. Осталось: {rooms_left}.",
+                    show_alert=True,
+                )
+                return
+
+            # Уже побеждённый монстр (прямой слот из FSM)
+            if _actual_slot in rc_mod.SLOT_ROOMS and _actual_slot in _beaten:
+                await query.answer("Этот монстр уже побеждён.", show_alert=True)
+                return
+
+            spawn = rc_mod.spawn_by_slot(_actual_slot)
             if spawn is None:
                 await query.answer("Цель не найдена.", show_alert=True)
-                return
-            # Босс только после зачистки всех комнат
-            if code == rc_mod.SLOT_BOSS and not rc_mod.is_boss_unlocked(_beaten):
-                await query.answer("Сначала зачисти все 5 комнат.", show_alert=True)
-                return
-            if code in rc_mod.SLOT_ROOMS and code in _beaten:
-                await query.answer("Эта комната уже зачищена.", show_alert=True)
                 return
             await combat_service.start_combat(
                 query=query,
@@ -543,6 +565,158 @@ async def on_floor_callback(
                 character=char,
                 spawn=spawn,
             )
+            return
+
+        # ── Этаж 8: исследование пещеры ─────────────────────────────────────
+        if code in ("exp_explore", exp_mod.SLOT_BOSS):
+            if not exp_mod.is_explore_floor(floor):
+                await query.answer("Это действие доступно только на 8-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from db.repository import floor_progress_repo as fpr
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _ex = exp_mod.ensure_explore_started(_ex)
+
+            # Кнопка босса
+            if code == exp_mod.SLOT_BOSS:
+                if not exp_mod.is_boss_available(_ex):
+                    pct = exp_mod.progress_percent(
+                        exp_mod.get_explore_count(_ex), exp_mod.get_explore_target(_ex)
+                    )
+                    await query.answer(
+                        f"Сначала исследуй пещеру до 100% (сейчас {pct}%).", show_alert=True
+                    )
+                    return
+                _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+                if exp_mod.SLOT_BOSS in _beaten:
+                    await query.answer("Хранитель уже побеждён. ✅", show_alert=True)
+                    return
+                await combat_service.start_combat(
+                    query=query,
+                    session=session,
+                    state=state,
+                    character=char,
+                    spawn=exp_mod.SPAWN_BOSS,
+                )
+                return
+
+            # Кнопка «Исследовать» — бросаем событие
+            event_type = exp_mod.roll_explore_event()
+
+            if event_type == "monster":
+                _spawn = exp_mod.make_encounter_spawn()
+                await combat_service.start_combat(
+                    query=query,
+                    session=session,
+                    state=state,
+                    character=char,
+                    spawn=_spawn,
+                )
+                return
+
+            # Не-боевые события: инкрементируем счётчик вручную
+            _ex = exp_mod.increment_explore_count(_ex)
+            _row.extra = _ex
+            await session.flush()
+            await session.refresh(char)
+
+            count_now = exp_mod.get_explore_count(_ex)
+            target_now = exp_mod.get_explore_target(_ex)
+            pct_now = exp_mod.progress_percent(count_now, target_now)
+            boss_hint = "\n🗿 <b>Хранитель пробудился!</b> Кнопка появилась ниже." if exp_mod.is_boss_available(_ex) else ""
+
+            from services import character_service as cs
+            import html as _html
+
+            if event_type == "gold":
+                gold_amount = 20 + floor * 3 + random.randint(0, 20)
+                cs.add_gold(char, gold_amount)
+                await session.flush()
+                event_html = (
+                    f"💰 <b>Тайник с золотом!</b>\n"
+                    f"Ты нашёл кожаный кошель за камнем — +{gold_amount} монет."
+                )
+            elif event_type == "merchant":
+                _mp = dict(char.meta_progress or {})
+                _mp["merchant_discount_charges"] = int(_mp.get("merchant_discount_charges") or 0) + 2
+                char.meta_progress = _mp
+                await session.flush()
+                event_html = (
+                    "🏪 <b>Бродячий торговец!</b>\n"
+                    "В дальнем закутке расположился лавочник. Он даёт тебе скидку "
+                    "на следующие <b>2 покупки</b> в лавке (−30%)."
+                )
+            elif event_type == "mystical":
+                _myst_roll = random.randint(0, 2)
+                if _myst_roll == 0:
+                    # Упавшая звезда — XP бафф
+                    _mp2 = dict(char.meta_progress or {})
+                    _mp2["next_battle_xp_mult"] = max(float(_mp2.get("next_battle_xp_mult") or 1.0), 1.5)
+                    char.meta_progress = _mp2
+                    event_html = "⭐ <b>Упавшая звезда!</b>\nСледующий бой даст <b>+50%</b> опыта."
+                elif _myst_roll == 1:
+                    # Родник сил — восстановление HP/MP
+                    char.hp_current = int(char.hp_max)
+                    char.mp_current = int(char.mp_max)
+                    event_html = "✨ <b>Родник сил!</b>\nHP и MP полностью восстановлены."
+                else:
+                    # Благословение странника — немного золота
+                    _gold_myst = 8 + floor
+                    cs.add_gold(char, _gold_myst)
+                    event_html = f"🌟 <b>Благословение странника!</b>\nНайдено немного золота (+{_gold_myst}) среди костей путника."
+                await session.flush()
+            else:  # rare_item
+                from game.items import loot as loot_tables
+                from db.repository import inventory_repo
+                from game.floors.monsters import FloorMonsterSpawn as _FMS
+                import copy
+                # Используем минибосс-спаун для хорошего дропа
+                _mini_spawn = _FMS(
+                    slot_code="exp_mini",
+                    template=exp_mod.SPAWN_BOSS.template,
+                    is_elite=False,
+                    is_mini_boss=True,
+                    is_major_boss=False,
+                )
+                _loot = loot_tables.roll_victory_item_payload(floor, _mini_spawn)
+                _free = await inventory_repo.first_free_bag_slot(session, char.id)
+                if _free is not None:
+                    await inventory_repo.add_bag_item(
+                        session, char.id, copy.deepcopy(_loot), bag_slot=_free
+                    )
+                    _iname = _html.escape(str(_loot.get("name", "Предмет")))
+                    event_html = (
+                        f"🌟 <b>Редкая находка!</b>\n"
+                        f"Среди руин мерцает нечто ценное — "
+                        f"<b>{_iname}</b> добавлен в сумку (ячейка {_free})."
+                    )
+                else:
+                    cs.add_gold(char, 15 + floor * 2)
+                    await session.flush()
+                    event_html = (
+                        "🌟 <b>Редкая находка!</b>\n"
+                        "Сумка полна — вещь оказалась слишком громоздкой. "
+                        f"Вместо неё +{15 + floor * 2} монет."
+                    )
+
+            # Обновляем экран этажа
+            from bot.keyboards.floor_kb import explore_floor_keyboard
+            _kb = explore_floor_keyboard(char, extra=_ex)
+            _progress_line = f"\n\n📍 Исследование: {count_now}/{target_now} ({pct_now}%){boss_hint}"
+            await push_floor_screen_ui(
+                session,
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                character=char,
+                reply_markup=_kb,
+                target_message=query.message,
+                text_suffix=f"\n{event_html}{_progress_line}",
+            )
+            await query.answer()
             return
 
         if code == "srch":

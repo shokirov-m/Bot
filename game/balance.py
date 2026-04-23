@@ -49,18 +49,18 @@ DEATH_GOLD_LOSS_FRACTION = 0.10
 # Верхний предел потери за одну смерть (после расчёта доли и обрезки по текущему балансу).
 MAX_DEATH_GOLD_LOSS = 8_000
 
-# Шанс дропа предмета: этажи 1-5 / этажи 6+
+# Шанс дропа предмета: этажи 1-5 / этажи 6+  (+25–27 п.п. к исходным значениям)
 DROP_CHANCE_FLOOR_LOW_MAX = 5
 
-DROP_CHANCE_NORMAL_LOW  = 0.045   # 4.5%
-DROP_CHANCE_ELITE_LOW   = 0.050   # 5.0%
-DROP_CHANCE_MINI_LOW    = 0.080   # 8.0%
-DROP_CHANCE_MAJOR_LOW   = 0.105   # 10.5%
+DROP_CHANCE_NORMAL_LOW  = 0.305   # 30.5%
+DROP_CHANCE_ELITE_LOW   = 0.310   # 31.0%
+DROP_CHANCE_MINI_LOW    = 0.340   # 34.0%
+DROP_CHANCE_MAJOR_LOW   = 0.370   # 37.0%
 
-DROP_CHANCE_NORMAL_HIGH = 0.013   # 1.3%
-DROP_CHANCE_ELITE_HIGH  = 0.032   # 3.2%
-DROP_CHANCE_MINI_HIGH   = 0.058   # 5.8%
-DROP_CHANCE_MAJOR_HIGH  = 0.083   # 8.3%
+DROP_CHANCE_NORMAL_HIGH = 0.270   # 27.0%
+DROP_CHANCE_ELITE_HIGH  = 0.285   # 28.5%
+DROP_CHANCE_MINI_HIGH   = 0.315   # 31.5%
+DROP_CHANCE_MAJOR_HIGH  = 0.345   # 34.5%
 
 # --- Базовые статы монстра (до множителей типа элита/босс) ---
 MONSTER_HP_RAW_BASE = 72

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale
 from bot.keyboards.floor_kb import (
+    explore_floor_keyboard,
     floor_screen_keyboard,
     long_floor_screen_keyboard,
     room_clear_floor_keyboard,
@@ -37,6 +38,7 @@ from game.floors import room_clear_floor as rc_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import wave_floor as wv_mod
 from game.floors import wandering_npcs as wandering_npcs_mod
+from game.floors import explore_floor as exp_mod
 from game.floors.tower_ascent import (
     clear_tower_ascent_pending,
     ensure_peaceful_city_hub_ascent,
@@ -98,6 +100,12 @@ async def floor_keyboard_for_character(
         rc_mod.ensure_started(character)
         defeated = await defeated_slot_codes_for_floor(session, character.id, n)
         return room_clear_floor_keyboard(character, defeated_slots=defeated)
+
+    # Этаж 8 — исследование пещеры
+    if exp_mod.is_explore_floor(n):
+        row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
+        _extra = dict(row.extra or {})
+        return explore_floor_keyboard(character, extra=_extra)
 
     # Этаж 10 — волны вторжения
     if wv_mod.is_wave_floor(n):
@@ -316,6 +324,8 @@ def format_floor_message_photo_caption(character: Character) -> str:
     if rc_mod.is_room_clear_floor(int(n)):
         b = rc_mod.format_room_clear_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
+    if exp_mod.is_explore_floor(int(n)):
+        lines.append("🔍 Исследование пещеры · нажми «Исследовать»")
     if wv_mod.is_wave_floor(int(n)):
         b = wv_mod.format_wave_floor_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
@@ -457,7 +467,11 @@ async def push_floor_screen_ui(
     if rc_mod.is_room_clear_floor(n) or wv_mod.is_wave_floor(n):
         _raw_cleared = list((ex.get("slots_cleared") or []))
         _cleared_slots = frozenset(str(x) for x in _raw_cleared)
-    full_body = format_floor_message(character, defeated_slots=_cleared_slots) + gg_banner + event_html + text_suffix
+    # Баннер прогресса исследования (этаж 8)
+    _explore_banner = ""
+    if exp_mod.is_explore_floor(n):
+        _explore_banner = "\n" + exp_mod.format_explore_banner_html(ex)
+    full_body = format_floor_message(character, defeated_slots=_cleared_slots) + _explore_banner + gg_banner + event_html + text_suffix
     photo = location_image_for_floor(n) if game_images_enabled(character) else None
     if photo is None and game_images_enabled(character):
         photo = UI_PLACEHOLDER_IMAGE_URL
