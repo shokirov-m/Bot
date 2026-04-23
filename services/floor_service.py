@@ -180,12 +180,40 @@ def _format_floor3_city_only(character: Character) -> str:
     return "\n".join(lines)
 
 
+def _format_explore_floor_message(character: Character) -> str:
+    """Этаж 8 — короткое описание для экрана исследования (без стандартного мусора)."""
+    n = character.floor_number
+    zone = floor_data.get_zone_for_floor(n)
+    room = floor_data.epithet_for_floor(zone, n)
+    lines: list[str] = []
+    if combat_night.is_night_utc():
+        lines.append(
+            "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
+            "после победы — <b>+40% золото и опыт</b>.</i>",
+        )
+    lines.append(f"🗻 <b>Пещера Первородных</b> · этаж <b>{n}</b>/100")
+    lines.append(f"📍 <i>{html.escape(room)}</i>")
+    lines.append(
+        "<i>Тёмная пещера скрывает множество тайн. Исследуй каждый угол, "
+        "чтобы пробудить Хранителя и открыть путь выше.</i>"
+    )
+    hi = int(character.highest_floor_reached)
+    lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️")
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        lines.append(f"✅ <b>Хранитель повержен.</b> Поднимись на этаж <b>{pend}</b>.")
+    return "\n".join(lines)
+
+
 def format_floor_message(character: Character, *, defeated_slots: frozenset[str] | None = None) -> str:
     """Текстовое описание текущего этажа (HTML) — коротко, без воды."""
     long_floor_mod.ensure_long_floor_started(character)
     n = character.floor_number
     if int(n) == 3 and not long_floor_mod.is_long_floor_active(character):
         return _format_floor3_city_only(character)
+    # Этаж 8 — специальный экран исследования
+    if exp_mod.is_explore_floor(int(n)):
+        return _format_explore_floor_message(character)
     zone = floor_data.get_zone_for_floor(n)
     room = floor_data.epithet_for_floor(zone, n)
     city = floor_data.get_city_for_floor(n)
@@ -200,9 +228,7 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if not long_floor_mod.is_long_floor_active(character):
         zd = zone.description
-        if combat_night.is_night_utc():
-            zd = f"🌑 Ночь в башне: {zd}"
-        short = zd if len(zd) <= 140 else zd[:137] + "…"
+        short = zd if len(zd) <= 80 else zd[:77] + "…"
         lines.append(f"<i>{html.escape(short)}</i>")
 
     if long_floor_mod.is_long_floor_active(character):
@@ -217,13 +243,9 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         lines.append(wv_mod.format_wave_floor_banner_html(_ds))
 
     if city:
-        lines.append(f"{city.emoji} <b>{html.escape(city.name)}</b> — «Город»: кузница, лавка, таверна.")
+        lines.append(f"{city.emoji} <b>{html.escape(city.name)}</b> — зайди в «Город».")
 
     tags: list[str] = []
-    if floor_data.has_quest_npc(n) and int(n) != 3:
-        tags.append("📜 Квесты")
-    if floor_data.has_trader(n):
-        tags.append("🏛️ Рынок / лавка — в городе" if int(n) == 3 else "🏪 Лавка — в городе")
     if floor_data.is_mini_boss_floor(n):
         tags.append("⚔️ Мини-босс")
     if floor_data.is_major_boss_floor(n):
@@ -233,58 +255,20 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
 
     wn = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), n)
     if wn:
-        lines.append(
-            f"🎭 <b>{html.escape(wn['title'])}</b> — <i>{html.escape(wn['hint'])}</i> "
-            f"(кнопка «{html.escape(wn['button'])}»).",
-        )
+        lines.append(f"🎭 <b>{html.escape(wn['title'])}</b> — кнопка «{html.escape(wn['button'])}».")
 
     if tutorial_battle_pending(character) and n == 1:
         lines.append("🎓 <b>Учебный бой</b> наставника — кнопка ниже.")
 
-    sec = f"🔮 Тайник после боя ~{int(floor_data.SECRET_ROOM_CHANCE * 100)}%"
-    if n <= SECRET_GEAR_EARLY_MAX_FLOOR:
-        sec += ", иногда экипировка"
-    else:
-        sec += f", экип ~{int(SECRET_GEAR_DROP_CHANCE * 100)}%"
-    lines.append(sec + ".")
-
-    if n in pets_mod.pet_gacha_floors_for_pet_switch():
-        lines.append(
-            "🐾 <b>Питомцы:</b> призыв в «Город» (лавка). Пассив в бою — у <b>одного</b> активного; "
-            "смена здесь кнопкой или в статусе.",
-        )
-    elif int(n) == 3:
-        lines.append(
-            "🐾 <b>Питомцы:</b> на 3 ярусе — храм призыва в городе на <b>рынке</b>; "
-            "пассив в бою у <b>одного</b> активного.",
-        )
+    if rotten_swamps_mod.is_rotten_swamps_zone(n):
+        lines.append("🌿 <b>Болота:</b> туман −5 HP перед боем · пиявки · лагерь (кнопка).")
 
     hi = int(character.highest_floor_reached)
-    lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️ · при входе цели сбрасываются.")
+    lines.append(f"🧭 Открыто 1–{hi}")
 
-    if n < 100 and not long_floor_mod.is_long_floor_active(character):
-        lines.append("🗝️ Новый ярус: зачисти все цели, затем кнопка «Этаж N» или ⬆️ Выше.")
-    if forest_beginnings_mod.is_forest_beginnings_zone(n) and int(n) != 3:
-        lines.append(
-            "🌲 <b>Лес Начал (1–10)</b> — обучение: "
-            "<i>грибы</i> (шанс перед боем с обычной целью), <i>дух</i> (1× за проход зоны); "
-            "кнопка «Привал» — полное HP/MP без стамины (1× за проход).",
-        )
-    if rotten_swamps_mod.is_rotten_swamps_zone(n):
-        lines.append(
-            "🌿 <b>Гнилые Болота (11–20)</b>: "
-            "<i>токсичный туман</i> (−5 HP перед каждым боем, нет урона при <b>защите снаряжения ≥5</b>); "
-            "<i>пиявки</i> — после боя шанс яда на <b>следующем этаже</b>; "
-            "<i>густой туман</i> скрывает обычных монстров на списке целей; "
-            "кнопка «Заброшенный лагерь» — случайный предмет <b>или</b> ловушка (1× за проход зоны).",
-        )
     pend = tower_next_floor_pending(character)
     if pend is not None:
-        lines.append(f"✅ <b>Ярус зачищен.</b> Поднимись на этаж <b>{pend}</b> кнопкой выше или «⬆️ Выше».")
-    if long_floor_mod.is_long_floor_active(character):
-        lines.append("Сценарий этажа — шаги кнопками (−1 ⚡ за бой).")
-    else:
-        lines.append("<b>Цель</b> — пошаговый бой (−1 ⚡).")
+        lines.append(f"✅ <b>Ярус зачищен.</b> Поднимись на <b>{pend}</b> этаж.")
     return "\n".join(lines)
 
 
@@ -309,6 +293,19 @@ def format_floor_message_photo_caption(character: Character) -> str:
         if pend is not None:
             bits.append(f"✅ Подъём на <b>{pend}</b>")
         return "\n".join(bits)
+    # Этаж 8 — исследование
+    if exp_mod.is_explore_floor(int(n)):
+        zone = floor_data.get_zone_for_floor(n)
+        room = floor_data.epithet_for_floor(zone, n)
+        pend = tower_next_floor_pending(character)
+        bits = [
+            f"🗻 <b>Пещера Первородных</b> · <b>{n}</b>/100",
+            f"📍 <i>{html.escape(room)}</i>",
+            "🔍 Исследование · нажми кнопку ниже",
+        ]
+        if pend is not None:
+            bits.append(f"✅ Подъём на <b>{pend}</b>")
+        return "\n".join(bits)
     zone = floor_data.get_zone_for_floor(n)
     room = floor_data.epithet_for_floor(zone, n)
     city = floor_data.get_city_for_floor(n)
@@ -325,17 +322,13 @@ def format_floor_message_photo_caption(character: Character) -> str:
         b = rc_mod.format_room_clear_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
     if exp_mod.is_explore_floor(int(n)):
-        lines.append("🔍 Исследование пещеры · нажми «Исследовать»")
+        lines.append("🔍 Исследование · нажми кнопку ниже")
     if wv_mod.is_wave_floor(int(n)):
         b = wv_mod.format_wave_floor_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
     if city:
         lines.append(f"{city.emoji} <b>{html.escape(city.name)}</b> — город")
     tags: list[str] = []
-    if floor_data.has_quest_npc(n) and int(n) != 3:
-        tags.append("📜 Квесты")
-    if floor_data.has_trader(n):
-        tags.append("🏛️ Рынок в городе" if int(n) == 3 else "🏪 Лавка — в городе")
     if floor_data.is_mini_boss_floor(n):
         tags.append("⚔️ Мини-босс")
     if floor_data.is_major_boss_floor(n):
@@ -344,33 +337,16 @@ def format_floor_message_photo_caption(character: Character) -> str:
         lines.append(" · ".join(tags))
     wn = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), n)
     if wn:
-        raw_wn = f"🎭 {wn['title']}: {wn['hint']}"
-        lines.append(html.escape(raw_wn if len(raw_wn) <= 120 else raw_wn[:117] + "…"))
+        lines.append(html.escape(f"🎭 {wn['title']} — кнопка «{wn['button']}»"))
     if tutorial_battle_pending(character) and n == 1:
         lines.append("🎓 Учебный бой — внизу")
-    sec = f"🔮 Тайник ~{int(floor_data.SECRET_ROOM_CHANCE * 100)}%"
-    if n <= SECRET_GEAR_EARLY_MAX_FLOOR:
-        sec += ", экип. возможна"
-    else:
-        sec += f", экип ~{int(SECRET_GEAR_DROP_CHANCE * 100)}%"
-    lines.append(sec)
-    if n in pets_mod.pet_gacha_floors_for_pet_switch():
-        lines.append("🐾 Питомцы: город / пассив · один активен")
-    hi = int(character.highest_floor_reached)
-    lines.append(f"🧭 1–{hi} · ⬆️⬇️ · цели сбрасываются при входе")
-    if n < 100 and not long_floor_mod.is_long_floor_active(character):
-        lines.append("🗝️ Зачистка → кнопка этажа / ⬆️")
-    if forest_beginnings_mod.is_forest_beginnings_zone(n) and int(n) != 3:
-        lines.append("🌲 Лес 1–10: грибы / дух · 🏕️ привал")
     if rotten_swamps_mod.is_rotten_swamps_zone(n):
-        lines.append("🌿 Болота: туман −5 HP · пиявки · туман целей · лагерь")
+        lines.append("🌿 Болота: туман −5 HP · пиявки · лагерь")
+    hi = int(character.highest_floor_reached)
+    lines.append(f"🧭 1–{hi}")
     pend = tower_next_floor_pending(character)
     if pend is not None:
-        lines.append(f"✅ Подъём на <b>{pend}</b> — кнопка или ⬆️")
-    if long_floor_mod.is_long_floor_active(character):
-        lines.append("Сценарий: −1 ⚡ за бой")
-    else:
-        lines.append("<b>Цель</b> — бой (−1 ⚡)")
+        lines.append(f"✅ Подъём на <b>{pend}</b>")
     return "\n".join(lines)
 
 

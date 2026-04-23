@@ -536,6 +536,36 @@ def explore_floor_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def explore_event_keyboard(
+    floor_number: int,
+    *,
+    extra: dict | None = None,
+) -> InlineKeyboardMarkup:
+    """Клавиатура после не-боевого события исследования: продолжить или вернуться к этажу."""
+    _extra = extra if extra is not None else {}
+    boss_available = exp_mod.is_boss_available(_extra)
+    beaten = frozenset(str(x) for x in _extra.get("slots_cleared") or [])
+
+    count = exp_mod.get_explore_count(_extra)
+    target = exp_mod.get_explore_target(_extra)
+    pct = exp_mod.progress_percent(count, target)
+
+    rows: list[list[InlineKeyboardButton]] = []
+
+    # Кнопка «Продолжить исследование» (только если босс ещё не победил)
+    if not (exp_mod.SLOT_BOSS in beaten):
+        label = f"🔍 Продолжить [{pct}%]"
+        rows.append([InlineKeyboardButton(text=label, callback_data=_cb(floor_number, "exp_explore"))])
+
+    # Кнопка босса если разблокирован
+    if boss_available and exp_mod.SLOT_BOSS not in beaten:
+        rows.append([InlineKeyboardButton(text="🗿 Хранитель Пещеры (БОСС)", callback_data=_cb(floor_number, exp_mod.SLOT_BOSS))])
+
+    rows.append([InlineKeyboardButton(text="🗺️ К этажу", callback_data=_cb(floor_number, "return"))])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def secret_result_keyboard(floor_number: int) -> InlineKeyboardMarkup:
     """После текста обыска — вернуться к списку целей."""
     return InlineKeyboardMarkup(

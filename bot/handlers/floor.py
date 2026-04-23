@@ -702,19 +702,17 @@ async def on_floor_callback(
                         f"Вместо неё +{15 + floor * 2} монет."
                     )
 
-            # Обновляем экран этажа
-            from bot.keyboards.floor_kb import explore_floor_keyboard
-            _kb = explore_floor_keyboard(char, extra=_ex)
+            # Показываем результат события с кнопкой «Продолжить»
+            from bot.keyboards.floor_kb import explore_event_keyboard
+            _kb = explore_event_keyboard(floor, extra=_ex)
             _progress_line = f"\n\n📍 Исследование: {count_now}/{target_now} ({pct_now}%){boss_hint}"
-            await push_floor_screen_ui(
-                session,
+            await push_game_ui(
                 state,
                 query.bot,
                 chat_id=query.message.chat.id,
-                character=char,
+                text=event_html + _progress_line,
                 reply_markup=_kb,
                 target_message=query.message,
-                text_suffix=f"\n{event_html}{_progress_line}",
             )
             await query.answer()
             return

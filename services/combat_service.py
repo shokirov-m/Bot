@@ -551,13 +551,13 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     if taunt_raw:
         taunt_line = taunt_raw if taunt_raw.startswith("💬") else f"💬 «{taunt_raw}»"
     if log_lines and taunt_line:
-        log_block = f"{log_lines}\n\n{taunt_line}"
+        log_block = f"{log_lines}\n{taunt_line}"
     elif log_lines:
         log_block = log_lines
     elif taunt_line:
         log_block = taunt_line
     else:
-        log_block = "<i>—</i>"
+        log_block = ""
 
     fln = int(state.get("floor", 0))
     sep = LINE_SEP_BATTLE
@@ -567,30 +567,23 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
             "<i>🌑 Ночь UTC: враг +20% HP/ATK, победа +40% золото и опыт.</i>\n"
         )
 
-    title = f"⚔️ <b>ЭТАЖ {fln}</b>"
+    title = f"⚔️ <b>Этаж {fln}</b>"
     if state.get("night_battle"):
         title += " 🌑"
 
+    log_section = f"{sep}\n{log_block}" if log_block else ""
     return (
-        f"{sep}\n"
         f"{title}\n"
-        f"{sep}\n"
         f"{night_note}"
-        f"<b>▸ ВРАГ</b>\n"
         f"{enemy_line}\n"
         f"{hp_mon}\n"
         f"{buff_line}"
         f"\n"
-        f"<b>▸ ИГРОК</b>\n"
         f"{php_line}\n"
-        f"\n"
         f"{mp_line}\n"
         f"{shield_p}"
         f"{pet_p}"
-        f"{sep}\n"
-        f"📜 Лог хода:\n"
-        f"{log_block}\n"
-        f"{sep}"
+        f"{log_section}"
     )
 
 

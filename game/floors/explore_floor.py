@@ -173,6 +173,5 @@ def format_explore_banner_html(extra: dict) -> str:
 
     return (
         f"🔍 <b>Исследование пещеры</b> [{bar}] {pct}%{boss_hint}\n"
-        f"Попыток: {count}/{target} "
-        f"<i>(70% бой, 12% тайник, 8% торговец, 7% событие, 3% редкость)</i>"
+        f"Попыток: {count}/{target}"
     )
