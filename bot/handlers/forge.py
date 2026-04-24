@@ -16,6 +16,7 @@ from bot.keyboards.forge_kb import (
     forge_actions_keyboard,
     forge_dis_bag_keyboard,
     forge_enchant_slots_keyboard,
+    forge_quest_keyboard,
     forge_rune_bag_pick_keyboard,
     forge_rune_menu_keyboard,
     forge_rune_socket_pick_keyboard,
@@ -473,4 +474,126 @@ async def forge_rune_craft_auto(query: CallbackQuery, session: AsyncSession) -> 
         await query.answer("Слито!")
     except Exception:
         logger.exception("frg:rca")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+# ── Задания кузнеца (цепочка) ─────────────────────────────────────────────────
+
+@router.callback_query(F.data.regexp(r"^frg:qst:\d+$"))
+async def forge_quest_open(query: CallbackQuery, session: AsyncSession) -> None:
+    """Открыть экран цепочки заданий кузнеца."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не на этом этаже.", show_alert=True)
+            return
+        from services import forge_quest_service as fqs
+        text = fqs.format_forge_quest_html(char, floor_key)
+        state = fqs._get_state(char, floor_key)
+        await query.message.edit_text(
+            text,
+            reply_markup=forge_quest_keyboard(floor_key, state),
+            parse_mode=ParseMode.HTML,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("frg:qst open")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:qst:start:\d+$"))
+async def forge_quest_start(query: CallbackQuery, session: AsyncSession) -> None:
+    """Начать цепочку заданий кузнеца."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[3])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не на этом этаже.", show_alert=True)
+            return
+        from services import forge_quest_service as fqs
+        ok = fqs.start_chain(char, floor_key)
+        if not ok:
+            await query.answer("Цепочка уже начата или недоступна.", show_alert=True)
+            return
+        await session.flush()
+        text = fqs.format_forge_quest_html(char, floor_key)
+        state = fqs._get_state(char, floor_key)
+        await query.message.edit_text(
+            text,
+            reply_markup=forge_quest_keyboard(floor_key, state),
+            parse_mode=ParseMode.HTML,
+        )
+        await query.answer("📜 Цепочка заданий начата!")
+    except Exception:
+        logger.exception("frg:qst:start")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:qst:claim:\d+:\d+$"))
+async def forge_quest_claim_step(query: CallbackQuery, session: AsyncSession) -> None:
+    """Сдать шаг цепочки кузнеца."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[3])
+        step = int(parts[4])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не на этом этаже.", show_alert=True)
+            return
+        from services import forge_quest_service as fqs
+        ok, msg = await fqs.claim_step(session, char, floor_key, step)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await session.commit()
+        text = fqs.format_forge_quest_html(char, floor_key)
+        state = fqs._get_state(char, floor_key)
+        await query.message.edit_text(
+            f"{text}\n\n{msg}",
+            reply_markup=forge_quest_keyboard(floor_key, state),
+            parse_mode=ParseMode.HTML,
+        )
+        await query.answer("✅ Шаг выполнен!")
+    except Exception:
+        logger.exception("frg:qst:claim")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:qst:final:\d+$"))
+async def forge_quest_final(query: CallbackQuery, session: AsyncSession) -> None:
+    """Получить финальную награду цепочки кузнеца."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[3])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не на этом этаже.", show_alert=True)
+            return
+        from services import forge_quest_service as fqs
+        ok, msg = await fqs.claim_final_reward(session, char, floor_key)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await session.commit()
+        state = fqs._get_state(char, floor_key)
+        await query.message.edit_text(
+            msg,
+            reply_markup=forge_quest_keyboard(floor_key, state),
+            parse_mode=ParseMode.HTML,
+        )
+        await query.answer("🏆 Цепочка завершена!")
+    except Exception:
+        logger.exception("frg:qst:final")
         await query.answer("Ошибка.", show_alert=True)

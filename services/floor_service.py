@@ -18,12 +18,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale
 from bot.keyboards.floor_kb import (
+    explore_floor_4_keyboard,
+    explore_floor_4_event_keyboard,
     explore_floor_keyboard,
+    explore_floor_22_keyboard,
+    explore_floor_22_event_keyboard,
     floor_screen_keyboard,
     long_floor_screen_keyboard,
     room_clear_floor_keyboard,
     room_clear_floor_10_keyboard,
+    room_clear_floor_24_keyboard,
     wave_floor_screen_keyboard,
+    wave_floor_27_keyboard,
 )
 from bot.utils.game_ui import push_game_ui, remember_game_ui_anchor
 from db.models.character import Character
@@ -37,10 +43,14 @@ from game.floors import long_floor as long_floor_mod
 from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import room_clear_floor as rc_mod
 from game.floors import room_clear_floor_10 as rc10_mod
+from game.floors import room_clear_floor_24 as rc24_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import wave_floor as wv_mod
+from game.floors import wave_floor_27 as wv27_mod
 from game.floors import wandering_npcs as wandering_npcs_mod
 from game.floors import explore_floor as exp_mod
+from game.floors import explore_floor_4 as exp4_mod
+from game.floors import explore_floor_22 as exp22_mod
 from game.floors.tower_ascent import (
     clear_tower_ascent_pending,
     ensure_peaceful_city_hub_ascent,
@@ -97,6 +107,12 @@ async def floor_keyboard_for_character(
     """Клавиатура этажа с отметками ✅ у побеждённых целей."""
     n = int(character.floor_number)
 
+    # Этаж 4 — исследование леса
+    if exp4_mod.is_explore_floor_4(n):
+        row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
+        _extra = dict(row.extra or {})
+        return explore_floor_4_keyboard(character, extra=_extra)
+
     # Этаж 5 — зачистка комнат
     if rc_mod.is_room_clear_floor(n):
         rc_mod.ensure_started(character)
@@ -114,6 +130,24 @@ async def floor_keyboard_for_character(
         rc10_mod.ensure_started(character)
         defeated = await defeated_slot_codes_for_floor(session, character.id, n)
         return room_clear_floor_10_keyboard(character, defeated_slots=defeated)
+
+    # Этаж 22 — исследование Пещеры Теней
+    if exp22_mod.is_explore_floor_22(n):
+        row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
+        _extra = dict(row.extra or {})
+        return explore_floor_22_keyboard(character, extra=_extra)
+
+    # Этаж 24 — зачистка комнат Пещер Теней
+    if rc24_mod.is_room_clear_floor_24(n):
+        rc24_mod.ensure_started(character)
+        defeated = await defeated_slot_codes_for_floor(session, character.id, n)
+        return room_clear_floor_24_keyboard(character, defeated_slots=defeated)
+
+    # Этаж 27 — волны теней
+    if wv27_mod.is_wave_floor_27(n):
+        wv27_mod.ensure_started(character)
+        defeated = await defeated_slot_codes_for_floor(session, character.id, n)
+        return wave_floor_27_keyboard(character, defeated_slots=defeated)
 
     long_floor_mod.ensure_long_floor_started(character)
     if long_floor_mod.is_long_floor_active(character):
@@ -176,6 +210,31 @@ def _format_floor3_city_only(character: Character) -> str:
     return "\n".join(lines)
 
 
+def _format_explore_floor_4_message(character: Character) -> str:
+    """Этаж 4 — короткое описание для экрана исследования леса."""
+    n = character.floor_number
+    zone = floor_data.get_zone_for_floor(n)
+    room = floor_data.epithet_for_floor(zone, n)
+    lines: list[str] = []
+    if combat_night.is_night_utc():
+        lines.append(
+            "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
+            "после победы — <b>+40% золото и опыт</b>.</i>",
+        )
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  🌿 <b>Лес Начал</b>")
+    lines.append(f"📍 <i>{html.escape(room)}</i>")
+    lines.append(
+        "<i>Густой лес хранит тайны. Исследуй чащу, находи добычу и сразись "
+        "с Хранителем Рощи, чтобы открыть путь выше.</i>"
+    )
+    hi = int(character.highest_floor_reached)
+    lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️")
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        lines.append(f"✅ <b>Хранитель Рощи повержен.</b> Поднимись на этаж <b>{pend}</b>.")
+    return "\n".join(lines)
+
+
 def _format_explore_floor_message(character: Character) -> str:
     """Этаж 8 — короткое описание для экрана исследования (без стандартного мусора)."""
     n = character.floor_number
@@ -201,15 +260,46 @@ def _format_explore_floor_message(character: Character) -> str:
     return "\n".join(lines)
 
 
+def _format_explore_floor_22_message(character: Character) -> str:
+    """Этаж 22 — описание для экрана исследования Пещеры Теней."""
+    n = character.floor_number
+    zone = floor_data.get_zone_for_floor(n)
+    room = floor_data.epithet_for_floor(zone, n)
+    lines: list[str] = []
+    if combat_night.is_night_utc():
+        lines.append(
+            "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
+            "после победы — <b>+40% золото и опыт</b>.</i>",
+        )
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  🕳️ <b>Пещеры Теней</b>")
+    lines.append(f"📍 <i>{html.escape(room)}</i>")
+    lines.append(
+        "<i>Тьма здесь живая. Каждый шаг — риск. Исследуй пещеру, "
+        "уничтожь Ткача Теней и открой путь выше.</i>"
+    )
+    hi = int(character.highest_floor_reached)
+    lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️")
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        lines.append(f"✅ <b>Ткач Теней повержен.</b> Поднимись на этаж <b>{pend}</b>.")
+    return "\n".join(lines)
+
+
 def format_floor_message(character: Character, *, defeated_slots: frozenset[str] | None = None) -> str:
     """Текстовое описание текущего этажа (HTML) — коротко, без воды."""
     long_floor_mod.ensure_long_floor_started(character)
     n = character.floor_number
     if int(n) == 3 and not long_floor_mod.is_long_floor_active(character):
         return _format_floor3_city_only(character)
-    # Этаж 8 — специальный экран исследования
+    # Этаж 4 — специальный экран исследования леса
+    if exp4_mod.is_explore_floor_4(int(n)):
+        return _format_explore_floor_4_message(character)
+    # Этаж 8 — специальный экран исследования пещеры
     if exp_mod.is_explore_floor(int(n)):
         return _format_explore_floor_message(character)
+    # Этаж 22 — исследование Пещеры Теней
+    if exp22_mod.is_explore_floor_22(int(n)):
+        return _format_explore_floor_22_message(character)
     zone = floor_data.get_zone_for_floor(n)
     room = floor_data.epithet_for_floor(zone, n)
     city = floor_data.get_city_for_floor(n)
@@ -238,7 +328,16 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(rc10_mod.format_room_clear_banner_html(_ds))
 
-    if wv_mod.is_wave_floor(int(n)):
+    if rc24_mod.is_room_clear_floor_24(int(n)):
+        _ds = defeated_slots if defeated_slots is not None else frozenset()
+        lines.append(rc24_mod.format_room_clear_banner_html(_ds))
+
+    if wv27_mod.is_wave_floor_27(int(n)):
+        _ds = defeated_slots if defeated_slots is not None else frozenset()
+        lines.append(wv27_mod.format_wave_floor_27_banner_html(_ds))
+
+    # Волновой баннер только если этаж 10 НЕ переопределён room_clear_10
+    if wv_mod.is_wave_floor(int(n)) and not rc10_mod.is_room_clear_floor_10(int(n)):
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(wv_mod.format_wave_floor_banner_html(_ds))
 
@@ -324,9 +423,19 @@ def format_floor_message_photo_caption(character: Character) -> str:
     if rc10_mod.is_room_clear_floor_10(int(n)):
         b = rc10_mod.format_room_clear_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
+    if rc24_mod.is_room_clear_floor_24(int(n)):
+        b = rc24_mod.format_room_clear_banner_html(frozenset())
+        lines.append(b if len(b) <= 120 else b[:117] + "…")
+    if exp4_mod.is_explore_floor_4(int(n)):
+        lines.append("🔍 Исследование леса · нажми кнопку ниже")
     if exp_mod.is_explore_floor(int(n)):
         lines.append("🔍 Исследование · нажми кнопку ниже")
-    if wv_mod.is_wave_floor(int(n)):
+    if exp22_mod.is_explore_floor_22(int(n)):
+        lines.append("🕯️ Исследование пещеры · нажми кнопку ниже")
+    if wv27_mod.is_wave_floor_27(int(n)):
+        b = wv27_mod.format_wave_floor_27_banner_html(frozenset())
+        lines.append(b if len(b) <= 120 else b[:117] + "…")
+    if wv_mod.is_wave_floor(int(n)) and not rc10_mod.is_room_clear_floor_10(int(n)):
         b = wv_mod.format_wave_floor_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
     if city:
@@ -443,13 +552,19 @@ async def push_floor_screen_ui(
     splash_needed = int(row.visits) == 0 and not ex.get("_floor_intro_anim_v0")
     # Для баннеров с прогрессом — читаем cleared slots
     _cleared_slots: frozenset[str] = frozenset()
-    if rc_mod.is_room_clear_floor(n) or rc10_mod.is_room_clear_floor_10(n) or wv_mod.is_wave_floor(n):
+    if (rc_mod.is_room_clear_floor(n) or rc10_mod.is_room_clear_floor_10(n)
+            or rc24_mod.is_room_clear_floor_24(n)
+            or wv_mod.is_wave_floor(n) or wv27_mod.is_wave_floor_27(n)):
         _raw_cleared = list((ex.get("slots_cleared") or []))
         _cleared_slots = frozenset(str(x) for x in _raw_cleared)
-    # Баннер прогресса исследования (этаж 8)
+    # Баннер прогресса исследования (этаж 4 — лес, этаж 8 — пещера, этаж 22 — тени)
     _explore_banner = ""
-    if exp_mod.is_explore_floor(n):
+    if exp4_mod.is_explore_floor_4(n):
+        _explore_banner = "\n" + exp4_mod.format_explore_banner_html(ex)
+    elif exp_mod.is_explore_floor(n):
         _explore_banner = "\n" + exp_mod.format_explore_banner_html(ex)
+    elif exp22_mod.is_explore_floor_22(n):
+        _explore_banner = "\n" + exp22_mod.format_explore_banner_html(ex)
     full_body = format_floor_message(character, defeated_slots=_cleared_slots) + _explore_banner + gg_banner + event_html + text_suffix
     photo = location_image_for_floor(n) if game_images_enabled(character) else None
     if photo is None and game_images_enabled(character):

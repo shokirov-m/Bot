@@ -28,8 +28,12 @@ from game.floors import forest_beginnings as fb
 from game.floors import long_floor as long_floor_mod
 from game.floors import room_clear_floor as rc_mod
 from game.floors import room_clear_floor_10 as rc10_mod
+from game.floors import room_clear_floor_24 as rc24_mod
 from game.floors import wave_floor as wv_mod
+from game.floors import wave_floor_27 as wv27_mod
 from game.floors import explore_floor as exp_mod
+from game.floors import explore_floor_4 as exp4_mod
+from game.floors import explore_floor_22 as exp22_mod
 from services import combat_service, golden_goblin_service
 from services.floor_service import (
     floor_keyboard_for_character,
@@ -230,6 +234,16 @@ async def on_room_10_locked(query: CallbackQuery, **_: object) -> None:
     await query.answer("Сначала зачисти предыдущую комнату. 🔒", show_alert=True)
 
 
+@router.callback_query(F.data == "rc24:locked")
+async def on_room_24_locked(query: CallbackQuery, **_: object) -> None:
+    await query.answer("Сначала зачисти предыдущую комнату Пещеры. 🔒", show_alert=True)
+
+
+@router.callback_query(F.data == "wv27:locked")
+async def on_wave_27_locked(query: CallbackQuery, **_: object) -> None:
+    await query.answer("Сначала победи предыдущую волну теней.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("fl:"))
 async def on_floor_callback(
     query: CallbackQuery,
@@ -288,8 +302,29 @@ async def on_floor_callback(
             if info is None:
                 await query.answer("Сейчас здесь никого нет.", show_alert=True)
                 return
-            msg = f"{info['title']}: {info['hint']}"
-            await query.answer(msg[:200], show_alert=True)
+            from services import wandering_npc_quest_service as wnpc_qs
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+            text = wnpc_qs.format_npc_quest_screen(char, floor)
+            q_state = wnpc_qs.get_quest_for_floor(char, floor)
+            rows: list[list[InlineKeyboardButton]] = []
+            if q_state is None:
+                rows.append([InlineKeyboardButton(
+                    text="📜 Взять задание",
+                    callback_data=f"wnpc:take:{floor}",
+                )])
+            elif wnpc_qs.can_claim(char, floor):
+                rows.append([InlineKeyboardButton(
+                    text="🎁 Получить награду",
+                    callback_data=f"wnpc:claim:{floor}",
+                )])
+            rows.append([InlineKeyboardButton(
+                text="⬅ Назад",
+                callback_data=f"flr:{floor}:back",
+            )])
+            kb = InlineKeyboardMarkup(inline_keyboard=rows)
+            if query.message is not None:
+                await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+            await query.answer()
             return
 
         if code in ("petg", "petr", "petw"):
@@ -427,6 +462,94 @@ async def on_floor_callback(
                 target_message=query.message,
             )
             await query.answer(f"Этаж {char.floor_number}")
+            return
+
+        # ── Этаж 24: зачистка комнат Пещер Теней ────────────────────────────
+        if code in rc24_mod.ROOM_CLEAR_24_ALL_SLOTS:
+            if not rc24_mod.is_room_clear_floor_24(floor):
+                await query.answer("Этот сценарий только на 24-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from db.repository import floor_progress_repo as fpr
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+
+            _actual_slot = code
+            _room_idx = rc24_mod.room_index_for_button(code)
+            if _room_idx is not None:
+                if rc24_mod.is_room_complete(_room_idx, _beaten):
+                    await query.answer("Эта комната уже зачищена. ✅", show_alert=True)
+                    return
+                _next = rc24_mod.next_slot_in_room(_room_idx, _beaten)
+                if _next is None:
+                    await query.answer("Нет доступных целей.", show_alert=True)
+                    return
+                _actual_slot = _next
+
+            if _actual_slot == rc24_mod.SLOT_BOSS and not rc24_mod.is_boss_unlocked(_beaten):
+                rooms_left = rc24_mod.TOTAL_ROOMS - rc24_mod.rooms_cleared_count(_beaten)
+                await query.answer(
+                    f"Сначала зачисти все комнаты. Осталось: {rooms_left}.",
+                    show_alert=True,
+                )
+                return
+
+            if _actual_slot in rc24_mod.SLOT_ROOMS and _actual_slot in _beaten:
+                await query.answer("Этот монстр уже побеждён.", show_alert=True)
+                return
+
+            spawn = rc24_mod.spawn_by_slot(_actual_slot)
+            if spawn is None:
+                await query.answer("Цель не найдена.", show_alert=True)
+                return
+            _r24_mi = rc24_mod.slot_room_and_monster_index(_actual_slot)
+            _r24_free_stam = (_r24_mi is not None and _r24_mi[1] > 0)
+            await combat_service.start_combat(
+                query=query,
+                session=session,
+                state=state,
+                character=char,
+                spawn=spawn,
+                free_stamina=_r24_free_stam,
+            )
+            return
+
+        # ── Этаж 27: волны теней ─────────────────────────────────────────────
+        if code in wv27_mod.WAVE_FLOOR_27_ALL_SLOTS or code == "wv27:locked":
+            if code == "wv27:locked":
+                await query.answer("Сначала победи предыдущую волну теней.", show_alert=True)
+                return
+            if not wv27_mod.is_wave_floor_27(floor):
+                await query.answer("Этот сценарий только на 27-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from db.repository import floor_progress_repo as fpr
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+            spawn = wv27_mod.spawn_by_slot(code)
+            if spawn is None:
+                await query.answer("Цель не найдена.", show_alert=True)
+                return
+            current_slot = wv27_mod.current_available_slot(_beaten)
+            if code != current_slot:
+                if code in _beaten:
+                    await query.answer("Эта волна уже отбита.", show_alert=True)
+                else:
+                    await query.answer("Сначала победи предыдущую волну.", show_alert=True)
+                return
+            await combat_service.start_combat(
+                query=query,
+                session=session,
+                state=state,
+                character=char,
+                spawn=spawn,
+            )
             return
 
         # ── Этаж 5: зачистка комнат ─────────────────────────────────────────
@@ -639,47 +762,70 @@ async def on_floor_callback(
             )
             return
 
-        # ── Этаж 8: исследование пещеры ─────────────────────────────────────
-        if code in ("exp_explore", exp_mod.SLOT_BOSS):
-            if not exp_mod.is_explore_floor(floor):
-                await query.answer("Это действие доступно только на 8-м этаже.", show_alert=True)
-                return
+        # ── Этажи 4, 8 и 22: исследование ───────────────────────────────────
+        _is_e4 = code in ("e4_explore", exp4_mod.SLOT_BOSS)
+        _is_e8 = code in ("exp_explore", exp_mod.SLOT_BOSS)
+        _is_e22 = code in ("e22_explore", exp22_mod.SLOT_BOSS)
+        if _is_e4 or _is_e8 or _is_e22:
+            # Выбираем модуль в зависимости от этажа
+            if _is_e4:
+                if not exp4_mod.is_explore_floor_4(floor):
+                    await query.answer("Это действие доступно только на 4-м этаже.", show_alert=True)
+                    return
+                _emod = exp4_mod
+                _explore_btn = "e4_explore"
+                _boss_name_hint = "🌳 <b>Хранитель Рощи пробудился!</b> Кнопка появилась ниже."
+            elif _is_e22:
+                if not exp22_mod.is_explore_floor_22(floor):
+                    await query.answer("Это действие доступно только на 22-м этаже.", show_alert=True)
+                    return
+                _emod = exp22_mod
+                _explore_btn = "e22_explore"
+                _boss_name_hint = "🕸️ <b>Ткач Теней пробудился!</b> Кнопка появилась ниже."
+            else:
+                if not exp_mod.is_explore_floor(floor):
+                    await query.answer("Это действие доступно только на 8-м этаже.", show_alert=True)
+                    return
+                _emod = exp_mod
+                _explore_btn = "exp_explore"
+                _boss_name_hint = "🗿 <b>Хранитель пробудился!</b> Кнопка появилась ниже."
+
             if query.message is None:
                 await query.answer()
                 return
             from db.repository import floor_progress_repo as fpr
             _row = await fpr.ensure_floor_row(session, char.id, floor)
             _ex = dict(_row.extra or {})
-            _ex = exp_mod.ensure_explore_started(_ex)
+            _ex = _emod.ensure_explore_started(_ex)
 
             # Кнопка босса
-            if code == exp_mod.SLOT_BOSS:
-                if not exp_mod.is_boss_available(_ex):
-                    pct = exp_mod.progress_percent(
-                        exp_mod.get_explore_count(_ex), exp_mod.get_explore_target(_ex)
+            if code == _emod.SLOT_BOSS:
+                if not _emod.is_boss_available(_ex):
+                    pct = _emod.progress_percent(
+                        _emod.get_explore_count(_ex), _emod.get_explore_target(_ex)
                     )
                     await query.answer(
-                        f"Сначала исследуй пещеру до 100% (сейчас {pct}%).", show_alert=True
+                        f"Сначала исследуй до 100% (сейчас {pct}%).", show_alert=True
                     )
                     return
                 _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
-                if exp_mod.SLOT_BOSS in _beaten:
-                    await query.answer("Хранитель уже побеждён. ✅", show_alert=True)
+                if _emod.SLOT_BOSS in _beaten:
+                    await query.answer("Босс уже побеждён. ✅", show_alert=True)
                     return
                 await combat_service.start_combat(
                     query=query,
                     session=session,
                     state=state,
                     character=char,
-                    spawn=exp_mod.SPAWN_BOSS,
+                    spawn=_emod.SPAWN_BOSS,
                 )
                 return
 
             # Кнопка «Исследовать» — бросаем событие
-            event_type = exp_mod.roll_explore_event()
+            event_type = _emod.roll_explore_event()
 
             if event_type == "monster":
-                _spawn = exp_mod.make_encounter_spawn()
+                _spawn = _emod.make_encounter_spawn()
                 await combat_service.start_combat(
                     query=query,
                     session=session,
@@ -690,15 +836,15 @@ async def on_floor_callback(
                 return
 
             # Не-боевые события: инкрементируем счётчик вручную
-            _ex = exp_mod.increment_explore_count(_ex)
+            _ex = _emod.increment_explore_count(_ex)
             _row.extra = _ex
             await session.flush()
             await session.refresh(char)
 
-            count_now = exp_mod.get_explore_count(_ex)
-            target_now = exp_mod.get_explore_target(_ex)
-            pct_now = exp_mod.progress_percent(count_now, target_now)
-            boss_hint = "\n🗿 <b>Хранитель пробудился!</b> Кнопка появилась ниже." if exp_mod.is_boss_available(_ex) else ""
+            count_now = _emod.get_explore_count(_ex)
+            target_now = _emod.get_explore_target(_ex)
+            pct_now = _emod.progress_percent(count_now, target_now)
+            boss_hint = f"\n{_boss_name_hint}" if _emod.is_boss_available(_ex) else ""
 
             from services import character_service as cs
             import html as _html
@@ -740,6 +886,17 @@ async def on_floor_callback(
                     cs.add_gold(char, _gold_myst)
                     event_html = f"🌟 <b>Благословение странника!</b>\nНайдено немного золота (+{_gold_myst}) среди костей путника."
                 await session.flush()
+            elif event_type == "crystal":
+                # Светящийся кристалл — восстанавливает MP (уникально для этажа 22)
+                _mp_gain = max(1, int(char.mp_max * random.uniform(0.40, 0.70)))
+                char.mp_current = min(int(char.mp_max), int(char.mp_current) + _mp_gain)
+                await session.flush()
+                event_html = (
+                    f"💎 <b>Светящийся кристалл!</b>\n"
+                    f"Из стены пещеры торчит мерцающий кристалл. Прикоснувшись к нему, "
+                    f"ты чувствуешь прилив магической энергии — "
+                    f"<b>+{_mp_gain} MP</b> восстановлено."
+                )
             elif event_type == "trap":
                 # Ловушка — небольшой урон, утешительное золото
                 _trap_dmg = max(1, int(char.hp_max * random.uniform(0.07, 0.13)))
@@ -817,8 +974,17 @@ async def on_floor_callback(
                     )
 
             # Показываем результат события с кнопкой «Продолжить»
-            from bot.keyboards.floor_kb import explore_event_keyboard
-            _kb = explore_event_keyboard(floor, extra=_ex)
+            from bot.keyboards.floor_kb import (
+                explore_event_keyboard,
+                explore_floor_4_event_keyboard,
+                explore_floor_22_event_keyboard,
+            )
+            if _is_e4:
+                _kb = explore_floor_4_event_keyboard(floor, extra=_ex)
+            elif _is_e22:
+                _kb = explore_floor_22_event_keyboard(floor, extra=_ex)
+            else:
+                _kb = explore_event_keyboard(floor, extra=_ex)
             _progress_line = f"\n\n📍 Исследование: {count_now}/{target_now} ({pct_now}%){boss_hint}"
             await push_game_ui(
                 state,
@@ -903,4 +1069,77 @@ async def on_floor_callback(
         )
     except Exception:
         logger.exception("Ошибка в callback этажа")
+
+
+# ── Обработчики заданий путников (wnpc:*) ─────────────────────────────────────
+
+@router.callback_query(F.data.regexp(r"^wnpc:take:\d+$"))
+async def wnpc_take_quest(query: CallbackQuery, session: AsyncSession) -> None:
+    """Взять задание от путника."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor = int(query.data.split(":")[2])
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+
+        from services import wandering_npc_quest_service as wnpc_qs
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        ok = wnpc_qs.take_quest(char, floor)
+        if not ok:
+            await query.answer("Задание уже взято или недоступно.", show_alert=True)
+            return
+
+        await session.flush()
+        text = wnpc_qs.format_npc_quest_screen(char, floor)
+        rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"flr:{floor}:back")]]
+        kb = InlineKeyboardMarkup(inline_keyboard=rows)
+        await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+        await query.answer("✅ Задание принято!")
+    except Exception:
+        logger.exception("wnpc:take")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^wnpc:claim:\d+$"))
+async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession) -> None:
+    """Получить награду за выполненное задание путника."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor = int(query.data.split(":")[2])
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+
+        from services import wandering_npc_quest_service as wnpc_qs
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        ok, msg = await wnpc_qs.claim_quest_reward(session, char, floor)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+
+        await session.commit()
+        rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"flr:{floor}:back")]]
+        kb = InlineKeyboardMarkup(inline_keyboard=rows)
+        await query.message.edit_text(msg, reply_markup=kb, parse_mode=ParseMode.HTML)
+        await query.answer("🎁 Награда получена!")
+    except Exception:
+        logger.exception("wnpc:claim")
+        await query.answer("Ошибка.", show_alert=True)
         await query.answer("Ошибка.", show_alert=True)

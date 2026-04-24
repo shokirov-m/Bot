@@ -55,11 +55,15 @@ def _payload(session_row: AppGlobal) -> dict[str, Any]:
     return dict(session_row.payload or {})
 
 
+ESCAPE_TIMEOUT_SECONDS: int = 30 * 60  # 30 минут
+
+
 async def ensure_initial_spawn(session: AsyncSession) -> tuple[bool, int | None, int | None]:
     """
     При первом запуске создаёт волну 1. Возвращает
     (created_new, floor_or_none, wave_or_none) для рассылки.
     """
+    import time as _time
     row = await _ensure_row(session)
     base = _payload(row)
     if base.get("gg_wave") is not None:
@@ -68,6 +72,7 @@ async def ensure_initial_spawn(session: AsyncSession) -> tuple[bool, int | None,
     base["gg_wave"] = 1
     base["gg_floor"] = fl
     base["gg_claimed"] = False
+    base["gg_spawned_at"] = _time.time()
     row.payload = base
     await session.flush()
     return True, fl, 1
@@ -75,6 +80,7 @@ async def ensure_initial_spawn(session: AsyncSession) -> tuple[bool, int | None,
 
 async def roll_next_spawn(session: AsyncSession) -> tuple[int, int]:
     """Новая волна (планировщик): случайный этаж, сброс «убит». Возвращает (wave, floor)."""
+    import time as _time
     row = await _ensure_row(session)
     base = _payload(row)
     wave = int(base.get("gg_wave", 0)) + 1
@@ -82,9 +88,38 @@ async def roll_next_spawn(session: AsyncSession) -> tuple[int, int]:
     base["gg_wave"] = wave
     base["gg_floor"] = fl
     base["gg_claimed"] = False
+    base["gg_spawned_at"] = _time.time()
     row.payload = base
     await session.flush()
     return wave, fl
+
+
+async def try_escape_if_timeout(session: AsyncSession) -> tuple[bool, int | None]:
+    """
+    Проверяет, не истёк ли таймаут побега (30 мин).
+    Если гоблин ещё активен и не убит — помечает как сбежавшего.
+    Возвращает (escaped, floor_number_or_none).
+    """
+    import time as _time
+    row = await session.get(AppGlobal, 1)
+    if row is None:
+        return False, None
+    base = _payload(row)
+    if base.get("gg_claimed"):
+        return False, None
+    spawned_at = base.get("gg_spawned_at")
+    if spawned_at is None:
+        return False, None
+    elapsed = _time.time() - float(spawned_at)
+    if elapsed < ESCAPE_TIMEOUT_SECONDS:
+        return False, None
+    # Гоблин сбегает: помечаем как claimed (чтобы скрыть с этажа)
+    fl = int(base.get("gg_floor") or 0)
+    base["gg_claimed"] = True
+    base["gg_escaped"] = True
+    row.payload = base
+    await session.flush()
+    return True, fl
 
 
 async def current_wave(session: AsyncSession) -> int:
@@ -116,11 +151,18 @@ async def merge_spawns_if_active(
     from game.floors import room_clear_floor as rc_mod, wave_floor as wv_mod
     if rc_mod.is_room_clear_floor(fl) or wv_mod.is_wave_floor(fl):
         return spawns
+    # Не добавляем на этажах с боссом (мини и мажор).
+    from game.floors import floor_data as fd_mod
+    if fd_mod.is_major_boss_floor(fl) or fd_mod.is_mini_boss_floor(fl):
+        return spawns
+    # Не добавляем на этажах-исследованиях (4 и 8).
+    _EXPLORE_FLOORS = {4, 8}
+    if fl in _EXPLORE_FLOORS:
+        return spawns
     if fl < FLOOR_MIN or fl > FLOOR_MAX:
         return spawns
     if not await is_active_on_floor(session, fl):
         return spawns
-    # У этажа 3 нет боёв на карте — но 3 не в диапазоне 5–20.
     return [build_spawn(), *spawns]
 
 

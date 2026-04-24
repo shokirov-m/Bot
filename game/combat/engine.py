@@ -332,6 +332,11 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     luck = int(st["luck"])
     mods = _mods(state)
 
+    # Проверка промаха (зависит от ЛОВ: ЛОВ=0 → 20%, ЛОВ=85+ → 3%)
+    if formulas.roll_miss(int(st["dex"])):
+        logs.append("💨 Промах! Удар не достиг цели.")
+        return logs, "continue", 0
+
     elem_bonus = int(state.get("weapon_rune_bonus_pct", 0))
     _log_weapon_rune_elemental_once(state, elem_bonus, logs)
 

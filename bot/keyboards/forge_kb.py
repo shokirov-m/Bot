@@ -129,7 +129,38 @@ def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🔨 Разобрать предмет", callback_data=f"frg:dis:{floor_number}")],
             [InlineKeyboardButton(text="💎 Руны на оружии", callback_data=f"frg:rnm:{floor_number}")],
             [InlineKeyboardButton(text="🧪 Сварить настой (HP)", callback_data=f"frg:brew:{floor_number}")],
+            [InlineKeyboardButton(text="📜 Задание кузнеца", callback_data=f"frg:qst:{floor_number}")],
             [InlineKeyboardButton(text="⬅ В город", callback_data=f"frg:city:{floor_number}")],
             menu_nav_button_row(),
         ],
     )
+
+
+def forge_quest_keyboard(floor_number: int, state: dict) -> InlineKeyboardMarkup:
+    """Клавиатура экрана цепочки заданий кузнеца."""
+    rows: list[list[InlineKeyboardButton]] = []
+
+    if not state:
+        rows.append([InlineKeyboardButton(
+            text="⚒️ Начать цепочку заданий",
+            callback_data=f"frg:qst:start:{floor_number}",
+        )])
+    else:
+        final_claimed = state.get("final_claimed", False)
+        if not final_claimed:
+            for s in (1, 2, 3):
+                if state.get(f"{s}_done") and not state.get(f"{s}_claimed"):
+                    rows.append([InlineKeyboardButton(
+                        text=f"✅ Сдать шаг {s}",
+                        callback_data=f"frg:qst:claim:{floor_number}:{s}",
+                    )])
+                    break
+            if all(state.get(f"{s}_claimed") for s in (1, 2, 3)) and not final_claimed:
+                rows.append([InlineKeyboardButton(
+                    text="🏆 Получить финальную награду",
+                    callback_data=f"frg:qst:final:{floor_number}",
+                )])
+
+    rows.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)

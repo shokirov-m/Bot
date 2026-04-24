@@ -62,8 +62,12 @@ from game.floors import monster_catalog as monster_catalog_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import room_clear_floor as room_clear_mod
 from game.floors import room_clear_floor_10 as room_clear_10_mod
+from game.floors import room_clear_floor_24 as room_clear_24_mod
 from game.floors import wave_floor as wave_floor_mod
+from game.floors import wave_floor_27 as wave_floor_27_mod
 from game.floors import explore_floor as explore_floor_mod
+from game.floors import explore_floor_4 as explore_floor_4_mod
+from game.floors import explore_floor_22 as explore_floor_22_mod
 from utils.image_assets import combat_monster_portrait_path
 from game.floors.monster_stat_formula import compute_formula_stat_bundle, monster_strike_ailment
 from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawns_for_floor
@@ -981,24 +985,41 @@ async def _apply_tower_progress_after_victory(
     extra = dict(row.extra or {})
     cleared: list[str] = list(extra.get("slots_cleared", []))
 
-    # Этаж 8: бой-исследование инкрементирует счётчик (не добавляется в slots_cleared как обычный слот)
+    # Этаж 4: бой-исследование леса инкрементирует счётчик
+    if spawn.slot_code == explore_floor_4_mod.SLOT_ENCOUNTER:
+        extra = explore_floor_4_mod.increment_explore_count(extra)
+        extra["slots_cleared"] = cleared
+        row.extra = extra
+        await session.flush()
+        return ""
+
+    # Этаж 8: бой-исследование пещеры инкрементирует счётчик (не добавляется в slots_cleared)
     if spawn.slot_code == explore_floor_mod.SLOT_ENCOUNTER:
         extra = explore_floor_mod.increment_explore_count(extra)
         extra["slots_cleared"] = cleared
         row.extra = extra
         await session.flush()
+
+    # Этаж 22: бой-исследование Пещеры Теней инкрементирует счётчик
+    if spawn.slot_code == explore_floor_22_mod.SLOT_ENCOUNTER:
+        extra = explore_floor_22_mod.increment_explore_count(extra)
+        extra["slots_cleared"] = cleared
+        row.extra = extra
+        await session.flush()
+        return ""
         return ""
 
     if spawn.slot_code not in cleared:
         cleared.append(spawn.slot_code)
     extra["slots_cleared"] = cleared
     row.extra = extra
+    # Сразу фиксируем изменение, чтобы следующий запрос в той же транзакции
+    # и следующий callback увидели актуальный slots_cleared.
+    await session.flush()
 
     all_spawns = long_floor_mod.spawns_for_tower_progress(character, cur)
     needed = {s.slot_code for s in all_spawns}
     # needed.issubset(cleared) == True только когда ВСЕ нужные слоты зачищены.
-    # Старый вариант (set(cleared) < needed) давал False при любом «чужом» слоте
-    # (напр. "gg" золотого гоблина), что ошибочно триггерило подъём на следующий этаж.
     if not needed.issubset(set(cleared)):
         return ""
 
@@ -1014,9 +1035,13 @@ async def _apply_tower_progress_after_victory(
     set_tower_ascent_pending(character, nxt)
     character.highest_floor_reached = max(int(character.highest_floor_reached), nxt)
     extra["slots_cleared"] = []
-    # Сбрасываем прогресс исследования при подъёме с 8-го этажа
+    # Сбрасываем прогресс исследования при подъёме с 4-го и 8-го этажей
+    if cur == explore_floor_4_mod.EXPLORE_FLOOR_4:
+        extra = explore_floor_4_mod.reset_explore_state(extra)
     if cur == explore_floor_mod.EXPLORE_FLOOR:
         extra = explore_floor_mod.reset_explore_state(extra)
+    if cur == explore_floor_22_mod.EXPLORE_FLOOR_22:
+        extra = explore_floor_22_mod.reset_explore_state(extra)
     row.extra = extra
     zone_next = floor_data.get_zone_for_floor(nxt)
     room_next = floor_data.epithet_for_floor(zone_next, nxt)
@@ -1267,6 +1292,42 @@ async def _victory_sequence(
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
     daily_service.record_kill(character)
+    # Обновляем прогресс ежедневных заданий
+    from services import daily_quest_service as dqs
+    dqs.record_battle_result(
+        character,
+        is_elite=bool(spawn.is_elite),
+        is_mini_boss=bool(spawn.is_mini_boss),
+        is_major_boss=bool(spawn.is_major_boss),
+        gold_gained=int(net_gold),
+    )
+    # Обновляем прогресс заданий путников (этажи 1–20)
+    from services import wandering_npc_quest_service as wnpc_qs
+    wnpc_qs.record_battle(
+        character,
+        is_elite=bool(spawn.is_elite),
+        is_mini_boss=bool(spawn.is_mini_boss),
+        is_major_boss=bool(spawn.is_major_boss),
+        gold_gained=int(net_gold),
+    )
+    # Обновляем прогресс цепочек кузнеца и скупщика (по всем хабам)
+    from services import forge_quest_service as fqs, tavern_buyer_service as bqs
+    from game.quests.forge_quests import HUB_FLOORS as _HUB_FLOORS
+    for _hub in _HUB_FLOORS:
+        fqs.record_battle(
+            character, _hub,
+            is_elite=bool(spawn.is_elite),
+            is_mini_boss=bool(spawn.is_mini_boss),
+            is_major_boss=bool(spawn.is_major_boss),
+            gold_gained=int(net_gold),
+        )
+        bqs.record_battle(
+            character, _hub,
+            is_elite=bool(spawn.is_elite),
+            is_mini_boss=bool(spawn.is_mini_boss),
+            is_major_boss=bool(spawn.is_major_boss),
+            gold_gained=int(net_gold),
+        )
     # Вклад зависит от типа врага: обычный +1, элитный +3, босс +5/+10
     _clan_delta = 1
     if spawn.is_mini_boss:
@@ -1311,7 +1372,7 @@ async def _victory_sequence(
             clan_service.add_material_drop(character, _mat_drop, _mat_amount)
             _mat_icons = {"wood": "🪵", "stone": "🪨", "herbs": "🌿"}
             _mat_ru = {"wood": "дерево", "stone": "камень", "herbs": "травы"}
-            _mat_note = f"\n{_mat_icons.get(_mat_drop, '📦')} +{_mat_amount} {_mat_ru.get(_mat_drop, _mat_drop)} (клан)"
+            _mat_note = f"\n{_mat_icons.get(_mat_drop, '📦')} +{_mat_amount} {_mat_ru.get(_mat_drop, _mat_drop)}"
         else:
             _mat_note = ""
     except Exception:
@@ -1456,6 +1517,9 @@ async def _victory_sequence(
     elif spawn.slot_code in room_clear_10_mod.SLOT_ROOMS:
         _next_rc_slot = room_clear_10_mod.next_slot_after_defeat(spawn.slot_code)
         _next_rc_mod = room_clear_10_mod
+    elif spawn.slot_code in room_clear_24_mod.SLOT_ROOMS:
+        _next_rc_slot = room_clear_24_mod.next_slot_after_defeat(spawn.slot_code)
+        _next_rc_mod = room_clear_24_mod
     if _next_rc_slot is not None and _next_rc_mod is not None:
         _next_rc_spawn = _next_rc_mod.spawn_by_slot(_next_rc_slot)
         _next_name = _next_rc_spawn.display_name if _next_rc_spawn else "Следующий"
@@ -1596,16 +1660,36 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
         found_rc10 = room_clear_10_mod.spawn_by_slot(slot)
         if found_rc10 is not None:
             return found_rc10
+    # Room-clear floor 24 (r24_r0…r24_r4, r24_boss)
+    if slot in room_clear_24_mod.ROOM_CLEAR_24_ALL_SLOTS:
+        found_rc24 = room_clear_24_mod.spawn_by_slot(slot)
+        if found_rc24 is not None:
+            return found_rc24
+    # Wave floor 27 (wv27_w1, wv27_w2, wv27_w3, wv27_boss)
+    if slot in wave_floor_27_mod.WAVE_FLOOR_27_ALL_SLOTS:
+        found_wv27 = wave_floor_27_mod.spawn_by_slot(slot)
+        if found_wv27 is not None:
+            return found_wv27
     # Wave floors (wv_w1, wv_w2, wv_w3, wv_boss)
     if slot in wave_floor_mod.WAVE_FLOOR_ALL_SLOTS:
         found_wv = wave_floor_mod.spawn_by_slot(slot)
         if found_wv is not None:
             return found_wv
-    # Explore floor (exp_encounter, exp_boss)
+    # Explore floor 4 (e4_encounter, e4_boss)
+    if slot in explore_floor_4_mod.EXPLORE_4_ALL_SLOTS:
+        found_e4 = explore_floor_4_mod.spawn_by_slot(slot)
+        if found_e4 is not None:
+            return found_e4
+    # Explore floor 8 (exp_encounter, exp_boss)
     if slot in explore_floor_mod.EXPLORE_ALL_SLOTS:
         found_exp = explore_floor_mod.spawn_by_slot(slot)
         if found_exp is not None:
             return found_exp
+    # Explore floor 22 (e22_encounter, e22_boss)
+    if slot in explore_floor_22_mod.EXPLORE_22_ALL_SLOTS:
+        found_e22 = explore_floor_22_mod.spawn_by_slot(slot)
+        if found_e22 is not None:
+            return found_e22
     spawns = build_spawns_for_floor(battle_floor)
     found = next((s for s in spawns if s.slot_code == slot), None)
     if found is None:

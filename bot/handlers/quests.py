@@ -23,6 +23,7 @@ from game.floors import floor_data
 from game.quests.floor_quests import npc_quest_template
 from game.quests.npc_quests import QuestTemplate, template_by_key, templates_for_floor
 from services import quest_service
+from services import daily_quest_service as dqs
 from services.floor_service import floor_keyboard_for_character, format_floor_message
 from utils.ui import LINE_SEP
 
@@ -145,6 +146,16 @@ async def render_quest_floor_hub(
                     ),
                 ],
             )
+        _dq = dqs.get_daily_quests(char)
+        _dq_cl = sum(1 for q in _dq if dqs.can_claim(q))
+        _dq_done = sum(1 for q in _dq if dqs.is_done(q))
+        if _dq_cl > 0:
+            _dlbl = f"📅 Ежедневные ({_dq_cl} к получению!)"
+        elif _dq_done > 0:
+            _dlbl = f"📅 Ежедневные ({_dq_done}/3 выполнено)"
+        else:
+            _dlbl = "📅 Ежедневные задания"
+        rows_btn.append([InlineKeyboardButton(text=_dlbl, callback_data="qhub:d")])
         rows_btn.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
         return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
 
@@ -210,6 +221,18 @@ async def render_quest_floor_hub(
     if has_active and not has_claim:
         lines.append("")
         lines.append("<i>Продолжай бой на башне.</i>")
+
+    # Кнопка перехода на ежедневные задания
+    _daily_q = dqs.get_daily_quests(char)
+    _daily_claimable = sum(1 for q in _daily_q if dqs.can_claim(q))
+    _daily_done = sum(1 for q in _daily_q if dqs.is_done(q))
+    if _daily_claimable > 0:
+        _daily_lbl = f"📅 Ежедневные ({_daily_claimable} к получению!)"
+    elif _daily_done > 0:
+        _daily_lbl = f"📅 Ежедневные ({_daily_done}/3 выполнено)"
+    else:
+        _daily_lbl = "📅 Ежедневные задания"
+    rows_btn.append([InlineKeyboardButton(text=_daily_lbl, callback_data="qhub:d")])
 
     rows_btn.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
@@ -287,9 +310,27 @@ async def render_active_quests_overview(
                 nav2.append(InlineKeyboardButton(text="▶️", callback_data=f"qhub:a:{page + 1}"))
             rows_btn.append(nav2)
 
+    rows_btn.append([InlineKeyboardButton(text="📅 Ежедневные задания", callback_data="qhub:d")])
     rows_btn.append([InlineKeyboardButton(text="📋 К этажу", callback_data="qhub:p:0")])
     rows_btn.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows_btn)
+
+
+async def render_daily_quests_hub(char: Character) -> tuple[str, InlineKeyboardMarkup]:
+    """Экран ежедневных заданий."""
+    text = dqs.format_daily_quests_html(char)
+    rows: list[list[InlineKeyboardButton]] = []
+
+    # Кнопки «Забрать» для выполненных заданий
+    claim_rows = dqs.daily_quest_keyboard_rows(char, int(char.floor_number))
+    rows.extend(claim_rows)
+
+    # Навигация
+    rows.append([
+        InlineKeyboardButton(text="📋 Задания этажа", callback_data="qhub:p:0"),
+    ])
+    rows.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
+    return text, InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def render_quests_hub(session: AsyncSession, char: Character) -> tuple[str, InlineKeyboardMarkup]:
@@ -322,9 +363,88 @@ async def quests_hub_noop(query: CallbackQuery) -> None:
     await query.answer()
 
 
+@router.callback_query(F.data == "qhub:d")
+async def quests_hub_daily(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Экран ежедневных заданий."""
+    try:
+        if query.message is None or query.from_user is None:
+            await query.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+        text, kb = await render_daily_quests_hub(char)
+        await push_game_ui(
+            state, query.bot,
+            chat_id=query.message.chat.id,
+            text=text, reply_markup=kb,
+            target_message=query.message,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("qhub:d")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^qdcl:\d+$"))
+async def on_daily_quest_claim(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Получение награды за ежедневное задание."""
+    try:
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        slot = int(query.data.split(":")[1])
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+
+        ok, msg = await dqs.claim_quest(session, char, slot)
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+
+        await query.answer("🎁 Награда получена!")
+        text, kb = await render_daily_quests_hub(char)
+        reward_block = f"{msg}\n\n{LINE_SEP}\n{text}"
+        if len(reward_block) > 4000:
+            reward_block = text
+        await push_game_ui(
+            state, query.bot,
+            chat_id=query.message.chat.id,
+            text=reward_block,
+            reply_markup=kb,
+            target_message=query.message,
+        )
+    except Exception:
+        logger.exception("qdcl")
+        await query.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data == "qhub:")
 @router.callback_query(F.data.regexp(r"^qhub:p:\d+$"))
 @router.callback_query(F.data.regexp(r"^qhub:a:\d+$"))
+@router.callback_query(F.data == "qhub:back")
 async def quests_hub_callbacks(
     query: CallbackQuery,
     session: AsyncSession,

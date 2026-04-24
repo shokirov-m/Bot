@@ -83,6 +83,19 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         replace_existing=True,
     )
 
+    async def job_golden_goblin_escape() -> None:
+        try:
+            await task_golden_goblin_escape_check(bot)
+        except Exception:
+            logger.exception("[GOLDEN_GOBLIN] Ошибка проверки побега")
+
+    scheduler.add_job(
+        job_golden_goblin_escape,
+        IntervalTrigger(minutes=5),
+        id="tower_golden_goblin_escape",
+        replace_existing=True,
+    )
+
 
 def schedule_rest_completion_notification(
     bot: Bot,
@@ -314,6 +327,38 @@ async def task_golden_goblin_tick(bot: Bot) -> None:
         await session.commit()
     await broadcast_golden_goblin_html(bot, int(fl), int(wave))
     logger.info("[GOLDEN_GOBLIN] Новая волна {} на этаже {}", wave, fl)
+
+
+async def task_golden_goblin_escape_check(bot: Bot) -> None:
+    """
+    Каждые 5 минут: проверяет, не сбежал ли золотой гоблин (30 мин без убийства).
+    Если сбежал — рассылает оповещение всем.
+    """
+    from db.database import get_session_factory
+    from services import golden_goblin_service
+
+    factory = get_session_factory()
+    async with factory() as session:
+        escaped, fl = await golden_goblin_service.try_escape_if_timeout(session)
+        await session.commit()
+
+    if escaped:
+        await broadcast_golden_goblin_escaped(bot, int(fl or 0))
+        logger.info("[GOLDEN_GOBLIN] Гоблин сбежал с этажа {}", fl)
+
+
+async def broadcast_golden_goblin_escaped(bot: Bot, floor_n: int) -> None:
+    """Оповещение всем: золотой гоблин сбежал, никто не успел."""
+    text_msg = (
+        "🔔 <b>Оповещение башни</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💨 <b>Золотой гоблин сбежал!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"Никто не успел поймать гоблина на <b>этаже {floor_n}</b>.\n"
+        "<i>Хитрец исчез в тенях башни с полными карманами золота...</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
+    await _broadcast_html(bot, text_msg)
 
 
 async def task_world_boss_spawn(bot: Bot) -> None:

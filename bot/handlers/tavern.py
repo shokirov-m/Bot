@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards.tavern_kb import tavern_menu_keyboard
+from bot.keyboards.tavern_kb import buyer_quest_keyboard, tavern_menu_keyboard
 from db.repository import character_repo, user_repo
 from game.locations import tavern as tavern_loc
 from services import tavern_service
@@ -83,4 +83,123 @@ async def tavern_buy(query: CallbackQuery, session: AsyncSession) -> None:
         await query.answer("Приятного!")
     except Exception:
         logger.exception("tvr:buy")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+# ── Скупщик Орин ─────────────────────────────────────────────────────────────
+
+@router.callback_query(F.data.regexp(r"^tvr:buyer:\d+$"))
+async def tavern_buyer_open(query: CallbackQuery, session: AsyncSession) -> None:
+    """Открыть экран Скупщика Орина."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не в этом городе.", show_alert=True)
+            return
+        from services import tavern_buyer_service as bqs
+        text = bqs.format_buyer_quest_html(char, floor_key)
+        state = bqs._get_state(char, floor_key)
+        await query.message.edit_text(
+            text,
+            reply_markup=buyer_quest_keyboard(floor_key, state),
+            parse_mode="HTML",
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("tvr:buyer")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^tvr:bq:start:\d+$"))
+async def tavern_buyer_start(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[3])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не в этом городе.", show_alert=True)
+            return
+        from services import tavern_buyer_service as bqs
+        ok = bqs.start_chain(char, floor_key)
+        if not ok:
+            await query.answer("Цепочка уже начата или недоступна.", show_alert=True)
+            return
+        await session.flush()
+        text = bqs.format_buyer_quest_html(char, floor_key)
+        state = bqs._get_state(char, floor_key)
+        await query.message.edit_text(
+            text,
+            reply_markup=buyer_quest_keyboard(floor_key, state),
+            parse_mode="HTML",
+        )
+        await query.answer("🪙 Поручения приняты!")
+    except Exception:
+        logger.exception("tvr:bq:start")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^tvr:bq:claim:\d+:\d+$"))
+async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[3])
+        step = int(parts[4])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не в этом городе.", show_alert=True)
+            return
+        from services import tavern_buyer_service as bqs
+        ok, msg = await bqs.claim_step(session, char, floor_key, step)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await session.commit()
+        text = bqs.format_buyer_quest_html(char, floor_key)
+        state = bqs._get_state(char, floor_key)
+        await query.message.edit_text(
+            f"{text}\n\n{msg}",
+            reply_markup=buyer_quest_keyboard(floor_key, state),
+            parse_mode="HTML",
+        )
+        await query.answer("✅ Шаг выполнен!")
+    except Exception:
+        logger.exception("tvr:bq:claim")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^tvr:bq:final:\d+$"))
+async def tavern_buyer_final(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[3])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не в этом городе.", show_alert=True)
+            return
+        from services import tavern_buyer_service as bqs
+        ok, msg = await bqs.claim_final_reward(session, char, floor_key)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await session.commit()
+        state = bqs._get_state(char, floor_key)
+        await query.message.edit_text(
+            msg,
+            reply_markup=buyer_quest_keyboard(floor_key, state),
+            parse_mode="HTML",
+        )
+        await query.answer("🏆 Цепочка завершена!")
+    except Exception:
+        logger.exception("tvr:bq:final")
         await query.answer("Ошибка.", show_alert=True)

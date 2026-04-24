@@ -177,6 +177,11 @@ def spawns_for_tower_progress(character: Character, floor_number: int) -> list[F
     if floor_number == PILOT_FLOOR and is_long_floor_scenario_active(character):
         return all_long_floor_spawns()
 
+    # Этаж 4 — исследование леса (для подъёма нужен только босс)
+    from game.floors import explore_floor_4 as e4_mod
+    if e4_mod.is_explore_floor_4(floor_number):
+        return [e4_mod.SPAWN_BOSS]
+
     # Этаж 5 — зачистка комнат
     from game.floors import room_clear_floor as rc_mod
     if rc_mod.is_room_clear_floor(floor_number):
@@ -191,6 +196,21 @@ def spawns_for_tower_progress(character: Character, floor_number: int) -> list[F
     from game.floors import room_clear_floor_10 as rc10_mod
     if rc10_mod.is_room_clear_floor_10(floor_number):
         return rc10_mod.all_room_clear_spawns()
+
+    # Этаж 22 — исследование Пещеры Теней (для подъёма нужен только босс)
+    from game.floors import explore_floor_22 as e22_mod
+    if e22_mod.is_explore_floor_22(floor_number):
+        return [e22_mod.SPAWN_BOSS]
+
+    # Этаж 24 — зачистка комнат Пещер Теней
+    from game.floors import room_clear_floor_24 as rc24_mod
+    if rc24_mod.is_room_clear_floor_24(floor_number):
+        return rc24_mod.all_room_clear_spawns()
+
+    # Этаж 27 — волны теней
+    from game.floors import wave_floor_27 as wv27_mod
+    if wv27_mod.is_wave_floor_27(floor_number):
+        return wv27_mod.all_wave_floor_27_spawns()
 
     return build_spawns_for_floor(floor_number)
 

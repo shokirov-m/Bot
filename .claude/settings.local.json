@@ -18,7 +18,9 @@
       "Bash(python -c \"import services.combat_service; print\\('combat_service OK'\\)\")",
       "Bash(python -c \"import services.floor_service; import bot.handlers.floor; import bot.keyboards.floor_kb; import game.floors.explore_floor; print\\('All OK'\\)\")",
       "Bash(python -c \"import services.floor_service; import services.combat_service; import bot.handlers.floor; print\\('All OK'\\)\")",
-      "Bash(python -c \"import services.floor_service; import services.combat_service; print\\('All OK'\\)\")"
+      "Bash(python -c \"import services.floor_service; import services.combat_service; print\\('All OK'\\)\")",
+      "Bash(python3 -c \"import json; data = json.load\\(open\\('C:\\\\Users\\\\Shokirov\\\\Desktop\\\\БАШНЯ 100 ИСПИТАНИЙ\\\\tower_bot/game/data/monsters_catalog.json'\\)\\); print\\(json.dumps\\(data['pools'].get\\('shadow_caves', []\\), indent=2\\)\\)\")",
+      "Bash(find \"C:\\\\Users\\\\Shokirov\\\\Desktop\\\\БАШНЯ 100 ИСПИТАНИЙ\\\\tower_bot\" -type f -name \"*.py\" -exec grep -l \"shadow_caves\\\\|shadow.*cave\" {} \\\\;)"
     ]
   }
 }

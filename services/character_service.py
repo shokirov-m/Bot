@@ -554,14 +554,19 @@ def try_paid_reset_stat_allocations(character: Character) -> tuple[bool, str]:
     return True, ""
 
 
-def try_allocate_stat_point(character: Character, stat_key: str) -> bool:
-    """Потратить 1 свободное очко на стат. True если успех."""
+def try_allocate_stat_point(character: Character, stat_key: str, amount: int = 1) -> int:
+    """Потратить до `amount` свободных очков на стат.
+    Возвращает фактически потраченное количество (0 = ничего не потрачено).
+    Обратная совместимость: старый bool-результат заменён на int (0 = False, >0 = True).
+    """
     field = _STAT_FIELD_BY_KEY.get(stat_key)
     if field is None:
-        return False
-    if int(character.unspent_stat_points) <= 0:
-        return False
+        return 0
+    free = int(character.unspent_stat_points)
+    if free <= 0:
+        return 0
+    actual = min(amount, free)
     cur = int(getattr(character, field))
-    setattr(character, field, cur + 1)
-    character.unspent_stat_points = int(character.unspent_stat_points) - 1
-    return True
+    setattr(character, field, cur + actual)
+    character.unspent_stat_points = free - actual
+    return actual
