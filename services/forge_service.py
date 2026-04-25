@@ -21,7 +21,7 @@ from game.items import runes as rune_sys
 from game.items import materials as mat_sys
 from game.items.rarity_scaling import scaled_armor_defense_value, scaled_weapon_attack_value
 from game.locations import forge as forge_loc
-from services import home_service, profession_service, title_service
+from services import home_service, title_service
 from utils.ui import LINE_SEP, format_inventory_item_html, render_enchant_stars
 
 
@@ -212,12 +212,10 @@ async def try_enchant_equipped_in_slot(
     if rune_ward:
         character.rune_stones = int(character.rune_stones) - 1
     title_service.refresh_unlocks(character)
-    profession_service.refresh_unlocks(character)
 
     rolled = enchant_rules.roll_enchant_outcome(
         cur,
-        success_chance_bonus=profession_service.enchant_success_bonus_active(character)
-        + home_service.workbench_enchant_bonus(character),
+        success_chance_bonus=home_service.workbench_enchant_bonus(character),
     )
     outcome = rolled
     ward_absorbed = False

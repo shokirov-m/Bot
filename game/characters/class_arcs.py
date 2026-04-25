@@ -103,7 +103,6 @@ def needs_subclass_choice(character: Character) -> bool:
 
 
 def combat_skill_class_key(character: Character) -> str:
-    """Боевой источник скиллов — активная профессия (fallback wanderer)."""
-    from services import profession_service
-
-    return profession_service.combat_skill_class_key(character)
+    """Боевой источник скиллов — class_key персонажа (fallback wanderer)."""
+    key = str(character.class_key or "wanderer").lower()
+    return key if key else "wanderer"

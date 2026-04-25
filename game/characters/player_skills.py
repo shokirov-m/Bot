@@ -2,9 +2,35 @@
 Player Skills Management (Archetype 2.0 Integration).
 """
 from __future__ import annotations
+from typing import Any
 from db.models.character import Character
 from game.archetypes import manager as arch_manager
 from game.characters.skills import SkillDef, skills_for_class
+
+# Compatibility shim: skills are now tree-based, not shop-based.
+# Populated lazily so it reflects all registered archetype skills.
+def _build_skill_by_key() -> dict[str, SkillDef]:
+    result: dict[str, SkillDef] = {}
+    from game.archetypes.data import SKILLS
+    for key, sk in SKILLS.items():
+        result[key] = SkillDef(
+            key=sk.key,
+            name=sk.name_ru,
+            mp_cost=int(sk.mp_cost),
+            cooldown=int(sk.cooldown),
+            power=float(sk.power_mult),
+            kind=str(sk.kind),
+            effect_key=sk.effect_key,
+            effect_chance=float(sk.effect_chance),
+        )
+    return result
+
+
+SKILL_BY_KEY: dict[str, SkillDef] = _build_skill_by_key()
+
+# Skills are no longer purchased at the temple — now unlocked via skill tree.
+# Kept as empty dict for API compatibility.
+TEMPLE_SKILL_PRICES_GOLD: dict[str, int] = {}
 
 def ensure_skill_meta(character: Character) -> None:
     """No longer strictly needed for unlocking, but keeps meta healthy."""

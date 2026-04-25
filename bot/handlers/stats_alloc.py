@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.repository import character_repo, user_repo
-from services import character_service, profession_service, stat_bonus_service
+from services import character_service, stat_bonus_service
 
 router = Router(name="stats_alloc")
 
@@ -177,7 +177,6 @@ async def st_allocate(callback: CallbackQuery, session: AsyncSession, state: FSM
             return
 
         await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
-        profession_service.refresh_unlocks(char)
         await session.flush()
 
         mode = await _get_mode(state)
