@@ -1951,6 +1951,20 @@ async def _apply_combat_item(
     return True, None, logs
 
 
+def _rehydrate_skills_and_cooldowns(combat_state: dict[str, Any], character: Character) -> None:
+    """
+    Бэкап боя в meta — JSON; SkillDef в combat_skills превращаются в строки.
+    Без пересборки engine.player_skill падает (ловится в combat.py как «Ошибка боя»).
+    """
+    combat_state["combat_skills"] = battle_skills_tuple(character)
+    sc = combat_state.get("skill_cd")
+    if not isinstance(sc, dict):
+        combat_state["skill_cd"] = {"0": 0, "1": 0, "2": 0}
+    else:
+        for k in ("0", "1", "2"):
+            sc.setdefault(k, 0)
+
+
 async def handle_combat_callback(
     *,
     query: CallbackQuery,
@@ -1986,6 +2000,8 @@ async def handle_combat_callback(
         if query.from_user is not None:
             combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
         return
+
+    _rehydrate_skills_and_cooldowns(combat_state, character)
 
     if query.message is None:
         await query.answer()

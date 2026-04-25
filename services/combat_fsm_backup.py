@@ -43,11 +43,15 @@ def persist_combat_backup(character: Character, combat_state: dict[str, Any]) ->
     if not isinstance(combat_state, dict) or not combat_state:
         return
     try:
+        # SkillDef не сериализуется в JSON нормально (default=str → мусор); в бою всегда
+        # подставляем battle_skills_tuple в handle_combat_callback.
+        to_store = dict(combat_state)
+        to_store.pop("combat_skills", None)
         payload = {
             "v": _VERSION,
             "t": int(time.time()),
             "cid": int(character.id),
-            "c": _json_safe(combat_state),
+            "c": _json_safe(to_store),
         }
     except (TypeError, ValueError, RecursionError):
         return

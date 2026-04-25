@@ -197,8 +197,16 @@ async def on_combat_callback(
             skill_index=skill_index,
             item_id=item_id,
         )
-    except Exception:
+    except Exception as e:
         logger.exception("Ошибка в боевом callback")
+        # #region agent log
+        log_debug(
+            "combat.py:on_combat_callback:exception",
+            "unhandled in combat cb",
+            {"exc_type": type(e).__name__, "exc_msg": (str(e) or "")[:220]},
+            hypothesis_id="H6",
+        )
+        # #endregion
         try:
             if query.from_user is not None:
                 combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
