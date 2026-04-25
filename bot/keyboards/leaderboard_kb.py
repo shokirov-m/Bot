@@ -18,6 +18,26 @@ def leaderboard_categories_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="💪 Статы", callback_data="top:cat:pow"),
                 InlineKeyboardButton(text="💰 Золото", callback_data="top:cat:gld"),
             ],
+            [
+                InlineKeyboardButton(text="🏰 Кланы", callback_data="top:cat:clans"),
+                InlineKeyboardButton(text="🎭 Классы", callback_data="top:cat:classes"),
+            ],
             menu_nav_button_row(),
+        ],
+    )
+
+
+def leaderboard_classes_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⚔️ Воин", callback_data="top:class:warrior"),
+                InlineKeyboardButton(text="🔮 Маг", callback_data="top:class:mage"),
+            ],
+            [
+                InlineKeyboardButton(text="🗡️ Убийца", callback_data="top:class:scout"),
+                InlineKeyboardButton(text="⛪ Жрец", callback_data="top:class:acolyte"),
+            ],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="top:back")],
         ],
     )

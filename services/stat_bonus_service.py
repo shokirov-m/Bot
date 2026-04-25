@@ -15,6 +15,7 @@ from db.repository import inventory_repo
 from game.characters.titles import TITLE_BY_KEY
 from game.items import enchant as enchant_rules
 from game.items.rarity_scaling import scaled_armor_defense_value
+from game.archetypes import manager as arch_manager
 from game.items.stat_bonuses import STAT_KEYS, empty_stat_bonus_map, stat_bonuses_from_item_data
 from services import profession_service, title_service
 
@@ -104,11 +105,17 @@ def active_title_stat_bonuses(character: Character) -> dict[str, int]:
 
 
 async def extra_stat_bonuses(session: AsyncSession, character: Character) -> tuple[dict[str, int], dict[str, int]]:
-    """(сумма с экипировки, сумма с активного титула + основная профессия)."""
+    """(сумма с экипировки, сумма с активного титула + основная профессия + древо навыков)."""
     gear = await equipped_gear_stat_bonuses(session, character.id)
     title_b = active_title_stat_bonuses(character)
     prof_b = profession_service.profession_primary_stat_bonuses(character)
+    tree_b_raw = arch_manager.get_tree_bonuses(character)
+    
+    # Filter only base stats (str, dex, int, vit, luck) and cast to int
+    tree_b = {k: int(v) for k, v in tree_b_raw.items() if k in STAT_KEYS}
+    
     title_b = merge_stat_maps(title_b, prof_b)
+    title_b = merge_stat_maps(title_b, tree_b)
     return gear, title_b
 
 

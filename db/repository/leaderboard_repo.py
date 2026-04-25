@@ -99,6 +99,34 @@ async def get_clan_tags_for_characters(
     return {int(row[0]): str(row[1]) for row in result.all()}
 
 
+async def top_clans(session: AsyncSession, *, limit: int = 10) -> list[Clan]:
+    stmt = (
+        select(Clan)
+        .order_by(
+            desc(Clan.clan_level),
+            desc(Clan.clan_xp),
+            desc(Clan.created_at),
+        )
+        .limit(limit)
+    )
+    r = await session.execute(stmt)
+    return list(r.scalars().all())
+
+
+async def top_by_class(
+    session: AsyncSession, class_key: str, *, limit: int = 10
+) -> list[Character]:
+    stmt = (
+        select(Character)
+        .join(User, Character.user_id == User.id)
+        .where(User.is_banned.is_(False), Character.class_key == class_key)
+        .order_by(desc(Character.level), desc(Character.experience))
+        .limit(limit)
+    )
+    r = await session.execute(stmt)
+    return list(r.scalars().all())
+
+
 def character_total_stats(c: Character) -> int:
     return (
         int(c.stat_strength)

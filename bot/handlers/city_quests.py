@@ -74,9 +74,11 @@ async def on_city_quest_callback(
             return
 
         loc = get_locale(char, query.from_user.language_code)
+        pending_msg = await city_quest_service.try_claim_pending_rewards(session, char)
+
         if code == "hub":
             await query.message.edit_text(
-                format_city_hub_message(char),
+                format_city_hub_message(char) + pending_msg,
                 reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
                 parse_mode=ParseMode.HTML,
             )
@@ -91,14 +93,16 @@ async def on_city_quest_callback(
                     await query.answer("Нет поручения.", show_alert=True)
                     return
                 await query.message.edit_text(
-                    f"⚔️ <b>Стража</b>\n\n{body}",
+                    f"⚔️ <b>Стража</b>\n\n{body}{pending_msg}",
                     reply_markup=city_quest_offer_keyboard(char.floor_number),
+                    parse_mode=ParseMode.HTML,
                 )
             elif row.status == "completed":
                 await query.message.edit_text(
                     f"🏛️ <b>{html.escape(tpl.title)}</b>\n"
-                    "Страж кивает: в этом городе ты уже всё сделал.",
+                    f"Страж кивает: в этом городе ты уже всё сделал.{pending_msg}",
                     reply_markup=city_quest_hub_only_keyboard(char.floor_number),
+                    parse_mode=ParseMode.HTML,
                 )
             else:
                 p = dict(row.progress or {})
@@ -107,8 +111,9 @@ async def on_city_quest_callback(
                 await query.message.edit_text(
                     f"🏛️ <b>{html.escape(tpl.title)}</b>\n"
                     f"Прогресс: побед в башне — <b>{k}/{need}</b>.\n"
-                    "Сражайся на этажах и возвращайся.",
+                    f"Сражайся на этажах и возвращайся.{pending_msg}",
                     reply_markup=city_quest_hub_only_keyboard(char.floor_number),
+                    parse_mode=ParseMode.HTML,
                 )
             await query.answer()
             return

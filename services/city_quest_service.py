@@ -45,9 +45,16 @@ async def apply_kill_progress(session: AsyncSession, character: Character) -> st
                 free = await inventory_repo.first_free_bag_slot(session, character.id)
                 gname = html.escape(str(gear_raw.get("name", "предмет")))
                 if free is None:
+                    # [FIX] Сохраняем награду в pending, чтобы не потерять
+                    mp = dict(character.meta_progress or {})
+                    pending = list(mp.get("pending_gear_rewards") or [])
+                    pending.append(copy.deepcopy(gear_raw))
+                    mp["pending_gear_rewards"] = pending
+                    character.meta_progress = mp
+
                     gear_note = (
                         f"\n   ⚠️ Награда <b>{gname}</b> не поместилась в сумку — "
-                        "освободи ячейку и обратись к старосте позже (предмет потерян)."
+                        "освободи место, она сохранена в «ожидающие» (забери позже у стражи)."
                     )
                 else:
                     await inventory_repo.add_bag_item(
@@ -133,3 +140,45 @@ def offer_screen_html(floor_number: int) -> str | None:
         f"{tpl.intro_html}\n\n"
         f"<b>Награда:</b> {tpl.reward_gold} золота, {tpl.reward_xp} опыта{gear_line}."
     )
+
+
+async def try_claim_pending_rewards(session: AsyncSession, character: Character) -> str:
+    """
+    Проверяет наличие невыданных наград (pending_gear_rewards) в meta_progress.
+    Пытается выдать их в свободные слоты. Возвращает текст результата.
+    """
+    mp = dict(character.meta_progress or {})
+    pending = list(mp.get("pending_gear_rewards") or [])
+    if not pending:
+        return ""
+
+    lines: list[str] = ["\n🎁 <b>Ожидающие награды:</b>"]
+    still_pending: list[dict] = []
+    granted_count = 0
+
+    for gear_raw in pending:
+        free = await inventory_repo.first_free_bag_slot(session, character.id)
+        gname = html.escape(str(gear_raw.get("name", "предмет")))
+        if free is None:
+            still_pending.append(gear_raw)
+            lines.append(f"   ❌ <b>{gname}</b> — всё ещё нет места в сумке.")
+        else:
+            await inventory_repo.add_bag_item(
+                session,
+                character.id,
+                copy.deepcopy(gear_raw),
+                bag_slot=free,
+            )
+            lines.append(f"   ✅ <b>{gname}</b> (выдано в ячейку {free})")
+            granted_count += 1
+
+    if granted_count > 0:
+        mp["pending_gear_rewards"] = still_pending
+        character.meta_progress = mp
+        await session.flush()
+        return "\n".join(lines) + "\n"
+
+    if still_pending:
+        return "\n".join(lines) + "\n"
+
+    return ""

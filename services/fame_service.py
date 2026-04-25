@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from loguru import logger
 from db.models.character import Character
 
 _FAME_KEY = "fame"
@@ -48,7 +49,7 @@ def add_fame(character: Character, amount: int) -> int:
 
         grant_fame_600_rewards_if_needed(character)
     except Exception:
-        pass
+        logger.exception(f"Ошибка при выдаче наград за славу 600 для героя {character.id}")
     return new_val
 
 
@@ -90,7 +91,7 @@ def format_fame_html(character: Character) -> str:
             title, frame = row
             extra = f"\n🎖 <b>Титул славы:</b> {title}\n🖼 <b>Рамка профиля:</b> {frame}"
     except Exception:
-        pass
+        logger.exception(f"Ошибка при выдаче наград за славу 600 для героя {character.id}")
     return (
         f"⭐ <b>Слава:</b> {fame}  {rank_name}\n"
         f"<i>{rank_desc}</i>\n"

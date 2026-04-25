@@ -45,21 +45,6 @@ async def auction_create_direct_offer_lot(
     return ok, msg, lot
 
 
-async def auction_place_bid(
-    session: AsyncSession,
-    char: Character,
-    lot_id: int,
-    amount: int,
-) -> tuple[bool, str]:
-    """Устаревшие торги (ставки); в UI используется мгновенная покупка."""
-    amt = int(amount)
-    if amt < 1:
-        return False, "Сумма ставки должна быть положительной."
-    if int(char.gold) < amt:
-        return False, "Недостаточно золота."
-    return await market.place_bid(session, char, lot_id, amt)
-
-
 async def auction_buy_lot_now(session: AsyncSession, char: Character, lot_id: int) -> tuple[bool, str]:
     """Публичный лот: купить сразу по указанной цене."""
     lot = await auction_repo.get_by_id(session, lot_id)

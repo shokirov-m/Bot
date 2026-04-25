@@ -19,6 +19,7 @@ from game.combat.monster_abilities import (
     apply_pre_turn_abilities,
     apply_post_hit_abilities,
     apply_rune_golem_absorb,
+    apply_shatter_death,
     check_and_consume_monster_shield,
     check_zombie_undying,
     get_extra_pierce_fraction,
@@ -138,8 +139,45 @@ def _stats(state: dict[str, Any]) -> dict[str, int]:
     return state["stats"]
 
 
-def _mods(state: dict[str, Any]) -> dict[str, Any]:
-    return state["passive_mods"]
+def apply_floor_aura_effects(state: dict[str, Any]) -> list[str]:
+    logs = []
+    aura = state.get("floor_aura")
+    if not aura: return []
+    
+    # HP Loss (Player)
+    if "hp_loss_turn_pct" in aura:
+        loss = max(1, int(state["player_hp"] * aura.get("hp_loss_turn_pct", 0)))
+        state["player_hp"] = max(0, int(state["player_hp"]) - loss)
+        logs.append(f"{aura['emoji']} <b>{aura['name']}</b>: вы теряете {loss} HP от окружения.")
+        combo_break_on_player_hurt(state)
+        
+    # Regen (Monster)
+    if "monster_regen_pct" in aura:
+        m = state["monster"]
+        regen = int(int(m["max_hp"]) * aura.get("monster_regen_pct", 0))
+        if regen > 0:
+            m["hp"] = min(int(m["max_hp"]), int(m["hp"]) + regen)
+            logs.append(f"{aura['emoji']} <b>{aura['name']}</b>: враг восстановил {regen} HP.")
+            
+    # Blizzard (Miss Chance Period)
+    period = aura.get("miss_chance_mod_period")
+    if period:
+        # Use monster_turn + 1 because this is called at start of turn
+        mt = int(state.get("monster_turn", 0)) + 1
+        if mt % period == 0:
+            state["player_aura_miss_chance"] = aura.get("miss_chance_mod_value", 0)
+            logs.append(f"{aura['emoji']} <b>{aura['name']}</b>: видимость падает, меткость снижена!")
+        else:
+            state["player_aura_miss_chance"] = 0
+            
+    return logs
+
+
+def apply_elixir_buffs(state: dict[str, Any], dmg: int) -> int:
+    """Apply multipliers from active elixirs."""
+    # This is normally handled in combat_service by putting multipliers into passive_mods
+    # But we can also do it here if needed.
+    return dmg
 
 
 def apply_dot_damage_player(state: dict[str, Any]) -> list[str]:
@@ -354,7 +392,8 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
         return logs, "continue", 0
 
     # Проверка промаха (зависит от ЛОВ: ЛОВ=0 → 20%, ЛОВ=85+ → 3%)
-    if formulas.roll_miss(int(st["dex"])):
+    aura_miss = float(state.get("player_aura_miss_chance", 0.0))
+    if formulas.roll_miss(int(st["dex"]), extra_miss_chance=aura_miss):
         logs.append("💨 Промах! Удар не достиг цели.")
         return logs, "continue", 0
 
@@ -416,6 +455,7 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
         if check_zombie_undying(state, undying_logs):
             logs.extend(undying_logs)
             return logs, "continue", dmg
+        apply_shatter_death(state, logs)
         return logs, "win", dmg
     record_player_last_damage_to_monster(state, dmg)
     _mark_weapon_mastery_strike(state)
@@ -425,6 +465,7 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
         if check_zombie_undying(state, undying_logs):
             logs.extend(undying_logs)
             return logs, "continue", dmg
+        apply_shatter_death(state, logs)
         return logs, "win", dmg
     return logs, "continue", dmg
 
@@ -457,12 +498,16 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         logs.append(f"Навык на перезарядке ({cd} х.).")
         return logs, None, 0
 
-    mp = int(state["player_mp"])
-    if mp < sk.mp_cost:
-        logs.append("Недостаточно MP.")
+    cost = sk.mp_cost
+    mp_mult = float(state.get("player_mp_cost_mult", 1.0))
+    if mp_mult != 1.0:
+        cost = int(cost * mp_mult)
+
+    if mp < cost:
+        logs.append(f"Недостаточно MP (нужно {cost}).")
         return logs, None, 0
 
-    state["player_mp"] = mp - sk.mp_cost
+    state["player_mp"] = mp - cost
     state["skill_cd"][str(index)] = sk.cooldown
 
     st = _stats(state)
@@ -656,6 +701,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         else:
             record_player_last_damage_to_monster(state, dmg)
             _mark_weapon_mastery_strike(state)
+            apply_shatter_death(state, logs)
             return logs, "win", dmg
     record_player_last_damage_to_monster(state, dmg)
     _mark_weapon_mastery_strike(state)
@@ -679,6 +725,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         if check_zombie_undying(state, undying_logs):
             logs.extend(undying_logs)
             return logs, "continue", dmg
+        apply_shatter_death(state, logs)
         return logs, "win", dmg
     return logs, "continue", dmg
 
@@ -690,6 +737,9 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
 
     logs.extend(monster_ai.update_monster_mode(state))
     logs.extend(monster_ai.sync_boss_phase(state))
+
+    # ── Эффекты этажа (Ауры 21-30) ──
+    logs.extend(apply_floor_aura_effects(state))
 
     # ── Уникальные способности до хода (регенерация, щит, дыхание) ───────────
     pre_logs: list[str] = []

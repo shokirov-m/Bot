@@ -21,7 +21,7 @@ def init_effects(state: dict[str, Any]) -> None:
     state.setdefault("monster_rage", False)
     state.setdefault("player_block_next", False)
     state.setdefault("monster_def_mod", 0)  # отрицательное — снижение защиты
-    state.setdefault("player_damage_mod", 1.0)
+    state.setdefault("player_damage_mult", 1.0)
     state.setdefault("skip_player_turn", False)
     state.setdefault("player_shield_hp", 0)
     state.setdefault("player_temp_dodge", 0.0)

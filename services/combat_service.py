@@ -91,7 +91,6 @@ from services import (
     game_metrics_service,
     golden_goblin_service,
     leaderboard_service,
-    profession_service,
     quest_service,
     rest_service,
     season_record_service,
@@ -102,7 +101,6 @@ from services.tutorial_battle_service import apply_path_rank_from_tutorial, tuto
 from game.economy.stamina import spend_stamina
 from services.stamina_service import can_start_combat
 from services.combat_fsm_backup import clear_combat_backup, persist_combat_backup
-from utils.debug_agent_log import log_debug
 from utils.ui import LINE_SEP, LINE_SEP_BATTLE, render_hp_bar, render_mp_bar
 
 TUTORIAL_DUMMY_TEMPLATE = MonsterTemplate(
@@ -439,7 +437,7 @@ def _build_combat_dict(
         "floor": character.floor_number,
         "spawn_slot": spawn.slot_code,
         "class_key": character.class_key,
-        "combat_skill_class_key": profession_service.combat_skill_class_key(character),
+        "combat_skill_class_key": character.class_key,
         "stats": st,
         "player_hp": character.hp_current,
         "player_hp_max": character.hp_max,
@@ -478,6 +476,20 @@ def _build_combat_dict(
     loc_battle = get_locale(character, None)
     pet_base = pets_mod.format_pet_battle_line_html(character, locale=loc_battle)
     state["pet_line_html"] = pet_base or ""
+
+    from game.floors.aura import apply_aura_to_combat_state
+    apply_aura_to_combat_state(state)
+
+    # Elixirs
+    buffs_elixir = (character.meta_progress or {}).get("active_elixirs", {})
+    if buffs_elixir:
+        from services.home_service import ELIXIRS
+        for k_el, dur_el in buffs_elixir.items():
+            if dur_el > 0:
+                edef_el = ELIXIRS.get(k_el)
+                if edef_el and "buff" in edef_el:
+                    for b_k, b_v in edef_el["buff"].items():
+                        mods[b_k] = mods.get(b_k, 1.0) * b_v
     return state
 
 
@@ -743,17 +755,6 @@ async def start_combat(
 
     await state.set_state(CombatStates.in_battle)
     await state.update_data(combat=combat_state)
-    # #region agent log
-    log_debug(
-        "combat_service:start_combat:armed",
-        "fsm saved combat (main)",
-        {
-            "floor": int(character.floor_number),
-            "combat_state_top_keys": [str(k) for k in list(combat_state.keys())[:16]],
-        },
-        hypothesis_id="H5",
-    )
-    # #endregion
     persist_combat_backup(character, combat_state)
     await session.flush()
 
@@ -937,17 +938,6 @@ async def start_tutorial_combat(
 
     await state.set_state(CombatStates.in_battle)
     await state.update_data(combat=combat_state)
-    # #region agent log
-    log_debug(
-        "combat_service:start_tutorial_combat:armed",
-        "fsm saved combat (tutorial)",
-        {
-            "floor": int(character.floor_number),
-            "is_tutorial": True,
-        },
-        hypothesis_id="H5",
-    )
-    # #endregion
     persist_combat_backup(character, combat_state)
     await session.flush()
 
@@ -1065,7 +1055,6 @@ async def _apply_tower_progress_after_victory(
         extra["slots_cleared"] = cleared
         row.extra = extra
         await session.flush()
-        return ""
         return ""
 
     if spawn.slot_code not in cleared:
@@ -1255,6 +1244,10 @@ async def _victory_sequence(
     await character_repo.lock_character_row(session, character.id)
 
     spawn = _spawn_from_state(character, combat_state)
+    if spawn is None:
+        await state.clear()
+        await message.answer("⚠️ Сессия боя устарела (spawn lost). Награды не начислены. Пожалуйста, зайдите на этаж заново.")
+        return
     battle_floor = int(combat_state.get("floor", character.floor_number))
     rotten_swamps_mod.maybe_roll_leech_infection_after_swamp_win(character, battle_floor)
     await session.flush()
@@ -1347,16 +1340,15 @@ async def _victory_sequence(
 
     net_gold, ml_debt_note = sink_rules.garnish_victory_gold_for_debt(character, gross_gold)
 
-    character_service.add_gold(character, net_gold)
-    if message.from_user is not None:
-        await anticheat_service.record_gold_gain(
-            session,
-            character,
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
-            gold_delta=net_gold,
-            bot=message.bot,
-        )
+    await character_service.add_gold_async(
+        session,
+        character,
+        net_gold,
+        source="battle_win",
+        bot=message.bot,
+        telegram_id=message.from_user.id if message.from_user else None,
+        username=message.from_user.username if message.from_user else None,
+    )
     levels_battle = await character_service.add_experience_async(session, character, xp, bot=message.bot)
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
@@ -1368,6 +1360,17 @@ async def _victory_sequence(
     except Exception:
         pass
     daily_service.record_kill(character)
+    
+    # Decrement elixirs
+    mp_win = dict(character.meta_progress or {})
+    buffs_win = dict(mp_win.get("active_elixirs") or {})
+    if buffs_win:
+        new_buffs_win = {}
+        for k_win, v_win in buffs_win.items():
+            if v_win > 1:
+                new_buffs_win[k_win] = v_win - 1
+        mp_win["active_elixirs"] = new_buffs_win
+        character.meta_progress = mp_win
     # Обновляем прогресс ежедневных заданий
     from services import daily_quest_service as dqs
     dqs.record_battle_result(
@@ -1506,9 +1509,11 @@ async def _victory_sequence(
         if dropped:
             extra_drop = f"\n📦 <b>{html.escape(drop_label)}</b> — в сумку"
 
+        # Runes and Trophies
         extra_rune_item = ""
         boss_like = spawn.is_mini_boss or spawn.is_major_boss
         if spawn.is_elite or boss_like:
+            from game.items import rune_items
             rd = rune_items.roll_rune_drop(int(character.floor_number), boss_like)
             if rd is not None:
                 slot_r = await inventory_repo.first_free_bag_slot(session, character.id)
@@ -1521,15 +1526,19 @@ async def _victory_sequence(
                     )
                     extra_rune_item = f"\n💎 <b>{html.escape(rd.display_name)}</b> — в сумку"
 
-        # Трофей босса: 5% шанс с монстров boss_* (нужен для улучшения дома 3-5 ур.)
-        _tkey = str(spawn.template.key or "")
-        if _tkey.startswith("boss_") and random.random() < 0.05:
-            try:
-                from services.forge_service import add_boss_trophy_to_bag
-                await add_boss_trophy_to_bag(session, character.id, count=1)
-                extra_rune_item += "\n🏆 <b>Трофей босса</b> — в сумку"
-            except Exception:
-                pass
+        # Boss Trophies Drop (Guaranteed)
+        if boss_like:
+            from game.items import materials
+            trophy_count = 3 if spawn.is_major_boss else 1
+            slot_t = await inventory_repo.first_free_bag_slot(session, character.id)
+            if slot_t is not None:
+                await inventory_repo.add_bag_item(
+                    session,
+                    character.id,
+                    materials.boss_trophy_payload(trophy_count),
+                    bag_slot=slot_t,
+                )
+                extra_drop += f"\n🏆 <b>Трофей босса</b> ({trophy_count} шт.) — в сумку"
 
     mname = html.escape(str(combat_state.get("monster", {}).get("name", "Враг")))
     floor_before = int(character.floor_number)
@@ -1715,14 +1724,6 @@ async def _victory_sequence(
         except Exception:
             logger.debug("victory UI: резервная клавиатура не отображена")
     finally:
-        # #region agent log
-        log_debug(
-            "combat_service:_victory_sequence:finally",
-            "victory path clearing/proceeding (hp sync)",
-            {"has_combat_state": bool(combat_state.get("monster"))},
-            hypothesis_id="H3",
-        )
-        # #endregion
         clear_combat_backup(character)
         await character_service.refresh_hp_mp_from_effective(session, character)
         _okh = int(combat_state.get("gear_on_kill_heal", 0) or 0)
@@ -1741,7 +1742,7 @@ async def _victory_sequence(
         await state.clear()
 
 
-def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> FloorMonsterSpawn:
+def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> FloorMonsterSpawn | None:
     slot = str(combat_state.get("spawn_slot"))
     if slot == "tutorial":
         return TUTORIAL_SPAWN
@@ -1794,8 +1795,6 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
             return found_e22
     spawns = build_spawns_for_floor(battle_floor)
     found = next((s for s in spawns if s.slot_code == slot), None)
-    if found is None:
-        return spawns[0]
     return found
 
 
@@ -1869,7 +1868,7 @@ async def _defeat_sequence(
         pct = float(DEATH_GOLD_LOSS_FRACTION)
         lost_gold = max(1, int(g * pct))
         lost_gold = min(lost_gold, g, int(MAX_DEATH_GOLD_LOSS))
-    character.gold = max(0, g - lost_gold)
+    character_service.add_gold(character, -lost_gold)
 
     weapon = await inventory_repo.get_equipped_weapon(session, character.id)
     enchant_msg = ""
@@ -1979,17 +1978,6 @@ async def handle_combat_callback(
     data = await state.get_data()
     combat_state: dict[str, Any] | None = data.get("combat")
     if combat_state is None:
-        # #region agent log
-        log_debug(
-            "combat_service:handle_combat_callback:no_combat",
-            "combat key missing inside handler",
-            {
-                "data_keys": [str(k) for k in data.keys()][:24],
-                "action": str(action),
-            },
-            hypothesis_id="H4_H5",
-        )
-        # #endregion
         await query.answer("Нет активного боя.", show_alert=True)
         clear_combat_backup(character)
         try:

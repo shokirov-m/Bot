@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
 from db.models.quest import QuestProgress
-from db.repository import inventory_repo, quest_repo
+from db.repository import character_repo, inventory_repo, quest_repo
 from game.floors.monsters import FloorMonsterSpawn
 from game.quests.floor_quests import npc_quest_template, reward_for_quest
 from game.quests.npc_quests import (
@@ -212,6 +212,7 @@ async def claim_quest_reward(
     """
     Выдать награду за npcq. Возвращает {gold, exp, item, rune_stones, title, errors?}.
     """
+    await character_repo.lock_character_row(session, character.id)
     row = await quest_repo.get_by_key(session, character.id, quest_key)
     tpl = template_by_key(quest_key)
     if row is None or tpl is None:

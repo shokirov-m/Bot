@@ -64,12 +64,6 @@ class Character(Base):
         nullable=False,
         server_default="1",
     )
-    class_tier: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        server_default="0",
-    )
-    subclass_key: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     level: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     unspent_stat_points: Mapped[int] = mapped_column(

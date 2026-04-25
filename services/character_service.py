@@ -25,7 +25,9 @@ from db.models.inventory import InventoryItem
 from db.models.quest import QuestProgress
 from db.models.user import User
 from db.repository import character_repo, inventory_repo
-from game.characters.classes import ClassDefinition, get_class_or_none
+from game.archetypes import manager as arch_manager
+from game.archetypes.models import Archetype
+from game.characters.classes import get_class_or_none
 from game.items.equipment import (
     starter_bread_payload,
     starter_offhand_dagger_payload,
@@ -60,18 +62,16 @@ def experience_needed_for_next_level(level: int, floor_number: int) -> int:
     return need
 
 
-def _compute_hp_max(vitality: int, strength: int, cls: ClassDefinition) -> int:
-    """Базовый расчёт HP с учётом ВЫН/СИЛ и пассива класса."""
-    # +1 СИЛ в распределении даёт больше макс. HP (раньше ×4 в базе формулы).
+def _compute_hp_max(vitality: int, strength: int, arch: Archetype) -> int:
+    """Базовый расчёт HP с учётом ВЫН/СИЛ и пассива архетипа."""
     base = 40 + vitality * 6 + strength * 5
-    # round: при множителе класса (напр. ×1.15) int() «съедал» доли HP за каждую единицу СИЛ/ВЫН
-    return max(1, int(round(float(base) * float(cls.hp_multiplier))))
+    return max(1, int(round(float(base) * float(arch.hp_multiplier))))
 
 
-def _compute_mp_max(intelligence: int, cls: ClassDefinition) -> int:
-    """Базовый расчёт MP с учётом ИНТ и пассива класса."""
+def _compute_mp_max(intelligence: int, arch: Archetype) -> int:
+    """Базовый расчёт MP с учётом ИНТ и пассива архетипа."""
     base = 15 + intelligence * 5
-    return max(0, int(round(float(base) * float(cls.mp_multiplier))))
+    return max(0, int(round(float(base) * float(arch.mp_multiplier))))
 
 
 async def create_character_for_user(
@@ -86,13 +86,20 @@ async def create_character_for_user(
     """
     Создать персонажа для пользователя. Вызывать только если персонажа ещё нет.
     """
-    cls = get_class_or_none(class_key)
-    if cls is None:
-        raise ValueError(f"Неизвестный класс: {class_key}")
-
+    arch = arch_manager.get_archetype(class_key) or arch_manager.get_archetype("wanderer")
+    
     name = (display_name or "Странник")[:64]
-    hp_max = _compute_hp_max(cls.vitality, cls.strength, cls)
-    mp_max = _compute_mp_max(cls.intelligence, cls)
+    hp_max = _compute_hp_max(int(getattr(character_repo, "starter_vit", 10)), int(getattr(character_repo, "starter_str", 10)), arch)
+    # Wait, I should use the stats from the archetype or defaults.
+    # Actually, character_service usually gets the base stats from the class.
+    
+    # Correction: use stats from the arch or defaults
+    st_str = arch.base_stats.get("str", 10)
+    st_vit = arch.base_stats.get("vit", 10)
+    st_int = arch.base_stats.get("int", 10)
+    
+    hp_max = _compute_hp_max(st_vit, st_str, arch)
+    mp_max = _compute_mp_max(st_int, arch)
 
     now = datetime.now(UTC)
     meta: dict[str, Any] = {"tutorial_battle": "pending"}
@@ -105,12 +112,12 @@ async def create_character_for_user(
     char = Character(
         user_id=user.id,
         display_name=name,
-        class_key=cls.key,
-        stat_strength=cls.strength,
-        stat_dexterity=cls.dexterity,
-        stat_intelligence=cls.intelligence,
-        stat_vitality=cls.vitality,
-        stat_luck=cls.luck,
+        class_key=arch.key,
+        stat_strength=st_str,
+        stat_dexterity=arch.base_stats.get("dex", 10),
+        stat_intelligence=st_int,
+        stat_vitality=st_vit,
+        stat_luck=arch.base_stats.get("luck", 10),
         hp_current=hp_max,
         hp_max=hp_max,
         mp_current=mp_max,
@@ -119,8 +126,6 @@ async def create_character_for_user(
         last_stamina_regen_at=now,
         floor_number=1,
         highest_floor_reached=1,
-        class_tier=0,
-        subclass_key=None,
         level=1,
         experience=0,
         gold=0,
@@ -198,7 +203,36 @@ async def equipped_weapon_attack_value(session: AsyncSession, character: Charact
 
 
 def add_gold(character: Character, amount: int) -> None:
-    character.gold = int(character.gold) + int(amount)
+    amt = int(amount)
+    if amt > 0:
+        bonus = float((character.meta_progress or {}).get("achievement_gold_bonus", 0.0))
+        if bonus > 0.001:
+            amt = int(round(amt * (1.0 + bonus)))
+    character.gold = int(character.gold) + amt
+
+
+async def add_gold_async(
+    session: AsyncSession,
+    character: Character,
+    amount: int,
+    *,
+    source: str = "other",
+    bot: Bot | None = None,
+    telegram_id: int | None = None,
+    username: str | None = None,
+) -> None:
+    """Централизованное начисление золота с записью в античит."""
+    add_gold(character, amount)
+    if amount > 0 and telegram_id is not None:
+        from services import anticheat_service
+        await anticheat_service.record_gold_gain(
+            session,
+            character,
+            telegram_id=telegram_id,
+            username=username,
+            gold_delta=amount,
+            bot=bot,
+        )
 
 
 def try_spend_gold(character: Character, amount: int) -> bool:
@@ -209,13 +243,19 @@ def try_spend_gold(character: Character, amount: int) -> bool:
     cur = int(character.gold)
     if cur < n:
         return False
-    character.gold = cur - n
+    add_gold(character, -n)
     return True
 
 
 def add_experience(character: Character, amount: int) -> int:
     """Начислить опыт. Возвращает число полученных уровней за этот вызов."""
-    character.experience = int(character.experience) + int(amount)
+    amt = int(amount)
+    if amt > 0:
+        bonus = float((character.meta_progress or {}).get("achievement_xp_bonus", 0.0))
+        if bonus > 0.001:
+            amt = int(round(amt * (1.0 + bonus)))
+
+    character.experience = int(character.experience) + amt
     levels = 0
     while True:
         need = experience_needed_for_next_level(character.level, character.floor_number)
@@ -226,6 +266,17 @@ def add_experience(character: Character, amount: int) -> int:
         levels += 1
     if levels:
         character.unspent_stat_points = int(character.unspent_stat_points) + 5 * levels
+        # Grant SP starting from lvl 10
+        sp_gained = 0
+        for lv in range(character.level - levels + 1, character.level + 1):
+            if lv >= 10:
+                sp_gained += 1
+        
+        if sp_gained > 0:
+            mp = dict(character.meta_progress or {})
+            mp["unspent_sp"] = int(mp.get("unspent_sp", 0)) + sp_gained
+            character.meta_progress = mp
+            
     return levels
 
 
@@ -263,9 +314,12 @@ def level_up_notice_html(character: Character, levels_gained: int) -> str:
     """Короткая HTML-строка для экранов награды после повышения уровня."""
     if levels_gained <= 0:
         return ""
+    sp = int((character.meta_progress or {}).get("unspent_sp", 0))
+    sp_line = f"\n✨ Очков навыков: <b>{sp}</b> — в меню персонажа" if character.level >= 10 else ""
     return (
         f"\n🎉 <b>Уровень +{levels_gained}!</b> Сейчас: <b>{character.level}</b> ур. "
-        f"Свободных очков: <b>{int(character.unspent_stat_points)}</b> — команда /stats"
+        f"Свободных очков: <b>{int(character.unspent_stat_points)}</b> — /stats"
+        f"{sp_line}"
     )
 
 
@@ -308,7 +362,15 @@ async def admin_grant_character_levels(
 
     character.level = old + d
     character.unspent_stat_points = int(character.unspent_stat_points) + 5 * d
-    from services import title_service
+    # Grant SP for admin levels too
+    sp_gained = 0
+    for lv in range(old + 1, character.level + 1):
+        if lv >= 10:
+            sp_gained += 1
+    if sp_gained > 0:
+        mp = dict(character.meta_progress or {})
+        mp["unspent_sp"] = int(mp.get("unspent_sp", 0)) + sp_gained
+        character.meta_progress = mp
 
     title_service.refresh_unlocks(character)
     await refresh_hp_mp_from_effective(session, character)
@@ -453,8 +515,6 @@ async def reset_all_progress_keep_identity(session: AsyncSession, character: Cha
     character.last_stamina_regen_at = now
     character.floor_number = 1
     character.highest_floor_reached = 1
-    character.class_tier = 0
-    character.subclass_key = None
     character.level = 1
     character.unspent_stat_points = 0
     character.experience = 0
@@ -498,7 +558,7 @@ def nominal_primary_stats_tuple(character: Character) -> tuple[int, int, int, in
     После подкласса (57) статы в БД хранятся как база класса ×2.
     """
     cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
-    mult = 2 if character.subclass_key else 1
+    mult = 1
     return (
         int(cls.strength) * mult,
         int(cls.dexterity) * mult,

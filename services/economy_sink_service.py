@@ -78,7 +78,7 @@ def try_play_lottery(character: Character, *, floor_key: int) -> tuple[bool, str
     if int(character.gold) < cost:
         return False, f"Нужно {cost} золота для билета."
     dg, dr, code = sink_rules.run_lottery_draw(cost)
-    character.gold = int(character.gold) + int(dg)
+    character_service.add_gold(character, dg)
     character.rune_stones = int(character.rune_stones) + int(dr)
     mp = _mp(character)
     mp[sink_rules.META_LOTTERY_SPENT] = int(mp.get(sink_rules.META_LOTTERY_SPENT, 0)) + cost
@@ -98,7 +98,7 @@ def try_borrow_moneylender(character: Character, *, floor_key: int) -> tuple[boo
     if amt < 50:
         return False, "Слишком низкий потолок займа."
     debt_total = sink_rules.debt_for_borrow(amt)
-    character.gold = int(character.gold) + amt
+    character_service.add_gold(character, amt)
     sink_rules.set_moneylender_debt(character, debt_total)
     return True, (
         f"Ростовщик выдаёт <b>{amt}</b> 💰 под запись. "
@@ -115,7 +115,7 @@ def try_repay_moneylender(character: Character, *, floor_key: int) -> tuple[bool
     pay = min(d, int(character.gold), max(50, d // 4))
     if int(character.gold) < pay:
         return False, "Недостаточно золота для минимального платежа."
-    character.gold = int(character.gold) - pay
+    character_service.add_gold(character, -pay)
     sink_rules.set_moneylender_debt(character, d - pay)
     left = sink_rules.moneylender_debt(character)
     tail = " Долг закрыт." if left == 0 else f" Остаток долга: <b>{left}</b> 💰."

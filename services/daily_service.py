@@ -13,6 +13,7 @@ from typing import Any
 from aiogram import Bot
 from bot.i18n import t
 from db.models.character import Character
+from db.repository import character_repo
 from sqlalchemy.ext.asyncio import AsyncSession
 from services import character_service
 from services.subscription_service import channel_public_url, subscription_check
@@ -139,6 +140,26 @@ class ClaimResult:
     message_html: str
 
 
+def _calculate_rewards_and_streak(st: dict, today: str) -> tuple[int, int, int]:
+    """Внутренняя логика: (золото, опыт, новый_стрик)."""
+    prev_lcd = st["lcd"]
+    if prev_lcd is None:
+        new_streak = 1
+    else:
+        try:
+            prev_day = date.fromisoformat(str(prev_lcd))
+            today_day = date.fromisoformat(today)
+            if (today_day - prev_day).days == 1:
+                new_streak = int(st["streak"]) + 1
+            else:
+                new_streak = 1
+        except ValueError:
+            new_streak = 1
+    gold = 35 + new_streak * 8
+    xp = 15 + new_streak * 4
+    return gold, xp, new_streak
+
+
 def compute_next_daily_claim_rewards(character: Character) -> tuple[int, int, int] | None:
     """
     Если сегодня награду ещё не забирали — (gold, xp, streak_после_получения).
@@ -148,22 +169,7 @@ def compute_next_daily_claim_rewards(character: Character) -> tuple[int, int, in
     _, st = _load_state(character)
     if st["lcd"] == today:
         return None
-    prev_lcd = st["lcd"]
-    if prev_lcd is None:
-        new_streak = 1
-    else:
-        try:
-            prev_day = date.fromisoformat(str(prev_lcd))
-            today_day = date.fromisoformat(today)
-            if (today_day - prev_day).days == 1:
-                new_streak = st["streak"] + 1
-            else:
-                new_streak = 1
-        except ValueError:
-            new_streak = 1
-    gold = 35 + new_streak * 8
-    xp = 15 + new_streak * 4
-    return gold, xp, new_streak
+    return _calculate_rewards_and_streak(st, today)
 
 
 def can_claim_daily_today(character: Character) -> bool:
@@ -181,7 +187,9 @@ async def try_claim_daily_reward(
     *,
     locale: str = "ru",
     bot: Any = None,
+    telegram_id: int | None = None,
 ) -> ClaimResult:
+    await character_repo.lock_character_row(session, character.id)
     today = _utc_today_iso()
     meta, st = _load_state(character)
     if st["lcd"] == today:
@@ -190,23 +198,15 @@ async def try_claim_daily_reward(
         need = max(0, KILLS_GOAL - (st["kc"] if st["kd"] == today else 0))
         return ClaimResult(False, t(locale, "daily_claim_need", goal=KILLS_GOAL, need=need))
 
-    prev_lcd = st["lcd"]
-    if prev_lcd is None:
-        new_streak = 1
-    else:
-        try:
-            prev_day = date.fromisoformat(str(prev_lcd))
-            today_day = date.fromisoformat(today)
-            if (today_day - prev_day).days == 1:
-                new_streak = st["streak"] + 1
-            else:
-                new_streak = 1
-        except ValueError:
-            new_streak = 1
-
-    gold = 35 + new_streak * 8
-    xp = 15 + new_streak * 4
-    character_service.add_gold(character, gold)
+    gold, xp, new_streak = _calculate_rewards_and_streak(st, today)
+    await character_service.add_gold_async(
+        session,
+        character,
+        gold,
+        source="daily_reward",
+        bot=bot,
+        telegram_id=telegram_id,
+    )
     lv = await character_service.add_experience_async(session, character, xp, bot=bot)
 
     st["streak"] = new_streak

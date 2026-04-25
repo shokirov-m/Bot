@@ -110,7 +110,7 @@ async def try_buy_offer(
                 "Возвращайся завтра."
             )
 
-    character.gold = int(character.gold) - price
+    character_service.add_gold(character, -price)
     character.tavern_visits = int(character.tavern_visits) + 1
     title_service.refresh_unlocks(character)
 

@@ -135,36 +135,40 @@ def floor_screen_keyboard(
             rows.append(buffer)
             buffer = []
 
-    for sp in spawns:
-        base = sp.display_name
-        if (
-            rotten_swamps_mod.is_rotten_swamps_zone(floor_number)
-            and not long_floor_mod.is_long_floor_active(character)
-            and rotten_swamps_mod.dense_fog_hides_spawn_on_map(sp)
-            and sp.slot_code not in beaten
-        ):
-            base = rotten_swamps_mod.mystery_spawn_label()
-        if sp.slot_code in beaten:
-            suffix = " ✅"
-            avail = 36 - len(suffix)
-            if len(base) > avail:
-                base = base[: avail - 1] + "…"
-            label = base + suffix
-        else:
-            label = base
-            if len(label) > 36:
-                label = label[:33] + "…"
-        btn = InlineKeyboardButton(
-            text=label,
-            callback_data=_cb(floor_number, sp.slot_code),
-        )
-        if sp.is_major_boss or sp.is_mini_boss or sp.is_elite:
-            flush()
-            rows.append([btn])
-        else:
-            buffer.append(btn)
-            if len(buffer) >= 2:
+    if not (tutorial_battle_pending(character) and floor_number == 1):
+        for sp in spawns:
+            base = sp.display_name
+            if (
+                rotten_swamps_mod.is_rotten_swamps_zone(floor_number)
+                and not long_floor_mod.is_long_floor_active(character)
+                and rotten_swamps_mod.dense_fog_hides_spawn_on_map(sp)
+                and sp.slot_code not in beaten
+            ):
+                base = rotten_swamps_mod.mystery_spawn_label()
+            if sp.slot_code in beaten:
+                suffix = " ✅"
+                avail = 36 - len(suffix)
+                if len(base) > avail:
+                    base = base[: avail - 1] + "…"
+                label = base + suffix
+            else:
+                label = base
+                if len(label) > 36:
+                    label = label[:33] + "…"
+            btn = InlineKeyboardButton(
+                text=label,
+                callback_data=_cb(floor_number, sp.slot_code),
+            )
+            if sp.is_major_boss or sp.is_mini_boss or sp.is_elite:
                 flush()
+                rows.append([btn])
+            else:
+                buffer.append(btn)
+                if len(buffer) >= 2:
+                    flush()
+    else:
+        # Если учебный бой активен, можно добавить подсказку или оставить пусто
+        pass
 
     flush()
 

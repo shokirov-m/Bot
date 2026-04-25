@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from db.models.character import Character
+from services import character_service
 
 META_KEY = "tutorial_v1"
 
@@ -28,7 +29,7 @@ def grant_creation_gold(character: Character, *, amount: int = 35) -> bool:
     st["creation_bonus"] = True
     meta[META_KEY] = st
     character.meta_progress = meta
-    character.gold = int(character.gold) + int(amount)
+    character_service.add_gold(character, int(amount))
     return True
 
 
@@ -41,7 +42,7 @@ def try_claim_button_bonus(character: Character, *, amount: int = 18) -> tuple[b
     st["button_bonus"] = True
     meta[META_KEY] = st
     character.meta_progress = meta
-    character.gold = int(character.gold) + int(amount)
+    character_service.add_gold(character, int(amount))
     return True, f"+{amount} золота."
 
 

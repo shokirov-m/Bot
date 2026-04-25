@@ -119,6 +119,10 @@ def format_leaderboard_html(
         "flr": "🗺️ <b>Топ по этажу</b>",
         "pow": "💪 <b>Топ по сумме статов</b> <i>(СИЛ+ЛОВ+ИНТ+ВЫН+УДА)</i>",
         "gld": "💰 <b>Топ по золоту</b>",
+        "warrior": "⚔️ <b>Топ Воинов</b>",
+        "mage": "🔮 <b>Топ Магов</b>",
+        "scout": "🗡️ <b>Топ Убийц</b>",
+        "acolyte": "⛪ <b>Топ Жрецов</b>",
     }
     head = titles.get(category, "📊 <b>Топ</b>")
     if not rows:
@@ -148,5 +152,24 @@ def format_leaderboard_html(
             extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
         lines.append(f"{med} <b>{tag_prefix}{name}</b>{ranker_suffix}\n   <i>{extra}</i>")
         if i < len(rows):
+            lines.append("")
+    return "\n".join(lines)
+
+
+def format_clan_leaderboard_html(clans: list[Clan]) -> str:
+    head = "🏰 <b>Топ кланов башни</b>"
+    if not clans:
+        return f"{head}\n\n<i>Пока нет созданных кланов.</i>"
+    
+    lines = [head, ""]
+    for i, cl in enumerate(clans, start=1):
+        med = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+        name = html.escape(cl.name)
+        tag = f" [{html.escape(cl.tag)}]" if cl.tag else ""
+        lines.append(
+            f"{med} <b>{name}{tag}</b>\n"
+            f"   <i>Ур.{cl.clan_level} · опыт {cl.clan_xp:,}</i>"
+        )
+        if i < len(clans):
             lines.append("")
     return "\n".join(lines)

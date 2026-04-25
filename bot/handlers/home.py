@@ -69,7 +69,7 @@ async def home_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
 # Гардероб
 # ---------------------------------------------------------------------------
 
-@router.callback_query(F.data == "hom:mine")
+@router.callback_query(F.data == "hom:mine_col")
 async def home_mine_collect(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if callback.from_user is None or callback.message is None or callback.bot is None:
@@ -83,22 +83,167 @@ async def home_mine_collect(callback: CallbackQuery, session: AsyncSession, stat
         if not ok:
             await callback.answer(msg[:200], show_alert=True)
             return
-        loc = get_locale(char, callback.from_user.language_code)
-        text = home_service.format_home_main_html(char) + f"\n\n✅ {msg}"
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=home_main_keyboard(char, locale=loc),
-            target_message=callback.message,
-            photo_path=None,
+        
+        await session.flush()
+        text = home_service.format_mine_farm_menu_html(char) + f"\n\n✅ {msg}"
+        await callback.message.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=mine_farm_keyboard(char)
         )
-        await session.commit()
         await callback.answer("Собрано!")
     except Exception:
-        logger.exception("hom:mine")
+        logger.exception("hom:mine_col")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "hom:mine_menu")
+async def home_mine_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        if not home_service.is_mine_unlocked(char):
+            await callback.answer("Шахта откроется на ур. 4 дома.", show_alert=True)
+            return
+            
+        from bot.keyboards.home_kb import mine_farm_keyboard
+        await callback.message.edit_text(
+            home_service.format_mine_farm_menu_html(char),
+            parse_mode="HTML",
+            reply_markup=mine_farm_keyboard(char)
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:mine_menu")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "hom:mine_buy")
+async def home_mine_buy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(callback, session)
+        if char is None: return
+        ok, msg = home_service.try_buy_mine(char)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        await session.flush()
+        from bot.keyboards.home_kb import mine_farm_keyboard
+        await callback.message.edit_text(
+            home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
+            parse_mode="HTML",
+            reply_markup=mine_farm_keyboard(char)
+        )
+        await callback.answer("Поздравляем!")
+    except Exception:
+        logger.exception("hom:mine_buy")
+
+
+@router.callback_query(F.data == "hom:npc_hire")
+async def home_npc_hire(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(callback, session)
+        if char is None: return
+        ok, msg = home_service.try_hire_npc(char)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        await session.flush()
+        from bot.keyboards.home_kb import mine_farm_keyboard
+        await callback.message.edit_text(
+            home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
+            parse_mode="HTML",
+            reply_markup=mine_farm_keyboard(char)
+        )
+        await callback.answer("Рабочий нанят!")
+    except Exception:
+        logger.exception("hom:npc_hire")
+
+
+@router.callback_query(F.data == "hom:mine_up")
+async def home_mine_upgrade(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(callback, session)
+        if char is None: return
+        ok, msg = home_service.try_upgrade_mine(char)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        await session.flush()
+        from bot.keyboards.home_kb import mine_farm_keyboard
+        await callback.message.edit_text(
+            home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
+            parse_mode="HTML",
+            reply_markup=mine_farm_keyboard(char)
+        )
+        await callback.answer("Улучшено!")
+    except Exception:
+        logger.exception("hom:mine_up")
+
+
+@router.callback_query(F.data == "hom:pet_train")
+async def home_pet_train(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(callback, session)
+        if char is None: return
+        from bot.keyboards.home_kb import pet_training_keyboard
+        from game.characters import pets as pets_mod
+        
+        mp, st = pets_mod._pets_meta(char)
+        treats = int(st.get("treats") or 0)
+        
+        text = (
+            "🍱 <b>Тренировка питомцев</b>\n\n"
+            f"Запас корма: <b>{treats}</b> ед.\n"
+            "Потрать 1 ед. корма, чтобы дать питомцу <b>+50 XP</b>. "
+            "Корм добывается на ферме (ур. 4 дома).\n\n"
+            "Выбери питомца для кормления:"
+        )
+        await callback.message.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=pet_training_keyboard(char)
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:pet_train")
+
+
+@router.callback_query(F.data.startswith("hom:pet_xp:"))
+async def home_pet_xp(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None: return
+        char = await _char(callback, session)
+        if char is None: return
+        pet_key = callback.data.removeprefix("hom:pet_xp:").strip()
+        
+        ok, msg = home_service.try_feed_pet_for_xp(char, pet_key)
+        await session.flush()
+        
+        from game.characters import pets as pets_mod
+        from bot.keyboards.home_kb import pet_training_keyboard
+        mp, st = pets_mod._pets_meta(char)
+        treats = int(st.get("treats") or 0)
+        
+        text = (
+            "🍱 <b>Тренировка питомцев</b>\n\n"
+            f"Запас корма: <b>{treats}</b> ед.\n"
+            f"<i>{msg}</i>\n\n"
+            "Выбери питомца для кормления:"
+        )
+        await callback.message.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=pet_training_keyboard(char)
+        )
+        await callback.answer("Приятного аппетита!" if ok else msg[:180], show_alert=not ok)
+    except Exception:
+        logger.exception("hom:pet_xp")
 
 
 @router.callback_query(F.data == "hom:ward")

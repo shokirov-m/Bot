@@ -75,21 +75,3 @@ def try_restore_combat_backup(character: Character) -> dict[str, Any] | None:
     if not isinstance(c, dict) or "monster" not in c or "player_hp" not in c:
         return None
     return copy.deepcopy(c)
-
-
-def combat_backup_failure_reason(character: Character) -> str:
-    """Короткий код причины, почему try_restore вернул None (для логов отладки)."""
-    mp = character.meta_progress or {}
-    raw = mp.get(META_KEY)
-    if not isinstance(raw, dict):
-        return "no_meta_key"
-    if int(raw.get("cid", 0) or 0) != int(character.id):
-        return "cid_mismatch"
-    if int(time.time()) - int(raw.get("t", 0) or 0) > _MAX_AGE_SEC:
-        return "expired"
-    c = raw.get("c")
-    if not isinstance(c, dict):
-        return "c_not_dict"
-    if "monster" not in c or "player_hp" not in c:
-        return "c_incomplete"
-    return "unknown"

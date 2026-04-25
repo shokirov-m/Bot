@@ -150,7 +150,7 @@ def try_upgrade_home_level(
         )
 
     mp, h = _load_home(character)
-    character.gold = int(character.gold) - gold_cost
+    character_service.add_gold(character, -gold_cost)
     new_lv = lv + 1
     h["home_level"] = new_lv
     _save_home(character, mp, h)
@@ -351,7 +351,7 @@ def try_upgrade_workbench(character: Character) -> tuple[bool, str]:
     if int(character.gold) < cost:
         return False, f"Нужно {cost} золота."
     mp, h = _load_home(character)
-    character.gold = int(character.gold) - cost
+    character_service.add_gold(character, -cost)
     h["workbench_tier"] = cur + 1
     _save_home(character, mp, h)
     new_t = cur + 1
@@ -591,14 +591,143 @@ def format_workbench_html(character: Character) -> str:
     )
 
 
-def format_alchemy_stub_html(character: Character) -> str:
+# --- Alchemy Table ---
+ALCHEMY_TIER_MAX = 5
+ALCHEMY_UPGRADE_BASE_GOLD = 25_000
+
+ELIXIRS = {
+    "elixir_str": {"name": "Зелье Силы", "emoji": "🔴", "cost_gold": 1000, "mats": {"common": 5}, "duration": 3, "buff": {"atk_mult": 1.15}},
+    "elixir_def": {"name": "Зелье Защиты", "emoji": "🔵", "cost_gold": 1000, "mats": {"common": 5}, "duration": 3, "buff": {"def_mult": 1.20}},
+    "elixir_luck": {"name": "Зелье Удачи", "emoji": "🟡", "cost_gold": 2000, "mats": {"uncommon": 3}, "duration": 3, "buff": {"drop_mult": 1.25}},
+    "elixir_str_greater": {"name": "Вел. Зелье Силы", "emoji": "🔥", "cost_gold": 5000, "mats": {"rare": 2}, "duration": 10, "buff": {"atk_mult": 1.25}},
+    "elixir_def_greater": {"name": "Вел. Зелье Защиты", "emoji": "💎", "cost_gold": 5000, "mats": {"rare": 2}, "duration": 10, "buff": {"def_mult": 1.35}},
+}
+
+def alchemy_tier(character: Character) -> int:
+    return int((character.meta_progress or {}).get("home_alchemy_tier", 1))
+
+def try_upgrade_alchemy(character: Character) -> tuple[bool, str]:
     t = alchemy_tier(character)
-    return (
-        "⚗️ <b>Алхимический стол</b>\n"
-        f"<i>Уровень стола: {t}</i>\n\n"
-        "Зелья и рецепты появятся в следующих обновлениях.\n"
-        "<i>Следи за новостями башни.</i>"
-    )
+    if t >= ALCHEMY_TIER_MAX: return False, "Максимальный уровень."
+    cost = ALCHEMY_UPGRADE_BASE_GOLD * t
+    if not character_service.try_spend_gold(character, cost):
+        return False, f"Нужно {cost:,} 💰."
+    
+    mp = dict(character.meta_progress or {})
+    mp["home_alchemy_tier"] = t + 1
+    character.meta_progress = mp
+    return True, f"Стол улучшен до ур. {t+1}!"
+
+def format_alchemy_menu_html(character: Character) -> str:
+    t = alchemy_tier(character)
+    mp = character.meta_progress or {}
+    buffs = mp.get("active_elixirs", {})
+    
+    lines = [
+        "⚗️ <b>Алхимический стол</b>",
+        f"Уровень стола: <b>{t}</b>",
+        "",
+        "<i>Здесь можно преобразовывать материалы или варить усиливающие зелья.</i>",
+        "",
+    ]
+    
+    if buffs:
+        lines.append("✨ <b>Активные эффекты:</b>")
+        for k, v in buffs.items():
+            edef = ELIXIRS.get(k)
+            if edef:
+                lines.append(f"• {edef['emoji']} {edef['name']}: {v} боёв осталось")
+        lines.append("")
+        
+    lines.append("📜 <b>Доступные зелья:</b>")
+    for k, v in ELIXIRS.items():
+        m_line = " + ".join([f"{count} {k}" for k, count in v["mats"].items()])
+        lines.append(f"• {v['emoji']} <b>{v['name']}</b>: {v['cost_gold']}💰 + {m_line}")
+        
+    return "\n".join(lines)
+
+async def try_brew_elixir(session: AsyncSession, character: Character, elixir_key: str) -> tuple[bool, str]:
+    edef = ELIXIRS.get(elixir_key)
+    if not edef: return False, "Неизвестный рецепт."
+    
+    if not character_service.try_spend_gold(character, edef["cost_gold"]):
+        return False, f"Нужно {edef['cost_gold']} 💰."
+        
+    # Check materials
+    from db.repository import inventory_repo
+    from game.items.materials import total_materials_in_bag
+    bag_items = await inventory_repo.list_bag_items(session, character.id)
+    
+    for m_rarity, m_count in edef["mats"].items():
+        if total_materials_in_bag(bag_items, m_rarity) < m_count:
+            return False, f"Не хватает материалов: {m_rarity} ({m_count} шт)."
+            
+    # Consume materials
+    remaining = dict(edef["mats"])
+    for it in bag_items:
+        d = it.item_data or {}
+        if str(d.get("kind")) == "material":
+            r = str(d.get("rarity"))
+            if r in remaining and remaining[r] > 0:
+                cnt = int(d.get("count", 1))
+                take = min(cnt, remaining[r])
+                if cnt <= take:
+                    await session.delete(it)
+                else:
+                    d["count"] = cnt - take
+                    it.item_data = d
+                remaining[r] -= take
+                
+    # Apply buff
+    mp = dict(character.meta_progress or {})
+    buffs = dict(mp.get("active_elixirs") or {})
+    buffs[elixir_key] = edef["duration"]
+    mp["active_elixirs"] = buffs
+    mp["elixirs_brewed"] = int(mp.get("elixirs_brewed", 0)) + 1
+    character.meta_progress = mp
+    return True, f"Сварено: <b>{edef['name']}</b>! Эффект на {edef['duration']} боёв."
+
+async def try_transmute_materials(session: AsyncSession, character: Character, from_rarity: str) -> tuple[bool, str]:
+    """3 -> 1 transmutation."""
+    rarity_order = ["common", "uncommon", "rare", "epic", "legendary", "mythic"]
+    if from_rarity not in rarity_order[:-1]: return False, "Нельзя преобразовать этот тип."
+    
+    idx = rarity_order.index(from_rarity)
+    to_rarity = rarity_order[idx+1]
+    
+    from db.repository import inventory_repo
+    from game.items.materials import total_materials_in_bag, material_payload
+    bag_items = await inventory_repo.list_bag_items(session, character.id)
+    
+    if total_materials_in_bag(bag_items, from_rarity) < 3:
+        return False, f"Нужно минимум 3 материала {from_rarity}."
+        
+    # Consume
+    remaining = 3
+    for it in bag_items:
+        d = it.item_data or {}
+        if str(d.get("kind")) == "material" and str(d.get("rarity")) == from_rarity:
+            cnt = int(d.get("count", 1))
+            take = min(cnt, remaining)
+            if cnt <= take:
+                await session.delete(it)
+            else:
+                d["count"] = cnt - take
+                it.item_data = d
+            remaining -= take
+            if remaining <= 0: break
+            
+    # Add new
+    slot = await inventory_repo.first_free_bag_slot(session, character.id)
+    if slot is not None:
+        await inventory_repo.add_bag_item(session, character.id, material_payload(to_rarity, 1), bag_slot=slot)
+    else:
+        # Fallback to pending or just add (already checked 3 consumed, so at least 1 slot is freed?)
+        # Actually if we consumed a stack, we might have freed a slot or just reduced count.
+        # But since we just deleted/modified items, there is room.
+        await inventory_repo.add_bag_item(session, character.id, material_payload(to_rarity, 1))
+
+    return True, f"Трансмутация успешна! Получен 1 {to_rarity} материал."
 
 
 def format_library_html(character: Character) -> str:
@@ -621,27 +750,115 @@ def format_library_html(character: Character) -> str:
 # ---------------------------------------------------------------------------
 
 META_MINE_FARM = "home_mine_farm_v1"
-_MINE_INTERVAL = 3 * 3600  # 3 ч — 1 ед. руды и 1 ед. корма
-_MINE_CAP = 8
+_MINE_INTERVAL_BASE = 3 * 3600  # 3 ч — 1 ед. руды и 1 ед. корма
+_MINE_CAP_BASE = 8
 
+MINE_PURCHASE_GOLD = 50_000
+NPC_HIRE_GOLD = 25_000
+MINE_UPGRADE_BASE_GOLD = 30_000
+
+def is_mine_unlocked(character: Character) -> bool:
+    """Шахта доступна для покупки на 4 уровне дома."""
+    return home_level(character) >= 4
 
 def _mine_farm_block(character: Character) -> tuple[dict[str, Any], dict[str, Any]]:
     mp = dict(character.meta_progress or {})
     b = dict(mp.get(META_MINE_FARM) or {})
     return mp, b
 
+def is_mine_bought(character: Character) -> bool:
+    _, b = _mine_farm_block(character)
+    return bool(b.get("bought", False))
+
+def is_npc_hired(character: Character) -> bool:
+    _, b = _mine_farm_block(character)
+    return bool(b.get("npc_hired", False))
+
+def mine_level(character: Character) -> int:
+    _, b = _mine_farm_block(character)
+    return max(1, int(b.get("level", 1)))
+
+def try_buy_mine(character: Character) -> tuple[bool, str]:
+    if not is_mine_unlocked(character):
+        return False, "Нужен особняк (ур. 4) для открытия шахты."
+    if is_mine_bought(character):
+        return False, "Шахта уже куплена."
+    if int(character.gold) < MINE_PURCHASE_GOLD:
+        return False, f"Нужно {MINE_PURCHASE_GOLD:,} 💰."
+    
+    mp, b = _mine_farm_block(character)
+    character_service.add_gold(character, -MINE_PURCHASE_GOLD)
+    b["bought"] = True
+    b["ts"] = int(time.time())
+    b["level"] = 1
+    mp[META_MINE_FARM] = b
+    character.meta_progress = mp
+    return True, f"−{MINE_PURCHASE_GOLD:,} 💰\n<b>Шахта и ферма открыты!</b> Теперь они будут приносить ресурсы."
+
+def try_hire_npc(character: Character) -> tuple[bool, str]:
+    if not is_mine_bought(character):
+        return False, "Сначала купи шахту."
+    if is_npc_hired(character):
+        return False, "Рабочий уже нанят."
+    if int(character.gold) < NPC_HIRE_GOLD:
+        return False, f"Нужно {NPC_HIRE_GOLD:,} 💰."
+    
+    mp, b = _mine_farm_block(character)
+    character_service.add_gold(character, -NPC_HIRE_GOLD)
+    b["npc_hired"] = True
+    mp[META_MINE_FARM] = b
+    character.meta_progress = mp
+    return True, f"−{NPC_HIRE_GOLD:,} 💰\n<b>Рабочий нанят!</b> Скорость добычи и вместимость склада увеличены."
+
+def mine_upgrade_cost(character: Character) -> int | None:
+    lv = mine_level(character)
+    if lv >= 5: return None
+    return MINE_UPGRADE_BASE_GOLD * lv
+
+def try_upgrade_mine(character: Character) -> tuple[bool, str]:
+    if not is_mine_bought(character):
+        return False, "Сначала купи шахту."
+    lv = mine_level(character)
+    cost = mine_upgrade_cost(character)
+    if cost is None:
+        return False, "Максимальный уровень шахты."
+    if int(character.gold) < cost:
+        return False, f"Нужно {cost:,} 💰."
+    
+    mp, b = _mine_farm_block(character)
+    character_service.add_gold(character, -cost)
+    b["level"] = lv + 1
+    mp[META_MINE_FARM] = b
+    character.meta_progress = mp
+    return True, f"−{cost:,} 💰\n<b>Шахта улучшена до уровня {lv+1}!</b>"
+
 
 def tick_mine_farm_stores(character: Character) -> tuple[int, int]:
     """
     Накопление в фоне; возвращает (ore, food) после тика.
     """
-    if home_level(character) < 4:
+    if not is_mine_bought(character):
         return 0, 0
     mp, b = _mine_farm_block(character)
+    
+    lv = mine_level(character)
+    npc = is_npc_hired(character)
+    
+    # NPC ускоряет добычу на 30%, каждый уровень шахты снижает интервал на 10%
+    interval = _MINE_INTERVAL_BASE * (0.9 ** (lv - 1))
+    if npc:
+        interval *= 0.7
+    
+    # Вместимость: база 8 + 4 за уровень, +10 если есть NPC
+    cap = _MINE_CAP_BASE + (lv - 1) * 4
+    if npc:
+        cap += 10
+        
     now = int(time.time())
     last = int(b.get("ts", 0) or 0)
     ore = int(b.get("ore", 0) or 0)
     food = int(b.get("food", 0) or 0)
+    
     if last <= 0:
         b["ts"] = now
         b["ore"] = 0
@@ -649,26 +866,37 @@ def tick_mine_farm_stores(character: Character) -> tuple[int, int]:
         mp[META_MINE_FARM] = b
         character.meta_progress = mp
         return 0, 0
+        
     dt = max(0, now - last)
-    n = int(dt // _MINE_INTERVAL)
+    n = int(dt // interval)
     if n > 0:
-        ore = min(_MINE_CAP, ore + n)
-        food = min(_MINE_CAP, food + n)
+        ore = min(cap, ore + n)
+        food = min(cap, food + n)
         b["ore"] = ore
         b["food"] = food
-        b["ts"] = last + n * _MINE_INTERVAL
+        b["ts"] = last + int(n * interval)
         mp[META_MINE_FARM] = b
         character.meta_progress = mp
     return ore, food
 
 
 def mine_farm_status_line_html(character: Character) -> str:
-    if home_level(character) < 4:
+    if not is_mine_unlocked(character):
         return ""
+    if not is_mine_bought(character):
+        return f"⛏ <b>Шахта:</b> можно купить за {MINE_PURCHASE_GOLD:,} 💰"
+    
     o, f = tick_mine_farm_stores(character)
+    lv = mine_level(character)
+    npc_icon = "👷" if is_npc_hired(character) else "❌"
+    
+    # Расчет макс капа для отображения
+    cap = _MINE_CAP_BASE + (lv - 1) * 4
+    if is_npc_hired(character): cap += 10
+    
     return (
-        f"⛏ <b>Шахта / ферма:</b> руда <b>{o}</b> / {_MINE_CAP} · "
-        f"корм <b>{f}</b> / {_MINE_CAP} <i>(~3 ч / ед.)</i>"
+        f"⛏ <b>Шахта (ур. {lv}):</b> руда <b>{o}</b>/{cap} · "
+        f"корм <b>{f}</b>/{cap} {npc_icon}"
     )
 
 
@@ -677,11 +905,12 @@ async def collect_mine_farm_rewards(
     character: Character,
 ) -> tuple[bool, str]:
     """Забрать накопленное: common-материалы + корм питомцу."""
-    if home_level(character) < 4:
-        return False, "Нужен <b>особняк (ур. 4+)</b>."
+    if not is_mine_bought(character):
+        return False, "Шахта не куплена."
     o, f = tick_mine_farm_stores(character)
     if o <= 0 and f <= 0:
-        return False, "Пока пусто. Накопится через время (каждые 3 ч +1 к запасу)."
+        return False, "Пока пусто. Ресурсы копятся со временем."
+    
     from db.repository import inventory_repo
     from services.forge_service import add_materials_to_bag
 
@@ -689,11 +918,12 @@ async def collect_mine_farm_rewards(
     lines: list[str] = []
     if o > 0:
         await add_materials_to_bag(session, int(character.id), "common", o)
-        lines.append(f"🪨 +{o} <b>осколка стали</b> (common)")
+        lines.append(f"🪨 +{o} <b>осколка стали</b>")
     if f > 0:
+        # Прямое начисление корма в meta питомцев
         from game.characters import pets as pets_mod
         pets_mod.add_pet_treats(character, f)
-        lines.append(f"🥕 +{f} <b>корма</b> питомцу (запас лакомств)")
+        lines.append(f"🥕 +{f} <b>корма</b>")
 
     b["ore"] = 0
     b["food"] = 0
@@ -702,3 +932,77 @@ async def collect_mine_farm_rewards(
     character.meta_progress = mp
     await session.flush()
     return True, " ".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Тренировка питомцев (прокачка за корм из фермы)
+# ---------------------------------------------------------------------------
+
+def try_feed_pet_for_xp(character: Character, pet_key: str) -> tuple[bool, str]:
+    """Потратить 1 ед. корма (из запаса treats) для +50 XP питомцу."""
+    from game.characters import pets as pets_mod
+    mp, st = pets_mod._pets_meta(character)
+    
+    treats = int(st.get("treats") or 0)
+    if treats <= 0:
+        return False, "Нет корма. Собери его на ферме (ур. 4 дома)."
+    
+    owned = pets_mod.owned_keys(character)
+    if pet_key not in owned:
+        return False, "У тебя нет этого питомца."
+    
+    px = st.get("pet_xp") or {}
+    if not isinstance(px, dict): px = {}
+    cur_xp = int(px.get(pet_key) or 0)
+    
+    # Лимит уровня 10 (2000 XP)
+    if cur_xp >= 2000:
+        return False, "Питомец уже максимального уровня."
+    
+    # Тратим 1 корм -> +50 XP
+    st["treats"] = treats - 1
+    px[pet_key] = cur_xp + 50
+    st["pet_xp"] = px
+    mp[pets_mod.META_KEY] = st
+    character.meta_progress = mp
+    
+    d = pets_mod._all_defs().get(pet_key)
+    p_name = d.name_ru if d else pet_key
+    return True, f"🍱 Ты покормил <b>{p_name}</b>! +50 XP (теперь {cur_xp + 50})."
+
+
+def format_mine_farm_menu_html(character: Character) -> str:
+    if not is_mine_unlocked(character):
+        return "Шахта и ферма открываются в <b>Особняке</b> (ур. 4 дома)."
+    
+    if not is_mine_bought(character):
+        return (
+            "⛏ <b>Заброшенная шахта</b>\n\n"
+            "На заднем дворе твоего особняка есть вход в старую шахту. "
+            "Если расчистить завалы, она начнет приносить ценную руду и ресурсы для фермы.\n\n"
+            f"Цена расчистки: <b>{MINE_PURCHASE_GOLD:,} 💰</b>"
+        )
+    
+    o, f = tick_mine_farm_stores(character)
+    lv = mine_level(character)
+    npc = is_npc_hired(character)
+    
+    lines = [
+        f"⛏ <b>Шахта и Ферма (уровень {lv})</b>",
+        f"Статус рабочего: {'👷 Нанят' if npc else '❌ Не нанят'}",
+        "",
+        f"📦 <b>Склад:</b>",
+        f"• Руда: <b>{o}</b> ед.",
+        f"• Корм: <b>{f}</b> ед.",
+        "",
+        "<i>Ресурсы копятся автоматически. Рабочий ускоряет процесс и увеличивает склад.</i>"
+    ]
+    
+    if not npc:
+        lines.append(f"\n🤝 Можно нанять рабочего за <b>{NPC_HIRE_GOLD:,} 💰</b>")
+    
+    up_cost = mine_upgrade_cost(character)
+    if up_cost:
+        lines.append(f"⬆ Улучшение шахты: <b>{up_cost:,} 💰</b>")
+        
+    return "\n".join(lines)

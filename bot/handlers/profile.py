@@ -28,14 +28,16 @@ from bot.keyboards.profile_kb import (
     profile_spec_submenu_keyboard,
     profile_view_keyboard,
 )
+from bot.keyboards.tree_kb import skill_tree_keyboard, node_action_keyboard
 from bot.utils.game_ui import push_game_ui
-from services import character_service, fame_service, leaderboard_service, profession_service, stat_bonus_service, title_service
+from services import character_service, fame_service, leaderboard_service, stat_bonus_service, title_service
 from services.rest_service import (
     apply_completed_rest_if_needed,
     format_rest_status_line_html,
 )
 from game.characters import pets as pets_mod
 from game.characters.classes import get_class_or_none
+from game.archetypes import manager as arch_manager
 from game.characters.global_passives import format_unlocked_global_passives_ru, refresh_global_passives
 from game.characters.path_ranks import path_rank_name_ru
 from services.character_service import experience_needed_for_next_level
@@ -140,22 +142,12 @@ def _build_profile_text(
     locale: str = "ru",
     gear_defense: int = 0,
 ) -> str:
-    cls = get_class_or_none(char.class_key)
-    if cls:
-        class_title = f"{cls.emoji} {html.escape(cls.name_ru)}"
+    arch = arch_manager.get_archetype(char.class_key)
+    if arch:
+        class_title = f"{arch.emoji} {html.escape(arch.name_ru)}"
     else:
         class_title = html.escape(char.class_key)
-    profession_service.ensure_profession_meta(char)
     loc = locale if locale in ("ru", "en") else "ru"
-    p1 = profession_service.active_primary_key(char)
-    p2 = profession_service.active_secondary_key(char)
-    prof_parts: list[str] = []
-    if p1:
-        prof_parts.append(html.escape(profession_service.profession_display_name(p1, locale=loc)))
-    if p2:
-        prof_parts.append(html.escape(profession_service.profession_display_name(p2, locale=loc)))
-    if prof_parts:
-        class_title += " · " + " / ".join(prof_parts)
     rank_raw = path_rank_name_ru(char)
     rank_s = html.escape(rank_raw) if rank_raw else "—"
     sec_raw = (char.meta_progress or {}).get("active_title_secondary_name_ru")
@@ -473,6 +465,27 @@ async def cmd_profile(message: Message, session: AsyncSession, state: FSMContext
             logger.exception("Не удалось отправить сообщение об ошибке статуса")
 
 
+@router.callback_query(F.data == "prf:achievements")
+async def on_profile_achievements(query: CallbackQuery, session: AsyncSession) -> None:
+    if query.message is None:
+        await query.answer()
+        return
+    user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+    char = await character_repo.get_by_user_id(session, user.id)
+    if not char:
+        await query.answer()
+        return
+        
+    from services import achievement_service
+    # Check for new ones
+    achievement_service.check_and_apply_achievements(char)
+    await session.flush()
+    
+    text = achievement_service.format_achievements_html(char)
+    await query.message.edit_text(text, reply_markup=profile_full_stats_keyboard())
+    await query.answer()
+
+
 @router.callback_query(F.data == "prf:full")
 async def on_profile_full_stats(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -528,7 +541,7 @@ async def on_profile_spec_submenu(callback: CallbackQuery, session: AsyncSession
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=profile_spec_submenu_keyboard(locale=loc),
+            reply_markup=profile_spec_submenu_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=None,
         )
@@ -589,15 +602,40 @@ async def on_profile_skills(callback: CallbackQuery, session: AsyncSession, stat
             await callback.answer("Нет персонажа.", show_alert=True)
             return
         ensure_skill_meta(char)
+        
+        # Repair SP for high-level characters who missed it during the system update
+        if char.level >= 10:
+            mp = dict(char.meta_progress or {})
+            unlocked_keys = arch_manager.get_unlocked_node_keys(char)
+            # Total SP they SHOULD have earned
+            expected_total_sp = char.level - 9 
+            # SP they have spent
+            tree = arch_manager.get_character_tree(char)
+            spent_sp = sum(tree[k].cost_sp for k in unlocked_keys if k in tree)
+            # Current unspent
+            current_unspent = int(mp.get("unspent_sp", 0))
+            
+            if (spent_sp + current_unspent) < expected_total_sp:
+                # Grant the difference
+                missing = expected_total_sp - (spent_sp + current_unspent)
+                mp["unspent_sp"] = current_unspent + missing
+                char.meta_progress = mp
+                logger.info(f"Granted {missing} missing SP to character {char.id}")
+
         await session.flush()
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        text = build_skills_screen_html(char, locale=loc)
+        
+        text = (
+            "🌳 <b>Древо навыков</b>\n\n"
+            "Здесь вы можете тратить очки навыков (SP) на изучение новых способностей и усиление персонажа.\n"
+            "Очки SP даются за каждый уровень после 10-го."
+        )
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=profile_skills_main_keyboard(locale=loc),
+            reply_markup=skill_tree_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=None,
         )
@@ -605,6 +643,90 @@ async def on_profile_skills(callback: CallbackQuery, session: AsyncSession, stat
     except Exception:
         logger.exception("prf:skills")
         await callback.answer("Ошибка.", show_alert=True)
+
+@router.callback_query(F.data.startswith("tree:view:"))
+async def on_tree_node_view(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        node_key = callback.data.split(":")[-1]
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        char = await character_repo.get_by_user_id(session, user.id)
+        
+        tree = arch_manager.get_character_tree(char)
+        node = tree.get(node_key)
+        if not node:
+            await callback.answer("Узел не найден.", show_alert=True)
+            return
+            
+        unlocked = arch_manager.get_unlocked_node_keys(char)
+        is_unlocked = node_key in unlocked
+        can_buy = not is_unlocked and all(p in unlocked for p in node.parent_keys) and arch_manager.get_character_sp(char) >= node.cost_sp
+        
+        status = "✅ Изучено" if is_unlocked else ("🌟 Доступно" if can_buy else "🔒 Заблокировано")
+        
+        text = (
+            f"📍 <b>{node.name_ru}</b>\n"
+            f"Статус: <b>{status}</b>\n\n"
+            f"{node.description_ru}\n\n"
+        )
+        
+        if node.node_type == "active_skill":
+            sk = arch_manager.get_skill(str(node.value))
+            if sk:
+                text += f"🔮 <i>Активный навык: {sk.mp_cost} MP, КД {sk.cooldown}</i>\n"
+        
+        if node.parent_keys:
+            parents = ", ".join([tree[p].name_ru for p in node.parent_keys])
+            text += f"\n<i>Требуется: {parents}</i>"
+
+        await callback.message.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=node_action_keyboard(node_key, can_buy)
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("tree:view")
+        await callback.answer("Ошибка.", show_alert=True)
+
+@router.callback_query(F.data.startswith("tree:buy:"))
+async def on_tree_node_buy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        node_key = callback.data.split(":")[-1]
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        char = await character_repo.get_by_user_id(session, user.id)
+        
+        ok, msg = arch_manager.try_unlock_node(char, node_key)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+            
+        await session.flush()
+        await callback.answer(msg, show_alert=False)
+        
+        # Back to tree
+        loc = get_locale(char, callback.from_user.language_code)
+        text = (
+            "🌳 <b>Древо навыков</b>\n\n"
+            "Узел успешно изучен! Вы получили новые бонусы или способности."
+        )
+        await callback.message.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=skill_tree_keyboard(char, locale=loc)
+        )
+    except Exception:
+        logger.exception("tree:buy")
+        await callback.answer("Ошибка при изучении.", show_alert=True)
+
+@router.callback_query(F.data == "prf:skills_equip")
+async def on_profile_skills_equip_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Old skill equip menu, now renamed."""
 
 
 @router.callback_query(F.data.regexp(r"^prf:sk_slot:\d+$"))

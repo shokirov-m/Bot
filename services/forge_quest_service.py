@@ -22,7 +22,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
-from db.repository import inventory_repo
+from db.repository import character_repo, inventory_repo
 from game.quests.forge_quests import ForgeQuestChain, ForgeQuestStep, chain_for_hub
 from services import character_service, fame_service
 
@@ -137,6 +137,7 @@ async def claim_step(
     Сдать промежуточный шаг и получить небольшую награду.
     После сдачи открывается следующий шаг.
     """
+    await character_repo.lock_character_row(session, character.id)
     state = _get_state(character, hub_floor)
     if not state:
         return False, "Цепочка не начата."
@@ -192,6 +193,7 @@ async def claim_final_reward(
     hub_floor: int,
 ) -> tuple[bool, str]:
     """Получить финальную награду (предмет) после завершения всех трёх шагов."""
+    await character_repo.lock_character_row(session, character.id)
     state = _get_state(character, hub_floor)
     if not state:
         return False, "Цепочка не начата."

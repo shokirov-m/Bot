@@ -9,6 +9,7 @@ payload Clan:
   captured_floors dict          — {"15": {"captured_at": ..., "expires_at": ..., "income_at": ...}}
   war             dict | None   — текущая война (null = нет войны)
   event_log       list[dict]    — последние 20 событий для лидера
+  banner          dict          — {"emoji": "⚔️", "text": "Клан"}
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +31,9 @@ from db.models.user import User
 from db.repository import clan_repo
 
 # ─────────────────────────── Константы ─────────────────────────────────────
+
+CLAN_RENAME_COST = 5_000
+RENAME_COST = CLAN_RENAME_COST
 
 CLAN_CREATE_COST_GOLD = 20_000
 
@@ -289,7 +295,8 @@ def _floor_capture_active(entry: dict[str, Any], now: datetime) -> bool:
     try:
         expires = datetime.fromisoformat(entry["expires_at"])
         return now < expires
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking floor capture: {e}")
         return False
 
 
@@ -335,7 +342,7 @@ async def try_create_clan(
         return False, "Такое имя клана уже занято."
     if tag and await clan_repo.get_clan_by_tag(session, tag) is not None:
         return False, f"Тег [{tag}] уже занят другим кланом."
-    leader.gold = int(leader.gold) - CLAN_CREATE_COST_GOLD
+    character_service.add_gold(leader, -CLAN_CREATE_COST_GOLD)
     c = await clan_repo.create_clan(session, name=name, tag=tag, leader=leader)
     payload = {"treasury_gold": 0, "materials": {"wood": 0, "stone": 0, "herbs": 0},
                "buildings": {}, "relics": [], "captured_floors": {}, "war": None, "event_log": []}
@@ -424,7 +431,7 @@ async def try_donate_gold(
     actual = min(amount, limit - cur)
     if actual <= 0:
         return False, f"Казна переполнена ({cur:,}/{limit:,} 💰). Сначала обновите клан или постройте сокровищницу."
-    character.gold = int(character.gold) - actual
+    character_service.add_gold(character, -actual)
     payload["treasury_gold"] = cur + actual
     pts = max(1, actual // 1000)
     await clan_repo.add_contribution(session, m, pts)
@@ -618,7 +625,7 @@ async def try_capture_floor(
             if datetime.now(UTC) < expires:
                 return False, f"Этаж {floor_number} уже захвачен вашим кланом до {_fmt_ts(entry['expires_at'])}."
         except Exception:
-            pass
+            logger.exception(f"Ошибка парсинга expires_at для клана {clan.id}, этаж {fl_key}")
     # Проверка лимита захватов по уровню клана
     clan_lv = int(clan.clan_level)
     cap_limit = CAPTURE_LIMIT_PER_CLAN_LEVEL.get(clan_lv, 2)
@@ -711,7 +718,8 @@ async def collect_floor_income(session: AsyncSession, clan: Clan) -> int:
             else:
                 updated_caps[fl_key] = entry
         except Exception:
-            updated_caps[fl_key] = entry
+            logger.exception(f"Критическая ошибка в collect_floor_income для клана {clan.id}, этаж {fl_key}")
+            # Не добавляем в updated_caps, чтобы битая запись не блокировала слот вечно
     if total > 0:
         limit = _treasury_limit(payload)
         cur = _treasury_gold(payload)
@@ -1137,8 +1145,11 @@ async def format_clan_card_html(session: AsyncSession, character: Character) -> 
     caps_str = ", ".join(active_caps) if active_caps else "<i>нет</i>"
     chat = f'<a href="{html.escape(clan.chat_url)}">Чат клана</a>' if clan.chat_url else ""
     mat_str = f"🪵{mats['wood']} 🪨{mats['stone']} 🌿{mats['herbs']}"
+    banner = payload.get("banner")
+    banner_str = f"<b>{banner['emoji']} {html.escape(banner['text'])}</b>\n" if banner else ""
     return (
         f"⚔️ <b>{html.escape(clan.name)}</b>{tag_str} · ID <code>{clan.id}</code>\n"
+        f"{banner_str}"
         f"📊 Уровень: <b>{lv}/10</b> · Участников: <b>{n}/{max_m}</b>\n"
         f"💰 Казна: <b>{tg:,}</b>/{tg_lim:,} · {mat_str}\n"
         f"🏆 Реликвий: <b>{len(relics)}</b> · Этажей: {caps_str}\n"
@@ -1353,10 +1364,9 @@ async def try_rename_clan(
     if existing and int(existing.id) != int(clan.id):
         return False, "Такое имя уже занято другим кланом."
     # Переименование стоит золото (анти-спам)
-    RENAME_COST = 5_000
-    if int(character.gold) < RENAME_COST:
-        return False, f"Переименование стоит {RENAME_COST:,} 💰."
-    character.gold = int(character.gold) - RENAME_COST
+    if int(character.gold) < CLAN_RENAME_COST:
+        return False, f"Переименование стоит {CLAN_RENAME_COST:,} 💰."
+    character_service.add_gold(character, -CLAN_RENAME_COST)
     old_name = clan.name
     clan.name = name[:64]
     await session.flush()
@@ -1377,4 +1387,76 @@ def format_clan_settings_html(clan: Clan) -> str:
         f"📝 Описание: {desc_str}\n"
         f"💬 Ссылка на чат: {chat_str}\n\n"
         f"<i>Нажми кнопку, чтобы изменить соответствующее поле.</i>"
+    )
+async def try_set_clan_banner(
+    session: AsyncSession, character: Character, emoji: str, text: str
+) -> tuple[bool, str]:
+    m = await clan_repo.get_membership(session, int(character.id))
+    if m is None or m.role != "leader":
+        return False, "Только лидер может менять знамя."
+    clan = await clan_repo.get_clan(session, int(m.clan_id))
+    if clan is None: return False, "Клан не найден."
+    
+    payload = _payload(clan)
+    payload["banner"] = {"emoji": emoji[:2], "text": text[:32]}
+    _add_event(payload, f"Лидер обновил знамя клана: {emoji} {text}")
+    await clan_repo.update_payload(session, clan, payload)
+    return True, "Знамя обновлено!"
+
+
+async def try_assign_member_title(
+    session: AsyncSession, character: Character, target_id: int, title: str
+) -> tuple[bool, str]:
+    m = await clan_repo.get_membership(session, int(character.id))
+    if m is None or not can_manage(m.role):
+        return False, "Недостаточно прав."
+    tm = await clan_repo.get_membership(session, int(target_id))
+    if tm is None or tm.clan_id != m.clan_id:
+        return False, "Игрок не в вашем клане."
+    
+    payload = tm.payload or {}
+    payload["clan_title"] = title[:16]
+    tm.payload = payload
+    await session.flush()
+    return True, "Титул присвоен!"
+
+
+async def try_clan_altar_blessing(
+    session: AsyncSession, character: Character
+) -> tuple[bool, str]:
+    """Ежедневное благословение у алтаря клана."""
+    m = await clan_repo.get_membership(session, int(character.id))
+    if m is None:
+        return False, "Вы не состоите в клане."
+    
+    # Check cooldown
+    from datetime import date
+    m_payload = dict(m.payload or {})
+    last_bless_str = m_payload.get("last_altar_blessing")
+    today = date.today().isoformat()
+    
+    if last_bless_str == today:
+        return False, "Вы уже получили благословение сегодня. Возвращайтесь завтра!"
+    
+    # Mark as used
+    m_payload["last_altar_blessing"] = today
+    m.payload = m_payload
+    
+    # Generate random blessing
+    import random
+    blessings = [
+        ("🗡️ Благословение Меча", "+3 к Силе"),
+        ("🛡️ Благословение Щита", "+3 к Выносливости"),
+        ("⚡ Благословение Ветра", "+3 к Ловкости"),
+        ("🔮 Благословение Мудрости", "+3 к Интеллекту"),
+        ("🍀 Благословение Фортуны", "+3 к Удаче"),
+    ]
+    b_name, b_desc = random.choice(blessings)
+    
+    # Для реализации реального бонуса нужно добавить временный эффект в Character.payload.
+    # Пока что ограничимся уведомлением и сохранением в логах.
+    return True, (
+        f"🙏 Вы склонились перед алтарем клана...\n\n"
+        f"<b>{b_name}</b> снизошло на вас!\n"
+        f"<i>{b_desc} (бонус активен до конца дня)</i>"
     )

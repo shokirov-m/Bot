@@ -50,12 +50,6 @@ async def cmd_daily(message: Message, session: AsyncSession) -> None:
                 disable_web_page_preview=True,
             )
             return
-        res = await daily_service.try_claim_daily_reward(session, char, locale=loc, bot=message.bot)
-        if res.message_html:
-            if res.ok:
-                body += "\n\n" + res.message_html
-            else:
-                body += "\n\n" + f"<i>{html.escape(res.message_html)}</i>"
         await session.commit()
         await message.answer(
             body,
@@ -130,7 +124,9 @@ async def daily_claim(callback: CallbackQuery, session: AsyncSession) -> None:
         if not sub:
             await callback.answer("Сначала подпишись на канал.", show_alert=True)
             return
-        res = await daily_service.try_claim_daily_reward(session, char, locale=loc, bot=callback.bot)
+        res = await daily_service.try_claim_daily_reward(
+            session, char, locale=loc, bot=callback.bot, telegram_id=callback.from_user.id
+        )
         body, _ = await build_daily_body_html(
             callback.bot,
             callback.from_user.id,

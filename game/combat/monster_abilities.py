@@ -20,6 +20,8 @@
   breath_period     — каждые N ходов удваивает свой урон (огненное дыхание)
   curse_chance      — проклятие: снижает урон игрока на 20% на N ходов
   curse_turns
+  freeze_stack      — атаки накладывают «Озноб». 3 стака = оглушение на 1 ход
+  shatter_death     — при смерти наносит урон игроку (базируется на броне монстра)
 """
 
 from __future__ import annotations
@@ -106,8 +108,16 @@ ABILITY_MAP: dict[str, dict[str, Any]] = {
         "bleed_turns": 2,
     },
     "ice_elemental": {
-        "stun_chance": 0.25,    # заморозка
+        "freeze_stack": True,   # заморозка через стаки
         "pierce_pct": 15,
+    },
+    "golem_ice": {
+        "shatter_death": True,
+        "pierce_pct": 5,
+    },
+    "frost_wisp": {
+        "freeze_stack": True,
+        "pierce_pct": 20,
     },
     "mini_frost_troll": {
         "regen_threshold": 0.30,
@@ -388,6 +398,17 @@ def apply_post_hit_abilities(
         )
         logs.append(f"🌑 <b>Проклятие!</b> Твой урон −20% на {turns} х.")
 
+    # ── Заморозка (стаки Озноба) ──────────────────────────────────────────────
+    if ab.get("freeze_stack") and dealt_damage > 0:
+        stacks = int(state.get("player_freeze_stacks", 0)) + 1
+        if stacks >= 3:
+            state["player_freeze_stacks"] = 0
+            state["player_skip_next_action"] = True
+            logs.append("❄️ <b>Заморозка!</b> Тело сковал лед, ты пропускаешь ход.")
+        else:
+            state["player_freeze_stacks"] = stacks
+            logs.append(f"🥶 <b>Озноб</b> ({stacks}/3): твои движения замедляются.")
+
     # ── Хаотический удар (chaos_spawn) ───────────────────────────────────────
     if ab.get("chaos_strike") and random.random() < 0.50:
         roll = random.randint(0, 2)
@@ -483,6 +504,21 @@ def check_zombie_undying(state: dict[str, Any], logs: list[str]) -> bool:
         f"(воскрешение срабатывает один раз за бой)"
     )
     return True
+
+
+# ── Проверка уникальных пробиваний брони ─────────────────────────────────────
+def apply_shatter_death(state: dict[str, Any], logs: list[str]) -> None:
+    """Вызывается при смерти монстра с shatter_death."""
+    m = state.get("monster", {})
+    tk = str(m.get("template_key", ""))
+    ab = get_abilities(tk)
+    if not ab.get("shatter_death"):
+        return
+    
+    # Урон = 50% от базовой брони монстра
+    dmg = max(5, int(int(m.get("defense", 0)) * 0.5))
+    state["player_hp"] = max(0, int(state["player_hp"]) - dmg)
+    logs.append(f"💥 <b>Осколки!</b> При смерти {m.get('emoji', '👹')} разлетается на куски: −{dmg} HP.")
 
 
 # ── Проверка уникальных пробиваний брони ─────────────────────────────────────

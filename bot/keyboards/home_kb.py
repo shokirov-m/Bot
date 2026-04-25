@@ -46,9 +46,9 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
         lib_label = "🔬 Библиотека (+1 стат)" if h_left == 0 else f"🔬 Библиотека (~{int(h_left)}ч)"
         rows.append([InlineKeyboardButton(text=lib_label[:64], callback_data="hom:lib")])
 
-    if home_service.home_level(character) >= 4:
+    if home_service.is_mine_unlocked(character):
         rows.append(
-            [InlineKeyboardButton(text="⛏ Собрать шахту/ферму", callback_data="hom:mine")],
+            [InlineKeyboardButton(text="⛏ Шахта и Ферма", callback_data="hom:mine_menu")],
         )
 
     # Верстак (ур.2+)
@@ -124,6 +124,46 @@ def alchemy_keyboard() -> InlineKeyboardMarkup:
             menu_nav_button_row(),
         ],
     )
+
+
+def mine_farm_keyboard(character: Character) -> InlineKeyboardMarkup:
+    from services import home_service
+    rows: list[list[InlineKeyboardButton]] = []
+    
+    # Кнопка собрать, если шахта куплена
+    if home_service.is_mine_bought(character):
+        rows.append([InlineKeyboardButton(text="📦 Забрать ресурсы", callback_data="hom:mine_col")])
+        
+        # Улучшение или наем NPC
+        if not home_service.is_npc_hired(character):
+            rows.append([InlineKeyboardButton(text=f"👷 Нанять рабочего ({home_service.NPC_HIRE_GOLD:,}💰)", callback_data="hom:npc_hire")])
+        
+        up_cost = home_service.mine_upgrade_cost(character)
+        if up_cost:
+            rows.append([InlineKeyboardButton(text=f"⬆ Улучшить шахту ({up_cost:,}💰)", callback_data="hom:mine_up")])
+            
+        rows.append([InlineKeyboardButton(text="🍱 Тренировать питомцев", callback_data="hom:pet_train")])
+    else:
+        rows.append([InlineKeyboardButton(text=f"⛏ Расчистить шахту ({home_service.MINE_PURCHASE_GOLD:,}💰)", callback_data="hom:mine_buy")])
+        
+    rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def pet_training_keyboard(character: Character) -> InlineKeyboardMarkup:
+    from game.characters import pets as pets_mod
+    rows: list[list[InlineKeyboardButton]] = []
+    
+    owned = pets_mod.owned_keys(character)
+    for pk in owned:
+        d = pets_mod._all_defs().get(pk)
+        if d:
+            rows.append([InlineKeyboardButton(text=f"🍱 Покормить {d.name_ru}", callback_data=f"hom:pet_xp:{pk}")])
+            
+    rows.append([InlineKeyboardButton(text="⬅ В шахту", callback_data="hom:mine_menu")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def wardrobe_preview_keyboard(portrait_key: str, *, is_current: bool) -> InlineKeyboardMarkup:
