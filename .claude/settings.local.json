@@ -20,7 +20,17 @@
       "Bash(python -c \"import services.floor_service; import services.combat_service; import bot.handlers.floor; print\\('All OK'\\)\")",
       "Bash(python -c \"import services.floor_service; import services.combat_service; print\\('All OK'\\)\")",
       "Bash(python3 -c \"import json; data = json.load\\(open\\('C:\\\\Users\\\\Shokirov\\\\Desktop\\\\БАШНЯ 100 ИСПИТАНИЙ\\\\tower_bot/game/data/monsters_catalog.json'\\)\\); print\\(json.dumps\\(data['pools'].get\\('shadow_caves', []\\), indent=2\\)\\)\")",
-      "Bash(find \"C:\\\\Users\\\\Shokirov\\\\Desktop\\\\БАШНЯ 100 ИСПИТАНИЙ\\\\tower_bot\" -type f -name \"*.py\" -exec grep -l \"shadow_caves\\\\|shadow.*cave\" {} \\\\;)"
+      "Bash(find \"C:\\\\Users\\\\Shokirov\\\\Desktop\\\\БАШНЯ 100 ИСПИТАНИЙ\\\\tower_bot\" -type f -name \"*.py\" -exec grep -l \"shadow_caves\\\\|shadow.*cave\" {} \\\\;)",
+      "Bash(python -m py_compile \"game/quests/forge_quests.py\")",
+      "Bash(python -m py_compile \"game/quests/tavern_buyer_quests.py\")",
+      "Bash(python -m py_compile \"game/quests/wandering_npc_quests.py\")",
+      "Bash(python -c \"from game.data.monsters import ALL_MONSTERS; keys = list\\(ALL_MONSTERS.keys\\(\\)\\); print\\('\\\\n'.join\\(keys[:60]\\)\\)\")",
+      "Bash(python -c \"from game.data.monsters import ALL_MONSTERS; keys = list\\(ALL_MONSTERS.keys\\(\\)\\); print\\('\\\\n'.join\\(keys[60:]\\)\\)\")",
+      "Bash(python -m py_compile \"game/combat/monster_abilities.py\")",
+      "Bash(python -m py_compile \"game/combat/engine.py\")",
+      "Bash(python -m py_compile \"services/forge_quest_service.py\")",
+      "Bash(python -m py_compile \"services/tavern_buyer_service.py\")",
+      "Bash(python -m py_compile \"bot/handlers/forge.py\")"
     ]
   }
 }

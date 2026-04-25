@@ -2,7 +2,8 @@
 Цепочки заданий от кузнеца в городских хабах.
 
 Каждый хаб (этажи 3, 31, 61, 91) даёт свою цепочку из 3 шагов.
-В конце — редкий/эпический предмет.
+В конце — редкий/эпический предмет (редкость повышена на 1 ранг).
+Награды за шаги увеличены в 3 раза.
 
 Шаги:
   1) Заработай N золота в боях       (earn_gold)
@@ -17,33 +18,33 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True, slots=True)
 class ForgeQuestStep:
-    step: int          # 1, 2, 3
+    step: int
     title: str
     desc: str
-    quest_type: str    # earn_gold | kills_elite | kills_boss
+    quest_type: str
     target: int
-    reward_gold: int   # промежуточная награда за шаг
+    reward_gold: int
     reward_xp: int
     reward_fame: int
 
 
 @dataclass(frozen=True, slots=True)
 class ForgeQuestChain:
-    hub_floor: int          # 3 | 31 | 61 | 91
+    hub_floor: int
     npc_name: str
     npc_emoji: str
     chain_title: str
     intro: str
     steps: tuple[ForgeQuestStep, ...]
-    # Финальная награда
     final_gold: int
     final_xp: int
     final_fame: int
-    final_item: dict        # item_data payload
-    final_text: str         # диалог кузнеца при выдаче
+    final_item: dict
+    final_text: str
 
 
 # ── Хаб 3: Тихий Ручей — Кузнец Боран ────────────────────────────────────────
+# Награды ×3, редкость: uncommon → rare
 _CHAIN_3 = ForgeQuestChain(
     hub_floor=3,
     npc_name="Кузнец Боран",
@@ -61,8 +62,8 @@ _CHAIN_3 = ForgeQuestChain(
             desc="Заработай 300 золота в боях.",
             quest_type="earn_gold",
             target=300,
-            reward_gold=50,
-            reward_xp=30,
+            reward_gold=150,
+            reward_xp=90,
             reward_fame=5,
         ),
         ForgeQuestStep(
@@ -71,8 +72,8 @@ _CHAIN_3 = ForgeQuestChain(
             desc="Победи 3 элитных монстра.",
             quest_type="kills_elite",
             target=3,
-            reward_gold=80,
-            reward_xp=50,
+            reward_gold=240,
+            reward_xp=150,
             reward_fame=8,
         ),
         ForgeQuestStep(
@@ -81,23 +82,23 @@ _CHAIN_3 = ForgeQuestChain(
             desc="Победи 1 мини-босса или сильного босса.",
             quest_type="kills_boss",
             target=1,
-            reward_gold=120,
-            reward_xp=80,
+            reward_gold=360,
+            reward_xp=240,
             reward_fame=12,
         ),
     ),
-    final_gold=200,
-    final_xp=150,
+    final_gold=600,
+    final_xp=450,
     final_fame=15,
     final_item={
         "name": "Кузнечный меч Борана",
         "kind": "weapon",
         "hand": "main",
         "weapon_type": "blade",
-        "rarity": "uncommon",
-        "attack": 18,
-        "str": 3,
-        "luck": 1,
+        "rarity": "rare",           # повышено: uncommon → rare
+        "attack": 26,
+        "str": 5,
+        "luck": 2,
         "image_url": "",
         "desc": "Выкован опытным кузнецом Бораном в Тихом Ручье.",
     },
@@ -109,6 +110,7 @@ _CHAIN_3 = ForgeQuestChain(
 )
 
 # ── Хаб 31: Айронфолл — Кузнец Гарт ──────────────────────────────────────────
+# Награды ×3, редкость: rare → epic
 _CHAIN_31 = ForgeQuestChain(
     hub_floor=31,
     npc_name="Кузнец Гарт",
@@ -126,8 +128,8 @@ _CHAIN_31 = ForgeQuestChain(
             desc="Заработай 800 золота в боях.",
             quest_type="earn_gold",
             target=800,
-            reward_gold=150,
-            reward_xp=100,
+            reward_gold=450,
+            reward_xp=300,
             reward_fame=10,
         ),
         ForgeQuestStep(
@@ -136,8 +138,8 @@ _CHAIN_31 = ForgeQuestChain(
             desc="Победи 6 элитных монстров.",
             quest_type="kills_elite",
             target=6,
-            reward_gold=220,
-            reward_xp=150,
+            reward_gold=660,
+            reward_xp=450,
             reward_fame=15,
         ),
         ForgeQuestStep(
@@ -146,23 +148,23 @@ _CHAIN_31 = ForgeQuestChain(
             desc="Победи 2 мини-боссов или сильных боссов.",
             quest_type="kills_boss",
             target=2,
-            reward_gold=300,
-            reward_xp=200,
+            reward_gold=900,
+            reward_xp=600,
             reward_fame=20,
         ),
     ),
-    final_gold=400,
-    final_xp=300,
+    final_gold=1200,
+    final_xp=900,
     final_fame=25,
     final_item={
         "name": "Боевой топор Гарта",
         "kind": "weapon",
         "hand": "main",
         "weapon_type": "axe",
-        "rarity": "rare",
-        "attack": 35,
-        "str": 5,
-        "vit": 2,
+        "rarity": "epic",           # повышено: rare → epic
+        "attack": 50,
+        "str": 8,
+        "vit": 4,
         "image_url": "",
         "desc": "Тяжёлый топор из айронфоллской стали. Рубит броню как масло.",
     },
@@ -173,6 +175,7 @@ _CHAIN_31 = ForgeQuestChain(
 )
 
 # ── Хаб 61: Эмберхолл — Кузнец Вара ──────────────────────────────────────────
+# Награды ×3, редкость: rare → epic
 _CHAIN_61 = ForgeQuestChain(
     hub_floor=61,
     npc_name="Мастер Вара",
@@ -190,8 +193,8 @@ _CHAIN_61 = ForgeQuestChain(
             desc="Заработай 1500 золота в боях.",
             quest_type="earn_gold",
             target=1500,
-            reward_gold=300,
-            reward_xp=220,
+            reward_gold=900,
+            reward_xp=660,
             reward_fame=18,
         ),
         ForgeQuestStep(
@@ -200,8 +203,8 @@ _CHAIN_61 = ForgeQuestChain(
             desc="Победи 10 элитных монстров.",
             quest_type="kills_elite",
             target=10,
-            reward_gold=420,
-            reward_xp=320,
+            reward_gold=1260,
+            reward_xp=960,
             reward_fame=25,
         ),
         ForgeQuestStep(
@@ -210,21 +213,21 @@ _CHAIN_61 = ForgeQuestChain(
             desc="Победи 3 мини-боссов или сильных боссов.",
             quest_type="kills_boss",
             target=3,
-            reward_gold=560,
-            reward_xp=420,
+            reward_gold=1680,
+            reward_xp=1260,
             reward_fame=32,
         ),
     ),
-    final_gold=700,
-    final_xp=500,
+    final_gold=2100,
+    final_xp=1500,
     final_fame=35,
     final_item={
         "name": "Латы чемпиона Эмберхолла",
         "kind": "armor",
-        "rarity": "rare",
-        "defense": 22,
-        "vit": 5,
-        "hp_bonus": 40,
+        "rarity": "epic",           # повышено: rare → epic
+        "defense": 32,
+        "vit": 8,
+        "hp_bonus": 60,
         "image_url": "",
         "desc": "Броня, закалённая в вулканическом огне. Не горит, не ржавеет.",
     },
@@ -235,6 +238,7 @@ _CHAIN_61 = ForgeQuestChain(
 )
 
 # ── Хаб 91: Этернис — Архикузнец Соль ────────────────────────────────────────
+# Награды ×3, редкость: epic → legendary
 _CHAIN_91 = ForgeQuestChain(
     hub_floor=91,
     npc_name="Архикузнец Соль",
@@ -252,8 +256,8 @@ _CHAIN_91 = ForgeQuestChain(
             desc="Заработай 2500 золота в боях.",
             quest_type="earn_gold",
             target=2500,
-            reward_gold=600,
-            reward_xp=450,
+            reward_gold=1800,
+            reward_xp=1350,
             reward_fame=25,
         ),
         ForgeQuestStep(
@@ -262,8 +266,8 @@ _CHAIN_91 = ForgeQuestChain(
             desc="Победи 15 элитных монстров.",
             quest_type="kills_elite",
             target=15,
-            reward_gold=850,
-            reward_xp=640,
+            reward_gold=2550,
+            reward_xp=1920,
             reward_fame=35,
         ),
         ForgeQuestStep(
@@ -272,24 +276,24 @@ _CHAIN_91 = ForgeQuestChain(
             desc="Победи 5 мини-боссов или сильных боссов.",
             quest_type="kills_boss",
             target=5,
-            reward_gold=1100,
-            reward_xp=850,
+            reward_gold=3300,
+            reward_xp=2550,
             reward_fame=45,
         ),
     ),
-    final_gold=1000,
-    final_xp=800,
+    final_gold=3000,
+    final_xp=2400,
     final_fame=50,
     final_item={
         "name": "Молот Вечности",
         "kind": "weapon",
         "hand": "main",
         "weapon_type": "hammer",
-        "rarity": "epic",
-        "attack": 70,
-        "str": 10,
-        "vit": 5,
-        "luck": 3,
+        "rarity": "legendary",      # повышено: epic → legendary
+        "attack": 95,
+        "str": 15,
+        "vit": 8,
+        "luck": 5,
         "image_url": "",
         "desc": "Легендарное оружие архикузнеца Соля. Каждый удар звучит как гром.",
     },
@@ -315,7 +319,6 @@ def chain_for_hub(hub_floor: int) -> ForgeQuestChain | None:
 
 
 def hub_floor_for_character_floor(floor: int) -> int | None:
-    """Возвращает этаж хаба, на котором находится персонаж (или None)."""
     if floor in HUB_FLOORS:
         return floor
     return None

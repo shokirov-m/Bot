@@ -1,14 +1,8 @@
 """
-Цепочки заданий от Скупщика в таверне.
+Цепочки заданий от Скупщика Орина в таверне.
+Награды увеличены в 3 раза, редкость предметов повышена на 1 ранг.
 
-Скупщик Орин — торговец, который скупает трофеи с монстров.
-Есть в каждом городском хабе (этажи 3, 31, 61, 91).
-Даёт 3-шаговую цепочку. Финальная награда — кольцо/амулет.
-
-Шаги:
-  1) Победи N монстров (любых)    (kills_any)
-  2) Заработай N золота в боях    (earn_gold)
-  3) Убей N элитных монстров      (kills_elite)
+uncommon → rare, rare → epic, epic → legendary
 """
 
 from __future__ import annotations
@@ -21,7 +15,7 @@ class BuyerQuestStep:
     step: int
     title: str
     desc: str
-    quest_type: str    # kills_any | earn_gold | kills_elite | kills_boss | battles_win
+    quest_type: str
     target: int
     reward_gold: int
     reward_xp: int
@@ -43,7 +37,7 @@ class BuyerQuestChain:
     final_text: str
 
 
-# ── Хаб 3: Скупщик Орин ───────────────────────────────────────────────────────
+# ── Хаб 3 — редкость: uncommon → rare ────────────────────────────────────────
 _CHAIN_3 = BuyerQuestChain(
     hub_floor=3,
     npc_name="Скупщик Орин",
@@ -61,8 +55,8 @@ _CHAIN_3 = BuyerQuestChain(
             desc="Убей 5 монстров в башне.",
             quest_type="kills_any",
             target=5,
-            reward_gold=60,
-            reward_xp=35,
+            reward_gold=180,
+            reward_xp=105,
             reward_fame=4,
         ),
         BuyerQuestStep(
@@ -71,8 +65,8 @@ _CHAIN_3 = BuyerQuestChain(
             desc="Заработай 200 золота в боях.",
             quest_type="earn_gold",
             target=200,
-            reward_gold=80,
-            reward_xp=45,
+            reward_gold=240,
+            reward_xp=135,
             reward_fame=6,
         ),
         BuyerQuestStep(
@@ -81,20 +75,20 @@ _CHAIN_3 = BuyerQuestChain(
             desc="Победи 2 элитных монстра.",
             quest_type="kills_elite",
             target=2,
-            reward_gold=100,
-            reward_xp=60,
+            reward_gold=300,
+            reward_xp=180,
             reward_fame=8,
         ),
     ),
-    final_gold=150,
-    final_xp=100,
+    final_gold=450,
+    final_xp=300,
     final_fame=12,
     final_item={
         "name": "Кольцо удачи Орина",
         "kind": "ring",
-        "rarity": "uncommon",
-        "luck": 5,
-        "dex": 2,
+        "rarity": "rare",           # повышено: uncommon → rare
+        "luck": 8,
+        "dex": 4,
         "image_url": "",
         "desc": "Особое кольцо от скупщика Орина. Удача любит таких, как ты.",
     },
@@ -105,7 +99,7 @@ _CHAIN_3 = BuyerQuestChain(
     ),
 )
 
-# ── Хаб 31: Скупщик Орин в Айронфолле ────────────────────────────────────────
+# ── Хаб 31 — редкость: rare → epic ───────────────────────────────────────────
 _CHAIN_31 = BuyerQuestChain(
     hub_floor=31,
     npc_name="Скупщик Орин",
@@ -123,8 +117,8 @@ _CHAIN_31 = BuyerQuestChain(
             desc="Убей 10 монстров в башне.",
             quest_type="kills_any",
             target=10,
-            reward_gold=160,
-            reward_xp=110,
+            reward_gold=480,
+            reward_xp=330,
             reward_fame=10,
         ),
         BuyerQuestStep(
@@ -133,8 +127,8 @@ _CHAIN_31 = BuyerQuestChain(
             desc="Заработай 600 золота в боях.",
             quest_type="earn_gold",
             target=600,
-            reward_gold=200,
-            reward_xp=140,
+            reward_gold=600,
+            reward_xp=420,
             reward_fame=14,
         ),
         BuyerQuestStep(
@@ -143,21 +137,21 @@ _CHAIN_31 = BuyerQuestChain(
             desc="Победи 4 элитных монстра.",
             quest_type="kills_elite",
             target=4,
-            reward_gold=260,
-            reward_xp=180,
+            reward_gold=780,
+            reward_xp=540,
             reward_fame=18,
         ),
     ),
-    final_gold=350,
-    final_xp=250,
+    final_gold=1050,
+    final_xp=750,
     final_fame=22,
     final_item={
         "name": "Амулет скупщика",
         "kind": "amulet",
-        "rarity": "rare",
-        "luck": 8,
-        "dex": 3,
-        "int": 2,
+        "rarity": "epic",           # повышено: rare → epic
+        "luck": 12,
+        "dex": 5,
+        "int": 4,
         "image_url": "",
         "desc": "Амулет с рынка Айронфолла. Торговцы чуют удачу за версту.",
     },
@@ -168,7 +162,7 @@ _CHAIN_31 = BuyerQuestChain(
     ),
 )
 
-# ── Хаб 61: Скупщик Орин в Эмберхолле ────────────────────────────────────────
+# ── Хаб 61 — редкость: rare → epic ───────────────────────────────────────────
 _CHAIN_61 = BuyerQuestChain(
     hub_floor=61,
     npc_name="Скупщик Орин",
@@ -186,8 +180,8 @@ _CHAIN_61 = BuyerQuestChain(
             desc="Убей 15 монстров в башне.",
             quest_type="kills_any",
             target=15,
-            reward_gold=350,
-            reward_xp=260,
+            reward_gold=1050,
+            reward_xp=780,
             reward_fame=18,
         ),
         BuyerQuestStep(
@@ -196,8 +190,8 @@ _CHAIN_61 = BuyerQuestChain(
             desc="Заработай 1200 золота в боях.",
             quest_type="earn_gold",
             target=1200,
-            reward_gold=450,
-            reward_xp=330,
+            reward_gold=1350,
+            reward_xp=990,
             reward_fame=24,
         ),
         BuyerQuestStep(
@@ -206,21 +200,21 @@ _CHAIN_61 = BuyerQuestChain(
             desc="Победи 6 элитных монстров.",
             quest_type="kills_elite",
             target=6,
-            reward_gold=560,
-            reward_xp=420,
+            reward_gold=1680,
+            reward_xp=1260,
             reward_fame=30,
         ),
     ),
-    final_gold=600,
-    final_xp=450,
+    final_gold=1800,
+    final_xp=1350,
     final_fame=32,
     final_item={
         "name": "Шлем торговца",
         "kind": "helmet",
-        "rarity": "rare",
-        "defense": 15,
-        "dex": 4,
-        "luck": 6,
+        "rarity": "epic",           # повышено: rare → epic
+        "defense": 22,
+        "dex": 7,
+        "luck": 9,
         "image_url": "",
         "desc": "Шлем с огненными рунами. Торговцы Эмберхолла ценят острый ум.",
     },
@@ -230,7 +224,7 @@ _CHAIN_61 = BuyerQuestChain(
     ),
 )
 
-# ── Хаб 91: Скупщик Орин в Этернисе ──────────────────────────────────────────
+# ── Хаб 91 — редкость: epic → legendary ──────────────────────────────────────
 _CHAIN_91 = BuyerQuestChain(
     hub_floor=91,
     npc_name="Скупщик Орин",
@@ -248,8 +242,8 @@ _CHAIN_91 = BuyerQuestChain(
             desc="Убей 20 монстров в башне.",
             quest_type="kills_any",
             target=20,
-            reward_gold=700,
-            reward_xp=550,
+            reward_gold=2100,
+            reward_xp=1650,
             reward_fame=30,
         ),
         BuyerQuestStep(
@@ -258,8 +252,8 @@ _CHAIN_91 = BuyerQuestChain(
             desc="Заработай 2000 золота в боях.",
             quest_type="earn_gold",
             target=2000,
-            reward_gold=900,
-            reward_xp=700,
+            reward_gold=2700,
+            reward_xp=2100,
             reward_fame=40,
         ),
         BuyerQuestStep(
@@ -268,21 +262,21 @@ _CHAIN_91 = BuyerQuestChain(
             desc="Победи 10 элитных монстров.",
             quest_type="kills_elite",
             target=10,
-            reward_gold=1100,
-            reward_xp=850,
+            reward_gold=3300,
+            reward_xp=2550,
             reward_fame=50,
         ),
     ),
-    final_gold=800,
-    final_xp=650,
+    final_gold=2400,
+    final_xp=1950,
     final_fame=45,
     final_item={
         "name": "Печать Орина",
         "kind": "ring",
-        "rarity": "epic",
-        "luck": 15,
-        "dex": 8,
-        "int": 5,
+        "rarity": "legendary",      # повышено: epic → legendary
+        "luck": 22,
+        "dex": 12,
+        "int": 8,
         "image_url": "",
         "desc": "Личная печать великого скупщика Орина. Удача сопровождает носителя в любой схватке.",
     },
@@ -293,7 +287,6 @@ _CHAIN_91 = BuyerQuestChain(
     ),
 )
 
-# ── Словарь ────────────────────────────────────────────────────────────────────
 _CHAINS: dict[int, BuyerQuestChain] = {
     3: _CHAIN_3,
     31: _CHAIN_31,

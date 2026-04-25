@@ -107,7 +107,13 @@ async def character_has_ranker_gold_bonus(session: AsyncSession, character: Char
     return r is not None and r <= RANKER_TOP_N
 
 
-def format_leaderboard_html(category: str, rows: list[Character], *, locale: str = "ru") -> str:
+def format_leaderboard_html(
+    category: str,
+    rows: list[Character],
+    *,
+    locale: str = "ru",
+    clan_tags: dict[int, str] | None = None,
+) -> str:
     titles = {
         "lvl": "📈 <b>Топ по уровню</b>",
         "flr": "🗺️ <b>Топ по этажу</b>",
@@ -118,11 +124,15 @@ def format_leaderboard_html(category: str, rows: list[Character], *, locale: str
     if not rows:
         return f"{head}\n\n<i>Пока никого в рейтинге.</i>"
 
+    tags = clan_tags or {}
     lines = [head, ""]
     for i, c in enumerate(rows, start=1):
         med = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
         name = html.escape(_short_display(c.display_name))
         ranker_suffix = f" {t(locale, 'top_ranker_badge')}" if i <= RANKER_TOP_N else ""
+        # Тег клана перед ником (если есть)
+        tag = tags.get(int(c.id))
+        tag_prefix = f"[{html.escape(tag)}] " if tag else ""
         if category == "lvl":
             extra = (
                 f"Lv.{c.level} · XP {int(c.experience):,}"
@@ -136,12 +146,7 @@ def format_leaderboard_html(category: str, rows: list[Character], *, locale: str
             extra = f"сумма статов {s} · Ур.{c.level} · этаж {c.floor_number}"
         else:
             extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
-        lines.append(f"{med} <b>{name}</b>{ranker_suffix}\n   <i>{extra}</i>")
+        lines.append(f"{med} <b>{tag_prefix}{name}</b>{ranker_suffix}\n   <i>{extra}</i>")
         if i < len(rows):
             lines.append("")
-    lines.append("")
-    lines.append(
-        "<i>Забаненные не учитываются. Нажми категорию снизу, чтобы переключить.</i>\n"
-        f"{t(locale, 'top_ranker_rule_hint')}",
-    )
     return "\n".join(lines)

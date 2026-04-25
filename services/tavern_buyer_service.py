@@ -187,36 +187,37 @@ async def claim_final_reward(
     if state.get("final_claimed"):
         return False, "Финальная награда уже получена."
 
+    # Сначала проверяем место в сумке
+    slot = await inventory_repo.first_free_bag_slot(session, character.id)
+    if slot is None:
+        return False, (
+            "⚠️ <b>Сумка полна!</b>\n"
+            "Освободи хотя бы одно место и возвращайся за финальной наградой.\n"
+            "<i>Золото и опыт будут выданы вместе с предметом.</i>"
+        )
+
     character_service.add_gold(character, chain.final_gold)
     lv = await character_service.add_experience_async(
         session, character, chain.final_xp, bot=None
     )
     fame_service.add_fame(character, chain.final_fame)
 
-    slot = await inventory_repo.first_free_bag_slot(session, character.id)
-    item_added = False
-    if slot is not None:
-        await inventory_repo.add_bag_item(
-            session, character.id, chain.final_item, bag_slot=slot
-        )
-        item_added = True
+    await inventory_repo.add_bag_item(
+        session, character.id, chain.final_item, bag_slot=slot
+    )
 
     state["final_claimed"] = True
     _save_state(character, hub_floor, state)
     await session.flush()
 
     lv_html = character_service.level_up_notice_html(character, lv)
-    item_line = (
-        f"\n🎁 <b>{chain.final_item['name']}</b> [{chain.final_item['rarity']}] добавлен в сумку!"
-        if item_added
-        else "\n⚠️ Сумка полна — предмет потерян."
-    )
 
     return True, (
         f"<i>{chain.final_text}</i>\n\n"
         f"🏆 <b>Цепочка завершена!</b>\n"
-        f"💰 +{chain.final_gold}  ✨ +{chain.final_xp}  ⭐ +{chain.final_fame} Слава"
-        f"{item_line}{lv_html}"
+        f"💰 +{chain.final_gold}  ✨ +{chain.final_xp}  ⭐ +{chain.final_fame} Слава\n"
+        f"🎁 <b>{chain.final_item['name']}</b> [{chain.final_item['rarity']}] добавлен в сумку!"
+        f"{lv_html}"
     )
 
 

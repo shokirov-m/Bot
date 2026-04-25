@@ -6,6 +6,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
+from db.models.clan import Clan, ClanMembership
 from db.models.user import User
 
 DEFAULT_LIMIT = 10
@@ -73,6 +74,29 @@ async def top_by_gold(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> l
     )
     r = await session.execute(stmt)
     return list(r.scalars().all())
+
+
+async def get_clan_tags_for_characters(
+    session: AsyncSession,
+    character_ids: list[int],
+) -> dict[int, str]:
+    """
+    Возвращает {character_id: clan_tag} для персонажей из списка.
+    Если у персонажа нет клана или тег не задан — не включается в словарь.
+    """
+    if not character_ids:
+        return {}
+    stmt = (
+        select(ClanMembership.character_id, Clan.tag)
+        .join(Clan, ClanMembership.clan_id == Clan.id)
+        .where(
+            ClanMembership.character_id.in_(character_ids),
+            Clan.tag.isnot(None),
+            Clan.tag != "",
+        )
+    )
+    result = await session.execute(stmt)
+    return {int(row[0]): str(row[1]) for row in result.all()}
 
 
 def character_total_stats(c: Character) -> int:

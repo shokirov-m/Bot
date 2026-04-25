@@ -15,6 +15,15 @@ from game.balance import (
 )
 from game.characters.skills import SkillDef, passive_combat_modifiers, skills_for_class
 from game.combat import effects, formulas, monster_ai
+from game.combat.monster_abilities import (
+    apply_pre_turn_abilities,
+    apply_post_hit_abilities,
+    apply_rune_golem_absorb,
+    check_and_consume_monster_shield,
+    check_zombie_undying,
+    get_extra_pierce_fraction,
+    roll_monster_double_turn,
+)
 from game.items.runes import ELEMENTS, RuneData, rune_burn_params_for_rank
 
 Outcome = Literal["continue", "win", "lose"]
@@ -332,6 +341,16 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     luck = int(st["luck"])
     mods = _mods(state)
 
+    # Оглушение — следующее действие пропущено
+    if state.get("player_skip_next_action"):
+        del state["player_skip_next_action"]
+        logs.append("💫 Оглушён! Атака пропущена.")
+        return logs, "continue", 0
+
+    # Щит монстра (Valkyrie) — блокирует один удар
+    if check_and_consume_monster_shield(state, logs):
+        return logs, "continue", 0
+
     # Проверка промаха (зависит от ЛОВ: ЛОВ=0 → 20%, ЛОВ=85+ → 3%)
     if formulas.roll_miss(int(st["dex"])):
         logs.append("💨 Промах! Удар не достиг цели.")
@@ -364,6 +383,15 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     rline = _rune_added_damage_log_line(scaled_elem, flat_el)
     if rline:
         logs.append(rline)
+
+    # Проклятие (снижает урон игрока)
+    pdm = float(state.get("player_damage_mult", 1.0))
+    if pdm < 0.999:
+        dmg = max(1, int(dmg * pdm))
+
+    # Поглощение рун голема
+    dmg = apply_rune_golem_absorb(state, dmg, logs)
+
     if crit:
         logs.append(f"→ Ты нанёс 🗡️ {dmg} урона [КРИТ💥]")
     else:
@@ -380,6 +408,11 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     record_player_last_damage_to_monster(state, dmg)
     _mark_weapon_mastery_strike(state)
     if int(_m(state)["hp"]) <= 0:
+        # Способность Нежить (zombie): выживает один раз
+        undying_logs: list[str] = []
+        if check_zombie_undying(state, undying_logs):
+            logs.extend(undying_logs)
+            return logs, "continue", dmg
         return logs, "win", dmg
     return logs, "continue", dmg
 
@@ -390,6 +423,13 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     Урон — только по веткам, наносящим HP-урон монстру (после всех множителей).
     """
     logs: list[str] = []
+
+    # Оглушение — следующее действие пропущено
+    if state.get("player_skip_next_action"):
+        del state["player_skip_next_action"]
+        logs.append("💫 Оглушён! Навык не сработал.")
+        return logs, "continue", 0
+
     skill_src = str(state.get("combat_skill_class_key") or state.get("class_key") or "wanderer")
     skills: tuple[SkillDef, SkillDef, SkillDef] = state.get("combat_skills") or skills_for_class(skill_src)
     if index < 0 or index > 2:
@@ -574,6 +614,20 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         )
         logs.append("Кровотечение!")
 
+    # Проклятие (снижает урон игрока от навыков тоже)
+    pdm = float(state.get("player_damage_mult", 1.0))
+    if pdm < 0.999:
+        dmg = max(1, int(dmg * pdm))
+
+    # Щит монстра (valkyrie) блокирует удар навыком
+    if check_and_consume_monster_shield(state, logs):
+        # MP потрачено, кулдаун поставлен, но урон поглощён
+        state["skill_cd"][str(index)] = sk.cooldown
+        return logs, "continue", 0
+
+    # Поглощение рун голема
+    dmg = apply_rune_golem_absorb(state, dmg, logs)
+
     tag = "🔮" if sk.kind == "mag" else "🗡️"
     if crit:
         logs.append(f"{tag} {sk.name}: {dmg} урона [КРИТ💥]")
@@ -598,6 +652,11 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
             logs.append(f"↩️ Поглощение жизни: +{heal} HP.")
 
     if int(mon["hp"]) <= 0:
+        # Нежить (zombie): выживает один раз
+        undying_logs: list[str] = []
+        if check_zombie_undying(state, undying_logs):
+            logs.extend(undying_logs)
+            return logs, "continue", dmg
         return logs, "win", dmg
     return logs, "continue", dmg
 
@@ -609,6 +668,11 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
 
     logs.extend(monster_ai.update_monster_mode(state))
     logs.extend(monster_ai.sync_boss_phase(state))
+
+    # ── Уникальные способности до хода (регенерация, щит, дыхание) ───────────
+    pre_logs: list[str] = []
+    apply_pre_turn_abilities(state, pre_logs)
+    logs.extend(pre_logs)
 
     if state.get("monster_skip_next"):
         state["monster_skip_next"] = False
@@ -662,6 +726,14 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             if bool(m.get("is_major_boss")) or bool(m.get("is_mini_boss"))
             else float(MONSTER_ARMOR_PENETRATION)
         )
+    # Дополнительное пробивание от уникальной способности монстра
+    extra_pierce = get_extra_pierce_fraction(tk)
+    if extra_pierce > 0:
+        pen = min(0.95, pen + extra_pierce)
+        if not state.get("ability_pierce_logged"):
+            state["ability_pierce_logged"] = True
+            logs.append(f"⚔️ Враг пробивает броню (+{int(extra_pierce * 100)}% игнора).")
+
     pen = max(0.0, min(0.95, pen))
     eff_defense = int(defense * (1.0 - pen))
 
@@ -673,6 +745,11 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
         state["monster_special_cd"] = 2
     else:
         logs.append(f"Враг: {monster_ai.pick_skill_line(state, special=False)}.")
+
+    # Огненное дыхание (drake: каждые N ходов — ×2 урон)
+    if state.pop("monster_breath_active", False):
+        base = int(base * 2.0)
+        logs.append(f"🐉 {m.get('emoji', '🐉')} <b>Огненное дыхание!</b> Урон удвоен!")
 
     if state.get("player_block_next"):
         state["player_block_next"] = False
@@ -718,8 +795,31 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
                     {"potency_percent": 4},
                 )
                 logs.append("☠️ Яд проникает в раны!")
+            # Уникальные постатаки монстра (яд, ожог, оглушение, проклятие…)
+            post_logs: list[str] = []
+            apply_post_hit_abilities(state, dmg, post_logs)
+            logs.extend(post_logs)
 
     state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
+
+    # Двойная атака (time_phantom)
+    if int(state["player_hp"]) > 0 and roll_monster_double_turn(state):
+        logs.append(f"⏩ <b>Временной скачок!</b> Враг атакует снова!")
+        base2 = int(atk * random.uniform(0.85, 1.05) * mult * out_m)
+        base2 = max(1, int(base2 * float(MONSTER_DAMAGE_DEALT_MULT)))
+        dmg2 = max(1, base2 - eff_defense)
+        shield2 = int(state.get("player_shield_hp", 0))
+        if shield2 > 0:
+            absorbed2 = min(shield2, dmg2)
+            state["player_shield_hp"] = shield2 - absorbed2
+            dmg2 -= absorbed2
+            if absorbed2 > 0:
+                logs.append(f"🛡️ Щит поглотил {absorbed2} урона.")
+        state["player_hp"] = max(0, int(state["player_hp"]) - dmg2)
+        if dmg2 > 0:
+            combo_break_on_player_hurt(state)
+            logs.append(f"→ {m.get('emoji', '👹')} Второй удар: −{dmg2} HP")
+            record_monster_last_damage_to_player(state, dmg2)
 
     if int(state["player_hp"]) <= 0:
         return logs, "lose"
@@ -764,5 +864,13 @@ def end_round_tick(state: dict[str, Any]) -> list[str]:
         if int(state["monster_debuff_turns"]) <= 0:
             state["monster_outgoing_mult"] = 1.0
             logs.append("🌫️ Ослабление атаки врага спало.")
+
+    # Тик проклятия (снижение урона игрока)
+    pc = int(state.get("player_curse_turns", 0))
+    if pc > 0:
+        state["player_curse_turns"] = pc - 1
+        if int(state["player_curse_turns"]) <= 0:
+            state["player_damage_mult"] = 1.0
+            logs.append("🌑 Проклятие спало.")
 
     return logs

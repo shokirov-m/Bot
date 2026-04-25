@@ -65,7 +65,10 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
             user = await user_repo.get_by_telegram_id(session, query.from_user.id)
             ch = await character_repo.get_by_user_id(session, user.id) if user else None
             loc = get_locale(ch, query.from_user.language_code)
-        text = leaderboard_service.format_leaderboard_html(cat, rows, locale=loc)
+        # Загружаем теги кланов для персонажей из топа
+        char_ids = [int(c.id) for c in rows]
+        clan_tags = await leaderboard_repo.get_clan_tags_for_characters(session, char_ids)
+        text = leaderboard_service.format_leaderboard_html(cat, rows, locale=loc, clan_tags=clan_tags)
         kb = leaderboard_categories_keyboard()
         await query.message.edit_text(text, reply_markup=kb)
         await query.answer()

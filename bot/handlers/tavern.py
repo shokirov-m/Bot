@@ -162,9 +162,10 @@ async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession) -
         if not ok:
             await query.answer(msg[:180], show_alert=True)
             return
-        await session.commit()
+        # Читаем state ДО commit, пока char не сброшен
         text = bqs.format_buyer_quest_html(char, floor_key)
         state = bqs._get_state(char, floor_key)
+        await session.commit()
         await query.message.edit_text(
             f"{text}\n\n{msg}",
             reply_markup=buyer_quest_keyboard(floor_key, state),
@@ -190,10 +191,11 @@ async def tavern_buyer_final(query: CallbackQuery, session: AsyncSession) -> Non
         from services import tavern_buyer_service as bqs
         ok, msg = await bqs.claim_final_reward(session, char, floor_key)
         if not ok:
-            await query.answer(msg[:180], show_alert=True)
+            await query.answer(msg[:200], show_alert=True)
             return
-        await session.commit()
+        # Читаем state ДО commit
         state = bqs._get_state(char, floor_key)
+        await session.commit()
         await query.message.edit_text(
             msg,
             reply_markup=buyer_quest_keyboard(floor_key, state),
