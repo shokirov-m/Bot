@@ -251,7 +251,7 @@ def add_experience(character: Character, amount: int) -> int:
     """Начислить опыт. Возвращает число полученных уровней за этот вызов."""
     amt = int(amount)
     if amt > 0:
-        bonus = float((character.meta_progress or {}).get("achievement_xp_bonus", 0.0))
+        bonus = float((getattr(character, "meta_progress", None) or {}).get("achievement_xp_bonus", 0.0))
         if bonus > 0.001:
             amt = int(round(amt * (1.0 + bonus)))
 
@@ -273,7 +273,7 @@ def add_experience(character: Character, amount: int) -> int:
                 sp_gained += 1
         
         if sp_gained > 0:
-            mp = dict(character.meta_progress or {})
+            mp = dict(getattr(character, "meta_progress", None) or {})
             mp["unspent_sp"] = int(mp.get("unspent_sp", 0)) + sp_gained
             character.meta_progress = mp
             

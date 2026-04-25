@@ -167,7 +167,11 @@ async def cmd_clan(message: Message, session: AsyncSession, state: FSMContext) -
 
         if not tok:
             body = await format_clan_card_html(session, char)
-            await message.answer(body, parse_mode=ParseMode.HTML)
+            membership = await clan_repo.get_membership(session, int(char.id))
+            if membership is None:
+                await message.answer(body, parse_mode=ParseMode.HTML, reply_markup=clan_no_hub_keyboard())
+            else:
+                await message.answer(body, parse_mode=ParseMode.HTML, reply_markup=clan_hub_keyboard(membership.role))
             return
 
         sub = tok[0].lower()

@@ -175,9 +175,7 @@ def apply_floor_aura_effects(state: dict[str, Any]) -> list[str]:
 
 def apply_elixir_buffs(state: dict[str, Any], dmg: int) -> int:
     """Apply multipliers from active elixirs."""
-    # This is normally handled in combat_service by putting multipliers into passive_mods
-    # But we can also do it here if needed.
-    return dmg
+    return max(1, int(int(dmg) * float(_mods(state).get("atk_mult", 1.0))))
 
 
 def apply_dot_damage_player(state: dict[str, Any]) -> list[str]:
@@ -284,13 +282,14 @@ def player_defense_value(state: dict[str, Any]) -> int:
     arm_m = float(state.get("rune_armor_mult", 1.0))
     if arm_m != 1.0:
         gear = int(gear * arm_m)
-    return int(
+    total = int(
         base
         + float(_mods(state).get("def_bonus", 0))
         + int(state.get("player_fortify_bonus", 0))
         + int(state.get("player_level_def_bonus", 0))
         + gear,
     )
+    return max(0, int(total * float(_mods(state).get("def_mult", 1.0))))
 
 
 def monster_armor_value(state: dict[str, Any]) -> int:
@@ -414,6 +413,7 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
         if cdm > 0:
             dmg = int(dmg * (1.0 + cdm / 100.0))
     dmg = _apply_weapon_mastery_to_damage(state, dmg)
+    dmg = apply_elixir_buffs(state, dmg)
     dmg = combo_apply_outgoing_damage(state, dmg, logs)
     before_flat = dmg
     flat_el = int(state.get("weapon_rune_flat_elemental", 0))
@@ -612,6 +612,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         dmg = int(dmg * formulas.crit_multiplier())
 
     dmg = _apply_weapon_mastery_to_damage(state, dmg)
+    dmg = apply_elixir_buffs(state, dmg)
     dmg = combo_apply_outgoing_damage(state, dmg, logs)
     before_flat = dmg
     flat_el = int(state.get("weapon_rune_flat_elemental", 0))

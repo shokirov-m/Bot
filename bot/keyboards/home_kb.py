@@ -117,13 +117,43 @@ def workbench_keyboard(*, can_upgrade: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def alchemy_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")],
-            menu_nav_button_row(),
-        ],
-    )
+def alchemy_keyboard(character: Character) -> InlineKeyboardMarkup:
+    from services import home_service
+
+    rows: list[list[InlineKeyboardButton]] = []
+    tier = home_service.alchemy_tier(character)
+    if tier < home_service.ALCHEMY_TIER_MAX:
+        cost = home_service.ALCHEMY_UPGRADE_BASE_GOLD * max(1, tier)
+        rows.append([InlineKeyboardButton(text=f"⬆ Улучшить стол ({cost:,}💰)", callback_data="hom:alch:up")])
+
+    for key, edef in home_service.ELIXIRS.items():
+        if tier < int(edef.get("tier", 1)):
+            continue
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{edef['emoji']} Сварить: {edef['name']}",
+                callback_data=f"hom:alch:brew:{key}",
+            ),
+        ])
+
+    rows.append([
+        InlineKeyboardButton(text="🔁 common→uncommon", callback_data="hom:alch:trans:common"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🔁 uncommon→rare", callback_data="hom:alch:trans:uncommon"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🔁 rare→epic", callback_data="hom:alch:trans:rare"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🔁 epic→legendary", callback_data="hom:alch:trans:epic"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="🔁 legendary→mythic", callback_data="hom:alch:trans:legendary"),
+    ])
+    rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def mine_farm_keyboard(character: Character) -> InlineKeyboardMarkup:

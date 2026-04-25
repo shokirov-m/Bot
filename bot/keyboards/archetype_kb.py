@@ -5,14 +5,16 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from game.archetypes.data import ARCHETYPES
 
-def archetype_selection_keyboard() -> InlineKeyboardMarkup:
-    """Buttons for Tier 1 archetypes."""
+def archetype_selection_keyboard(*, tier: int = 1, allowed_keys: list[str] | None = None) -> InlineKeyboardMarkup:
+    """Buttons for archetypes of the requested tier."""
     rows: list[list[InlineKeyboardButton]] = []
-    # Show Tier 1 archetypes
-    tier1 = [a for a in ARCHETYPES.values() if a.tier == 1]
-    for arch in tier1:
+    allowed = set(allowed_keys or [])
+    choices = [a for a in ARCHETYPES.values() if a.tier == int(tier)]
+    if allowed:
+        choices = [a for a in choices if a.key in allowed]
+    for arch in choices:
         rows.append([InlineKeyboardButton(
-            text=f"{arch.emoji} {arch.name_ru}", 
+            text=f"👁 {arch.emoji} {arch.name_ru}",
             callback_data=f"arch:view:{arch.key}"
         )])
     
@@ -24,8 +26,8 @@ def archetype_confirm_keyboard(arch_key: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="✅ Подтвердить выбор", callback_data=f"arch:confirm:{arch_key}"),
-                InlineKeyboardButton(text="❌ Отмена", callback_data="prf:arch_pick"),
+                InlineKeyboardButton(text="✅ Выбрать этот путь", callback_data=f"arch:confirm:{arch_key}"),
+                InlineKeyboardButton(text="⬅️ К списку", callback_data="prf:arch_pick"),
             ]
         ]
     )

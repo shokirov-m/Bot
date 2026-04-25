@@ -136,7 +136,7 @@ async def equipped_gear_defense_total(session: AsyncSession, character_id: int) 
 
 
 async def effective_primary_stats(session: AsyncSession, character: Character) -> dict[str, int]:
-    """Статы в бою/профиле: база из БД + экип + титул(ы) + бонус основной профессии."""
+    """Статы в бою/профиле: база из БД + экип + титул(ы)."""
     gear, title_b = await extra_stat_bonuses(session, character)
     extra = merge_stat_maps(gear, title_b)
     return {

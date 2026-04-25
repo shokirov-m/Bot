@@ -19,6 +19,69 @@ from services import character_service
 
 router = Router(name="archetype_v2")
 
+_STAT_LABELS = {
+    "level": "уровень",
+    "str": "СИЛ",
+    "dex": "ЛОВ",
+    "int": "ИНТ",
+    "vit": "ВЫН",
+    "luck": "УДЧ",
+}
+
+_STAT_ATTRS = {
+    "str": "stat_strength",
+    "dex": "stat_dexterity",
+    "int": "stat_intelligence",
+    "vit": "stat_vitality",
+    "luck": "stat_luck",
+}
+
+
+def _requirement_lines(char, arch) -> str:
+    if not arch.requirements:
+        return "• нет"
+    lines: list[str] = []
+    for key, need in arch.requirements.items():
+        label = _STAT_LABELS.get(key, key.upper())
+        current = int(char.level) if key == "level" else int(getattr(char, _STAT_ATTRS.get(key, key), 0))
+        mark = "✅" if current >= int(need) else "❌"
+        lines.append(f"{mark} {label}: <b>{current}</b> / {int(need)}")
+    return "\n".join(lines)
+
+
+def _skill_line(skill) -> str:
+    kind = "физ." if skill.kind == "phys" else "маг."
+    cd = f", КД {skill.cooldown}" if int(skill.cooldown) > 0 else ""
+    effect = f", эффект {html.escape(skill.effect_key)} {int(skill.effect_chance * 100)}%" if skill.effect_key else ""
+    return (
+        f"• <b>{html.escape(skill.name_ru)}</b> [{kind}, MP {skill.mp_cost}{cd}] "
+        f"x{skill.power_mult:g}{effect}\n"
+        f"  <i>{html.escape(skill.description_ru)}</i>"
+    )
+
+
+def _archetype_preview_html(char, arch, *, can_ok: bool, reason: str) -> str:
+    skills = [arch_manager.get_skill(s) for s in arch.skills]
+    skills_text = "\n".join(_skill_line(s) for s in skills if s is not None) or "• нет"
+    passives_text = "\n".join(
+        f"• <b>{html.escape(p.name_ru)}</b>: {html.escape(p.description_ru)}"
+        for p in arch.passives
+    ) or "• нет"
+    hp_line = f"+{int(round((arch.hp_multiplier - 1.0) * 100))}% HP" if arch.hp_multiplier != 1.0 else "без бонуса HP"
+    mp_line = f"+{int(round((arch.mp_multiplier - 1.0) * 100))}% MP" if arch.mp_multiplier != 1.0 else "без бонуса MP"
+    status = "✅ Можно выбрать. Нажмите кнопку ниже, если этот путь подходит." if can_ok else f"⚠️ Нельзя выбрать сейчас: {html.escape(reason)}"
+    return (
+        f"{arch.emoji} <b>{html.escape(arch.name_ru)}</b>\n"
+        f"<i>{html.escape(arch.description_ru)}</i>\n\n"
+        f"📌 <b>Что даёт:</b>\n"
+        f"• {hp_line}; {mp_line}\n\n"
+        f"📋 <b>Требования:</b>\n{_requirement_lines(char, arch)}\n\n"
+        f"⚔️ <b>Навыки после выбора:</b>\n{skills_text}\n\n"
+        f"💎 <b>Пассивные бонусы:</b>\n{passives_text}\n\n"
+        f"{status}"
+    )
+
+
 @router.callback_query(F.data == "prf:arch_pick")
 async def on_archetype_list(callback: CallbackQuery, session: AsyncSession) -> None:
     try:
@@ -31,20 +94,30 @@ async def on_archetype_list(callback: CallbackQuery, session: AsyncSession) -> N
             await callback.answer()
             return
             
-        if char.level < 10:
-            await callback.answer("Нужен 10 уровень для выбора пути.", show_alert=True)
+        current = arch_manager.get_character_archetype(char)
+        if current.tier >= 2:
+            await callback.answer("Специализация уже выбрана.", show_alert=True)
+            return
+        target_tier = 1 if current.tier <= 0 else 2
+        required_level = 10 if target_tier == 1 else 30
+        if char.level < required_level:
+            await callback.answer(f"Нужен {required_level} уровень для выбора пути.", show_alert=True)
             return
 
+        title = "Выбор пути" if target_tier == 1 else "Выбор специализации"
         text = (
-            "🌟 <b>Выбор пути</b>\n\n"
-            "Вы достигли 10 уровня! Теперь вы можете выбрать специализацию. "
-            "Это определит ваши будущие навыки и пассивные бонусы.\n\n"
-            "Выберите архетип для просмотра деталей:"
+            f"🌟 <b>{title}</b>\n\n"
+            f"Вы достигли {required_level} уровня и можете выбрать следующий этап развития. "
+            "Он определит новые навыки и пассивные бонусы.\n\n"
+            "Сначала откройте описание пути, затем подтвердите выбор:"
         )
         await callback.message.edit_text(
             text,
             parse_mode="HTML",
-            reply_markup=archetype_selection_keyboard()
+            reply_markup=archetype_selection_keyboard(
+                tier=target_tier,
+                allowed_keys=arch_manager.tier2_children(current.key) if target_tier == 2 else None,
+            )
         )
         await callback.answer()
     except Exception:
@@ -67,22 +140,21 @@ async def on_archetype_view(callback: CallbackQuery, session: AsyncSession) -> N
         char = await character_repo.get_by_user_id(session, user.id)
         
         can_ok, reason = arch_manager.can_unlock_archetype(char, arch_key)
+        target_tier = arch.tier
         
-        skills_text = "\n".join([f"• {arch_manager.get_skill(s).name_ru}" for s in arch.skills if arch_manager.get_skill(s)])
-        passives_text = "\n".join([f"• <b>{p.name_ru}</b>: {p.description_ru}" for p in arch.passives])
-        
-        text = (
-            f"{arch.emoji} <b>{arch.name_ru}</b>\n"
-            f"<i>{arch.description_ru}</i>\n\n"
-            f"⚔️ <b>Навыки:</b>\n{skills_text}\n\n"
-            f"💎 <b>Пассивки:</b>\n{passives_text}\n\n"
-        )
+        text = _archetype_preview_html(char, arch, can_ok=can_ok, reason=reason)
         
         if not can_ok:
-            text += f"⚠️ <b>Требования не выполнены:</b>\n{reason}"
-            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=archetype_selection_keyboard())
+            current = arch_manager.get_character_archetype(char)
+            await callback.message.edit_text(
+                text,
+                parse_mode="HTML",
+                reply_markup=archetype_selection_keyboard(
+                    tier=target_tier,
+                    allowed_keys=arch_manager.tier2_children(current.key) if target_tier == 2 else None,
+                ),
+            )
         else:
-            text += "✅ Вы можете выбрать этот путь."
             await callback.message.edit_text(text, parse_mode="HTML", reply_markup=archetype_confirm_keyboard(arch_key))
             
         await callback.answer()
@@ -109,6 +181,11 @@ async def on_archetype_confirm(callback: CallbackQuery, session: AsyncSession) -
 
         # Perform the change
         char.class_key = arch.key
+        mp = dict(char.meta_progress or {})
+        mp["unlocked_nodes"] = []
+        mp["equipped_skill_keys"] = []
+        mp["unspent_sp"] = max(0, int(char.level) - 9)
+        char.meta_progress = mp
         # Refresh HP/MP and restore
         char.hp_max = character_service._compute_hp_max(char.stat_vitality, char.stat_strength, arch)
         char.mp_max = character_service._compute_mp_max(char.stat_intelligence, arch)
@@ -120,7 +197,7 @@ async def on_archetype_confirm(callback: CallbackQuery, session: AsyncSession) -
         loc = get_locale(char, callback.from_user.language_code)
         await callback.message.edit_text(
             f"🎉 Поздравляем! Вы теперь <b>{arch.name_ru}</b>!\n\n"
-            "Ваши характеристики обновлены, а новые навыки уже доступны в бою.",
+            "Характеристики обновлены, дерево навыков сброшено под новый путь, новые навыки доступны в бою.",
             parse_mode="HTML",
             reply_markup=profile_spec_submenu_keyboard(char, locale=loc)
         )

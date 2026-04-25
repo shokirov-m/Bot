@@ -15,7 +15,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_skills_btn": "⚔️ Навыки",
         "profile_spec_btn": "🎭 Специализация",
         "profile_spec_intro": (
-            "<i>Титулы, профессии и боевые навыки — выбери раздел ниже.</i>"
+            "<i>Титулы, архетипы и боевые навыки — выбери раздел ниже.</i>"
         ),
         "profile_ranker_name_badge": "🏅 Ранкер ",
         "skills_screen_title": "⚔️ <b>Боевые навыки</b>",
@@ -37,20 +37,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_floor": "🗺️ Этаж",
         "menu_inv": "🎒 Инвентарь",
         "menu_titles": "🏆 Титулы",
-        "menu_professions": "⚒️ Профессии",
-        "profile_class_flavor_note": (
-            "<i>Стартовый архетип при регистрации задаёт лор и начальный лут; в бою действуют "
-            "<b>профессии</b> и выбранные в школе навыки.</i>"
-        ),
-        "professions_screen_title": "⚒️ <b>Профессии</b>",
-        "professions_screen_intro": (
-            "<i>Открываются по базовым статам и опыту заточки. Основная задаёт набор боевых "
-            "навыков по умолчанию и бонусы к статам; вторая — с макс. этажа <b>{floor}</b>, только "
-            "к пассивным модификаторам боя (половина).</i>"
-        ),
-        "professions_clear_slot1": "❌ Снять основную",
-        "professions_clear_slot2": "❌ Снять вторую",
-        "professions_equipped_line": "Основная: <b>{p}</b>\nВторая: <b>{s}</b>",
         "menu_top": "📊 Топ игроков",
         "menu_city": "🏙️ Город",
         "menu_portal": "🌀 Портал",
@@ -341,7 +327,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_skills_btn": "⚔️ Skills",
         "profile_spec_btn": "🎭 Specialization",
         "profile_spec_intro": (
-            "<i>Titles, professions, and combat skills — pick a section below.</i>"
+            "<i>Titles, archetypes, and combat skills — pick a section below.</i>"
         ),
         "profile_ranker_name_badge": "🏅 Ranker ",
         "skills_screen_title": "⚔️ <b>Combat skills</b>",
@@ -363,20 +349,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_floor": "🗺️ Floor",
         "menu_inv": "🎒 Inventory",
         "menu_titles": "🏆 Titles",
-        "menu_professions": "⚒️ Professions",
-        "profile_class_flavor_note": (
-            "<i>Your registration archetype sets lore and starter loot; in combat, "
-            "<b>professions</b> and skills from the school matter.</i>"
-        ),
-        "professions_screen_title": "⚒️ <b>Professions</b>",
-        "professions_screen_intro": (
-            "<i>Unlock by base stats and enchant attempts. Primary sets default combat skills and "
-            "stat bonuses; secondary from max floor <b>{floor}</b> adds half of its passive combat "
-            "modifiers only.</i>"
-        ),
-        "professions_clear_slot1": "❌ Clear primary",
-        "professions_clear_slot2": "❌ Clear secondary",
-        "professions_equipped_line": "Primary: <b>{p}</b>\nSecondary: <b>{s}</b>",
         "menu_top": "📊 Leaderboard",
         "menu_city": "🏙️ City",
         "menu_portal": "🌀 Portal",

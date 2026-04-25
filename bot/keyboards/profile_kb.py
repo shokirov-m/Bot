@@ -1,4 +1,4 @@
-"""Клавиатура профиля: меню, специализация (титулы/профессии/навыки), полные характеристики."""
+"""Клавиатура профиля: меню, специализация (титулы/архетипы/навыки), полные характеристики."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.i18n import t
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
+from game.archetypes import manager as arch_manager
 from game.characters import pets as pets_mod
 
 
@@ -18,11 +19,11 @@ def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -
     ]
     
     # If wanderer and lvl 10+, show Archetype Selection
-    if str(character.class_key or "wanderer").lower() == "wanderer" and character.level >= 10:
+    arch = arch_manager.get_character_archetype(character)
+    if arch.tier <= 0 and character.level >= 10:
         rows.append([InlineKeyboardButton(text="🌟 Выбрать путь", callback_data="prf:arch_pick")])
-    elif character.level >= 30:
-         # Placeholder for Tier 2
-         pass
+    elif arch.tier == 1 and character.level >= 30:
+        rows.append([InlineKeyboardButton(text="🌟 Выбрать специализацию", callback_data="prf:arch_pick")])
 
     rows.extend([
         [InlineKeyboardButton(text="🌳 Древо навыков", callback_data="prf:skills")],

@@ -28,6 +28,30 @@ SKILLS: dict[str, SkillV2] = {
     "aco_smite": SkillV2("aco_smite", "Кара", "Святой свет поражает врага.", 16, 0, 1.5, "mag"),
     "aco_heal": SkillV2("aco_heal", "Лечение", "Восстанавливает HP.", 25, 0, 0.0, "mag", effect_key="heal", effect_chance=1.0),
     "aco_bless": SkillV2("aco_bless", "Благословение", "Регенерация HP и MP.", 30, 5, 0.0, "mag", effect_key="hot", effect_chance=1.0),
+
+    # --- Tier 2: Warrior specializations ---
+    "grd_wall": SkillV2("grd_wall", "Стена щитов", "Мощная защитная стойка.", 28, 4, 0.0, "phys", effect_key="fortify", effect_chance=1.0),
+    "grd_crush": SkillV2("grd_crush", "Сокрушение", "Тяжёлый удар с пробитием.", 24, 2, 1.9, "phys", effect_key="shred_armor", effect_chance=1.0),
+    "brs_rend": SkillV2("brs_rend", "Рассечение", "Кровавый удар берсерка.", 22, 1, 2.0, "phys", effect_key="bleed", effect_chance=0.45),
+    "brs_fury": SkillV2("brs_fury", "Бешеный напор", "Очень сильный удар без защиты.", 34, 3, 2.35, "phys"),
+
+    # --- Tier 2: Mage specializations ---
+    "pyro_flame": SkillV2("pyro_flame", "Пламенный взрыв", "Сильный огонь с шансом поджога.", 34, 2, 2.25, "mag", effect_key="burn", effect_chance=0.55),
+    "pyro_ember": SkillV2("pyro_ember", "Тлеющая печать", "Ослабляет броню врага жаром.", 28, 3, 1.45, "mag", effect_key="shred_armor", effect_chance=1.0),
+    "cryo_lance": SkillV2("cryo_lance", "Ледяное копьё", "Лёд пронзает цель.", 32, 2, 2.05, "mag", effect_key="freeze", effect_chance=0.45),
+    "cryo_barrier": SkillV2("cryo_barrier", "Кристальный барьер", "Щит из льда.", 36, 5, 0.0, "mag", effect_key="shield", effect_chance=1.0),
+
+    # --- Tier 2: Scout specializations ---
+    "ass_shadow": SkillV2("ass_shadow", "Теневой выпад", "Удар по слабому месту.", 24, 2, 2.15, "phys", effect_key="backstab", effect_chance=1.0),
+    "ass_venom": SkillV2("ass_venom", "Чёрный яд", "Сильное отравление.", 26, 3, 1.55, "phys", effect_key="poison", effect_chance=0.65),
+    "rng_mark": SkillV2("rng_mark", "Метка охотника", "Точный дальний удар.", 22, 1, 2.0, "phys"),
+    "rng_evasion": SkillV2("rng_evasion", "Побег сквозь туман", "Большой бонус уклонения.", 26, 4, 0.0, "phys", effect_key="dodge_buff", effect_chance=1.0),
+
+    # --- Tier 2: Acolyte specializations ---
+    "pal_smite": SkillV2("pal_smite", "Священный удар", "Световой удар паладина.", 28, 2, 1.95, "mag"),
+    "pal_guard": SkillV2("pal_guard", "Обет защиты", "Защитная молитва.", 30, 4, 0.0, "mag", effect_key="block_next", effect_chance=1.0),
+    "prp_radiance": SkillV2("prp_radiance", "Сияние", "Исцеляет раны.", 34, 3, 0.0, "mag", effect_key="heal", effect_chance=1.0),
+    "prp_hymn": SkillV2("prp_hymn", "Гимн стойкости", "Долгое восстановление.", 38, 5, 0.0, "mag", effect_key="hot", effect_chance=1.0),
 }
 
 PASSIVES: dict[str, PassiveV2] = {
@@ -35,6 +59,14 @@ PASSIVES: dict[str, PassiveV2] = {
     "pas_mag_flow": PassiveV2("pas_mag_flow", "Поток маны", "Повышает силу магии на 15%.", {"mag_bonus_percent": 15}),
     "pas_sct_reflex": PassiveV2("pas_sct_reflex", "Рефлексы", "Повышает шанс уклонения на 10%.", {"dodge_bonus": 0.10}),
     "pas_aco_faith": PassiveV2("pas_aco_faith", "Вера", "Увеличивает регенерацию MP за ход.", {"mp_regen_turn": 5}),
+    "pas_grd_bulwark": PassiveV2("pas_grd_bulwark", "Бастион", "Большой бонус защиты.", {"def_bonus": 22.0}),
+    "pas_brs_frenzy": PassiveV2("pas_brs_frenzy", "Боевой транс", "Больше шанса крита.", {"crit_bonus": 0.08}),
+    "pas_pyro_core": PassiveV2("pas_pyro_core", "Огненное ядро", "Сильнее магический урон.", {"mag_bonus_percent": 28}),
+    "pas_cryo_focus": PassiveV2("pas_cryo_focus", "Холодный разум", "Мана восстанавливается быстрее.", {"mp_regen_turn": 8}),
+    "pas_ass_precision": PassiveV2("pas_ass_precision", "Точный расчёт", "Крит и уклонение выше.", {"crit_bonus": 0.06, "dodge_bonus": 0.04}),
+    "pas_rng_reflex": PassiveV2("pas_rng_reflex", "Следопыт", "Сильный бонус уклонения.", {"dodge_bonus": 0.14}),
+    "pas_pal_oath": PassiveV2("pas_pal_oath", "Клятва", "Защита и вера.", {"def_bonus": 14.0, "mp_regen_turn": 3}),
+    "pas_prp_grace": PassiveV2("pas_prp_grace", "Благодать", "Много регенерации маны.", {"mp_regen_turn": 10, "mag_bonus_percent": 8}),
 }
 
 ARCHETYPES: dict[str, Archetype] = {
@@ -78,5 +110,76 @@ ARCHETYPES: dict[str, Archetype] = {
         passives=(PASSIVES["pas_aco_faith"],),
         skills=("aco_smite", "aco_heal", "aco_bless"),
         requirements={"level": 10, "int": 12, "vit": 12},
+    ),
+    "guardian": Archetype(
+        "guardian", "Страж", "🛡️", 2,
+        "Воин, превративший защиту в оружие.",
+        base_stats={"str": 22, "vit": 24},
+        hp_multiplier=1.25,
+        passives=(PASSIVES["pas_war_tough"], PASSIVES["pas_grd_bulwark"]),
+        skills=("grd_wall", "grd_crush", "war_bash"),
+        requirements={"level": 30, "str": 28, "vit": 24},
+    ),
+    "berserker": Archetype(
+        "berserker", "Берсерк", "🩸", 2,
+        "Воин, который давит врага яростью и критами.",
+        base_stats={"str": 28, "vit": 18},
+        hp_multiplier=1.18,
+        passives=(PASSIVES["pas_brs_frenzy"],),
+        skills=("brs_rend", "brs_fury", "war_heavy"),
+        requirements={"level": 30, "str": 32},
+    ),
+    "pyromancer": Archetype(
+        "pyromancer", "Пиромант", "🔥", 2,
+        "Маг разрушительного огня.",
+        base_stats={"int": 28, "luck": 14},
+        mp_multiplier=1.25,
+        passives=(PASSIVES["pas_mag_flow"], PASSIVES["pas_pyro_core"]),
+        skills=("pyro_flame", "pyro_ember", "mag_fire"),
+        requirements={"level": 30, "int": 32},
+    ),
+    "cryomancer": Archetype(
+        "cryomancer", "Криомант", "❄️", 2,
+        "Маг льда, контроля и выживания.",
+        base_stats={"int": 24, "vit": 18},
+        mp_multiplier=1.28,
+        passives=(PASSIVES["pas_cryo_focus"],),
+        skills=("cryo_lance", "cryo_barrier", "mag_frost"),
+        requirements={"level": 30, "int": 28, "vit": 18},
+    ),
+    "assassin": Archetype(
+        "assassin", "Ассасин", "🗡️", 2,
+        "Убийца, который заканчивает бой до ответного удара.",
+        base_stats={"dex": 28, "luck": 22},
+        passives=(PASSIVES["pas_sct_reflex"], PASSIVES["pas_ass_precision"]),
+        skills=("ass_shadow", "ass_venom", "sct_shot"),
+        requirements={"level": 30, "dex": 30, "luck": 20},
+    ),
+    "ranger": Archetype(
+        "ranger", "Следопыт", "🏹", 2,
+        "Охотник, который переживает врага скоростью.",
+        base_stats={"dex": 30, "vit": 16},
+        passives=(PASSIVES["pas_rng_reflex"],),
+        skills=("rng_mark", "rng_evasion", "sct_dodge"),
+        requirements={"level": 30, "dex": 32},
+    ),
+    "paladin": Archetype(
+        "paladin", "Паладин", "⚜️", 2,
+        "Жрец в броне, держащий строй светом.",
+        base_stats={"vit": 24, "int": 20, "str": 18},
+        hp_multiplier=1.18,
+        mp_multiplier=1.12,
+        passives=(PASSIVES["pas_pal_oath"],),
+        skills=("pal_smite", "pal_guard", "aco_bless"),
+        requirements={"level": 30, "vit": 24, "int": 20},
+    ),
+    "prophet": Archetype(
+        "prophet", "Пророк", "✨", 2,
+        "Жрец чистой благодати и долгих боёв.",
+        base_stats={"int": 26, "luck": 20},
+        mp_multiplier=1.30,
+        passives=(PASSIVES["pas_aco_faith"], PASSIVES["pas_prp_grace"]),
+        skills=("prp_radiance", "prp_hymn", "aco_smite"),
+        requirements={"level": 30, "int": 28, "luck": 18},
     ),
 }

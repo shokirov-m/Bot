@@ -1,5 +1,5 @@
 """
-Городская экономика: лотерея, ростовщик, сейф банка, заглушка аукциона.
+Городская экономика: лотерея, ростовщик, сейф банка.
 Колбэки ecy:* — только на этаже городского хаба.
 """
 
@@ -313,39 +313,3 @@ async def economy_safe_upgrade(query: CallbackQuery, session: AsyncSession) -> N
         logger.exception("ecy:sfu")
         await query.answer("Ошибка.", show_alert=True)
 
-
-@router.callback_query(F.data.startswith("ecy:auc:"))
-async def economy_auction_stub(query: CallbackQuery, session: AsyncSession) -> None:
-    try:
-        if query.data is None or query.from_user is None or query.message is None:
-            await query.answer()
-            return
-        from game.economy import sinks as sink_rules
-
-        floor_key = int(query.data.split(":")[2])
-        char = await _load_char_for_mutation(session, query.from_user.id)
-        if char is None:
-            await query.answer("Нет персонажа.", show_alert=True)
-            return
-        if char.floor_number != floor_key:
-            await query.answer("Этаж устарел.", show_alert=True)
-            return
-        mp = dict(char.meta_progress or {})
-        mp[sink_rules.META_AUCTION_STUB_SEEN] = int(mp.get(sink_rules.META_AUCTION_STUB_SEEN, 0)) + 1
-        char.meta_progress = mp
-        await session.flush()
-        body = sink_rules.auction_public_status_ru()
-        intro = economy_sink_service.economy_hub_intro_html(char)
-        try:
-            await query.message.edit_text(
-                f"{intro}\n\n{body}",
-                reply_markup=economy_hub_keyboard(floor_key),
-                parse_mode=ParseMode.HTML,
-            )
-        except TelegramBadRequest as e:
-            if not _is_message_not_modified(e):
-                raise
-        await query.answer()
-    except Exception:
-        logger.exception("ecy:auc")
-        await query.answer("Ошибка.", show_alert=True)

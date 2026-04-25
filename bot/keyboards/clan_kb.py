@@ -353,6 +353,12 @@ def clan_browse_keyboard(
     if nav:
         rows.append(nav)
 
+    if not in_clan:
+        rows.append([
+            InlineKeyboardButton(text="🆔 Вступить по ID", callback_data="cln:join:prompt"),
+            InlineKeyboardButton(text="➕ Создать клан", callback_data="cln:create"),
+        ])
+
     back_cb = "cln:hub" if in_clan else "cln:nohub"
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data=back_cb), _menu_btn()])
     return InlineKeyboardMarkup(inline_keyboard=rows)

@@ -1,6 +1,5 @@
 """
 Поглотители золота в городах-хабах: лотерея, ростовщик, сейф банка.
-Городская кнопка «Магазин» — краткая справка; торговля между игроками в /магазин.
 
 Баланс (подкрутка v2): лотерея слегка «жёстче», билет дороже на высоких хабах;
 долг ростовщика забирает долю золота с победы в бою до погашения.
@@ -18,7 +17,6 @@ META_ML_DEBT = "sink_moneylender_debt"
 META_LOTTERY_SPENT = "sink_lottery_gold_spent"
 META_BANK_SAFE_BALANCE = "bank_safe_balance"
 META_BANK_SAFE_LEVEL = "bank_safe_capacity_level"
-META_AUCTION_STUB_SEEN = "sink_auction_info_seen"
 META_NEXT_WIN_XP_MULT = "next_win_xp_mult"  # после успешного побега: −10% к опыту со след. победы
 
 
@@ -211,15 +209,6 @@ def try_bank_safe_upgrade(character: Any) -> tuple[bool, str]:
     _set_meta(character, mp)
     new_cap = bank_safe_capacity(character)
     return True, f"Хранилище <b>+1</b> уровень (−{cost} 💰). Вместимость: <b>{new_cap}</b> 💰."
-
-
-def auction_public_status_ru() -> str:
-    """Короткая справка: игровой магазин в боте; городская кнопка — напоминание."""
-    return (
-        "🛒 <b>Магазин игроков</b>\n"
-        "Выставляй предметы из сумки и покупай у других по фиксированной цене — "
-        "команда <b>/магазин</b> или кнопка в главном меню. Налог с продажи <b>10%</b> с продавца."
-    )
 
 
 def format_lottery_outcome_ru(code: str, ticket: int, gold_delta: int, rune_delta: int) -> str:

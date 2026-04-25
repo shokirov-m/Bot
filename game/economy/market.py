@@ -30,12 +30,6 @@ def _expires_at_utc(expires_at: datetime) -> datetime:
     return dt.astimezone(UTC)
 
 
-def min_next_bid_for_lot(lot: AuctionLot) -> int:
-    if int(lot.current_bid) <= 0:
-        return max(1, int(lot.start_price))
-    return int(lot.current_bid) + 1
-
-
 async def create_lot(
     session: AsyncSession,
     char: Character,
@@ -121,46 +115,6 @@ async def create_direct_offered_lot(
         f"{LOT_DURATION_DAYS} дн.",
         lot,
     )
-
-
-async def place_bid(
-    session: AsyncSession,
-    char: Character,
-    lot_id: int,
-    amount: int,
-) -> tuple[bool, str]:
-    """Ставка: золото списывается; прошлому лидеру возвращается ставка."""
-    amt = int(amount)
-    if amt < 1:
-        return False, "Сумма ставки некорректна."
-
-    lot = await auction_repo.get_by_id(session, lot_id)
-    if lot is None or lot.status != "active":
-        return False, "Лот не найден или уже закрыт."
-    if lot.target_char_id is not None:
-        return False, "Это личное предложение — купи или откажись через кнопки в уведомлении."
-    if datetime.now(UTC) >= _expires_at_utc(lot.expires_at):
-        return False, "Время торгов по лоту истекло."
-    if int(lot.seller_char_id) == int(char.id):
-        return False, "Нельзя ставить на свой лот."
-
-    need = min_next_bid_for_lot(lot)
-    if amt < need:
-        return False, f"Минимальная ставка: {need} зол."
-
-    if int(char.gold) < amt:
-        return False, "Недостаточно золота."
-
-    if int(lot.buyer_char_id or 0) > 0 and int(lot.current_bid) > 0:
-        prev = await character_repo.get_by_id(session, int(lot.buyer_char_id))
-        if prev is not None:
-            prev.gold = int(prev.gold) + int(lot.current_bid)
-
-    char.gold = int(char.gold) - amt
-    lot.current_bid = amt
-    lot.buyer_char_id = int(char.id)
-    await session.flush()
-    return True, f"Ставка {amt} зол. · лот #{lot.id}."
 
 
 async def buy_lot_now(

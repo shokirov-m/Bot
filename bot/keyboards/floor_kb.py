@@ -48,7 +48,7 @@ def _pet_rows(character: Character, floor_number: int) -> list[list[InlineKeyboa
 
 
 def _class_arc_rows(character: Character) -> list[list[InlineKeyboardButton]]:
-    """Классовая ветка наставника снята — профессии в статусе / меню."""
+    """Классовая ветка наставника снята — архетипы в статусе / меню."""
     return []
 
 

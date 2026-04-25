@@ -1484,11 +1484,20 @@ async def _victory_sequence(
         from services.fame_bonuses import loot_item_drop_fame_multiplier
 
         _fam = loot_item_drop_fame_multiplier(character)
+        _elixir_drop_mult = 1.0
+        from services.home_service import ELIXIRS as _HOME_ELIXIRS
+
+        for _ek, _ev in dict((character.meta_progress or {}).get("active_elixirs") or {}).items():
+            if int(_ev or 0) <= 0:
+                continue
+            _edef = _HOME_ELIXIRS.get(str(_ek))
+            if _edef is not None:
+                _elixir_drop_mult *= float((_edef.get("buff") or {}).get("drop_mult", 1.0))
         _drop_triggered = roll_item_drop(
             spawn,
             int(character.floor_number),
             stat_luck=_luck,
-            fame_loot_mult=_fam,
+            fame_loot_mult=_fam * _elixir_drop_mult,
         ) or (
             _home_loot_extra > 0 and random.random() < _home_loot_extra
         )

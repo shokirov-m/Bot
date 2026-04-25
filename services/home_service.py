@@ -22,7 +22,10 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models.character import Character
+from services import character_service
 
 META_HOME = "home_v1"
 
@@ -363,8 +366,11 @@ def try_upgrade_workbench(character: Character) -> tuple[bool, str]:
 
 
 def alchemy_tier(character: Character) -> int:
-    _, h = _load_home(character)
-    return max(0, min(5, int(h.get("alchemy_tier", 0))))
+    mp, h = _load_home(character)
+    raw = mp.get("home_alchemy_tier", h.get("alchemy_tier"))
+    if raw is None:
+        return 1 if can_access_alchemy(character) else 0
+    return max(0, min(ALCHEMY_TIER_MAX, int(raw)))
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +530,7 @@ def format_home_main_html(character: Character) -> str:
 
     if can_access_alchemy(character):
         at = alchemy_tier(character)
-        lines.append(f"⚗️ Алхимия: стол <b>ур. {at}</b> <i>(рецепты — позже)</i>")
+        lines.append(f"⚗️ Алхимия: стол <b>ур. {at}/{ALCHEMY_TIER_MAX}</b> (зелья и трансмутация)")
     else:
         lines.append("⚗️ Алхимия: <i>откроется на ур. 3</i>")
 
@@ -596,26 +602,26 @@ ALCHEMY_TIER_MAX = 5
 ALCHEMY_UPGRADE_BASE_GOLD = 25_000
 
 ELIXIRS = {
-    "elixir_str": {"name": "Зелье Силы", "emoji": "🔴", "cost_gold": 1000, "mats": {"common": 5}, "duration": 3, "buff": {"atk_mult": 1.15}},
-    "elixir_def": {"name": "Зелье Защиты", "emoji": "🔵", "cost_gold": 1000, "mats": {"common": 5}, "duration": 3, "buff": {"def_mult": 1.20}},
-    "elixir_luck": {"name": "Зелье Удачи", "emoji": "🟡", "cost_gold": 2000, "mats": {"uncommon": 3}, "duration": 3, "buff": {"drop_mult": 1.25}},
-    "elixir_str_greater": {"name": "Вел. Зелье Силы", "emoji": "🔥", "cost_gold": 5000, "mats": {"rare": 2}, "duration": 10, "buff": {"atk_mult": 1.25}},
-    "elixir_def_greater": {"name": "Вел. Зелье Защиты", "emoji": "💎", "cost_gold": 5000, "mats": {"rare": 2}, "duration": 10, "buff": {"def_mult": 1.35}},
+    "elixir_str": {"name": "Зелье Силы", "emoji": "🔴", "tier": 1, "cost_gold": 1000, "mats": {"common": 5}, "duration": 3, "buff": {"atk_mult": 1.15}},
+    "elixir_def": {"name": "Зелье Защиты", "emoji": "🔵", "tier": 1, "cost_gold": 1000, "mats": {"common": 5}, "duration": 3, "buff": {"def_mult": 1.20}},
+    "elixir_luck": {"name": "Зелье Удачи", "emoji": "🟡", "tier": 2, "cost_gold": 2000, "mats": {"uncommon": 3}, "duration": 3, "buff": {"drop_mult": 1.25}},
+    "elixir_str_greater": {"name": "Вел. Зелье Силы", "emoji": "🔥", "tier": 3, "cost_gold": 5000, "mats": {"rare": 2}, "duration": 10, "buff": {"atk_mult": 1.25}},
+    "elixir_def_greater": {"name": "Вел. Зелье Защиты", "emoji": "💎", "tier": 3, "cost_gold": 5000, "mats": {"rare": 2}, "duration": 10, "buff": {"def_mult": 1.35}},
 }
 
-def alchemy_tier(character: Character) -> int:
-    return int((character.meta_progress or {}).get("home_alchemy_tier", 1))
-
 def try_upgrade_alchemy(character: Character) -> tuple[bool, str]:
+    if not can_access_alchemy(character):
+        return False, "Алхимия откроется на ур. 3 дома."
     t = alchemy_tier(character)
     if t >= ALCHEMY_TIER_MAX: return False, "Максимальный уровень."
     cost = ALCHEMY_UPGRADE_BASE_GOLD * t
     if not character_service.try_spend_gold(character, cost):
         return False, f"Нужно {cost:,} 💰."
     
-    mp = dict(character.meta_progress or {})
+    mp, h = _load_home(character)
+    h["alchemy_tier"] = t + 1
     mp["home_alchemy_tier"] = t + 1
-    character.meta_progress = mp
+    _save_home(character, mp, h)
     return True, f"Стол улучшен до ур. {t+1}!"
 
 def format_alchemy_menu_html(character: Character) -> str:
@@ -642,16 +648,17 @@ def format_alchemy_menu_html(character: Character) -> str:
     lines.append("📜 <b>Доступные зелья:</b>")
     for k, v in ELIXIRS.items():
         m_line = " + ".join([f"{count} {k}" for k, count in v["mats"].items()])
-        lines.append(f"• {v['emoji']} <b>{v['name']}</b>: {v['cost_gold']}💰 + {m_line}")
+        req = int(v.get("tier", 1))
+        lock = "" if t >= req else f" <i>(стол ур. {req})</i>"
+        lines.append(f"• {v['emoji']} <b>{v['name']}</b>: {v['cost_gold']}💰 + {m_line}{lock}")
         
     return "\n".join(lines)
 
 async def try_brew_elixir(session: AsyncSession, character: Character, elixir_key: str) -> tuple[bool, str]:
     edef = ELIXIRS.get(elixir_key)
     if not edef: return False, "Неизвестный рецепт."
-    
-    if not character_service.try_spend_gold(character, edef["cost_gold"]):
-        return False, f"Нужно {edef['cost_gold']} 💰."
+    if alchemy_tier(character) < int(edef.get("tier", 1)):
+        return False, f"Нужен алхимический стол ур. {edef.get('tier', 1)}."
         
     # Check materials
     from db.repository import inventory_repo
@@ -661,6 +668,9 @@ async def try_brew_elixir(session: AsyncSession, character: Character, elixir_ke
     for m_rarity, m_count in edef["mats"].items():
         if total_materials_in_bag(bag_items, m_rarity) < m_count:
             return False, f"Не хватает материалов: {m_rarity} ({m_count} шт)."
+
+    if not character_service.try_spend_gold(character, edef["cost_gold"]):
+        return False, f"Нужно {edef['cost_gold']} 💰."
             
     # Consume materials
     remaining = dict(edef["mats"])

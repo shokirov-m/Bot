@@ -8,6 +8,29 @@ from game.archetypes.data import ARCHETYPES, SKILLS
 from game.archetypes.models import Archetype, SkillV2, SkillTreeNode
 from game.archetypes.trees import TREES
 
+_STAT_ATTR = {
+    "str": "stat_strength",
+    "dex": "stat_dexterity",
+    "int": "stat_intelligence",
+    "vit": "stat_vitality",
+    "luck": "stat_luck",
+}
+
+_TIER2_PARENT: dict[str, str] = {
+    "guardian": "warrior",
+    "berserker": "warrior",
+    "pyromancer": "mage",
+    "cryomancer": "mage",
+    "assassin": "scout",
+    "ranger": "scout",
+    "paladin": "acolyte",
+    "prophet": "acolyte",
+}
+
+def tier2_children(parent_key: str) -> list[str]:
+    parent = str(parent_key or "").lower()
+    return [child for child, p in _TIER2_PARENT.items() if p == parent]
+
 def get_archetype(key: str) -> Archetype | None:
     return ARCHETYPES.get(key)
 
@@ -52,14 +75,24 @@ def can_unlock_archetype(character: Character, arch_key: str) -> tuple[bool, str
     arch = ARCHETYPES.get(arch_key)
     if not arch:
         return False, "Неизвестный архетип."
+
+    current_key = str(character.class_key or "wanderer").lower()
+    current = ARCHETYPES.get(current_key, ARCHETYPES["wanderer"])
+    if arch.tier <= current.tier and arch.key != current.key:
+        return False, "Этот путь уже пройден или ниже текущего."
+    if arch.tier == 1 and current.key != "wanderer":
+        return False, "Базовый путь уже выбран."
+    if arch.tier == 2 and _TIER2_PARENT.get(arch.key) != current.key:
+        parent = ARCHETYPES.get(_TIER2_PARENT.get(arch.key, ""))
+        parent_name = parent.name_ru if parent else "нужный базовый путь"
+        return False, f"Сначала нужен путь: {parent_name}."
     
     if character.level < arch.requirements.get("level", 1):
         return False, f"Требуется уровень {arch.requirements['level']}."
         
     for stat, val in arch.requirements.items():
         if stat == "level": continue
-        # Map stat name to character attribute
-        attr = f"stat_{stat}" if not stat.startswith("stat_") else stat
+        attr = _STAT_ATTR.get(stat, stat if stat.startswith("stat_") else f"stat_{stat}")
         if int(getattr(character, attr, 0)) < val:
             return False, f"Требуется {stat.upper()} {val}+."
             
@@ -82,23 +115,16 @@ def get_character_tree(character: Character) -> dict[str, SkillTreeNode]:
 
 def get_unlocked_skills(character: Character) -> list[SkillV2]:
     """Returns list of active skills unlocked in the tree."""
+    arch = get_character_archetype(character)
+    res: list[SkillV2] = [SKILLS[sk_key] for sk_key in arch.skills if sk_key in SKILLS]
     tree = get_character_tree(character)
     unlocked = get_unlocked_node_keys(character)
-    res = []
-    
-    # Base skills if no tree nodes unlocked (fallback)
-    if not unlocked:
-        arch = get_character_archetype(character)
-        for sk_key in arch.skills:
-            if sk_key in SKILLS:
-                res.append(SKILLS[sk_key])
-        return res
 
     for node_key in unlocked:
         node = tree.get(node_key)
         if node and node.node_type == "active_skill":
             sk = SKILLS.get(str(node.value))
-            if sk:
+            if sk and all(existing.key != sk.key for existing in res):
                 res.append(sk)
     return res
 

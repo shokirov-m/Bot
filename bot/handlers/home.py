@@ -631,12 +631,83 @@ async def home_alchemy(callback: CallbackQuery, session: AsyncSession, state: FS
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
-            text=home_service.format_alchemy_stub_html(char),
-            reply_markup=alchemy_keyboard(),
+            text=home_service.format_alchemy_menu_html(char),
+            reply_markup=alchemy_keyboard(char),
             target_message=callback.message,
             photo_path=None,
         )
         await callback.answer()
     except Exception:
         logger.exception("hom:alch")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "hom:alch:up")
+async def home_alchemy_upgrade(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        await character_repo.lock_character_row(session, char.id)
+        ok, msg = home_service.try_upgrade_alchemy(char)
+        await session.flush()
+        text = home_service.format_alchemy_menu_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=alchemy_keyboard(char))
+        await callback.answer("Улучшено!" if ok else msg[:180], show_alert=not ok)
+    except Exception:
+        logger.exception("hom:alch:up")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:alch:brew:"))
+async def home_alchemy_brew(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        if not home_service.can_access_alchemy(char):
+            await callback.answer("Алхимия откроется на ур. 3 дома.", show_alert=True)
+            return
+        await character_repo.lock_character_row(session, char.id)
+        elixir_key = callback.data.rsplit(":", 1)[-1]
+        ok, msg = await home_service.try_brew_elixir(session, char, elixir_key)
+        await session.flush()
+        text = home_service.format_alchemy_menu_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=alchemy_keyboard(char))
+        await callback.answer("Сварено!" if ok else msg[:180], show_alert=not ok)
+    except Exception:
+        logger.exception("hom:alch:brew")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:alch:trans:"))
+async def home_alchemy_transmute(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        if not home_service.can_access_alchemy(char):
+            await callback.answer("Алхимия откроется на ур. 3 дома.", show_alert=True)
+            return
+        await character_repo.lock_character_row(session, char.id)
+        from_rarity = callback.data.rsplit(":", 1)[-1]
+        ok, msg = await home_service.try_transmute_materials(session, char, from_rarity)
+        await session.flush()
+        text = home_service.format_alchemy_menu_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=alchemy_keyboard(char))
+        await callback.answer("Готово!" if ok else msg[:180], show_alert=not ok)
+    except Exception:
+        logger.exception("hom:alch:trans")
         await callback.answer("Ошибка.", show_alert=True)

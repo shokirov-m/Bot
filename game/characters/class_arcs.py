@@ -85,7 +85,7 @@ def subclass_keys_for_character(character: Character) -> list[str]:
 
 
 def needs_base_class_choice(character: Character) -> bool:
-    """Устарело: классовая ветка заменена профессиями."""
+    """Устарело: классовая ветка заменена архетипами."""
     return False
 
 
