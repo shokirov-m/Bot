@@ -15,7 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.states.combat_states import CombatStates
 from db.repository import character_repo, user_repo
 from services import combat_idle_service, combat_service
-from services.combat_fsm_backup import clear_combat_backup, try_restore_combat_backup
+from services.combat_fsm_backup import (
+    clear_combat_backup,
+    combat_backup_failure_reason,
+    try_restore_combat_backup,
+)
 from utils.debug_agent_log import log_debug
 
 router = Router(name="combat")
@@ -104,6 +108,19 @@ async def on_combat_callback(
                     {"rec_keys": [str(k) for k in list((rec or {}).keys())[:12]]},
                     hypothesis_id="H2_H3",
                     run_id="post-fix",
+                )
+                # #endregion
+            else:
+                # #region agent log
+                log_debug(
+                    "combat.py:on_combat_callback:meta_recover_fail",
+                    "FSM/backup gap: restore from meta not possible",
+                    {
+                        "fail_reason": combat_backup_failure_reason(char),
+                        "state_is_in_battle": raw_state == CombatStates.in_battle.state,
+                        "had_st_data_combat": bool(st_data.get("combat")),
+                    },
+                    hypothesis_id="H2_H3_H5",
                 )
                 # #endregion
 
