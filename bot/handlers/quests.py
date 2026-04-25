@@ -424,18 +424,29 @@ async def on_daily_quest_claim(
             await query.answer(msg[:200], show_alert=True)
             return
 
-        await query.answer("🎁 Награда получена!")
-        text, kb = await render_daily_quests_hub(char)
-        reward_block = f"{msg}\n\n{LINE_SEP}\n{text}"
-        if len(reward_block) > 4000:
-            reward_block = text
-        await push_game_ui(
-            state, query.bot,
-            chat_id=query.message.chat.id,
-            text=reward_block,
-            reply_markup=kb,
-            target_message=query.message,
-        )
+        # Сохранить награду до ответа Telegram: иначе при ошибке edit/длины текста
+        # middleware откатит транзакцию — кнопка снова даст дублирующую награду.
+        await session.commit()
+
+        try:
+            await query.answer("🎁 Награда получена!")
+            text, kb = await render_daily_quests_hub(char)
+            reward_block = f"{msg}\n\n{LINE_SEP}\n{text}"
+            if len(reward_block) > 4000:
+                reward_block = text
+            await push_game_ui(
+                state, query.bot,
+                chat_id=query.message.chat.id,
+                text=reward_block,
+                reply_markup=kb,
+                target_message=query.message,
+            )
+        except Exception:
+            logger.exception("qdcl: ui after claim (награда уже в БД)")
+            try:
+                await query.answer("🎁 Награда зачислена. Обнови экран заданий.", show_alert=True)
+            except Exception:
+                pass
     except Exception:
         logger.exception("qdcl")
         await query.answer("Ошибка.", show_alert=True)

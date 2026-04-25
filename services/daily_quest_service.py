@@ -34,7 +34,9 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from db.models.character import Character
 from game.quests.daily_quests import (
@@ -67,6 +69,8 @@ def _load(character: Character) -> tuple[dict, dict]:
 def _save(character: Character, meta: dict, state: dict) -> None:
     meta[META_KEY] = state
     character.meta_progress = meta
+    # In-place меняет вложенные dict/list — явно помечаем JSON-колонку.
+    flag_modified(character, "meta_progress")
 
 
 # ── Генерация заданий ──────────────────────────────────────────────────────────
@@ -202,6 +206,10 @@ async def claim_quest(
     Забирает награду за задание с индексом slot (0, 1, 2).
     Возвращает (ok, html_message).
     """
+    # Сериализация параллельных нажатий «Забрать» и актуальные meta из БД.
+    await session.execute(select(Character.id).where(Character.id == character.id).with_for_update())
+    await session.refresh(character)
+
     state = _ensure_today(character)
     quests: list[dict] = state.get("quests") or []
 
@@ -209,7 +217,7 @@ async def claim_quest(
     if quest is None:
         return False, "Задание не найдено."
 
-    if quest.get("claimed"):
+    if quest.get("claimed") is True:
         return False, "Награда за это задание уже получена."
 
     cur = int(quest.get("current", 0))

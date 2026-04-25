@@ -48,9 +48,20 @@ async def on_combat_callback(
             await query.answer()
             return
 
+        # FSM-имя и данные в Redis иногда рассинхронизируются: экран боя остаётся, state «теряется».
+        st_data = await state.get_data()
         if await state.get_state() != CombatStates.in_battle.state:
-            await query.answer("Нет активного боя. Открой /floor.", show_alert=True)
-            return
+            if st_data.get("combat"):
+                await state.set_state(CombatStates.in_battle)
+            else:
+                await query.answer("Нет активного боя. Открой /floor.", show_alert=True)
+                return
+        else:
+            if not st_data.get("combat"):
+                await state.clear()
+                combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
+                await query.answer("Сессия боя устарела. Открой /floor.", show_alert=True)
+                return
 
         user = await user_repo.get_by_telegram_id(session, query.from_user.id)
         if user is None or user.is_banned:
