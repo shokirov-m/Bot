@@ -96,6 +96,24 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         replace_existing=True,
     )
 
+    async def job_arena_season_rollover() -> None:
+        try:
+            from services.arena_service import ARENA_SEASON_ID
+
+            logger.info(
+                "[ARENA] Сезон %s: плановый тик (лиги/MMR в meta; награды сезона — вручную/позже).",
+                ARENA_SEASON_ID,
+            )
+        except Exception:
+            logger.exception("[ARENA] season tick")
+
+    scheduler.add_job(
+        job_arena_season_rollover,
+        CronTrigger(day=1, hour=6, minute=0, timezone="UTC"),
+        id="tower_arena_season_monthly",
+        replace_existing=True,
+    )
+
 
 def schedule_rest_completion_notification(
     bot: Bot,

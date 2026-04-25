@@ -14,6 +14,7 @@ from bot.i18n import get_locale
 from bot.keyboards.forge_kb import (
     city_hub_keyboard,
     forge_actions_keyboard,
+    forge_craft_recipes_keyboard,
     forge_dis_bag_keyboard,
     forge_enchant_slots_keyboard,
     forge_quest_keyboard,
@@ -25,7 +26,8 @@ from db.repository import character_repo, inventory_repo, user_repo
 from game.items.runes import RuneData, ensure_rune_socket_list, extract_rune_from_item
 from game.floors import floor_data
 from game.locations import forge as forge_loc
-from services import forge_service
+from game.crafting.recipes import RECIPES
+from services import crafting_service, forge_service
 from services.floor_service import format_city_hub_message
 
 router = Router(name="forge")
@@ -148,6 +150,82 @@ async def forge_enchant_rune_ward(query: CallbackQuery, session: AsyncSession) -
         await _handle_forge_enchant_callback(query, session, rune_ward=True)
     except Exception:
         logger.exception("frg:enchw")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("frg:craft:"))
+async def forge_craft_menu(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key:
+            await query.answer("Ты не на этом этаже.", show_alert=True)
+            return
+        if not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Здесь нет кузницы.", show_alert=True)
+            return
+        rows: list[tuple[str, str]] = []
+        for r in RECIPES:
+            rid = str(r.get("id", ""))
+            if not rid:
+                continue
+            name = str(r.get("name_ru", rid))
+            desc = str(r.get("description", ""))[:32]
+            rows.append((rid, f"{name} — {desc}"))
+        if not rows:
+            await query.answer("Нет рецептов.", show_alert=True)
+            return
+        top = await forge_service.build_forge_message_html(session, char)
+        await query.message.edit_text(
+            f"{top}\n\n<i>Выбери рецепт (с материалами в сумке):</i>",
+            reply_markup=forge_craft_recipes_keyboard(floor_key, rows),
+            parse_mode=ParseMode.HTML,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("frg:craft")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("frg:crf:"))
+async def forge_craft_run(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        sp = query.data.split(":")
+        if len(sp) < 4:
+            await query.answer()
+            return
+        floor_key = int(sp[2])
+        recipe_id = str(sp[3])
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key:
+            await query.answer("Ты не на этом этаже.", show_alert=True)
+            return
+        ok, lines = await crafting_service.try_craft(session, char, recipe_id)
+        if not ok:
+            await query.answer((lines[0] if lines else "Нельзя.")[:180], show_alert=True)
+            return
+        body = "\n".join(lines)
+        refreshed = await forge_service.build_forge_message_html(session, char)
+        await query.message.edit_text(
+            f"{refreshed}\n\n{body}",
+            reply_markup=forge_actions_keyboard(char.floor_number),
+            parse_mode=ParseMode.HTML,
+        )
+        await query.answer("Сварено!" if "насто" in body.lower() else "Готово!")
+    except Exception:
+        logger.exception("frg:crf")
         await query.answer("Ошибка.", show_alert=True)
 
 

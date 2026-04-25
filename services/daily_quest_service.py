@@ -30,7 +30,6 @@
 from __future__ import annotations
 
 import random
-from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
@@ -46,9 +45,10 @@ from game.quests.daily_quests import (
     type_label,
 )
 from services import character_service
+from services.fame_bonuses import daily_quest_slots_count
 
 META_KEY = "daily_quests_v1"
-QUESTS_PER_DAY = 3
+QUESTS_PER_DAY = 3  # база; с славой ≥ 25 — см. daily_quest_slots_count
 
 
 def _utc_today_iso() -> str:
@@ -79,15 +79,14 @@ def _generate_quests(
     date_iso: str,
     character_id: int,
     tier: int,
+    n_slots: int,
 ) -> list[dict]:
-    """Детерминированно выбирает QUESTS_PER_DAY шаблонов из пула тира."""
+    """Детерминированно выбирает n шаблонов из пула тира."""
     pool = pool_for_tier(tier)
-    # Seed: дата в цифрах * 10000 + character_id (обеспечивает уникальность по дням и персонажам)
     date_int = int(date_iso.replace("-", ""))
     rng = random.Random(date_int * 10000 + character_id)
-
-    # Перемешиваем пул, берём первые QUESTS_PER_DAY
-    selected: list[DailyQuestTemplate] = rng.sample(pool, min(QUESTS_PER_DAY, len(pool)))
+    take = min(max(1, n_slots), len(pool))
+    selected: list[DailyQuestTemplate] = rng.sample(pool, take)
 
     quests = []
     for i, tpl in enumerate(selected):
@@ -107,6 +106,47 @@ def _generate_quests(
     return quests
 
 
+def _extend_quests_to_count(
+    character: Character,
+    meta: dict,
+    state: dict[str, Any],
+    quests: list[dict],
+    need: int,
+    today: str,
+    tier: int,
+) -> None:
+    """Добавить квесты, если слава дала 4-й слот при тех же date/tier."""
+    pool = pool_for_tier(tier)
+    used = {str(q.get("key")) for q in quests}
+    free_tpl = [p for p in pool if p.key not in used]
+    if not free_tpl:
+        return
+    date_int = int(today.replace("-", ""))
+    rng = random.Random(date_int * 10000 + int(character.id) + 777)
+    i = len(quests)
+    while len(quests) < need and free_tpl:
+        tpl = rng.choice(free_tpl)
+        free_tpl = [p for p in free_tpl if p.key != tpl.key]
+        quests.append(
+            {
+                "slot": i,
+                "key": tpl.key,
+                "type": tpl.type,
+                "title": tpl.title,
+                "desc": tpl.desc,
+                "target": tpl.target,
+                "current": 0,
+                "claimed": False,
+                "reward_gold": tpl.reward_gold,
+                "reward_xp": tpl.reward_xp,
+                "reward_rune": tpl.reward_rune,
+            },
+        )
+        i += 1
+    state["quests"] = quests
+    _save(character, meta, state)
+
+
 def _ensure_today(character: Character) -> dict:
     """
     Гарантирует, что у персонажа есть актуальные (сегодняшние) ежедневные задания.
@@ -115,15 +155,18 @@ def _ensure_today(character: Character) -> dict:
     today = _utc_today_iso()
     meta, state = _load(character)
     tier = tier_for_floor(int(character.highest_floor_reached))
+    need = daily_quest_slots_count(character)
 
     if state.get("date") == today and state.get("tier") == tier:
-        return state  # уже актуально
+        qlist: list[dict] = list(state.get("quests") or [])
+        if len(qlist) < need:
+            _extend_quests_to_count(character, meta, state, qlist, need, today, tier)
+        return state
 
-    # Дата сменилась или тир изменился → генерируем заново
     new_state: dict = {
         "date": today,
         "tier": tier,
-        "quests": _generate_quests(today, int(character.id), tier),
+        "quests": _generate_quests(today, int(character.id), tier, need),
     }
     _save(character, meta, new_state)
     return new_state

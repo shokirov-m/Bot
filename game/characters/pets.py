@@ -1,6 +1,10 @@
 """
 Питомцы: призыв за золото (лавка городского хаба; редкий пул после открытия 48 этажа).
-Бонусы суммируются через passive_combat_modifiers_merged (как глобальные пассивы).
+Активный питомец: пассивы попадают в `pet_passive_delta` → `passive_combat_modifiers_merged` → бой
+(`combat_service` / `pet_line_html`).
+
+Прогрессия: `pets_v1.pet_xp[pet_key]` копится за победы; уровни 1–10 (≈200 XP/ур.); пассив
+масштабируется. Корм: `treats` (ферма с ур.4 дома), `add_pet_treats`.
 """
 
 from __future__ import annotations
@@ -234,6 +238,58 @@ def active_pet_display(character: Character) -> str | None:
     return f"{d.emoji} {d.name_ru}"
 
 
+def _active_pet_level(xp: int) -> int:
+    """1..10, ~200 XP на уровень."""
+    lv = 1 + min(9, max(0, int(xp) // 200))
+    return max(1, min(10, lv))
+
+
+def _scale_passive(passive: dict[str, float | int], level: int) -> dict[str, float | int]:
+    f = 1.0 + (max(1, min(10, int(level))) - 1) * 0.04
+    out: dict[str, float | int] = {}
+    for k, v in passive.items():
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            out[k] = float(v) * f
+        else:
+            out[k] = v
+    return out
+
+
+def add_pet_treats(character: Character, amount: int) -> None:
+    """Корм для питомца (ферма дома); бонус к XP за бой при расходе (можно расширить)."""
+    if amount <= 0:
+        return
+    mp, st = _pets_meta(character)
+    t = int(st.get("treats") or 0) + int(amount)
+    st["treats"] = max(0, t)
+    mp[META_KEY] = st
+    character.meta_progress = dict(mp)
+
+
+def record_pet_xp_on_battle_win(character: Character, *, is_boss: bool) -> int:
+    """
+    +XP активному питомцу за бой (мир-ивент/башня). Сезон/этаж можно расширить.
+    Возвращает начисленный XP.
+    """
+    key = active_pet_key(character)
+    if not key:
+        return 0
+    d = _all_defs().get(key)
+    if d is None:
+        return 0
+    mp, st = _pets_meta(character)
+    px = st.get("pet_xp") or {}
+    if not isinstance(px, dict):
+        px = {}
+    cur = int(px.get(key) or 0)
+    add = 6 if is_boss else 3
+    px[key] = cur + add
+    st["pet_xp"] = px
+    mp[META_KEY] = st
+    character.meta_progress = dict(mp)
+    return add
+
+
 def pet_passive_delta(character: Character) -> dict[str, float | int]:
     key = active_pet_key(character)
     if not key:
@@ -241,7 +297,11 @@ def pet_passive_delta(character: Character) -> dict[str, float | int]:
     d = _all_defs().get(key)
     if d is None:
         return {}
-    return dict(d.passive)
+    _, st = _pets_meta(character)
+    px = (st.get("pet_xp") or {}) if isinstance(st.get("pet_xp"), dict) else {}
+    xpv = int(px.get(key) or 0) if key in px else 0
+    lv = _active_pet_level(xpv)
+    return _scale_passive(dict(d.passive), lv)
 
 
 def format_pet_passive_plain(passive: dict[str, float | int], *, locale: str) -> str:

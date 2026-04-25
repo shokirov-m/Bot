@@ -25,6 +25,8 @@ from game.combat.monster_abilities import (
     roll_monster_double_turn,
 )
 from game.items.runes import ELEMENTS, RuneData, rune_burn_params_for_rank
+from game.combat import passive_gear
+from game.floors.floor_entry_mods import maybe_lightning_execute_after_monster_damaged
 
 Outcome = Literal["continue", "win", "lose"]
 
@@ -405,11 +407,21 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     logs.extend(_rune_status_proc_logs(state))
 
     _m(state)["hp"] = max(0, int(_m(state)["hp"]) - dmg)
+    passive_gear.apply_lifesteal_for_damage(state, dmg, logs)
+    lnx = maybe_lightning_execute_after_monster_damaged(state, logs)
+    if lnx == "win":
+        record_player_last_damage_to_monster(state, dmg)
+        _mark_weapon_mastery_strike(state)
+        undying_logs: list[str] = []
+        if check_zombie_undying(state, undying_logs):
+            logs.extend(undying_logs)
+            return logs, "continue", dmg
+        return logs, "win", dmg
     record_player_last_damage_to_monster(state, dmg)
     _mark_weapon_mastery_strike(state)
     if int(_m(state)["hp"]) <= 0:
         # Способность Нежить (zombie): выживает один раз
-        undying_logs: list[str] = []
+        undying_logs = []
         if check_zombie_undying(state, undying_logs):
             logs.extend(undying_logs)
             return logs, "continue", dmg
@@ -635,6 +647,16 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         logs.append(f"{tag} {sk.name}: {dmg} урона")
 
     mon["hp"] = max(0, mhp - dmg)
+    passive_gear.apply_lifesteal_for_damage(state, dmg, logs)
+    lnx2 = maybe_lightning_execute_after_monster_damaged(state, logs)
+    if lnx2 == "win":
+        udg2: list[str] = []
+        if check_zombie_undying(state, udg2):
+            logs.extend(udg2)
+        else:
+            record_player_last_damage_to_monster(state, dmg)
+            _mark_weapon_mastery_strike(state)
+            return logs, "win", dmg
     record_player_last_damage_to_monster(state, dmg)
     _mark_weapon_mastery_strike(state)
 
@@ -762,6 +784,9 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             return logs, "win"
 
     dmg = max(1, base - eff_defense)
+    ftkm = float(state.get("fe_monster_to_player_mult", 1.0))
+    if ftkm < 0.999:
+        dmg = max(1, int(round(dmg * ftkm)))
     extra_mult = float(m.get("strike_ailment_mult") or 0.0)
     if extra_mult > 0:
         extra = max(0, int(base * extra_mult))
@@ -808,6 +833,8 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
         base2 = int(atk * random.uniform(0.85, 1.05) * mult * out_m)
         base2 = max(1, int(base2 * float(MONSTER_DAMAGE_DEALT_MULT)))
         dmg2 = max(1, base2 - eff_defense)
+        if ftkm < 0.999:
+            dmg2 = max(1, int(round(dmg2 * ftkm)))
         shield2 = int(state.get("player_shield_hp", 0))
         if shield2 > 0:
             absorbed2 = min(shield2, dmg2)

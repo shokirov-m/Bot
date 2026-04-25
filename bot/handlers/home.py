@@ -69,6 +69,38 @@ async def home_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
 # Гардероб
 # ---------------------------------------------------------------------------
 
+@router.callback_query(F.data == "hom:mine")
+async def home_mine_collect(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        ok, msg = await home_service.collect_mine_farm_rewards(session, char)
+        if not ok:
+            await callback.answer(msg[:200], show_alert=True)
+            return
+        loc = get_locale(char, callback.from_user.language_code)
+        text = home_service.format_home_main_html(char) + f"\n\n✅ {msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=home_main_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await session.commit()
+        await callback.answer("Собрано!")
+    except Exception:
+        logger.exception("hom:mine")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data == "hom:ward")
 async def home_wardrobe(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:

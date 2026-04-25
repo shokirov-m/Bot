@@ -80,7 +80,13 @@ def luck_drop_bonus(stat_luck: int) -> float:
     return min(0.15, (int(stat_luck) // 10) * 0.015)
 
 
-def roll_item_drop(spawn: FloorMonsterSpawn, floor_number: int, stat_luck: int = 0) -> bool:
+def roll_item_drop(
+    spawn: FloorMonsterSpawn,
+    floor_number: int,
+    stat_luck: int = 0,
+    *,
+    fame_loot_mult: float = 1.0,
+) -> bool:
     is_low = int(floor_number) <= int(DROP_CHANCE_FLOOR_LOW_MAX)
     if spawn.is_major_boss:
         chance = DROP_CHANCE_MAJOR_LOW if is_low else DROP_CHANCE_MAJOR_HIGH
@@ -91,4 +97,5 @@ def roll_item_drop(spawn: FloorMonsterSpawn, floor_number: int, stat_luck: int =
     else:
         chance = DROP_CHANCE_NORMAL_LOW if is_low else DROP_CHANCE_NORMAL_HIGH
     chance += luck_drop_bonus(stat_luck)
-    return random.random() < min(0.95, chance)
+    p = min(0.95, float(chance)) * max(0.0, float(fame_loot_mult))
+    return random.random() < min(0.95, p)

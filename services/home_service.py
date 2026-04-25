@@ -512,6 +512,9 @@ def format_home_main_html(character: Character) -> str:
     else:
         lines.append("🔬 Библиотека: <i>откроется на ур. 4</i>")
 
+    if hl >= 4:
+        lines.append(mine_farm_status_line_html(character))
+
     if can_access_workbench(character):
         wt = workbench_tier(character)
         bonus = workbench_enchant_bonus(character) * 100
@@ -611,3 +614,91 @@ def format_library_html(character: Character) -> str:
         "<i>Раз в 24 часа можно получить +1 к любому стату.</i>\n\n"
         + ready_line
     )
+
+
+# ---------------------------------------------------------------------------
+# Шахта / ферма (AFK) — с ур. 4; meta home_mine_farm_v1
+# ---------------------------------------------------------------------------
+
+META_MINE_FARM = "home_mine_farm_v1"
+_MINE_INTERVAL = 3 * 3600  # 3 ч — 1 ед. руды и 1 ед. корма
+_MINE_CAP = 8
+
+
+def _mine_farm_block(character: Character) -> tuple[dict[str, Any], dict[str, Any]]:
+    mp = dict(character.meta_progress or {})
+    b = dict(mp.get(META_MINE_FARM) or {})
+    return mp, b
+
+
+def tick_mine_farm_stores(character: Character) -> tuple[int, int]:
+    """
+    Накопление в фоне; возвращает (ore, food) после тика.
+    """
+    if home_level(character) < 4:
+        return 0, 0
+    mp, b = _mine_farm_block(character)
+    now = int(time.time())
+    last = int(b.get("ts", 0) or 0)
+    ore = int(b.get("ore", 0) or 0)
+    food = int(b.get("food", 0) or 0)
+    if last <= 0:
+        b["ts"] = now
+        b["ore"] = 0
+        b["food"] = 0
+        mp[META_MINE_FARM] = b
+        character.meta_progress = mp
+        return 0, 0
+    dt = max(0, now - last)
+    n = int(dt // _MINE_INTERVAL)
+    if n > 0:
+        ore = min(_MINE_CAP, ore + n)
+        food = min(_MINE_CAP, food + n)
+        b["ore"] = ore
+        b["food"] = food
+        b["ts"] = last + n * _MINE_INTERVAL
+        mp[META_MINE_FARM] = b
+        character.meta_progress = mp
+    return ore, food
+
+
+def mine_farm_status_line_html(character: Character) -> str:
+    if home_level(character) < 4:
+        return ""
+    o, f = tick_mine_farm_stores(character)
+    return (
+        f"⛏ <b>Шахта / ферма:</b> руда <b>{o}</b> / {_MINE_CAP} · "
+        f"корм <b>{f}</b> / {_MINE_CAP} <i>(~3 ч / ед.)</i>"
+    )
+
+
+async def collect_mine_farm_rewards(
+    session: AsyncSession,
+    character: Character,
+) -> tuple[bool, str]:
+    """Забрать накопленное: common-материалы + корм питомцу."""
+    if home_level(character) < 4:
+        return False, "Нужен <b>особняк (ур. 4+)</b>."
+    o, f = tick_mine_farm_stores(character)
+    if o <= 0 and f <= 0:
+        return False, "Пока пусто. Накопится через время (каждые 3 ч +1 к запасу)."
+    from db.repository import inventory_repo
+    from services.forge_service import add_materials_to_bag
+
+    mp, b = _mine_farm_block(character)
+    lines: list[str] = []
+    if o > 0:
+        await add_materials_to_bag(session, int(character.id), "common", o)
+        lines.append(f"🪨 +{o} <b>осколка стали</b> (common)")
+    if f > 0:
+        from game.characters import pets as pets_mod
+        pets_mod.add_pet_treats(character, f)
+        lines.append(f"🥕 +{f} <b>корма</b> питомцу (запас лакомств)")
+
+    b["ore"] = 0
+    b["food"] = 0
+    b["ts"] = int(time.time())
+    mp[META_MINE_FARM] = b
+    character.meta_progress = mp
+    await session.flush()
+    return True, " ".join(lines)

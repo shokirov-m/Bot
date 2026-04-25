@@ -17,6 +17,7 @@ from bot.utils.game_ui import push_game_ui
 from db.models.character import Character
 from db.repository import character_repo, user_repo
 from services import arena_service
+from services.fame_bonuses import max_arena_matches_per_day
 
 router = Router(name="arena")
 
@@ -74,11 +75,17 @@ async def _start_turn_duel_for_character(
         char,
         fixed_opponent=fixed_opponent,
     )
+    o_mmr = 1000
+    if opp is not None:
+        o_mmr = arena_service.arena_mmr(opp)
+    else:
+        o_mmr = max(650, 920 + int(char.floor_number) * 3)
     st = arena_service.build_turn_duel_open_state(
         character=char,
         opponent=opp,
         opponent_name=o_name,
         opponent_power=o_pow,
+        opponent_mmr=o_mmr,
         banner_html=banner,
         win_bonus=win_bonus,
         is_npc=is_npc,
@@ -153,7 +160,7 @@ async def _run_arena_turn_flow(
         msg = t(
             loc,
             "arena_daily_limit",
-            limit=arena_service.ARENA_MATCHES_PER_DAY,
+            limit=max_arena_matches_per_day(char),
         )
         if callback:
             await callback.answer(msg, show_alert=True)
@@ -240,9 +247,18 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
         limits = t(
             loc,
             "arena_menu_limits",
-            limit=arena_service.ARENA_MATCHES_PER_DAY,
+            limit=max_arena_matches_per_day(char),
             left=left,
         )
+        spn = arena_service.spirit_arena_charges(char)
+        spirit_line = (
+            f"\n👻 Запасных боёв: <b>{spn}</b> <i>(события этажа, сверх дневного лимита)</i>"
+            if spn
+            else ""
+        )
+        mmr = arena_service.arena_mmr(char)
+        league = arena_service.arena_league_label(mmr)
+        mmr_line = f"\n📊 MMR: <b>{mmr}</b> · {league} <i>(сезон {arena_service.ARENA_SEASON_ID})</i>"
         my_id = char.game_id
         id_hint = (
             t(loc, "arena_your_game_id", gid=my_id)
@@ -285,7 +301,7 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
-            text=f"{intro}\n\n{id_hint}\n\n{limits}\n\n{duel_hint}",
+            text=f"{intro}\n\n{id_hint}\n\n{limits}{spirit_line}{mmr_line}\n\n{duel_hint}",
             reply_markup=kb,
             target_message=callback.message,
             photo_path=None,
@@ -352,7 +368,7 @@ async def arena_opponent_id_message(message: Message, session: AsyncSession, sta
         if arena_service.arena_daily_limit_reached(char):
             await state.clear()
             await message.answer(
-                t(loc, "arena_daily_limit", limit=arena_service.ARENA_MATCHES_PER_DAY),
+                t(loc, "arena_daily_limit", limit=max_arena_matches_per_day(char)),
             )
             return
         tok = int(raw)
@@ -569,6 +585,7 @@ async def arena_turn_move(callback: CallbackQuery, session: AsyncSession, state:
             outcome=outcome,
             is_npc=bool(st.get("is_npc")),
             win_bonus=int(st.get("win_bonus") or 0),
+            opponent_mmr=int(st.get("o_mmr", 1000) or 1000),
         )
         header = t(loc, "arena_title")
         if out == "win":

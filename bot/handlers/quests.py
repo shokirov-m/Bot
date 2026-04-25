@@ -24,6 +24,7 @@ from game.quests.floor_quests import npc_quest_template
 from game.quests.npc_quests import QuestTemplate, template_by_key, templates_for_floor
 from services import quest_service
 from services import daily_quest_service as dqs
+from services import fame_bonuses as fb
 from services.floor_service import floor_keyboard_for_character, format_floor_message
 from utils.ui import LINE_SEP
 
@@ -325,6 +326,15 @@ async def render_daily_quests_hub(char: Character) -> tuple[str, InlineKeyboardM
     claim_rows = dqs.daily_quest_keyboard_rows(char, int(char.floor_number))
     rows.extend(claim_rows)
 
+    if fb.wanderer_content_unlocked(char) and fb.wanderer_daily_tip_available(char):
+        rows.append(
+            [InlineKeyboardButton(text="🧙 Совет Странника (раз в сутки)", callback_data="qd:wand")],
+        )
+    if fb.can_show_legendary_2500_quest(char):
+        rows.append(
+            [InlineKeyboardButton(text="🌟 Легендарный завет (один раз)", callback_data="qd:leg")],
+        )
+
     # Навигация
     rows.append([
         InlineKeyboardButton(text="📋 Задания этажа", callback_data="qhub:p:0"),
@@ -449,6 +459,94 @@ async def on_daily_quest_claim(
                 pass
     except Exception:
         logger.exception("qdcl")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "qd:wand")
+async def on_wanderer_tip(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        if query.message is None or query.from_user is None:
+            await query.answer()
+            return
+        u = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if u is None or u.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, u.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        ok, msg = fb.claim_wanderer_daily_tip(char)
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        await session.commit()
+        text, kb = await render_daily_quests_hub(char)
+        block = f"{msg}\n\n{LINE_SEP}\n{text}"
+        try:
+            await query.answer("Готово.")
+            await push_game_ui(
+                state, query.bot,
+                chat_id=query.message.chat.id,
+                text=block,
+                reply_markup=kb,
+                target_message=query.message,
+            )
+        except Exception:
+            logger.exception("qd:wand ui")
+    except Exception:
+        logger.exception("qd:wand")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "qd:leg")
+async def on_legendary_2500(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        if query.message is None or query.from_user is None:
+            await query.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None:
+            await query.answer()
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        ok, msg = await fb.complete_legendary_2500_quest(session, char)
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        await session.commit()
+        text, kb = await render_daily_quests_hub(char)
+        block = f"{msg}\n\n{LINE_SEP}\n{text}"
+        try:
+            await query.answer("🌟 Навсегда в летописи.")
+            await push_game_ui(
+                state, query.bot,
+                chat_id=query.message.chat.id,
+                text=block,
+                reply_markup=kb,
+                target_message=query.message,
+            )
+        except Exception:
+            logger.exception("qd:leg ui")
+    except Exception:
+        logger.exception("qd:leg")
         await query.answer("Ошибка.", show_alert=True)
 
 

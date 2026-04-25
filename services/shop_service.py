@@ -15,7 +15,16 @@ from db.repository import inventory_repo
 from game.combat import consumables as combat_consumables
 from game.economy import shop as shop_data
 from services import home_service
+from services.fame_bonuses import npc_merchant_price_multiplier
 from utils.ui import LINE_SEP
+
+
+def _final_shop_gold_price(character: Character, base_price: int, fl: int) -> int:
+    p = int(shop_data.effective_good_price(base_price, fl))
+    m = float(npc_merchant_price_multiplier(character))
+    if m < 0.999:
+        p = max(1, int(round(p * m)))
+    return p
 
 
 def format_shop_welcome_html(character: Character, *, from_city: bool) -> str:
@@ -44,13 +53,22 @@ def format_shop_welcome_html(character: Character, *, from_city: bool) -> str:
         "🛒 <b>Товар (обычный):</b>",
     ]
     fl = int(character.floor_number)
+    fam_disc = float(npc_merchant_price_multiplier(character)) < 0.999
     for g in shop_data.shop_goods_for_floor(fl):
-        p = shop_data.effective_good_price(g.price, fl)
+        p = _final_shop_gold_price(character, g.price, fl)
+        p_no_scale = g.price
+        p_floor = int(shop_data.effective_good_price(g.price, fl))
+        eff_note = ""
+        if p != p_no_scale and p == p_floor:
+            eff_note = f" <i>(кат. {g.price} 💰)</i>"
+        elif p != p_floor and not fam_disc:
+            eff_note = f" <i>(надбавка этажа, база {g.price})</i>"
         lines.append(
-            f"{g.emoji} <b>{html.escape(g.name)}</b> — {p} 💰"
-            f"{f' <i>(база {g.price})</i>' if p != g.price else ''}\n"
+            f"{g.emoji} <b>{html.escape(g.name)}</b> — {p} 💰{eff_note}\n"
             f"<i>{html.escape(g.blurb)}</i>",
         )
+    if fam_disc:
+        lines.append("<i>Известность: −10% к золотым ценам (слава 75+), суммируется с акцией бродячего торговца.</i>")
     return "\n".join(lines)
 
 
@@ -98,7 +116,7 @@ async def try_buy_good(
     if good is None:
         return False, "Такого товара нет."
 
-    price = shop_data.effective_good_price(good.price, character.floor_number)
+    price = _final_shop_gold_price(character, good.price, int(character.floor_number))
     mp = dict(character.meta_progress or {})
     disc_left = int(mp.get("merchant_discount_charges") or 0)
     used_discount = False

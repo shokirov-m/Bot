@@ -15,9 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
+from services.fame_bonuses import max_arena_matches_per_day
 
 ARENA_MATCHES_PER_DAY = 10
 META_ARENA_DAILY = "arena_daily_v1"
+# Событие этажа / награда: бои, не сжигающие дневной лимит
+SPIRIT_ARENA_FIGHTS_KEY = "spirit_arena_fights_v1"
+ARENA_MMR_KEY = "arena_mmr_v1"
+ARENA_SEASON_ID = "s1"
+_DEFAULT_MMR = 1000
 
 
 def _utc_today_iso() -> str:
@@ -35,22 +41,90 @@ def arena_matches_used_today(character: Character) -> int:
 
 
 def arena_matches_remaining_today(character: Character) -> int:
-    return max(0, ARENA_MATCHES_PER_DAY - arena_matches_used_today(character))
+    cap = max_arena_matches_per_day(character)
+    return max(0, cap - arena_matches_used_today(character))
+
+
+def arena_mmr(character: Character) -> int:
+    """Elo-like рейтинг 200–3000 (оценка для матчмейкинга и лиг)."""
+    raw = (character.meta_progress or {}).get(ARENA_MMR_KEY)
+    v = int(raw) if raw is not None and str(raw).isdigit() else _DEFAULT_MMR
+    return max(200, min(3000, v))
+
+
+def arena_league_label(mmr: int) -> str:
+    m = int(mmr)
+    if m < 900:
+        return "🥉 Бронза"
+    if m < 1050:
+        return "🥈 Серебро"
+    if m < 1200:
+        return "🥇 Золото"
+    if m < 1400:
+        return "💎 Сапфир"
+    return "👑 Элита"
+
+
+def _set_arena_mmr(character: Character, new_m: int) -> None:
+    mp = dict(character.meta_progress or {})
+    mp[ARENA_MMR_KEY] = max(200, min(3000, int(new_m)))
+    character.meta_progress = mp
+
+
+def _apply_arena_mmr_duel(
+    character: Character,
+    *,
+    outcome: Outcome,
+    opponent_mmr: int,
+) -> tuple[str, int]:
+    """Elo-обновление; соперник-бот ≈ 800–1500. Возврат: (строка для UI, дельта mmr)."""
+    my = arena_mmr(character)
+    om = max(200, min(3000, int(opponent_mmr)))
+    e_self = 1.0 / (1.0 + 10.0 ** ((om - my) / 400.0))
+    k = 28.0
+    if outcome == "win":
+        s = 1.0
+    elif outcome == "lose":
+        s = 0.0
+    else:
+        s = 0.5
+    new_m = int(my + k * (s - e_self))
+    delta = int(new_m - my)
+    _set_arena_mmr(character, new_m)
+    icon = "📈" if delta > 0 else "📉" if delta < 0 else "⏸"
+    return f"{icon} MMR: <b>{new_m}</b> ({'+' if delta > 0 else ''}{delta}). Лига: {arena_league_label(new_m)}.", delta
+
+
+def spirit_arena_charges(character: Character) -> int:
+    """Сколько запасных боёв с события этажа (без дневного лимита)."""
+    meta = dict(character.meta_progress or {})
+    return max(0, int(meta.get(SPIRIT_ARENA_FIGHTS_KEY) or 0))
 
 
 def _record_arena_match(character: Character) -> None:
     meta = dict(character.meta_progress or {})
-    today = _utc_today_iso()
-    raw = meta.get(META_ARENA_DAILY)
-    if not isinstance(raw, dict) or raw.get("d") != today:
-        meta[META_ARENA_DAILY] = {"d": today, "n": 1}
+    cap = max_arena_matches_per_day(character)
+    used = arena_matches_used_today(character)
+    if used < cap:
+        today = _utc_today_iso()
+        raw = meta.get(META_ARENA_DAILY)
+        if not isinstance(raw, dict) or raw.get("d") != today:
+            meta[META_ARENA_DAILY] = {"d": today, "n": 1}
+        else:
+            meta[META_ARENA_DAILY] = {"d": today, "n": int(raw.get("n", 0)) + 1}
     else:
-        meta[META_ARENA_DAILY] = {"d": today, "n": int(raw.get("n", 0)) + 1}
+        s = spirit_arena_charges(character)
+        if s > 0:
+            meta[SPIRIT_ARENA_FIGHTS_KEY] = s - 1
     character.meta_progress = meta
 
 
 def arena_daily_limit_reached(character: Character) -> bool:
-    return arena_matches_used_today(character) >= ARENA_MATCHES_PER_DAY
+    """True — нельзя начать бой (лимит дня исчерпан и нет дух-запасов)."""
+    cap = max_arena_matches_per_day(character)
+    if arena_matches_used_today(character) < cap:
+        return False
+    return spirit_arena_charges(character) <= 0
 
 
 def _arena_power(
@@ -322,6 +396,7 @@ async def prepare_phantom_fight(
         opponent=phantom_char,
         opponent_name=name,
         opponent_power=p_pow,
+        opponent_mmr=arena_mmr(phantom_char),
         banner_html=banner,
         win_bonus=0,
         is_npc=True,  # is_npc=True → нет золота при победе/поражении
@@ -367,6 +442,7 @@ def build_turn_duel_open_state(
     opponent: Character | None,
     opponent_name: str,
     opponent_power: float,
+    opponent_mmr: int,
     banner_html: str,
     win_bonus: int,
     is_npc: bool,
@@ -388,6 +464,7 @@ def build_turn_duel_open_state(
         "o_max": om,
         "o_name": opponent_name[:48],
         "o_pow": float(opponent_power),
+        "o_mmr": int(opponent_mmr),
         "banner": banner_html,
         "win_bonus": int(win_bonus),
         "is_npc": bool(is_npc),
@@ -400,9 +477,11 @@ def build_turn_duel_open_state(
 
 def format_turn_duel_screen_html(state: dict, *, log_lines: list[str] | None = None) -> str:
     log_lines = log_lines or []
+    ommr = int(state.get("o_mmr", 1000) or 1000)
     body = (
         f"{state['banner']}"
-        f"<b>{html.escape(state['o_name'])}</b> · раунд <b>{int(state['round_i']) + 1}</b> / {int(state['max_rounds'])}\n"
+        f"<b>{html.escape(state['o_name'])}</b> · MMR соперника: <b>~{ommr}</b> · "
+        f"раунд <b>{int(state['round_i']) + 1}</b> / {int(state['max_rounds'])}\n"
         f"Ты: <b>{int(state['p_hp'])}</b> / {int(state['p_max'])} HP · "
         f"Соперник: <b>{int(state['o_hp'])}</b> / {int(state['o_max'])} HP\n"
         "<i>Удар — урон обоим; Защита — меньше урона в ответ, без твоего удара.</i>\n"
@@ -490,8 +569,9 @@ def finish_turn_duel_economy(
     outcome: Outcome,
     is_npc: bool,
     win_bonus: int,
+    opponent_mmr: int = 1000,
 ) -> tuple[str, int, Outcome]:
-    """Награды и учёт дневного лимита арены (один бой)."""
+    """Награды, MMR, учёт дневного/дух-лимита (один бой)."""
     base_gold = 12 + int(character.floor_number) // 2 + int(character.level)
     gold_delta = 0
     if outcome == "win":
@@ -510,5 +590,12 @@ def finish_turn_duel_economy(
         )
     else:
         report = "Итог: <b>ничья</b>."
+    mmr_line, _d = _apply_arena_mmr_duel(
+        character,
+        outcome=outcome,
+        opponent_mmr=int(opponent_mmr),
+    )
+    report = f"{report}\n{mmr_line}"
+    _ = ARENA_SEASON_ID  # сезон; награда сезона — через планировщик
     _record_arena_match(character)
     return report, gold_delta, outcome

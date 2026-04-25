@@ -29,7 +29,7 @@ from bot.keyboards.profile_kb import (
     profile_view_keyboard,
 )
 from bot.utils.game_ui import push_game_ui
-from services import character_service, leaderboard_service, profession_service, stat_bonus_service, title_service
+from services import character_service, fame_service, leaderboard_service, profession_service, stat_bonus_service, title_service
 from services.rest_service import (
     apply_completed_rest_if_needed,
     format_rest_status_line_html,
@@ -232,6 +232,8 @@ def _build_profile_text(
                 f"🌐 Глобальные бонусы: <i>{gp_show}</i>",
                 LINE_SEP,
                 f"💰 Золото: {format_number(int(char.gold))}",
+                "",
+                fame_service.format_fame_html(char),
                 LINE_SEP,
                 render_hp_bar(char.hp_current, char.hp_max, wrap_bar_in_code=False),
                 "",

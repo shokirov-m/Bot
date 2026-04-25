@@ -46,6 +46,11 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
         lib_label = "🔬 Библиотека (+1 стат)" if h_left == 0 else f"🔬 Библиотека (~{int(h_left)}ч)"
         rows.append([InlineKeyboardButton(text=lib_label[:64], callback_data="hom:lib")])
 
+    if home_service.home_level(character) >= 4:
+        rows.append(
+            [InlineKeyboardButton(text="⛏ Собрать шахту/ферму", callback_data="hom:mine")],
+        )
+
     # Верстак (ур.2+)
     if home_service.can_access_workbench(character):
         rows.append([InlineKeyboardButton(text="🛠 Верстак", callback_data="hom:bench")])

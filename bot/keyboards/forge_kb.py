@@ -100,6 +100,26 @@ def forge_enchant_slots_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def forge_craft_recipes_keyboard(
+    floor_number: int,
+    recipe_ids: list[tuple[str, str]],
+) -> InlineKeyboardMarkup:
+    """(recipe_id, short_label)"""
+    rows: list[list[InlineKeyboardButton]] = []
+    for rid, lab in recipe_ids[:10]:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=lab[:58],
+                    callback_data=f"frg:crf:{floor_number}:{rid}",
+                ),
+            ],
+        )
+    rows.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def forge_dis_bag_keyboard(
     floor_number: int,
     items: list[tuple[int, str]],
@@ -129,6 +149,7 @@ def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🔨 Разобрать предмет", callback_data=f"frg:dis:{floor_number}")],
             [InlineKeyboardButton(text="💎 Руны на оружии", callback_data=f"frg:rnm:{floor_number}")],
             [InlineKeyboardButton(text="🧪 Сварить настой (HP)", callback_data=f"frg:brew:{floor_number}")],
+            [InlineKeyboardButton(text="⚒️ Крафт (рецепты)", callback_data=f"frg:craft:{floor_number}")],
             [InlineKeyboardButton(text="📜 Задание кузнеца", callback_data=f"frg:qst:{floor_number}")],
             [InlineKeyboardButton(text="⬅ В город", callback_data=f"frg:city:{floor_number}")],
             menu_nav_button_row(),

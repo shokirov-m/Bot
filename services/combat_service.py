@@ -32,7 +32,7 @@ from game.characters.path_ranks import PATH_RANK_BY_KEY
 from game.characters.player_skills import battle_skills_tuple, ensure_skill_meta
 from game.characters.skills import passive_combat_modifiers_merged, skills_for_class
 from game.characters.weapon_mastery import damage_multiplier_for_type, record_strike, weapon_type_from_item_data
-from game.combat import consumables, effects, engine, formulas, monster_ai, night_mode as combat_night
+from game.combat import consumables, effects, engine, formulas, monster_ai, night_mode as combat_night, passive_gear
 from game.items import runes as rune_items
 from game.balance import (
     DEATH_GOLD_LOSS_FRACTION,
@@ -57,6 +57,7 @@ from game.balance import (
 )
 from game.characters import pets as pets_mod
 from game.floors import floor_data
+from game.floors import floor_entry_mods
 from game.floors import long_floor as long_floor_mod
 from game.floors import monster_catalog as monster_catalog_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
@@ -100,6 +101,8 @@ from services import (
 from services.tutorial_battle_service import apply_path_rank_from_tutorial, tutorial_battle_pending
 from game.economy.stamina import spend_stamina
 from services.stamina_service import can_start_combat
+from services.combat_fsm_backup import clear_combat_backup, persist_combat_backup
+from utils.debug_agent_log import log_debug
 from utils.ui import LINE_SEP, LINE_SEP_BATTLE, render_hp_bar, render_mp_bar
 
 TUTORIAL_DUMMY_TEMPLATE = MonsterTemplate(
@@ -687,6 +690,10 @@ async def start_combat(
 
     eff_stats = await stat_bonus_service.effective_primary_stats(session, character)
     combat_state = _build_combat_dict(character, spawn, monster, primary_stats=eff_stats)
+    mod_logs = floor_entry_mods.consume_floor_mod_to_combat_state(character, combat_state)
+    if mod_logs:
+        _append_logs(combat_state, mod_logs)
+        await session.flush()
     combat_state["night_battle"] = night_on
     if str(spawn.slot_code) == golden_goblin_service.SLOT_CODE:
         combat_state["golden_goblin_wave"] = await golden_goblin_service.current_wave(session)
@@ -695,6 +702,13 @@ async def start_combat(
     combat_state["player_weapon_type"] = wtype
     combat_state["weapon_mastery_mult"] = wmult
     combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
+    _eqs = await inventory_repo.list_equipped_items(session, character.id)
+    _glogs = passive_gear.apply_to_combat_state(
+        combat_state,
+        [e.item_data for e in _eqs],
+    )
+    if _glogs:
+        _append_logs(combat_state, _glogs)
     _apply_weapon_runes_to_state(combat_state, character, w_item)
 
     if swamp_prefight_logs:
@@ -729,6 +743,19 @@ async def start_combat(
 
     await state.set_state(CombatStates.in_battle)
     await state.update_data(combat=combat_state)
+    # #region agent log
+    log_debug(
+        "combat_service:start_combat:armed",
+        "fsm saved combat (main)",
+        {
+            "floor": int(character.floor_number),
+            "combat_state_top_keys": [str(k) for k in list(combat_state.keys())[:16]],
+        },
+        hypothesis_id="H5",
+    )
+    # #endregion
+    persist_combat_backup(character, combat_state)
+    await session.flush()
 
     cls = get_class_or_none(character.class_key)
     class_ru = cls.name_ru if cls else character.class_key
@@ -736,6 +763,7 @@ async def start_combat(
     kb = combat_main_keyboard(character)
 
     if query.message is None:
+        clear_combat_backup(character)
         await state.clear()
         await session.execute(
             update(Character)
@@ -822,6 +850,11 @@ async def start_combat(
         return True
     except Exception:
         logger.exception("start_combat: UI после входа в бой")
+        clear_combat_backup(character)
+        try:
+            await session.flush()
+        except Exception:
+            pass
         await state.clear()
         await session.execute(
             update(Character)
@@ -882,6 +915,13 @@ async def start_tutorial_combat(
     combat_state["weapon_mastery_mult"] = wmult
     _apply_weapon_runes_to_state(combat_state, character, w_item)
     combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
+    _teq = await inventory_repo.list_equipped_items(session, character.id)
+    _tlg = passive_gear.apply_to_combat_state(
+        combat_state,
+        [e.item_data for e in _teq],
+    )
+    if _tlg:
+        _append_logs(combat_state, _tlg)
     combat_state["is_tutorial"] = True
     combat_state["night_battle"] = False
     combat_state["tutorial_phase"] = 1
@@ -897,6 +937,19 @@ async def start_tutorial_combat(
 
     await state.set_state(CombatStates.in_battle)
     await state.update_data(combat=combat_state)
+    # #region agent log
+    log_debug(
+        "combat_service:start_tutorial_combat:armed",
+        "fsm saved combat (tutorial)",
+        {
+            "floor": int(character.floor_number),
+            "is_tutorial": True,
+        },
+        hypothesis_id="H5",
+    )
+    # #endregion
+    persist_combat_backup(character, combat_state)
+    await session.flush()
 
     cls = get_class_or_none(character.class_key)
     class_ru = cls.name_ru if cls else character.class_key
@@ -904,6 +957,7 @@ async def start_tutorial_combat(
     kb = combat_main_keyboard(character)
 
     if query.message is None:
+        clear_combat_backup(character)
         await state.clear()
         if query.from_user is not None:
             combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
@@ -951,6 +1005,11 @@ async def start_tutorial_combat(
         return True
     except Exception:
         logger.exception("start_tutorial_combat: UI после входа в учебный бой")
+        clear_combat_backup(character)
+        try:
+            await session.flush()
+        except Exception:
+            pass
         await state.clear()
         if query.from_user is not None:
             combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
@@ -1104,6 +1163,8 @@ async def _after_monster_killed_player_action(
             except Exception:
                 logger.exception("edit tutorial wave2")
         await state.update_data(combat=combat_state)
+        persist_combat_backup(character, combat_state)
+        await session.flush()
         await query.answer()
         return True
     await _victory_sequence(
@@ -1183,6 +1244,11 @@ async def _victory_sequence(
         finally:
             if message.from_user is not None:
                 combat_idle_service.cancel_combat_idle_timer(int(message.from_user.id))
+            clear_combat_backup(character)
+            try:
+                await session.flush()
+            except Exception:
+                pass
             await state.clear()
         return
 
@@ -1221,6 +1287,9 @@ async def _victory_sequence(
         if combat_state.get("night_battle"):
             gross_gold = int(gross_gold * combat_night.REWARD_MULT)
             xp = int(xp * combat_night.REWARD_MULT)
+        fgm = float(combat_state.get("floor_event_gold_mult") or 1.0)
+        if fgm > 1.01:
+            gross_gold = int(round(gross_gold * fgm))
         gm, xm = title_service.reward_bonus_multipliers(character)
         esc_m = sink_rules.pop_next_win_xp_multiplier(character)
         mp_xp = dict(character.meta_progress or {})
@@ -1291,6 +1360,13 @@ async def _victory_sequence(
     levels_battle = await character_service.add_experience_async(session, character, xp, bot=message.bot)
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
+    try:
+        pets_mod.record_pet_xp_on_battle_win(
+            character,
+            is_boss=bool(spawn.is_mini_boss) or bool(spawn.is_major_boss),
+        )
+    except Exception:
+        pass
     daily_service.record_kill(character)
     # Обновляем прогресс ежедневных заданий
     from services import daily_quest_service as dqs
@@ -1402,7 +1478,15 @@ async def _victory_sequence(
         except Exception:
             pass
         _luck = int(character.stat_luck or 0)
-        _drop_triggered = roll_item_drop(spawn, int(character.floor_number), stat_luck=_luck) or (
+        from services.fame_bonuses import loot_item_drop_fame_multiplier
+
+        _fam = loot_item_drop_fame_multiplier(character)
+        _drop_triggered = roll_item_drop(
+            spawn,
+            int(character.floor_number),
+            stat_luck=_luck,
+            fame_loot_mult=_fam,
+        ) or (
             _home_loot_extra > 0 and random.random() < _home_loot_extra
         )
         if _drop_triggered:
@@ -1631,11 +1715,29 @@ async def _victory_sequence(
         except Exception:
             logger.debug("victory UI: резервная клавиатура не отображена")
     finally:
+        # #region agent log
+        log_debug(
+            "combat_service:_victory_sequence:finally",
+            "victory path clearing/proceeding (hp sync)",
+            {"has_combat_state": bool(combat_state.get("monster"))},
+            hypothesis_id="H3",
+        )
+        # #endregion
+        clear_combat_backup(character)
         await character_service.refresh_hp_mp_from_effective(session, character)
-        character.hp_current = min(int(character.hp_max), int(combat_state["player_hp"]))
+        _okh = int(combat_state.get("gear_on_kill_heal", 0) or 0)
+        _pe = min(
+            int(character.hp_max),
+            int(combat_state["player_hp"]) + (_okh if _okh > 0 else 0),
+        )
+        character.hp_current = _pe
         character.mp_current = min(int(character.mp_max), int(combat_state["player_mp"]))
         if message.from_user is not None:
             combat_idle_service.cancel_combat_idle_timer(int(message.from_user.id))
+        try:
+            await session.flush()
+        except Exception:
+            pass
         await state.clear()
 
 
@@ -1746,6 +1848,8 @@ async def _defeat_sequence(
                 reply_markup=revive_kb,
             )
         finally:
+            clear_combat_backup(character)
+            await session.flush()
             await state.clear()
         return
 
@@ -1806,6 +1910,8 @@ async def _defeat_sequence(
     try:
         await _safe_edit_combat_message_text(state, message, text, reply_markup=defeat_kb)
     finally:
+        clear_combat_backup(character)
+        await session.flush()
         await state.clear()
 
 
@@ -1859,7 +1965,23 @@ async def handle_combat_callback(
     data = await state.get_data()
     combat_state: dict[str, Any] | None = data.get("combat")
     if combat_state is None:
+        # #region agent log
+        log_debug(
+            "combat_service:handle_combat_callback:no_combat",
+            "combat key missing inside handler",
+            {
+                "data_keys": [str(k) for k in data.keys()][:24],
+                "action": str(action),
+            },
+            hypothesis_id="H4_H5",
+        )
+        # #endregion
         await query.answer("Нет активного боя.", show_alert=True)
+        clear_combat_backup(character)
+        try:
+            await session.flush()
+        except Exception:
+            pass
         await state.clear()
         if query.from_user is not None:
             combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
@@ -1910,6 +2032,8 @@ async def handle_combat_callback(
 
     # Доты и пассивная регенерация MP в начале твоего хода
     lines.extend(engine.apply_dot_damage_player(combat_state))
+    lines.extend(floor_entry_mods.floor_curse_on_player_phase_start(combat_state))
+    lines.extend(passive_gear.turn_start_regen_from_gear(combat_state))
     if int(combat_state["player_hp"]) <= 0:
         _append_logs(combat_state, lines)
         await _defeat_sequence(
@@ -2009,6 +2133,8 @@ async def handle_combat_callback(
                 await character_service.refresh_hp_mp_from_effective(session, character)
                 character.hp_current = min(int(character.hp_max), int(combat_state["player_hp"]))
                 character.mp_current = min(int(character.mp_max), int(combat_state["player_mp"]))
+                clear_combat_backup(character)
+                await session.flush()
                 await state.clear()
             await query.answer("Побег!")
             return
@@ -2135,6 +2261,8 @@ async def handle_combat_callback(
     except Exception:
         logger.exception("Не удалось обновить сообщение боя")
     await state.update_data(combat=combat_state)
+    persist_combat_backup(character, combat_state)
+    await session.flush()
     if query.from_user is not None:
         await combat_idle_service.arm_combat_idle_after_player_turn(
             bot=query.bot,
@@ -2183,15 +2311,30 @@ async def user_fixbattle_command(
     combat_state = data.get("combat")
     if cur != CombatStates.in_battle.state:
         return "Активного боя нет — можно начинать новый на /floor."
+
+    user = await user_repo.get_by_telegram_id(session, tid)
+    char_early = await character_repo.get_by_user_id(session, user.id) if user is not None else None
+
     if not isinstance(combat_state, dict):
+        if char_early is not None:
+            clear_combat_backup(char_early)
+            try:
+                await session.flush()
+            except Exception:
+                pass
         await state.clear()
         return "Состояние боя сброшено. Открой /floor."
 
-    user = await user_repo.get_by_telegram_id(session, tid)
     if user is None or user.is_banned:
+        if char_early is not None:
+            clear_combat_backup(char_early)
+            try:
+                await session.flush()
+            except Exception:
+                pass
         await state.clear()
         return "Нет доступа."
-    char = await character_repo.get_by_user_id(session, user.id)
+    char = char_early
     if char is None:
         await state.clear()
         return "Нет персонажа."

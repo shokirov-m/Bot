@@ -39,7 +39,9 @@ from game.characters import pets as pets_mod
 from game.combat import night_mode as combat_night
 from game.floors import floor_data
 from game.locations import cities as city_locations
+from game.floors import floor_entry_mods
 from game.floors import long_floor as long_floor_mod
+from game.items import materials
 from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import room_clear_floor as rc_mod
 from game.floors import room_clear_floor_10 as rc10_mod
@@ -474,8 +476,9 @@ async def maybe_roll_floor_entry_event(
     row: FloorProgress,
 ) -> str:
     """
-    Один бросок при первом «заходе» на этаж (visits == 0): 10% особое событие.
-    Не срабатывает на длинном этаже-сценарии.
+    Один бросок при первом «заходе» на этаж (visits == 0): ~20% особое событие.
+    Не срабатывает на длинном этаже-сценарии. Расширяемый набор: звезда, лавка,
+    ловушка, благословение; туман, проклятие, склад, дух-дуэль, молния.
     """
     if long_floor_mod.is_long_floor_active(character):
         return ""
@@ -486,11 +489,27 @@ async def maybe_roll_floor_entry_event(
         return ""
     ex["_entry_rand_v0"] = True
     row.extra = ex
-    if random.random() >= 0.10:
+    if random.random() >= float(floor_entry_mods.FLOOR_ENTRY_EVENT_CHANCE):
         await session.flush()
         return ""
 
-    kind = random.choice(("star", "merchant", "trap", "bless"))
+    # База + мир: чуть реже вредные, чтобы не срывать сессии.
+    roll = random.choices(
+        (
+            "star",
+            "merchant",
+            "trap",
+            "bless",
+            "fog",
+            "cursed",
+            "warehouse",
+            "spirit",
+            "lightning",
+        ),
+        weights=(1, 1, 0.75, 1, 0.9, 0.65, 0.8, 0.55, 0.7),
+        k=1,
+    )[0]
+    kind = str(roll)
     mp = dict(character.meta_progress or {})
     frag = ""
     if kind == "star":
@@ -512,7 +531,50 @@ async def maybe_roll_floor_entry_event(
             f"{LINE_SEP}\n⚠️ <b>Случайное событие — ловушка!</b>\n"
             f"<i>Ты теряешь <b>~15%</b> HP (осталось {nh}/{int(character.hp_max)}).</i>"
         )
-    else:
+    elif kind == "fog":
+        mp[floor_entry_mods.FLOOR_MOD_META_KEY] = {
+            "fog_taken_mult": 0.8,
+            "gold_mult": 1.3,
+        }
+        frag = (
+            f"{LINE_SEP}\n🌫️ <b>Густой туман</b> окутывает коридор!\n"
+            "<i>Следующий бой: <b>−20%</b> получаемого от врага урона, <b>+30%</b> к золоту с победы.</i>"
+        )
+    elif kind == "cursed":
+        mp[floor_entry_mods.FLOOR_MOD_META_KEY] = {"cursed": True, "cursed_dmg": 5}
+        frag = (
+            f"{LINE_SEP}\n🕯️ <b>Проклятие</b> висит в воздухе…\n"
+            "<i>Следующий бой: каждые 2 твоих хода — <b>−5 HP</b> (зональный урон).</i>"
+        )
+    elif kind == "warehouse":
+        wh_note = ""
+        free = await inventory_repo.first_free_bag_slot(session, character.id)
+        if free is not None:
+            pl = materials.material_payload("uncommon", random.randint(1, 3))
+            await inventory_repo.add_bag_item(
+                session, character.id, copy.deepcopy(pl), bag_slot=free
+            )
+            wn = html.escape(str(pl.get("name", "Материал")))
+            wh_note = f" <b>{wn}</b> ({int(pl.get('count', 1))}×) в сумку."
+        else:
+            wh_note = " <i>сумка полна</i> — приходи с местом, чтобы взять припасы."
+        frag = (
+            f"{LINE_SEP}\n📦 <b>Покинутый склад</b> на стороне пути!{wh_note}"
+        )
+    elif kind == "spirit":
+        k = floor_entry_mods.SPIRIT_ARENA_FIGHTS_KEY
+        mp[k] = int(mp.get(k) or 0) + 1
+        frag = (
+            f"{LINE_SEP}\n👻 <b>Дух вызывает на дуэль</b> — в награду даёт <b>запасной бой на арене</b>.\n"
+            "<i>Один матч <b>без расхода дневного лимита</b> (тратится при награде/учёте боя).</i>"
+        )
+    elif kind == "lightning":
+        mp[floor_entry_mods.FLOOR_MOD_META_KEY] = {"lightning_exec": 0.15}
+        frag = (
+            f"{LINE_SEP}\n⚡ <b>Грохочет дальняя буря!</b>\n"
+            "<i>Следующий бой: враг ниже <b>15% HP</b> — мгновенная <b>казнь молнией</b> (после твоей атаки/скилла).</i>"
+        )
+    else:  # bless
         character.hp_current = int(character.hp_max)
         character.mp_current = int(character.mp_max)
         frag = (

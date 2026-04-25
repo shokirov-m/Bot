@@ -43,6 +43,12 @@ def add_fame(character: Character, amount: int) -> int:
     new_val = int(meta.get(_FAME_KEY, 0)) + amount
     meta[_FAME_KEY] = new_val
     character.meta_progress = meta
+    try:
+        from services.fame_bonuses import grant_fame_600_rewards_if_needed
+
+        grant_fame_600_rewards_if_needed(character)
+    except Exception:
+        pass
     return new_val
 
 
@@ -75,8 +81,18 @@ def format_fame_html(character: Character) -> str:
     fame = get_fame(character)
     rank_name, rank_desc = fame_rank(fame)
     progress = fame_progress_to_next(fame)
+    extra = ""
+    try:
+        from services.fame_bonuses import title_and_frame_600_display
+
+        row = title_and_frame_600_display(character)
+        if row:
+            title, frame = row
+            extra = f"\n🎖 <b>Титул славы:</b> {title}\n🖼 <b>Рамка профиля:</b> {frame}"
+    except Exception:
+        pass
     return (
         f"⭐ <b>Слава:</b> {fame}  {rank_name}\n"
         f"<i>{rank_desc}</i>\n"
-        f"{progress}"
+        f"{progress}{extra}"
     )
