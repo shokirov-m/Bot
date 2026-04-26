@@ -1525,7 +1525,6 @@ async def _victory_sequence(
         extra_rune_item = ""
         boss_like = spawn.is_mini_boss or spawn.is_major_boss
         if spawn.is_elite or boss_like:
-            from game.items import rune_items
             rd = rune_items.roll_rune_drop(int(character.floor_number), boss_like)
             if rd is not None:
                 slot_r = await inventory_repo.first_free_bag_slot(session, character.id)
