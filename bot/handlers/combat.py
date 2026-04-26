@@ -16,6 +16,7 @@ from bot.states.combat_states import CombatStates
 from db.repository import character_repo, user_repo
 from services import combat_idle_service, combat_service
 from services.combat_fsm_backup import clear_combat_backup, try_restore_combat_backup
+from utils.combat_crash_dump import write_crash_dump
 
 router = Router(name="combat")
 
@@ -125,15 +126,37 @@ async def on_combat_callback(
             skill_index=skill_index,
             item_id=item_id,
         )
-    except Exception:
-        logger.exception("Ошибка в боевом callback")
+    except Exception as exc:
+        # Полный лог нужен для диагностики; пользователю даём короткое сообщение с типом ошибки
+        # и НЕ обнуляем FSM/бэкап — бой можно продолжать кликом по той же кнопке.
+        logger.exception(
+            "Сбой в боевом callback (action={}, skill_index={}, item_id={}): {}",
+            action if 'action' in locals() else '?',
+            skill_index if 'skill_index' in locals() else None,
+            item_id if 'item_id' in locals() else None,
+            type(exc).__name__,
+        )
         try:
-            if query.from_user is not None:
-                combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
-            await state.clear()
+            data_dump = await state.get_data()
+            combat_dump = data_dump.get("combat") if isinstance(data_dump, dict) else None
+            user_id = int(query.from_user.id) if query.from_user is not None else None
+            char_id = int(char.id) if 'char' in locals() and char is not None else None
+            write_crash_dump(
+                exc=exc,
+                action=action if 'action' in locals() else None,
+                skill_index=skill_index if 'skill_index' in locals() else None,
+                item_id=item_id if 'item_id' in locals() else None,
+                user_id=user_id,
+                character_id=char_id,
+                combat_state=combat_dump if isinstance(combat_dump, dict) else None,
+            )
         except Exception:
-            logger.debug("combat callback: state.clear после ошибки")
+            logger.debug("combat crash: запись дампа не удалась")
         try:
-            await query.answer("Ошибка боя: состояние сброшено. Открой этаж заново.", show_alert=True)
+            await query.answer(
+                f"Сбой при действии ({type(exc).__name__}). "
+                "Попробуй ещё раз или используй /fixbattle.",
+                show_alert=True,
+            )
         except Exception:
             pass

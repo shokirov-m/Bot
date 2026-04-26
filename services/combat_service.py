@@ -198,10 +198,13 @@ async def _safe_edit_combat_message_text(
         err = str(e).lower()
         if "message is not modified" in err:
             return True
-        if "message can't be edited" in err or "there is no text" in err or "have no text" in err:
-            logger.warning("combat UI: правка сообщения пропущена ({})", e)
-            return False
-        raise
+        # Любая другая ошибка телеграма (например, потерянный message_id, удалённое сообщение,
+        # слишком длинный caption и т. д.) НЕ должна обрывать бой. Лог + мирный возврат.
+        logger.warning("combat UI: правка сообщения пропущена ({})", e)
+        return False
+    except Exception as e:
+        logger.exception("combat UI: непредвиденная ошибка при правке сообщения боя ({})", e)
+        return False
 
 
 def _tutorial_monster_bundle() -> dict[str, Any]:
