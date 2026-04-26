@@ -1,5 +1,5 @@
 from game.characters.skills import SkillDef
-from game.combat.engine import player_skill
+from game.combat.engine import player_attack, player_skill
 
 
 def _state(mp: int = 20) -> dict:
@@ -42,3 +42,14 @@ def test_player_skill_without_enough_mp_does_not_crash() -> None:
     assert outcome is None
     assert damage == 0
     assert state["player_mp"] == 2
+
+
+def test_player_attack_with_aura_miss_argument_does_not_crash() -> None:
+    state = _state(mp=20)
+    state["player_aura_miss_chance"] = 0.0
+
+    logs, outcome, damage = player_attack(state)
+
+    assert logs
+    assert outcome in ("continue", "win")
+    assert damage >= 0

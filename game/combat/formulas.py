@@ -23,14 +23,14 @@ def dodge_chance_percent(dexterity: int, *, dodge_bonus_flat: float = 0.0) -> fl
     return clamp(base + dodge_bonus_flat, 0.0, 0.40)
 
 
-def miss_chance_percent(dexterity: int) -> float:
+def miss_chance_percent(dexterity: int, *, extra_miss_chance: float = 0.0) -> float:
     """
     Шанс промаха игрока: база 20% − каждые 5 ЛОВ снимают 1%.
     Минимум 3% (нельзя полностью устранить промах), максимум 20%.
     Например: ЛОВ 0 → 20%, ЛОВ 25 → 15%, ЛОВ 50 → 10%, ЛОВ 85 → 3%.
     """
     base = 0.20 - (int(dexterity) // 5) * 0.01
-    return clamp(base, 0.03, 0.20)
+    return clamp(base + float(extra_miss_chance), 0.03, 0.80)
 
 
 def roll_crit(luck: int, *, crit_bonus_flat: float = 0.0) -> bool:
@@ -41,9 +41,9 @@ def roll_dodge(dexterity: int, *, dodge_bonus_flat: float = 0.0) -> bool:
     return random.random() < dodge_chance_percent(dexterity, dodge_bonus_flat=dodge_bonus_flat)
 
 
-def roll_miss(dexterity: int) -> bool:
+def roll_miss(dexterity: int, *, extra_miss_chance: float = 0.0) -> bool:
     """Возвращает True, если атака игрока промахнулась."""
-    return random.random() < miss_chance_percent(dexterity)
+    return random.random() < miss_chance_percent(dexterity, extra_miss_chance=extra_miss_chance)
 
 
 def int_skill_phys_tuning_multiplier(intelligence: int) -> float:
