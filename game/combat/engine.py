@@ -139,6 +139,15 @@ def _stats(state: dict[str, Any]) -> dict[str, int]:
     return state["stats"]
 
 
+def _mods(state: dict[str, Any]) -> dict[str, Any]:
+    raw = state.get("passive_mods")
+    if isinstance(raw, dict):
+        return raw
+    mods = passive_combat_modifiers(str(state.get("class_key") or "wanderer"))
+    state["passive_mods"] = mods
+    return mods
+
+
 def apply_floor_aura_effects(state: dict[str, Any]) -> list[str]:
     logs = []
     aura = state.get("floor_aura")
@@ -498,6 +507,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         logs.append(f"Навык на перезарядке ({cd} х.).")
         return logs, None, 0
 
+    mp = int(state["player_mp"])
     cost = sk.mp_cost
     mp_mult = float(state.get("player_mp_cost_mult", 1.0))
     if mp_mult != 1.0:

@@ -23,6 +23,7 @@ class PromoReward:
 
 # Публичные коды для игроков; при необходимости добавляй новые.
 PROMO_REWARDS: dict[str, PromoReward] = {
+    "GIFT10K": PromoReward(gold=10000, xp=10000),
     "TOWER2026": PromoReward(gold=15000, xp=2000),
     "TOWER1000": PromoReward(gold=15000, xp=2000),
     "START": PromoReward(gold=150, xp=80),

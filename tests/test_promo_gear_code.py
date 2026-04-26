@@ -6,6 +6,16 @@ from game.characters import pets as pets_mod
 from game.promos import bag_payloads_for_code, promo_pet_key_for_code, reward_for_code
 
 
+def test_gift10k_reward() -> None:
+    r = reward_for_code("GIFT10K")
+    assert r is not None
+    assert r.gold == 10000
+    assert r.xp == 10000
+    assert r.rune_stones == 0
+    assert bag_payloads_for_code("GIFT10K") is None
+    assert promo_pet_key_for_code("GIFT10K") is None
+
+
 def test_basekit26_reward_and_bag_payloads() -> None:
     r = reward_for_code("BASEKIT26")
     assert r is not None
