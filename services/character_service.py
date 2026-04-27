@@ -39,6 +39,62 @@ from game.items.equipment import (
 from game.items.rarity_scaling import scaled_weapon_attack_value
 from utils.profile_portraits import META_PORTRAIT_KEY, META_REG_GENDER
 
+# История трат золота (для админки): список словарей в meta_progress.
+SPEND_LEDGER_KEY = "spend_ledger_v1"
+SPEND_LEDGER_MAX = 120
+
+
+def record_spend_ledger(
+    character: Character,
+    amount: int,
+    label: str,
+    *,
+    kind: str = "other",
+) -> None:
+    """Зафиксировать трату золота; ``amount`` — положительное число (сколько потрачено)."""
+    n = int(amount)
+    if n <= 0:
+        return
+    mp = dict(character.meta_progress or {})
+    items = list(mp.get(SPEND_LEDGER_KEY) or [])
+    items.append(
+        {
+            "t": datetime.now(UTC).isoformat(timespec="seconds"),
+            "a": n,
+            "l": (label or "")[:200],
+            "k": (kind or "other")[:48],
+        },
+    )
+    if len(items) > SPEND_LEDGER_MAX:
+        items = items[-SPEND_LEDGER_MAX:]
+    mp[SPEND_LEDGER_KEY] = items
+    character.meta_progress = mp
+
+
+def format_spend_ledger_admin_html(character: Character) -> str:
+    """HTML для админки: последние траты золота."""
+    import html as html_mod
+
+    items = list((character.meta_progress or {}).get(SPEND_LEDGER_KEY) or [])
+    if not items:
+        return (
+            "🛒 <b>Расходы золота</b>\n\n"
+            "<i>Записей пока нет. История ведётся с момента обновления бота; "
+            "прошлые операции сюда не переносятся.</i>"
+        )
+    lines: list[str] = [
+        "🛒 <b>Расходы золота (последние записи)</b>",
+        "<i>Сумма · описание · время (UTC)</i>\n",
+    ]
+    for row in reversed(items):
+        a = int(row.get("a", 0))
+        lab = str(row.get("l", ""))[:220]
+        t = str(row.get("t", "?"))[:40]
+        lines.append(
+            f"· <b>{a:,}</b> 💰 — {html_mod.escape(lab)} <i>({html_mod.escape(t)})</i>",
+        )
+    return "\n".join(lines)
+
 
 def zone_multiplier_for_floor(floor_number: int) -> float:
     """Множитель зоны по номеру текущего этажа персонажа."""
@@ -66,7 +122,7 @@ def experience_needed_for_next_level(level: int, floor_number: int) -> int:
 
 def _compute_hp_max(vitality: int, strength: int, arch: Archetype) -> int:
     """Базовый расчёт HP с учётом ВЫН/СИЛ и пассива архетипа.
-    BALANCE_V2: hp/VIT снижено с 6 до 4 (см. game/balance.py).
+    BALANCE_V2: HP/ВЫН — см. HP_PER_VIT в game/balance.py.
     """
     hp_per_vit = int(HP_PER_VIT) if BALANCE_V2_ENABLED else 6
     base = 40 + vitality * hp_per_vit + strength * 5
@@ -207,13 +263,21 @@ async def equipped_weapon_attack_value(session: AsyncSession, character: Charact
     return total
 
 
-def add_gold(character: Character, amount: int) -> None:
+def add_gold(
+    character: Character,
+    amount: int,
+    *,
+    spend_for: str | None = None,
+    spend_kind: str = "other",
+) -> None:
     amt = int(amount)
     if amt > 0:
         bonus = float((character.meta_progress or {}).get("achievement_gold_bonus", 0.0))
         if bonus > 0.001:
             amt = int(round(amt * (1.0 + bonus)))
     character.gold = int(character.gold) + amt
+    if amt < 0 and spend_for:
+        record_spend_ledger(character, -amt, spend_for, kind=spend_kind)
 
 
 async def add_gold_async(
@@ -240,7 +304,13 @@ async def add_gold_async(
         )
 
 
-def try_spend_gold(character: Character, amount: int) -> bool:
+def try_spend_gold(
+    character: Character,
+    amount: int,
+    *,
+    note: str | None = None,
+    kind: str = "spend",
+) -> bool:
     """Списать золото, если хватает. При amount <= 0 — True без изменений."""
     n = int(amount)
     if n <= 0:
@@ -249,6 +319,8 @@ def try_spend_gold(character: Character, amount: int) -> bool:
     if cur < n:
         return False
     add_gold(character, -n)
+    if note:
+        record_spend_ledger(character, n, note, kind=kind)
     return True
 
 
@@ -604,7 +676,12 @@ def try_paid_reset_stat_allocations(character: Character) -> tuple[bool, str]:
     pts = count_allocated_stat_points_over_nominal(character)
     if pts <= 0:
         return False, "settings_stat_reset_none"
-    if not try_spend_gold(character, STAT_ALLOC_RESET_COST_GOLD):
+    if not try_spend_gold(
+        character,
+        STAT_ALLOC_RESET_COST_GOLD,
+        note="Сброс распределения статов",
+        kind="stats",
+    ):
         return False, "settings_stat_reset_no_gold"
     nom = nominal_primary_stats_tuple(character)
     character.stat_strength = nom[0]

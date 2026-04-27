@@ -93,6 +93,9 @@ def admin_player_snapshot_keyboard(*, character_id: int, return_page: int) -> In
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                InlineKeyboardButton(text="🛒 Покупки / траты 💰", callback_data=f"adm:pur:{cid}:{pg}"),
+            ],
+            [
                 InlineKeyboardButton(text="➕ +1 ур.", callback_data=f"adm:lvw:{cid}:{pg}:1"),
                 InlineKeyboardButton(text="➕ +5 ур.", callback_data=f"adm:lvw:{cid}:{pg}:5"),
                 InlineKeyboardButton(text="➕ +10 ур.", callback_data=f"adm:lvw:{cid}:{pg}:10"),
@@ -106,6 +109,25 @@ def admin_player_snapshot_keyboard(*, character_id: int, return_page: int) -> In
                 InlineKeyboardButton(
                     text="⬅️ К списку игроков",
                     callback_data=f"adm:pl:{pg}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ В панель", callback_data="adm:hub"),
+            ],
+        ],
+    )
+
+
+def admin_player_purchases_back_keyboard(*, character_id: int, return_page: int) -> InlineKeyboardMarkup:
+    """Экран «траты золота»: назад к карточке игрока."""
+    cid = int(character_id)
+    pg = int(return_page)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⬅️ К карточке игрока",
+                    callback_data=f"adm:pv:{cid}:{pg}",
                 ),
             ],
             [

@@ -153,12 +153,18 @@ def try_upgrade_home_level(
         )
 
     mp, h = _load_home(character)
-    character_service.add_gold(character, -gold_cost)
     new_lv = lv + 1
+    nm = HOME_LEVEL_NAMES.get(new_lv, f"Ур.{new_lv}")
+    character_service.add_gold(
+        character,
+        -gold_cost,
+        spend_for=f"Дом: уровень {new_lv} ({nm})",
+        spend_kind="home",
+    )
     h["home_level"] = new_lv
     _save_home(character, mp, h)
 
-    new_name = HOME_LEVEL_NAMES.get(new_lv, f"Ур.{new_lv}")
+    new_name = nm
     trophy_line = f"\n−{trophy_cost} 🏆 трофеев босса" if trophy_cost > 0 else ""
     bonus_lines = _new_level_bonus_description(new_lv)
     msg = (
@@ -354,7 +360,12 @@ def try_upgrade_workbench(character: Character) -> tuple[bool, str]:
     if int(character.gold) < cost:
         return False, f"Нужно {cost} золота."
     mp, h = _load_home(character)
-    character_service.add_gold(character, -cost)
+    character_service.add_gold(
+        character,
+        -cost,
+        spend_for=f"Дом: верстак ур. {cur + 1}",
+        spend_kind="home",
+    )
     h["workbench_tier"] = cur + 1
     _save_home(character, mp, h)
     new_t = cur + 1
@@ -615,7 +626,12 @@ def try_upgrade_alchemy(character: Character) -> tuple[bool, str]:
     t = alchemy_tier(character)
     if t >= ALCHEMY_TIER_MAX: return False, "Максимальный уровень."
     cost = ALCHEMY_UPGRADE_BASE_GOLD * t
-    if not character_service.try_spend_gold(character, cost):
+    if not character_service.try_spend_gold(
+        character,
+        cost,
+        note=f"Дом: алхимический стол ур. {t + 1}",
+        kind="home",
+    ):
         return False, f"Нужно {cost:,} 💰."
     
     mp, h = _load_home(character)
@@ -669,7 +685,12 @@ async def try_brew_elixir(session: AsyncSession, character: Character, elixir_ke
         if total_materials_in_bag(bag_items, m_rarity) < m_count:
             return False, f"Не хватает материалов: {m_rarity} ({m_count} шт)."
 
-    if not character_service.try_spend_gold(character, edef["cost_gold"]):
+    if not character_service.try_spend_gold(
+        character,
+        edef["cost_gold"],
+        note=f"Дом: зелье «{edef['name']}»",
+        kind="home",
+    ):
         return False, f"Нужно {edef['cost_gold']} 💰."
             
     # Consume materials
@@ -797,7 +818,12 @@ def try_buy_mine(character: Character) -> tuple[bool, str]:
         return False, f"Нужно {MINE_PURCHASE_GOLD:,} 💰."
     
     mp, b = _mine_farm_block(character)
-    character_service.add_gold(character, -MINE_PURCHASE_GOLD)
+    character_service.add_gold(
+        character,
+        -MINE_PURCHASE_GOLD,
+        spend_for="Дом: покупка шахты и фермы",
+        spend_kind="home",
+    )
     b["bought"] = True
     b["ts"] = int(time.time())
     b["level"] = 1
@@ -814,7 +840,12 @@ def try_hire_npc(character: Character) -> tuple[bool, str]:
         return False, f"Нужно {NPC_HIRE_GOLD:,} 💰."
     
     mp, b = _mine_farm_block(character)
-    character_service.add_gold(character, -NPC_HIRE_GOLD)
+    character_service.add_gold(
+        character,
+        -NPC_HIRE_GOLD,
+        spend_for="Дом: найм рабочего на шахте",
+        spend_kind="home",
+    )
     b["npc_hired"] = True
     mp[META_MINE_FARM] = b
     character.meta_progress = mp
@@ -836,7 +867,12 @@ def try_upgrade_mine(character: Character) -> tuple[bool, str]:
         return False, f"Нужно {cost:,} 💰."
     
     mp, b = _mine_farm_block(character)
-    character_service.add_gold(character, -cost)
+    character_service.add_gold(
+        character,
+        -cost,
+        spend_for=f"Дом: улучшение шахты (ур. {lv + 1})",
+        spend_kind="home",
+    )
     b["level"] = lv + 1
     mp[META_MINE_FARM] = b
     character.meta_progress = mp

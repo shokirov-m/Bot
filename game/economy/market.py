@@ -141,7 +141,14 @@ async def buy_lot_now(
     free_b = await inventory_repo.first_free_bag_slot(session, int(buyer.id))
     if free_b is None:
         return False, "Освободи хотя бы одну ячейку сумки."
-    buyer.gold = int(buyer.gold) - price
+    from services import character_service
+
+    character_service.add_gold(
+        buyer,
+        -price,
+        spend_for=f"Аукцион: лот #{lot.id}",
+        spend_kind="auction",
+    )
     payout = int(price * (1.0 - COMMISSION_RATE))
     seller.gold = int(seller.gold) + payout
     await inventory_repo.add_bag_item(
@@ -243,7 +250,14 @@ async def accept_direct_offer(
     if free_b is None:
         return False, "Освободи хотя бы одну ячейку сумки."
 
-    buyer.gold = int(buyer.gold) - price
+    from services import character_service
+
+    character_service.add_gold(
+        buyer,
+        -price,
+        spend_for=f"Аукцион: лот #{lot.id} (личное)",
+        spend_kind="auction",
+    )
     payout = int(int(price) * (1.0 - COMMISSION_RATE))
     seller.gold = int(seller.gold) + payout
     await inventory_repo.add_bag_item(

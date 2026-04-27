@@ -144,9 +144,21 @@ _WEAPON_EMOJI: dict[str, str] = {
     "unarmed": "👊",
 }
 
+# Краткое обозначение в строке «Все типы» (только кириллица).
+WEAPON_TYPE_SHORT_RU: dict[str, str] = {
+    "blade": "меч",
+    "staff": "посох",
+    "bow": "лук",
+    "dagger": "кинжал",
+    "axe": "топор",
+    "polearm": "древковое",
+    "hammer": "молот",
+    "unarmed": "без оружия",
+}
+
 
 def mastery_all_types_line(character: Character) -> str:
-    """Все ненулевые мастерства в одну строку: «🗡 blade ур.3 (1240 уд.) · 🏹 bow ур.1 (160)…»."""
+    """Все ненулевые мастерства: «🗡 меч ур.3 (1240) · …» — без латиницы в подписях."""
     data = _load_mastery(character.meta_progress or {})
     if not data:
         return ""
@@ -158,7 +170,8 @@ def mastery_all_types_line(character: Character) -> str:
             continue
         emo = _WEAPON_EMOJI.get(wtype, "🗡")
         tier = tier_for_hits(h)
-        parts.append(f"{emo} {wtype} ур.{tier} ({h})")
+        name_ru = WEAPON_TYPE_SHORT_RU.get(wtype, wtype)
+        parts.append(f"{emo} {name_ru} ур.{tier} ({h})")
     if not parts:
         return ""
     return " · ".join(parts)
@@ -182,6 +195,7 @@ def mastery_summary_line(character: Character, weapon_type: str) -> str:
     tier = tier_for_hits(h)
     mult = MULT_BY_TIER[tier]
     nxt = next((t for t in THRESHOLDS if h < t), None)
+    nm = WEAPON_TYPE_SHORT_RU.get(weapon_type, weapon_type)
     if nxt is None:
-        return f"Мастерство ({weapon_type}): <b>{h}</b> уд. · макс. ярус · урон ×{mult:.2f}"
-    return f"Мастерство ({weapon_type}): <b>{h}</b> уд. · ярус {tier}/4 · урон ×{mult:.2f} · до след. {nxt - h} уд."
+        return f"Мастерство ({nm}): <b>{h}</b> уд. · макс. ярус · урон ×{mult:.2f}"
+    return f"Мастерство ({nm}): <b>{h}</b> уд. · ярус {tier}/4 · урон ×{mult:.2f} · до след. {nxt - h} уд."

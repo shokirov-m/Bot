@@ -116,7 +116,12 @@ async def try_buy_offer(
             )
 
     from services import character_service
-    character_service.add_gold(character, -price)
+    character_service.add_gold(
+        character,
+        -price,
+        spend_for=f"Таверна: {offer.name}",
+        spend_kind="tavern",
+    )
     character.tavern_visits = int(character.tavern_visits) + 1
     title_service.refresh_unlocks(character)
 
@@ -250,7 +255,12 @@ async def try_buy_daily_blueprint(
         return False, f"Недостаточно золота. Нужно {int(price):,} 💰."
 
     from services import character_service
-    character_service.add_gold(character, -int(price))
+    character_service.add_gold(
+        character,
+        -int(price),
+        spend_for=f"Таверна: чертёж «{name}»",
+        spend_kind="tavern",
+    )
     bought.append(rid)
     state["bought_blueprints"] = bought
     mp = dict(character.meta_progress or {})
@@ -285,13 +295,17 @@ async def try_buy_daily_gear(
     from db.repository import inventory_repo
     from services import character_service
 
-    character_service.add_gold(character, -int(price))
-    await inventory_repo.add_bag_item(session, character.id, dict(idata))
+    nm = str(idata.get("name", key))
+    character_service.add_gold(
+        character,
+        -int(price),
+        spend_for=f"Таверна: {nm}",
+        spend_kind="tavern",
+    )
     bought.append(key)
     state["bought_gears"] = bought
     mp = dict(character.meta_progress or {})
     mp[_TAVERN_DAILY_META] = state
     character.meta_progress = mp
     await session.flush()
-    nm = str(idata.get("name", key))
     return True, f"🛒 Куплено: <b>{html.escape(nm)}</b>. Лежит в инвентаре."

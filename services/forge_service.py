@@ -21,7 +21,7 @@ from game.items import runes as rune_sys
 from game.items import materials as mat_sys
 from game.items.rarity_scaling import scaled_armor_defense_value, scaled_weapon_attack_value
 from game.locations import forge as forge_loc
-from services import home_service, title_service
+from services import character_service, home_service, title_service
 from utils.ui import LINE_SEP, format_inventory_item_html, render_enchant_stars
 
 
@@ -205,7 +205,13 @@ async def try_enchant_equipped_in_slot(
         if int(character.rune_stones) < 1:
             return False, ["Нужен 1 рунный камень для рунной подстраховки."]
 
-    character.gold = int(character.gold) - gold_cost
+    slot_lab = html.escape(equip_meta.SLOT_LABEL_RU.get(equip_slot, equip_slot))
+    character_service.add_gold(
+        character,
+        -gold_cost,
+        spend_for=f"Кузница: заточка ({slot_lab})",
+        spend_kind="forge",
+    )
     character.enchant_attempts = int(character.enchant_attempts) + 1
     # списываем материалы
     await _consume_materials(session, character.id, rarity, mat_cost)
@@ -463,8 +469,12 @@ async def try_brew_city_elixir(
     if free is None:
         return False, ["В сумке нет свободной ячейки."]
 
-    character.gold = int(character.gold) - cost
-    payload = {
+    character_service.add_gold(
+        character,
+        -cost,
+        spend_for="Кузница: настой кузницы",
+        spend_kind="forge",
+    )
         "name": "Настой кузницы",
         "kind": "consumable",
         "rarity": "common",
@@ -619,8 +629,12 @@ async def craft_rune_merge(
     if free is None:
         return False, "Нет места в сумке."
 
-    character.gold = int(character.gold) - cost
-    for it in found[:2]:
+    character_service.add_gold(
+        character,
+        -cost,
+        spend_for=f"Кузница: слияние руны {el} ранг {target_rank}",
+        spend_kind="forge",
+    )
         await inventory_repo.delete_inventory_item(session, it)
 
     new_rune = rune_sys.RuneData(element=el, rank=target_rank)

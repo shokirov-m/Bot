@@ -319,7 +319,7 @@ async def on_floor_callback(
                 )])
             rows.append([InlineKeyboardButton(
                 text="⬅ Назад",
-                callback_data=f"flr:{floor}:back",
+                callback_data=f"fl:{floor}:back",
             )])
             kb = InlineKeyboardMarkup(inline_keyboard=rows)
             if query.message is not None:
@@ -387,6 +387,22 @@ async def on_floor_callback(
                 "Наставник Эрида больше не распределяет классы — используй «Профессии» в статусе или меню.",
                 show_alert=True,
             )
+            return
+
+        if code == "back":
+            if query.message is None:
+                await query.answer()
+                return
+            await push_floor_screen_ui(
+                session,
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                character=char,
+                reply_markup=await floor_keyboard_for_character(session, char),
+                target_message=query.message,
+            )
+            await query.answer()
             return
 
         if code == "return":
@@ -1102,7 +1118,7 @@ async def wnpc_take_quest(query: CallbackQuery, session: AsyncSession) -> None:
 
         await session.flush()
         text = wnpc_qs.format_npc_quest_screen(char, floor)
-        rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"flr:{floor}:back")]]
+        rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"fl:{floor}:back")]]
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
         await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
         await query.answer("✅ Задание принято!")
@@ -1137,11 +1153,10 @@ async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession) -> None:
             return
 
         await session.commit()
-        rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"flr:{floor}:back")]]
+        rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"fl:{floor}:back")]]
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
         await query.message.edit_text(msg, reply_markup=kb, parse_mode=ParseMode.HTML)
         await query.answer("🎁 Награда получена!")
     except Exception:
         logger.exception("wnpc:claim")
-        await query.answer("Ошибка.", show_alert=True)
         await query.answer("Ошибка.", show_alert=True)

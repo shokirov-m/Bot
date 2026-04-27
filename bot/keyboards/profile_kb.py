@@ -54,6 +54,7 @@ def profile_full_stats_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
     """Экран полных характеристик."""
     loc = locale if locale in ("ru", "en") else "ru"
     rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="📖 Что дают статы", callback_data="prf:stathelp")],
         [InlineKeyboardButton(text=t(loc, "profile_back_compact"), callback_data="prf:back")],
         [
             InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),

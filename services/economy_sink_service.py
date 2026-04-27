@@ -12,6 +12,7 @@ from db.models.character import Character
 from game.economy import sinks as sink_rules
 from game.floors import floor_data
 from game.locations import cities as city_locations
+from services import character_service
 from utils.ui import LINE_SEP
 
 
@@ -91,7 +92,14 @@ def try_claim_bank_interest(character: Character, *, floor_key: int) -> tuple[bo
 def try_unlock_bank_seal(character: Character, *, floor_key: int) -> tuple[bool, str]:
     if not _in_city_hub(character, floor_key):
         return False, "Сейф только в городе-хабе."
-    return sink_rules.try_unlock_bank_seal(character)
+    from game.economy.sinks import BANK_SEAL_UPGRADE_COST
+
+    ok, msg = sink_rules.try_unlock_bank_seal(character)
+    if ok:
+        character_service.record_spend_ledger(
+            character, BANK_SEAL_UPGRADE_COST, "Банк: печать", kind="bank"
+        )
+    return ok, msg
 
 
 def try_open_bank_term(character: Character, *, floor_key: int, amount: int, term_h: int) -> tuple[bool, str]:
@@ -126,6 +134,7 @@ def try_play_lottery(character: Character, *, floor_key: int) -> tuple[bool, str
     mp = _mp(character)
     mp[sink_rules.META_LOTTERY_SPENT] = int(mp.get(sink_rules.META_LOTTERY_SPENT, 0)) + cost
     _save_mp(character, mp)
+    character_service.record_spend_ledger(character, cost, f"Лотерея: билет ({cost} 💰)", "lottery")
     msg = sink_rules.format_lottery_outcome_ru(code, cost, int(dg), int(dr))
     return True, msg
 
@@ -158,7 +167,7 @@ def try_repay_moneylender(character: Character, *, floor_key: int) -> tuple[bool
     pay = min(d, int(character.gold), max(50, d // 4))
     if int(character.gold) < pay:
         return False, "Недостаточно золота для минимального платежа."
-    character_service.add_gold(character, -pay)
+    character_service.add_gold(character, -pay, spend_for="Ростовщик: погашение долга", spend_kind="sink")
     sink_rules.set_moneylender_debt(character, d - pay)
     left = sink_rules.moneylender_debt(character)
     tail = " Долг закрыт." if left == 0 else f" Остаток долга: <b>{left}</b> 💰."
@@ -168,7 +177,13 @@ def try_repay_moneylender(character: Character, *, floor_key: int) -> tuple[bool
 def try_bank_safe_deposit(character: Character, *, floor_key: int, amount: int) -> tuple[bool, str]:
     if not _in_city_hub(character, floor_key):
         return False, "Сейф только в городе-хабе."
-    return sink_rules.try_bank_safe_deposit(character, amount)
+    g0 = int(character.gold)
+    ok, msg = sink_rules.try_bank_safe_deposit(character, amount)
+    if ok and g0 > int(character.gold):
+        character_service.record_spend_ledger(
+            character, g0 - int(character.gold), "Банк: внесение в сейф", kind="bank"
+        )
+    return ok, msg
 
 
 def try_bank_safe_withdraw(character: Character, *, floor_key: int, amount: int) -> tuple[bool, str]:
@@ -180,7 +195,11 @@ def try_bank_safe_withdraw(character: Character, *, floor_key: int, amount: int)
 def try_bank_safe_upgrade(character: Character, *, floor_key: int) -> tuple[bool, str]:
     if not _in_city_hub(character, floor_key):
         return False, "Сейф только в городе-хабе."
-    return sink_rules.try_bank_safe_upgrade(character)
+    cost = sink_rules.bank_safe_upgrade_cost_gold(character)
+    ok, msg = sink_rules.try_bank_safe_upgrade(character)
+    if ok:
+        character_service.record_spend_ledger(character, cost, "Банк: улучшение сейфа", kind="bank")
+    return ok, msg
 
 
 async def flush(session: AsyncSession, character: Character) -> None:

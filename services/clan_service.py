@@ -342,7 +342,12 @@ async def try_create_clan(
         return False, "Такое имя клана уже занято."
     if tag and await clan_repo.get_clan_by_tag(session, tag) is not None:
         return False, f"Тег [{tag}] уже занят другим кланом."
-    character_service.add_gold(leader, -CLAN_CREATE_COST_GOLD)
+    character_service.add_gold(
+        leader,
+        -CLAN_CREATE_COST_GOLD,
+        spend_for="Создание клана",
+        spend_kind="clan",
+    )
     c = await clan_repo.create_clan(session, name=name, tag=tag, leader=leader)
     payload = {"treasury_gold": 0, "materials": {"wood": 0, "stone": 0, "herbs": 0},
                "buildings": {}, "relics": [], "captured_floors": {}, "war": None, "event_log": []}
@@ -431,7 +436,12 @@ async def try_donate_gold(
     actual = min(amount, limit - cur)
     if actual <= 0:
         return False, f"Казна переполнена ({cur:,}/{limit:,} 💰). Сначала обновите клан или постройте сокровищницу."
-    character_service.add_gold(character, -actual)
+    character_service.add_gold(
+        character,
+        -actual,
+        spend_for=f"Клан «{clan.name}»: взнос в казну",
+        spend_kind="clan",
+    )
     payload["treasury_gold"] = cur + actual
     pts = max(1, actual // 1000)
     await clan_repo.add_contribution(session, m, pts)
@@ -1491,7 +1501,12 @@ async def try_rename_clan(
     # Переименование стоит золото (анти-спам)
     if int(character.gold) < CLAN_RENAME_COST:
         return False, f"Переименование стоит {CLAN_RENAME_COST:,} 💰."
-    character_service.add_gold(character, -CLAN_RENAME_COST)
+    character_service.add_gold(
+        character,
+        -CLAN_RENAME_COST,
+        spend_for="Клан: переименование",
+        spend_kind="clan",
+    )
     old_name = clan.name
     clan.name = name[:64]
     await session.flush()

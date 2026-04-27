@@ -227,3 +227,50 @@ async def effective_primary_stats(session: AsyncSession, character: Character) -
     except Exception:
         pass
     return base
+
+
+def format_stat_derived_effects_ru(eff: dict[str, int]) -> str:
+    """
+    Сводка: какие бонусы дают <b>текущие итоговые</b> характеристики (после экипа и т.д.).
+    """
+    from game import balance as _bal
+    from game.combat import formulas as _f
+    from game.floors.rewards import luck_drop_bonus
+
+    s = int(eff.get("str", 0))
+    d = int(eff.get("dex", 0))
+    i = int(eff.get("int", 0))
+    v = int(eff.get("vit", 0))
+    l = int(eff.get("luck", 0))
+
+    hp_from_vit = v * int(_bal.HP_PER_VIT) if _bal.BALANCE_V2_ENABLED else v * 6
+    str_hp_part = s * 5
+    crit = _f.crit_chance_percent(l) * 100.0
+    dodge = _f.dodge_chance_percent(d) * 100.0
+    miss = _f.miss_chance_percent(d) * 100.0
+    hit = max(0.0, 100.0 - miss)
+    drop_p = luck_drop_bonus(l) * 100.0
+    vit_res = _bal.vit_status_resist_fraction(v) * 100.0
+
+    lines = [
+        "🧮 <b>Эффекты от твоих итоговых статов</b>",
+        f"⚔️ СИЛ {s}: база физ. урона ≈ <b>×2</b> к СИЛ в формуле удара; <b>+{str_hp_part}</b> к формуле макс. HP (вместе с ВЫН).",
+        f"🏃 ЛОВ {d}: уклонение <b>~{dodge:.1f}%</b> · шанс попадания <b>~{hit:.1f}%</b> · промах <b>~{miss:.1f}%</b>.",
+        f"🔮 ИНТ {i}: влияет на макс. MP и силу магических приёмов (детали в бою).",
+        f"🛡️ ВЫН {v}: <b>+{hp_from_vit}</b> к макс. HP от выносливости; сокращение длительности кровотечения/яда ≈ <b>−{vit_res:.0f}%</b> (суммарно, от ВЫН).",
+        f"🍀 УДА {l}: крит <b>~{crit:.1f}%</b>; бонус к шансу дропа с монстров ≈ <b>+{drop_p:.1f}%</b>.",
+    ]
+    return "\n".join(lines)
+
+
+def format_stat_cheat_sheet_ru() -> str:
+    """Справка без цифр персонажа: что в целом даёт характеристика."""
+    return (
+        "📖 <b>Что дают характеристики</b>\n\n"
+        "⚔️ <b>Сила</b> — основа физического урона, плюс часть к макс. HP.\n"
+        "🏃 <b>Ловкость</b> — уклонение, шанс попадать по врагу (ниже промахи).\n"
+        "🔮 <b>Интеллект</b> — запас маны и эффективность магии.\n"
+        "🛡️ <b>Выносливость</b> — много макс. HP; короче яды и кровотечения на вас.\n"
+        "🍀 <b>Удача</b> — крит; дополнительный шанс выбить вещь с врага.\n\n"
+        "<i>Точные числа в блоке «Эффекты от твоих итоговых статов» в полных характеристиках.</i>"
+    )

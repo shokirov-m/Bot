@@ -104,6 +104,26 @@ def get_character_sp(character: Character) -> int:
     """Returns unspent Skill Points from meta_progress."""
     return int((character.meta_progress or {}).get("unspent_sp", 0))
 
+
+def sync_unspent_sp_with_tree(character: Character) -> None:
+    """
+    Привести свободные SP в соответствие: (уровень − 9) минус сумма cost_sp изученных узлов.
+    Вызывать при открытии древа после смены стоимостей узлов или для починки рассинхрона.
+    """
+    if int(character.level or 0) < 10:
+        return
+    expected = max(0, int(character.level) - 9)
+    tree = get_character_tree(character)
+    if not tree:
+        return
+    unlocked = get_unlocked_node_keys(character)
+    spent = sum(tree[k].cost_sp for k in unlocked if k in tree)
+    new_unspent = max(0, expected - spent)
+    mp = dict(character.meta_progress or {})
+    if int(mp.get("unspent_sp", 0)) != new_unspent:
+        mp["unspent_sp"] = new_unspent
+        character.meta_progress = mp
+
 def get_unlocked_node_keys(character: Character) -> set[str]:
     """Returns set of unlocked tree node keys."""
     return set((character.meta_progress or {}).get("unlocked_nodes", []))
@@ -145,7 +165,7 @@ def get_tree_bonuses(character: Character) -> dict[str, float | int]:
     return merged
 
 def try_unlock_node(character: Character, node_key: str) -> tuple[bool, str]:
-    """Attempts to spend 1 SP and unlock a node."""
+    """Списывает cost_sp узла и открывает узел."""
     tree = get_character_tree(character)
     node = tree.get(node_key)
     if not node:

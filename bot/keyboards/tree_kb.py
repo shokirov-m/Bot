@@ -16,7 +16,7 @@ def skill_tree_keyboard(character: Character, locale: str = "ru") -> InlineKeybo
     rows: list[list[InlineKeyboardButton]] = []
     
     # Header showing SP
-    rows.append([InlineKeyboardButton(text=f"✨ Очки навыков: {sp}", callback_data="none")])
+    rows.append([InlineKeyboardButton(text=f"✨ Очки навыков: {sp}", callback_data="inv:noop")])
     
     # Filter nodes into branches (optional, for now just list them)
     # We'll group them by their parent status to show a logical order
@@ -39,12 +39,17 @@ def skill_tree_keyboard(character: Character, locale: str = "ru") -> InlineKeybo
     rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="prf:spec")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
-def node_action_keyboard(node_key: str, can_buy: bool) -> InlineKeyboardMarkup:
+def node_action_keyboard(node_key: str, can_buy: bool, *, cost_sp: int = 1) -> InlineKeyboardMarkup:
     """Buttons for buying or going back from a node view."""
     buttons = []
     if can_buy:
-        buttons.append(InlineKeyboardButton(text="💎 Изучить (1 SP)", callback_data=f"tree:buy:{node_key}"))
-    
+        buttons.append(
+            InlineKeyboardButton(
+                text=f"💎 Изучить ({cost_sp} SP)",
+                callback_data=f"tree:buy:{node_key}",
+            ),
+        )
+
     buttons.append(InlineKeyboardButton(text="⬅️ К древу", callback_data="prf:skills"))
-    
+
     return InlineKeyboardMarkup(inline_keyboard=[buttons])

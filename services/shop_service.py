@@ -14,7 +14,7 @@ from db.models.character import Character
 from db.repository import inventory_repo
 from game.combat import consumables as combat_consumables
 from game.economy import shop as shop_data
-from services import home_service
+from services import character_service, home_service
 from services.fame_bonuses import npc_merchant_price_multiplier
 from utils.ui import LINE_SEP
 
@@ -132,7 +132,15 @@ async def try_buy_good(
             return False, "Ошибка описания товара."
         if home_service.has_portrait_unlock(character, pk):
             return False, "Этот облик уже открыт."
-        character.gold = int(character.gold) - price
+        from utils.profile_portraits import portrait_title_ru
+
+        disp_label = portrait_title_ru(pk)
+        character_service.add_gold(
+            character,
+            -price,
+            spend_for=f"Магазин: облик «{disp_label}»",
+            spend_kind="shop",
+        )
         if used_discount:
             mp["merchant_discount_charges"] = disc_left - 1
             character.meta_progress = mp
@@ -142,7 +150,6 @@ async def try_buy_good(
         if used_discount:
             left = int((character.meta_progress or {}).get("merchant_discount_charges") or 0)
             note = f"\n<i>🏪 Скидка торговца: осталось ходов со скидкой — {left}.</i>"
-        from utils.profile_portraits import portrait_title_ru
         disp = html.escape(portrait_title_ru(pk))
         return True, f"−{price} 💰\nОблик «{disp}» открыт в <b>Дом → Гардероб</b>.{note}"
 
@@ -150,11 +157,12 @@ async def try_buy_good(
     if free is None:
         return False, "Не удалось найти свободный слот в сумке."
 
-    character.gold = int(character.gold) - price
-    if used_discount:
-        mp["merchant_discount_charges"] = disc_left - 1
-        character.meta_progress = mp
-    payload = copy.deepcopy(good.item_data)
+    character_service.add_gold(
+        character,
+        -price,
+        spend_for=f"Магазин: {good.name}",
+        spend_kind="shop",
+    )
     await inventory_repo.add_bag_item(session, character.id, payload, bag_slot=free)
     await session.flush()
 

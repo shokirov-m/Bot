@@ -52,7 +52,12 @@ def try_paid_rename(character: Character, raw: str) -> tuple[bool, str | None]:
     if err_key is not None or name is None:
         return False, err_key
     cost = int(settings.DISPLAY_NAME_CHANGE_GOLD)
-    if not character_service.try_spend_gold(character, cost):
+    if not character_service.try_spend_gold(
+        character,
+        cost,
+        note="Настройки: смена имени",
+        kind="settings",
+    ):
         return False, "settings_rename_no_gold"
     character.display_name = name[:64]
     return True, None

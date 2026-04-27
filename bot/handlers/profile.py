@@ -12,7 +12,7 @@ from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -147,6 +147,7 @@ def _build_profile_text(
     gear_defense: int = 0,
     chance_bonuses_line: str = "",
     achievement_bonuses_line: str = "",
+    stat_derivatives_block: str = "",
 ) -> str:
     arch = arch_manager.get_archetype(char.class_key)
     if arch:
@@ -345,6 +346,9 @@ def _build_profile_text(
             LINE_SEP,
         ],
     )
+    if stat_derivatives_block.strip() and (not compact):
+        lines.append(stat_derivatives_block.strip())
+        lines.append(LINE_SEP)
     m1, m2 = mastery_profile_lines(char, weapon_type)
     lines.extend([m1, "", m2])
     all_m = mastery_all_types_line(char)
@@ -440,6 +444,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     from services import achievement_service as _achs
     ach_line = _achs.format_achievement_bonuses_html(char)
 
+    deriv = stat_bonus_service.format_stat_derived_effects_ru(eff)
     base = _build_profile_text(
         char,
         compact=False,
@@ -454,6 +459,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         gear_defense=gear_def,
         chance_bonuses_line=chance_line,
         achievement_bonuses_line=ach_line,
+        stat_derivatives_block=deriv,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=False)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"
@@ -506,24 +512,40 @@ async def cmd_profile(message: Message, session: AsyncSession, state: FSMContext
 
 
 @router.callback_query(F.data == "prf:achievements")
-async def on_profile_achievements(query: CallbackQuery, session: AsyncSession) -> None:
-    if query.message is None:
+async def on_profile_achievements(
+    query: CallbackQuery, session: AsyncSession, state: FSMContext,
+) -> None:
+    try:
+        if query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if not user or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if not char:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        from services import achievement_service
+
+        achievement_service.check_and_apply_achievements(char)
+        await session.flush()
+        text = achievement_service.format_achievements_html(char)
+        loc = get_locale(char, query.from_user.language_code if query.from_user else None)
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=profile_full_stats_keyboard(locale=loc),
+            target_message=query.message,
+            photo_path=None,
+        )
         await query.answer()
-        return
-    user = await user_repo.get_by_telegram_id(session, query.from_user.id)
-    char = await character_repo.get_by_user_id(session, user.id)
-    if not char:
-        await query.answer()
-        return
-        
-    from services import achievement_service
-    # Check for new ones
-    achievement_service.check_and_apply_achievements(char)
-    await session.flush()
-    
-    text = achievement_service.format_achievements_html(char)
-    await query.message.edit_text(text, reply_markup=profile_full_stats_keyboard())
-    await query.answer()
+    except Exception:
+        logger.exception("prf:achievements")
+        await query.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data == "prf:full")
@@ -642,29 +664,11 @@ async def on_profile_skills(callback: CallbackQuery, session: AsyncSession, stat
             await callback.answer("Нет персонажа.", show_alert=True)
             return
         ensure_skill_meta(char)
-        
-        # Repair SP for high-level characters who missed it during the system update
         if char.level >= 10:
-            mp = dict(char.meta_progress or {})
-            unlocked_keys = arch_manager.get_unlocked_node_keys(char)
-            # Total SP they SHOULD have earned
-            expected_total_sp = char.level - 9 
-            # SP they have spent
-            tree = arch_manager.get_character_tree(char)
-            spent_sp = sum(tree[k].cost_sp for k in unlocked_keys if k in tree)
-            # Current unspent
-            current_unspent = int(mp.get("unspent_sp", 0))
-            
-            if (spent_sp + current_unspent) < expected_total_sp:
-                # Grant the difference
-                missing = expected_total_sp - (spent_sp + current_unspent)
-                mp["unspent_sp"] = current_unspent + missing
-                char.meta_progress = mp
-                logger.info(f"Granted {missing} missing SP to character {char.id}")
-
+            arch_manager.sync_unspent_sp_with_tree(char)
         await session.flush()
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        
+
         text = (
             "🌳 <b>Древо навыков</b>\n\n"
             "Здесь вы можете тратить очки навыков (SP) на изучение новых способностей и усиление персонажа.\n"
@@ -708,6 +712,7 @@ async def on_tree_node_view(callback: CallbackQuery, session: AsyncSession, stat
         
         text = (
             f"📍 <b>{node.name_ru}</b>\n"
+            f"Стоимость: <b>{node.cost_sp} SP</b>\n"
             f"Статус: <b>{status}</b>\n\n"
             f"{node.description_ru}\n\n"
         )
@@ -724,7 +729,7 @@ async def on_tree_node_view(callback: CallbackQuery, session: AsyncSession, stat
         await callback.message.edit_text(
             text,
             parse_mode="HTML",
-            reply_markup=node_action_keyboard(node_key, can_buy)
+            reply_markup=node_action_keyboard(node_key, can_buy, cost_sp=node.cost_sp),
         )
         await callback.answer()
     except Exception:
@@ -765,11 +770,81 @@ async def on_tree_node_buy(callback: CallbackQuery, session: AsyncSession, state
         await callback.answer("Ошибка при изучении.", show_alert=True)
 
 @router.callback_query(F.data == "prf:skills_equip")
-async def on_profile_skills_equip_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    """Old skill equip menu, now renamed."""
+async def on_profile_skills_equip_menu(
+    callback: CallbackQuery, session: AsyncSession, state: FSMContext,
+) -> None:
+    """Меню экипировки трёх боевых навыков (из специализации)."""
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        ensure_skill_meta(char)
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=build_skills_screen_html(char, locale=loc),
+            reply_markup=profile_skills_main_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:skills_equip")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.regexp(r"^prf:sk_slot:\d+$"))
+@router.callback_query(F.data == "prf:stathelp")
+async def on_profile_stat_help(
+    callback: CallbackQuery, session: AsyncSession, state: FSMContext,
+) -> None:
+    """Справка: что в целом даёт СИЛ/ЛОВ/…"""
+    try:
+        if callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if not user or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if not char:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        text = stat_bonus_service.format_stat_cheat_sheet_ru()
+        rows = [
+            [InlineKeyboardButton(text="📊 Полные характеристики", callback_data="prf:full")],
+            [
+                InlineKeyboardButton(text=t(loc, "profile_back_compact"), callback_data="prf:back"),
+            ],
+            [
+                InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),
+                InlineKeyboardButton(text=t(loc, "profile_spec_btn"), callback_data="prf:spec"),
+            ],
+        ]
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:stathelp")
+        await callback.answer("Ошибка.", show_alert=True)
 async def on_profile_skills_slot(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if callback.from_user is None or callback.message is None or callback.bot is None or callback.data is None:

@@ -25,6 +25,7 @@ from bot.keyboards.admin_kb import (
     admin_back_keyboard,
     admin_cancel_keyboard,
     admin_panel_keyboard,
+    admin_player_purchases_back_keyboard,
     admin_player_snapshot_keyboard,
     admin_players_browser_keyboard,
     admin_promo_keyboard,
@@ -473,6 +474,35 @@ async def cb_admin_player_view(callback: CallbackQuery, session: AsyncSession, s
     except Exception:
         logger.exception("adm:pv")
         await callback.answer("Ошибка БД.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("adm:pur:"), IsAdmin())
+async def cb_admin_player_purchases(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Журнал трат золота (meta_progress), для админа."""
+    if callback.message is None:
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    if len(parts) < 4 or parts[0] != "adm" or parts[1] != "pur" or not parts[2].isdigit() or not parts[3].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    ret_page = int(parts[3])
+    try:
+        ch = await character_repo.get_by_id(session, cid)
+        if ch is None:
+            await callback.answer("Персонаж не найден.", show_alert=True)
+            return
+        text = character_service.format_spend_ledger_admin_html(ch)
+        await _safe_edit_panel(
+            callback.message,
+            _truncate_html(text),
+            reply_markup=admin_player_purchases_back_keyboard(character_id=cid, return_page=ret_page),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("adm:pur")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 async def _admin_apply_level_and_refresh(
