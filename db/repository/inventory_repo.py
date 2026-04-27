@@ -368,3 +368,37 @@ def stack_count(item: InventoryItem) -> int:
     if not _is_stackable_kind(d):
         return 1
     return max(1, int(d.get("count") or 1))
+
+
+async def consolidate_bag_stacks(session: AsyncSession, character_id: int) -> int:
+    """
+    Объединить уже лежащие в сумке стакаемые предметы с одинаковой сигнатурой.
+    Полезно для предметов, попавших в сумку до включения авто-стакинга.
+    Возвращает количество удалённых (свернутых) записей.
+    """
+    bag = await list_bag_items(session, character_id)
+    groups: dict[tuple, list[InventoryItem]] = {}
+    for it in bag:
+        d = it.item_data or {}
+        if not _is_stackable_kind(d):
+            continue
+        sig = _stack_signature(d)
+        groups.setdefault(sig, []).append(it)
+    removed = 0
+    for sig, items in groups.items():
+        if len(items) < 2:
+            continue
+        items.sort(key=lambda x: (x.bag_slot if x.bag_slot is not None else 1 << 30, int(x.id)))
+        keeper = items[0]
+        kdata = dict(keeper.item_data or {})
+        total = max(1, int(kdata.get("count") or 1))
+        for extra in items[1:]:
+            ed = extra.item_data or {}
+            total += max(1, int(ed.get("count") or 1))
+            await session.delete(extra)
+            removed += 1
+        kdata["count"] = total
+        keeper.item_data = kdata
+    if removed:
+        await session.flush()
+    return removed

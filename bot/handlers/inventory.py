@@ -154,6 +154,16 @@ async def _show_bag_section(
     )
 
 
+async def _consolidate_legacy_stacks(session: AsyncSession, character_id: int) -> None:
+    """Тихо подружить старые стакаемые предметы у уже существующих персонажей."""
+    try:
+        merged = await inventory_repo.consolidate_bag_stacks(session, character_id)
+        if merged:
+            await session.commit()
+    except Exception:
+        logger.exception("inv:consolidate")
+
+
 @router.message(Command("inv"))
 @router.message(Command("инвентарь"))
 async def cmd_inventory(message: Message, session: AsyncSession, state: FSMContext) -> None:
@@ -164,6 +174,7 @@ async def cmd_inventory(message: Message, session: AsyncSession, state: FSMConte
         if char is None:
             await message.answer("Сначала создай героя через /start.")
             return
+        await _consolidate_legacy_stacks(session, int(char.id))
         text = _inventory_hub_text(int(char.floor_number))
         await push_game_ui(
             state,
@@ -187,6 +198,7 @@ async def inv_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCont
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
+        await _consolidate_legacy_stacks(session, int(char.id))
         await push_game_ui(
             state,
             callback.bot,
