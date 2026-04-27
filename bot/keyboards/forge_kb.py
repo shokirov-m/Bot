@@ -123,14 +123,64 @@ def forge_craft_recipes_keyboard(
 def forge_dis_bag_keyboard(
     floor_number: int,
     items: list[tuple[int, str]],
+    *,
+    rarity_filter: str | None = None,
+    kind_filter: str | None = None,
 ) -> InlineKeyboardMarkup:
-    """Список предметов для разбора (item_id, label)."""
+    """Список предметов для разбора (item_id, label) + фильтры и свип."""
     rows: list[list[InlineKeyboardButton]] = []
-    for item_id, label in items[:16]:
+    rar_btns: list[InlineKeyboardButton] = []
+    for code, lab in (
+        ("all", "Все"),
+        ("common", "common"),
+        ("uncommon", "uncommon"),
+        ("rare", "rare"),
+        ("epic", "epic"),
+    ):
+        sel = "✅ " if (rarity_filter or "all") == code else ""
+        rar_btns.append(
+            InlineKeyboardButton(
+                text=f"{sel}{lab}",
+                callback_data=f"frg:disf:{floor_number}:{code}:{kind_filter or 'all'}",
+            ),
+        )
+    rows.append(rar_btns[:3])
+    rows.append(rar_btns[3:])
+    knd_btns: list[InlineKeyboardButton] = []
+    for code, lab in (
+        ("all", "Все типы"),
+        ("weapon", "🗡 weapon"),
+        ("armor", "🧥 armor"),
+        ("shield", "🛡 shield"),
+        ("ring", "💍 ring"),
+        ("amulet", "📿 amulet"),
+    ):
+        sel = "✅ " if (kind_filter or "all") == code else ""
+        knd_btns.append(
+            InlineKeyboardButton(
+                text=f"{sel}{lab}",
+                callback_data=f"frg:disf:{floor_number}:{rarity_filter or 'all'}:{code}",
+            ),
+        )
+    rows.append(knd_btns[:3])
+    rows.append(knd_btns[3:])
+    for item_id, label in items[:12]:
         short = label if len(label) <= 38 else label[:35] + "…"
         rows.append(
             [InlineKeyboardButton(text=short, callback_data=f"frg:disx:{floor_number}:{item_id}")]
         )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="🧹 Свип common",
+                callback_data=f"frg:dsweep:{floor_number}:common",
+            ),
+            InlineKeyboardButton(
+                text="🧹 Свип ≤uncommon",
+                callback_data=f"frg:dsweep:{floor_number}:uncommon",
+            ),
+        ],
+    )
     rows.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)

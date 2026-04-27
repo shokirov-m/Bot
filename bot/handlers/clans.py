@@ -28,6 +28,8 @@ from bot.keyboards.clan_kb import (
     clan_panel_keyboard,
     clan_panel_members_keyboard,
     clan_relics_keyboard,
+    clan_salary_amount_keyboard,
+    clan_salary_menu_keyboard,
     clan_settings_keyboard,
     clan_treasury_keyboard,
     clan_war_keyboard,
@@ -37,6 +39,7 @@ from bot.keyboards.clan_kb import (
 from bot.states.clan_states import (
     ClanCreateStates,
     ClanDonateStates,
+    ClanSalaryStates,
     ClanSettingsStates,
     ClanWarDeclareStates,
 )
@@ -274,6 +277,38 @@ async def cb_clan_members(callback: CallbackQuery, session: AsyncSession, state:
 
 # ─────────────────────────── cln:treasury ───────────────────────────────────
 
+def _format_treasury_text(clan, char, payload: dict) -> tuple[str, int]:
+    """Возвращает (text, pending_salary_for_self)."""
+    check_and_complete_buildings(payload)
+    tg = _treasury_gold(payload)
+    tg_lim = _treasury_limit(payload)
+    mats = _mat(payload)
+    char_mats = clan_service.get_character_materials(char)
+    lv = int(clan.clan_level)
+    if lv < 10:
+        nxt = level_def(lv + 1)
+        cost_str = (
+            f"Ур.{lv + 1}: {nxt['cost_gold']:,}💰 · {nxt['cost_wood']}🪵 · "
+            f"{nxt['cost_stone']}🪨 · {nxt['cost_herbs']}🌿"
+        )
+    else:
+        cost_str = "Максимальный уровень клана."
+    pending_self = clan_service.pending_salary_for(char, payload)
+    salary_line = ""
+    if pending_self > 0:
+        salary_line = f"\n💼 Тебе выделено ЗП: <b>{pending_self:,}</b> 💰 — нажми «Забрать ЗП».\n"
+    text = (
+        f"💰 <b>Казна клана</b>\n\n"
+        f"Золото: <b>{tg:,}</b> / {tg_lim:,} 💰\n"
+        f"Материалы казны: 🪵{mats['wood']} 🪨{mats['stone']} 🌿{mats['herbs']}\n"
+        f"Твои материалы: 🪵{char_mats['wood']} 🪨{char_mats['stone']} 🌿{char_mats['herbs']}\n"
+        f"{salary_line}\n"
+        f"Уровень клана: <b>{lv}/10</b>\n"
+        f"<i>Стоимость след. уровня:\n{cost_str}</i>"
+    )
+    return text, pending_self
+
+
 @router.callback_query(F.data == "cln:treasury")
 async def cb_clan_treasury(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -289,29 +324,13 @@ async def cb_clan_treasury(callback: CallbackQuery, session: AsyncSession, state
             await callback.answer("Клан не найден.", show_alert=True)
             return
         payload = _payload(clan)
-        check_and_complete_buildings(payload)
-        tg = _treasury_gold(payload)
-        tg_lim = _treasury_limit(payload)
-        mats = _mat(payload)
-        char_mats = clan_service.get_character_materials(char)
-        lv = int(clan.clan_level)
-        if lv < 10:
-            nxt = level_def(lv + 1)
-            cost_str = (
-                f"Ур.{lv + 1}: {nxt['cost_gold']:,}💰 · {nxt['cost_wood']}🪵 · "
-                f"{nxt['cost_stone']}🪨 · {nxt['cost_herbs']}🌿"
-            )
-        else:
-            cost_str = "Максимальный уровень клана."
-        text = (
-            f"💰 <b>Казна клана</b>\n\n"
-            f"Золото: <b>{tg:,}</b> / {tg_lim:,} 💰\n"
-            f"Материалы казны: 🪵{mats['wood']} 🪨{mats['stone']} 🌿{mats['herbs']}\n"
-            f"Твои материалы: 🪵{char_mats['wood']} 🪨{char_mats['stone']} 🌿{char_mats['herbs']}\n\n"
-            f"Уровень клана: <b>{lv}/10</b>\n"
-            f"<i>Стоимость след. уровня:\n{cost_str}</i>"
+        text, pending_self = _format_treasury_text(clan, char, payload)
+        await _edit(
+            callback,
+            state,
+            text,
+            clan_treasury_keyboard(m.role, has_pending_salary=pending_self > 0),
         )
-        await _edit(callback, state, text, clan_treasury_keyboard(m.role))
         await callback.answer()
     except Exception:
         logger.exception("cln:treasury")
@@ -333,30 +352,15 @@ async def cb_clan_donate(callback: CallbackQuery, session: AsyncSession, state: 
             # Обновить экран казны
             m = await clan_repo.get_membership(session, int(char.id))
             clan = await clan_repo.get_clan(session, int(m.clan_id)) if m else None
-            if clan:
+            if clan and m:
                 payload = _payload(clan)
-                tg = _treasury_gold(payload)
-                tg_lim = _treasury_limit(payload)
-                mats = _mat(payload)
-                char_mats = clan_service.get_character_materials(char)
-                lv = int(clan.clan_level)
-                if lv < 10:
-                    nxt = level_def(lv + 1)
-                    cost_str = (
-                        f"Ур.{lv + 1}: {nxt['cost_gold']:,}💰 · {nxt['cost_wood']}🪵 · "
-                        f"{nxt['cost_stone']}🪨 · {nxt['cost_herbs']}🌿"
-                    )
-                else:
-                    cost_str = "Максимальный уровень клана."
-                text = (
-                    f"💰 <b>Казна клана</b>\n\n"
-                    f"Золото: <b>{tg:,}</b> / {tg_lim:,} 💰\n"
-                    f"Материалы казны: 🪵{mats['wood']} 🪨{mats['stone']} 🌿{mats['herbs']}\n"
-                    f"Твои материалы: 🪵{char_mats['wood']} 🪨{char_mats['stone']} 🌿{char_mats['herbs']}\n\n"
-                    f"Уровень клана: <b>{lv}/10</b>\n"
-                    f"<i>Стоимость след. уровня:\n{cost_str}</i>"
+                text, pending_self = _format_treasury_text(clan, char, payload)
+                await _edit(
+                    callback,
+                    state,
+                    text,
+                    clan_treasury_keyboard(m.role, has_pending_salary=pending_self > 0),
                 )
-                await _edit(callback, state, text, clan_treasury_keyboard(m.role))
     except Exception:
         logger.exception("cln:don")
         await callback.answer("Ошибка.", show_alert=True)
@@ -435,6 +439,215 @@ async def cb_donate_materials(callback: CallbackQuery, session: AsyncSession, st
     except Exception:
         logger.exception("cln:donate:mats")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+# ─────────────────────────── cln:salary:* ────────────────────────────────────
+
+@router.callback_query(F.data == "cln:salary:claim")
+async def cb_salary_claim(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        ok, msg = await clan_service.claim_salary(session, char)
+        await callback.answer(msg, show_alert=True)
+        if ok:
+            m = await clan_repo.get_membership(session, int(char.id))
+            clan = await clan_repo.get_clan(session, int(m.clan_id)) if m else None
+            if clan and m:
+                payload = _payload(clan)
+                text, pending_self = _format_treasury_text(clan, char, payload)
+                await _edit(
+                    callback,
+                    state,
+                    text,
+                    clan_treasury_keyboard(m.role, has_pending_salary=pending_self > 0),
+                )
+    except Exception:
+        logger.exception("cln:salary:claim")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "cln:salary:menu")
+async def cb_salary_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        m = await clan_repo.get_membership(session, int(char.id))
+        if m is None:
+            await callback.answer("Ты не в клане.", show_alert=True)
+            return
+        if not clan_service.can_manage(m.role):
+            await callback.answer("Только лидер или офицер.", show_alert=True)
+            return
+        clan = await clan_repo.get_clan(session, int(m.clan_id))
+        if clan is None:
+            await callback.answer("Клан не найден.", show_alert=True)
+            return
+        payload = _payload(clan)
+        tg = _treasury_gold(payload)
+        members = await clan_repo.get_members_with_characters(session, int(clan.id))
+        pending = {int(k): int(v or 0) for k, v in (payload.get("salary_pool") or {}).items()
+                   if str(k).lstrip("-").isdigit()}
+        # Сортируем: лидер → офицеры → ветераны → рядовые, исключаем самого actor.
+        order = {"leader": 0, "officer": 1, "veteran": 2, "member": 3}
+        rows: list[tuple[int, str, str, int]] = []
+        for mbr, ch in members:
+            if int(ch.id) == int(char.id):
+                continue
+            rows.append((
+                int(ch.id),
+                str(ch.display_name or "?"),
+                str(mbr.role),
+                pending.get(int(ch.id), 0),
+            ))
+        rows.sort(key=lambda r: (order.get(r[2], 99), -r[3], r[1].lower()))
+        if not rows:
+            await callback.answer("В клане нет других участников.", show_alert=True)
+            return
+        text = (
+            f"💼 <b>Распределение ЗП</b>\n\n"
+            f"В казне: <b>{tg:,}</b> 💰\n"
+            f"Выберите участника, чтобы выделить ему ЗП.\n"
+            f"<i>Сумма списывается из казны сразу; участник заберёт её сам кнопкой «Забрать ЗП».</i>"
+        )
+        await _edit(callback, state, text, clan_salary_menu_keyboard(rows))
+        await callback.answer()
+    except Exception:
+        logger.exception("cln:salary:menu")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^cln:salary:pick:\d+$"))
+async def cb_salary_pick(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        m = await clan_repo.get_membership(session, int(char.id))
+        if m is None or not clan_service.can_manage(m.role):
+            await callback.answer("Нет прав.", show_alert=True)
+            return
+        target_id = int((callback.data or "").split(":")[-1])
+        m_target = await clan_repo.get_membership(session, target_id)
+        if m_target is None or int(m_target.clan_id) != int(m.clan_id):
+            await callback.answer("Игрок не в твоём клане.", show_alert=True)
+            return
+        clan = await clan_repo.get_clan(session, int(m.clan_id))
+        target_char = await character_repo.get_by_id(session, target_id)
+        if clan is None or target_char is None:
+            await callback.answer("Не найдено.", show_alert=True)
+            return
+        payload = _payload(clan)
+        tg = _treasury_gold(payload)
+        pending = clan_service.pending_salary_for(target_char, payload)
+        text = (
+            f"💼 <b>ЗП: {html.escape(str(target_char.display_name))}</b>\n"
+            f"Роль: {clan_service.role_label(m_target.role)}\n\n"
+            f"В казне: <b>{tg:,}</b> 💰\n"
+            f"Уже ждёт: <b>{pending:,}</b> 💰\n\n"
+            f"Выберите сумму."
+        )
+        await _edit(callback, state, text, clan_salary_amount_keyboard(target_id))
+        await callback.answer()
+    except Exception:
+        logger.exception("cln:salary:pick")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^cln:salary:add:\d+:\d+$"))
+async def cb_salary_add(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        parts = (callback.data or "").split(":")
+        target_id = int(parts[-2])
+        amount = int(parts[-1])
+        ok, msg = await clan_service.allocate_salary(session, char, target_id, amount)
+        await callback.answer(msg, show_alert=True)
+        if ok:
+            m = await clan_repo.get_membership(session, int(char.id))
+            clan = await clan_repo.get_clan(session, int(m.clan_id)) if m else None
+            target_char = await character_repo.get_by_id(session, target_id)
+            if clan and target_char:
+                payload = _payload(clan)
+                tg = _treasury_gold(payload)
+                pending = clan_service.pending_salary_for(target_char, payload)
+                m_target = await clan_repo.get_membership(session, target_id)
+                role_label_str = (
+                    clan_service.role_label(m_target.role) if m_target else "—"
+                )
+                text = (
+                    f"💼 <b>ЗП: {html.escape(str(target_char.display_name))}</b>\n"
+                    f"Роль: {role_label_str}\n\n"
+                    f"В казне: <b>{tg:,}</b> 💰\n"
+                    f"Уже ждёт: <b>{pending:,}</b> 💰"
+                )
+                await _edit(callback, state, text, clan_salary_amount_keyboard(target_id))
+    except Exception:
+        logger.exception("cln:salary:add")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^cln:salary:custom:\d+$"))
+async def cb_salary_custom_start(
+    callback: CallbackQuery, session: AsyncSession, state: FSMContext
+) -> None:
+    try:
+        _, char = await _get_char(session, callback)
+        if char is None:
+            return
+        m = await clan_repo.get_membership(session, int(char.id))
+        if m is None or not clan_service.can_manage(m.role):
+            await callback.answer("Нет прав.", show_alert=True)
+            return
+        target_id = int((callback.data or "").split(":")[-1])
+        await state.set_state(ClanSalaryStates.waiting_amount)
+        await state.update_data(salary_target_id=target_id)
+        await callback.answer()
+        if callback.message:
+            await callback.message.answer(
+                "💼 Введи сумму ЗП для участника (целое число):",
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception:
+        logger.exception("cln:salary:custom")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.message(ClanSalaryStates.waiting_amount)
+async def msg_salary_custom_amount(
+    message: Message, session: AsyncSession, state: FSMContext
+) -> None:
+    try:
+        if message.from_user is None:
+            return
+        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
+        if user is None:
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            return
+        data = await state.get_data()
+        target_id = int(data.get("salary_target_id") or 0)
+        if target_id <= 0:
+            await state.clear()
+            return
+        raw = (message.text or "").strip().replace(" ", "").replace(",", "")
+        try:
+            amount = int(raw)
+        except ValueError:
+            await message.answer("Введи целое число.", parse_mode=ParseMode.HTML)
+            return
+        ok, msg = await clan_service.allocate_salary(session, char, target_id, amount)
+        await message.answer(msg, parse_mode=ParseMode.HTML)
+        await state.clear()
+    except Exception:
+        logger.exception("msg_salary_custom_amount")
+        await message.answer("Ошибка.", parse_mode=ParseMode.HTML)
+        await state.clear()
 
 
 # ─────────────────────────── cln:lvlup ──────────────────────────────────────

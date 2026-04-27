@@ -20,7 +20,7 @@ def city_floor3_market_keyboard(floor_number: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🏪 Лавка торговца", callback_data=f"shp:main:{f}:m")],
             [InlineKeyboardButton(text="💰 Скупщик", callback_data=f"cty:mkt:{f}:scrap")],
             [InlineKeyboardButton(text="🏦 Банк (сейф)", callback_data=f"ecy:sfv:{f}:mkt")],
-            [InlineKeyboardButton(text="⛪ Храм призыва", callback_data=f"cty:mkt:{f}:temple")],
+            [InlineKeyboardButton(text="🐾 Животновод (Храм призыва)", callback_data=f"cty:mkt:{f}:temple")],
             [InlineKeyboardButton(text="📜 Школа навыков", callback_data=f"cty:mkt:{f}:skills")],
             [InlineKeyboardButton(text="⬅ В город", callback_data=f"cty:mkt:{f}:hub")],
             menu_nav_button_row(),

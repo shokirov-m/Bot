@@ -57,7 +57,7 @@ def record_kill(character: Character) -> None:
         st["kd"] = today
         st["kc"] = 1
     else:
-        st["kc"] = st["kc"] + 1
+        st["kc"] = min(KILLS_GOAL, int(st["kc"]) + 1)
     _save_state(character, meta, st)
 
 
@@ -140,8 +140,17 @@ class ClaimResult:
     message_html: str
 
 
-def _calculate_rewards_and_streak(st: dict, today: str) -> tuple[int, int, int]:
-    """Внутренняя логика: (золото, опыт, новый_стрик)."""
+# Вехи стрика дают одноразовый множитель к ежедневной награде в день, когда стрик достиг цифры.
+STREAK_MILESTONE_MULTIPLIERS: dict[int, int] = {15: 2, 30: 3, 50: 5, 100: 10}
+
+
+def streak_milestone_multiplier(streak: int) -> int:
+    """1 — обычный день; 2/3/5/10 — на вехах стрика."""
+    return STREAK_MILESTONE_MULTIPLIERS.get(int(streak), 1)
+
+
+def _calculate_rewards_and_streak(st: dict, today: str) -> tuple[int, int, int, int]:
+    """Внутренняя логика: (золото, опыт, новый_стрик, множитель_вехи)."""
     prev_lcd = st["lcd"]
     if prev_lcd is None:
         new_streak = 1
@@ -155,14 +164,17 @@ def _calculate_rewards_and_streak(st: dict, today: str) -> tuple[int, int, int]:
                 new_streak = 1
         except ValueError:
             new_streak = 1
-    gold = 35 + new_streak * 8
-    xp = 15 + new_streak * 4
-    return gold, xp, new_streak
+    base_gold = 35 + new_streak * 8
+    base_xp = 15 + new_streak * 4
+    multiplier = streak_milestone_multiplier(new_streak)
+    gold = base_gold * multiplier
+    xp = base_xp * multiplier
+    return gold, xp, new_streak, multiplier
 
 
-def compute_next_daily_claim_rewards(character: Character) -> tuple[int, int, int] | None:
+def compute_next_daily_claim_rewards(character: Character) -> tuple[int, int, int, int] | None:
     """
-    Если сегодня награду ещё не забирали — (gold, xp, streak_после_получения).
+    Если сегодня награду ещё не забирали — (gold, xp, streak_после_получения, множитель).
     Если уже забрали — None.
     """
     today = _utc_today_iso()
@@ -198,7 +210,7 @@ async def try_claim_daily_reward(
         need = max(0, KILLS_GOAL - (st["kc"] if st["kd"] == today else 0))
         return ClaimResult(False, t(locale, "daily_claim_need", goal=KILLS_GOAL, need=need))
 
-    gold, xp, new_streak = _calculate_rewards_and_streak(st, today)
+    gold, xp, new_streak, multiplier = _calculate_rewards_and_streak(st, today)
     await character_service.add_gold_async(
         session,
         character,
@@ -215,6 +227,11 @@ async def try_claim_daily_reward(
     _save_state(character, meta, st)
 
     bonus = character_service.level_up_notice_html(character, lv)
+    if multiplier > 1:
+        bonus = (
+            f"\n🎉 <b>Веха стрика {new_streak}!</b> Награда увеличена ×{multiplier}."
+            + (bonus or "")
+        )
     return ClaimResult(
         True,
         t(

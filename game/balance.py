@@ -143,3 +143,41 @@ MONSTER_ARMOR_PENETRATION_MAJOR_BOSS = 0.25
 
 # Плоский бонус к защите игрока от уровня (добавляется в бою поверх экипировки).
 PLAYER_DEFENSE_BONUS_PER_LEVEL = 1
+
+
+# ─── BALANCE V2: ребаланс ВЫН/ЛОВ/УДА (фаза 4.2) ──────────────────────────────
+# Все коэффициенты, относящиеся к ребалансу, лежат здесь — чтобы откат был
+# одной правкой (выставить флаг в False и/или вернуть значения).
+# Ссылки в коде:
+#   game/combat/formulas.py — crit/dodge/miss
+#   services/character_service.py — _compute_hp_max
+#   services/combat_service.py / engine.py — статус-сопротивление от ВЫН
+BALANCE_V2_ENABLED: bool = True
+
+# Удача: каждые 5 УДА = +1% крита, шапка повышена с 40% до 50%.
+LUCK_CRIT_CAP: float = 0.50
+LUCK_CRIT_PER_5: float = 0.01
+
+# Ловкость:
+#   - шапка уклонения 40 → 45
+#   - база промаха 20 → 15 (минимум по-прежнему 3%)
+DEX_DODGE_CAP: float = 0.45
+DEX_DODGE_PER_5: float = 0.01
+DEX_MISS_BASE: float = 0.15
+
+# Выносливость:
+#   - HP на ВЫН: было 6 → стало 4 (только для персонажей, чей HP пересчитывается:
+#     новые/респек/арки. Старым игрокам hp_max не меняем).
+#   - Долгие статусы: за каждые 10 ВЫН — −5% длительности кровотечения/яда,
+#     до общей шапки −50%.
+HP_PER_VIT: int = 4
+VIT_STATUS_RESIST_PER_10: float = 0.05
+VIT_STATUS_RESIST_CAP: float = 0.50
+
+
+def vit_status_resist_fraction(vitality: int) -> float:
+    """Доля сокращения длительности кровотечения/яда от ВЫН (0..0.50)."""
+    if not BALANCE_V2_ENABLED:
+        return 0.0
+    raw = (max(0, int(vitality)) // 10) * float(VIT_STATUS_RESIST_PER_10)
+    return min(float(VIT_STATUS_RESIST_CAP), raw)

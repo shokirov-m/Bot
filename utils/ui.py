@@ -197,6 +197,9 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
         piece = data.get("set_piece")
         pc = f" · часть: <i>{html.escape(str(piece))}</i>" if piece else ""
         lines.append(f"🧩 <b>Набор:</b> {html.escape(st)}{pc}")
+    cnt = max(1, int(data.get("count") or 1))
+    if cnt > 1:
+        lines.append(f"📦 Количество: <b>×{cnt}</b>")
     summary = data.get("summary")
     if summary:
         lines.append(f"<i>{html.escape(str(summary))}</i>")
@@ -209,12 +212,15 @@ def item_bag_button_label(data: dict[str, Any] | None, _bag_slot: int | None = N
     gi = gear_icon_for_item_data(data)
     r = str(data.get("rarity") or "common").lower()
     em = RARITY_EMOJI.get(r, "⚪")
-    name = str(data.get("name", "?"))[:11]
+    cnt = max(1, int(data.get("count") or 1))
+    cnt_suffix = f" ×{cnt}" if cnt > 1 else ""
+    name_budget = 11 if cnt <= 1 else max(6, 11 - len(cnt_suffix))
+    name = str(data.get("name", "?"))[:name_budget]
     atk = data.get("attack", data.get("atk"))
     if atk is not None:
-        s = f"{gi}{em} {name} {atk}"
+        s = f"{gi}{em} {name} {atk}{cnt_suffix}"
     else:
-        s = f"{gi}{em} {name}"
+        s = f"{gi}{em} {name}{cnt_suffix}"
     return s[:30]
 
 

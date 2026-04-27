@@ -201,7 +201,7 @@ async def try_use_bag_ration_by_id(
 
     add = int(data.get("use_value", 2))
     character.stamina = min(mx, before + add)
-    await inventory_repo.delete_inventory_item(session, item)
+    await inventory_repo.consume_one_from_stack(session, item)
     await session.flush()
     gained = int(character.stamina) - before
     return True, f"🥖 Сыт! Стамина <b>+{gained}</b> ({character.stamina}/{mx})."
@@ -230,7 +230,7 @@ async def try_use_bag_bread_by_id(
     heal = max(1, int(data.get("use_value", 1)))
     new_hp = min(mx, cur + heal)
     character.hp_current = new_hp
-    await inventory_repo.delete_inventory_item(session, item)
+    await inventory_repo.consume_one_from_stack(session, item)
     await session.flush()
     gained = new_hp - cur
     name = html.escape(str(data.get("name", "Хлеб")))

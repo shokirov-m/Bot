@@ -169,6 +169,33 @@ def check_and_apply_achievements(character: Character) -> list[str]:
         
     return newly_completed
 
+def summarize_achievement_bonuses(character: Character) -> dict[str, float | int]:
+    """Сводка по «активным» бонусам с достижений: считается из meta_progress."""
+    mp = dict(character.meta_progress or {})
+    claimed = list(mp.get("achievements_claimed") or [])
+    return {
+        "claimed_count": int(len(claimed)),
+        "gold_bonus": float(mp.get("achievement_gold_bonus", 0.0) or 0.0),
+        "xp_bonus": float(mp.get("achievement_xp_bonus", 0.0) or 0.0),
+    }
+
+
+def format_achievement_bonuses_html(character: Character) -> str:
+    """Однострочник для блока «От достижений» в полных хар-ках."""
+    s = summarize_achievement_bonuses(character)
+    cnt = int(s["claimed_count"])
+    gb = float(s["gold_bonus"]) * 100.0
+    xb = float(s["xp_bonus"]) * 100.0
+    if cnt <= 0 and gb <= 0 and xb <= 0:
+        return ""
+    parts = [f"🏆 закрыто: {cnt}"]
+    if gb > 0:
+        parts.append(f"💰 +{gb:.0f}% золота")
+    if xb > 0:
+        parts.append(f"✨ +{xb:.0f}% опыта")
+    return " · ".join(parts)
+
+
 def format_achievements_html(character: Character) -> str:
     """Returns HTML listing only COMPLETED achievements."""
     claimed = get_claimed_keys(character)

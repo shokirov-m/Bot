@@ -75,7 +75,7 @@ def clan_info_keyboard() -> InlineKeyboardMarkup:
 
 # ─────────────────────────── Казна ──────────────────────────────────────────
 
-def clan_treasury_keyboard(role: str) -> InlineKeyboardMarkup:
+def clan_treasury_keyboard(role: str, *, has_pending_salary: bool = False) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     rows.append([
         InlineKeyboardButton(text="💰 1 000", callback_data="cln:don:1000"),
@@ -89,11 +89,61 @@ def clan_treasury_keyboard(role: str) -> InlineKeyboardMarkup:
     rows.append([
         InlineKeyboardButton(text="🌿 Материалы", callback_data="cln:donate:mats"),
     ])
+    if has_pending_salary:
+        rows.append([
+            InlineKeyboardButton(text="📥 Забрать ЗП", callback_data="cln:salary:claim"),
+        ])
+    if can_manage(role):
+        rows.append([
+            InlineKeyboardButton(text="💼 Выделить ЗП", callback_data="cln:salary:menu"),
+        ])
     if role in ("leader",):
         rows.append([
             InlineKeyboardButton(text="⬆️ Повысить уровень клана", callback_data="cln:lvlup"),
         ])
     rows.append([_back_clan(), _menu_btn()])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def clan_salary_menu_keyboard(
+    members: list[tuple[int, str, str, int]]
+) -> InlineKeyboardMarkup:
+    """Меню распределения ЗП — список участников. members: [(char_id, name, role, pending)]."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for cid, name, role, pending in members:
+        prefix = "📌 " if pending > 0 else ""
+        suffix = f" · ждёт {pending:,}💰" if pending > 0 else ""
+        text_label = f"{prefix}{role_label(role).split(' ', 1)[0]} {name}{suffix}"
+        rows.append([
+            InlineKeyboardButton(
+                text=text_label[:64],
+                callback_data=f"cln:salary:pick:{cid}",
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(text="◀️ Назад в казну", callback_data="cln:treasury"),
+        _menu_btn(),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def clan_salary_amount_keyboard(target_char_id: int) -> InlineKeyboardMarkup:
+    cid = int(target_char_id)
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text="+1 000", callback_data=f"cln:salary:add:{cid}:1000"),
+            InlineKeyboardButton(text="+5 000", callback_data=f"cln:salary:add:{cid}:5000"),
+            InlineKeyboardButton(text="+10 000", callback_data=f"cln:salary:add:{cid}:10000"),
+        ],
+        [
+            InlineKeyboardButton(text="+50 000", callback_data=f"cln:salary:add:{cid}:50000"),
+            InlineKeyboardButton(text="✏️ Другая", callback_data=f"cln:salary:custom:{cid}"),
+        ],
+        [
+            InlineKeyboardButton(text="◀️ К списку", callback_data="cln:salary:menu"),
+            _menu_btn(),
+        ],
+    ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

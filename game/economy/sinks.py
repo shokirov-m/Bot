@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import random
+from datetime import UTC, datetime
 from typing import Any
 
 # --- Ключи meta_progress ---
@@ -18,6 +19,24 @@ META_LOTTERY_SPENT = "sink_lottery_gold_spent"
 META_BANK_SAFE_BALANCE = "bank_safe_balance"
 META_BANK_SAFE_LEVEL = "bank_safe_capacity_level"
 META_NEXT_WIN_XP_MULT = "next_win_xp_mult"  # после успешного побега: −10% к опыту со след. победы
+
+# --- Банковские проценты и срочные вклады (BALANCE_V2) ---
+META_BANK_INTEREST_AT = "bank_interest_at_iso"  # время последнего начисления
+META_BANK_INTEREST_PENDING = "bank_interest_pending"  # накопленные, но ещё не зачисленные проценты
+META_BANK_SEAL = "bank_seal_unlocked"  # апгрейд «Банковская печать»
+META_BANK_TERM = "bank_term"  # {amount, started_at_iso, term_h, rate}
+
+BANK_RATE_PER_HOUR_BASE = 0.0005  # 0.05%/ч
+BANK_RATE_PER_HOUR_SEAL = 0.0010  # 0.10%/ч с апгрейдом
+BANK_INTEREST_CAP_PCT_BASE = 0.05  # до 5% от тела за неделю
+BANK_INTEREST_CAP_PCT_SEAL = 0.06  # +1% к шапке с апгрейдом
+BANK_SEAL_UPGRADE_COST = 5000
+
+BANK_TERM_OPTIONS: tuple[tuple[int, float], ...] = (
+    (24, 0.01),   # 24 часа — 1%
+    (72, 0.04),   # 72 часа — 4%
+    (168, 0.12),  # 7 дней — 12%
+)
 
 
 def _meta(character: Any) -> dict[str, Any]:
@@ -209,6 +228,186 @@ def try_bank_safe_upgrade(character: Any) -> tuple[bool, str]:
     _set_meta(character, mp)
     new_cap = bank_safe_capacity(character)
     return True, f"Хранилище <b>+1</b> уровень (−{cost} 💰). Вместимость: <b>{new_cap}</b> 💰."
+
+
+def bank_seal_active(character: Any) -> bool:
+    return bool(_meta(character).get(META_BANK_SEAL, False))
+
+
+def bank_interest_rate_per_hour(character: Any) -> float:
+    return BANK_RATE_PER_HOUR_SEAL if bank_seal_active(character) else BANK_RATE_PER_HOUR_BASE
+
+
+def bank_interest_cap_pct(character: Any) -> float:
+    return BANK_INTEREST_CAP_PCT_SEAL if bank_seal_active(character) else BANK_INTEREST_CAP_PCT_BASE
+
+
+def bank_pending_interest(character: Any) -> int:
+    return max(0, int(_meta(character).get(META_BANK_INTEREST_PENDING, 0) or 0))
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _parse_iso(s: Any) -> datetime | None:
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s))
+    except (TypeError, ValueError):
+        return None
+
+
+def accrue_bank_interest(character: Any, *, now_dt: datetime | None = None) -> int:
+    """Начислить накопленные проценты по обычному вкладу. Возвращает добавленное в pending."""
+    bal = bank_safe_balance(character)
+    if bal <= 0:
+        mp = _meta(character)
+        if META_BANK_INTEREST_AT in mp:
+            mp[META_BANK_INTEREST_AT] = _now_iso()
+            _set_meta(character, mp)
+        return 0
+    now = now_dt or datetime.now(UTC)
+    mp = _meta(character)
+    last = _parse_iso(mp.get(META_BANK_INTEREST_AT))
+    if last is None:
+        mp[META_BANK_INTEREST_AT] = now.isoformat()
+        _set_meta(character, mp)
+        return 0
+    hours = max(0.0, (now - last).total_seconds() / 3600.0)
+    if hours < 0.5:
+        return 0
+    rate = bank_interest_rate_per_hour(character)
+    cap_pct = bank_interest_cap_pct(character)
+    pending = float(mp.get(META_BANK_INTEREST_PENDING, 0) or 0)
+    cap_gold = bal * cap_pct
+    if pending >= cap_gold:
+        mp[META_BANK_INTEREST_AT] = now.isoformat()
+        _set_meta(character, mp)
+        return 0
+    add = bal * rate * hours
+    new_pending = min(cap_gold, pending + add)
+    delta = int(new_pending) - int(pending)
+    mp[META_BANK_INTEREST_PENDING] = new_pending
+    mp[META_BANK_INTEREST_AT] = now.isoformat()
+    _set_meta(character, mp)
+    return max(0, delta)
+
+
+def claim_bank_interest_to_wallet(character: Any) -> tuple[bool, str]:
+    """Забрать накопленные проценты в кошелёк. Возвращает результат."""
+    accrue_bank_interest(character)
+    p = bank_pending_interest(character)
+    if p <= 0:
+        return False, "Проценты ещё не накопились."
+    mp = _meta(character)
+    mp[META_BANK_INTEREST_PENDING] = 0
+    _set_meta(character, mp)
+    character.gold = int(character.gold) + p
+    return True, f"Получено <b>{p}</b> 💰 процентами. Накопление сброшено."
+
+
+def try_unlock_bank_seal(character: Any) -> tuple[bool, str]:
+    if bank_seal_active(character):
+        return False, "Банковская печать уже активна."
+    cost = BANK_SEAL_UPGRADE_COST
+    if int(character.gold) < cost:
+        return False, f"Нужно {cost} 💰 для апгрейда."
+    mp = _meta(character)
+    mp[META_BANK_SEAL] = True
+    _set_meta(character, mp)
+    character.gold = int(character.gold) - cost
+    return True, "Банковская печать активирована: ставка и шапка процентов выше."
+
+
+# ---- Срочный вклад ----
+
+def bank_term_state(character: Any) -> dict[str, Any] | None:
+    raw = _meta(character).get(META_BANK_TERM)
+    if not isinstance(raw, dict):
+        return None
+    return raw
+
+
+def bank_term_matures_at(state: dict[str, Any]) -> datetime | None:
+    started = _parse_iso(state.get("started_at_iso"))
+    if started is None:
+        return None
+    try:
+        h = int(state.get("term_h") or 0)
+    except (TypeError, ValueError):
+        return None
+    if h <= 0:
+        return None
+    from datetime import timedelta
+
+    return started + timedelta(hours=h)
+
+
+def try_open_bank_term(character: Any, *, amount: int, term_h: int) -> tuple[bool, str]:
+    if bank_term_state(character) is not None:
+        return False, "У тебя уже есть срочный вклад. Сначала закрой его."
+    rate = next((r for h, r in BANK_TERM_OPTIONS if int(h) == int(term_h)), None)
+    if rate is None:
+        return False, "Неизвестный срок вклада."
+    amt = max(0, int(amount))
+    if amt < 100:
+        return False, "Минимальная сумма вклада — 100 💰."
+    bal = bank_safe_balance(character)
+    if bal < amt:
+        return False, f"В сейфе только {bal} 💰 — недостаточно для вклада {amt}."
+    mp = _meta(character)
+    mp[META_BANK_SAFE_BALANCE] = bal - amt
+    mp[META_BANK_TERM] = {
+        "amount": amt,
+        "started_at_iso": _now_iso(),
+        "term_h": int(term_h),
+        "rate": float(rate),
+    }
+    _set_meta(character, mp)
+    return True, f"Открыт срочный вклад на <b>{amt}</b> 💰 ({term_h}ч, ставка {rate*100:.0f}%)."
+
+
+def try_close_bank_term(character: Any, *, force_early: bool = False) -> tuple[bool, str]:
+    st = bank_term_state(character)
+    if st is None:
+        return False, "Срочного вклада нет."
+    matures = bank_term_matures_at(st)
+    now = datetime.now(UTC)
+    matured = matures is not None and now >= matures
+    amt = max(0, int(st.get("amount") or 0))
+    rate = float(st.get("rate") or 0.0)
+    interest = int(amt * rate) if matured else 0
+    payout = amt + interest
+    cap = bank_safe_capacity(character)
+    bal = bank_safe_balance(character)
+    space = cap - bal
+    if payout > space:
+        # излишек уходит в кошелёк
+        to_safe = max(0, space)
+        to_wallet = payout - to_safe
+    else:
+        to_safe = payout
+        to_wallet = 0
+    mp = _meta(character)
+    if to_safe > 0:
+        mp[META_BANK_SAFE_BALANCE] = bal + to_safe
+    if to_wallet > 0:
+        character.gold = int(character.gold) + to_wallet
+    mp.pop(META_BANK_TERM, None)
+    _set_meta(character, mp)
+    if matured:
+        return True, (
+            f"Срочный вклад закрыт: тело <b>{amt}</b> + проценты <b>{interest}</b> 💰. "
+            f"В сейф: {to_safe}, в кошелёк: {to_wallet}."
+        )
+    if not force_early:
+        return False, "Вклад ещё не созрел. Подтверди досрочное закрытие."
+    return True, (
+        f"Досрочное закрытие: возвращено только тело <b>{amt}</b> 💰 "
+        f"(в сейф: {to_safe}, в кошелёк: {to_wallet})."
+    )
 
 
 def format_lottery_outcome_ru(code: str, ticket: int, gold_delta: int, rune_delta: int) -> str:

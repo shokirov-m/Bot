@@ -368,6 +368,7 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             return
         item_id = int(parts[2])
         from_bag = parts[3] == "b"
+        source = "b" if from_bag else "e"
         bag_page = int(parts[4])
         inv_section = item_categories.INV_SEC_WEAPON
         if from_bag and len(parts) >= 6:
@@ -416,6 +417,7 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             inv_section=inv_section if from_bag else item_categories.INV_SEC_WEAPON,
             show_ration_eat=show_ration,
             show_bread_eat=show_bread,
+            source=source,
         )
         raw_img = str(data.get("image_url") or "").strip()
         photo_arg = (
@@ -443,6 +445,16 @@ def _parse_sec_from_equip_callback(data: str | None) -> str:
     if len(parts) >= 4 and parts[3] in item_categories.ALL_INV_SECTIONS:
         return parts[3]
     return item_categories.INV_SEC_WEAPON
+
+
+def _parse_source_from_callback(data: str | None, expected_index: int) -> str:
+    """Извлечь `e`/`b` суффикс источника из колбэка eq/uneq, по умолчанию 'e'."""
+    parts = (data or "").split(":")
+    if len(parts) > expected_index:
+        v = str(parts[expected_index]).strip().lower()
+        if v in ("e", "b"):
+            return v
+    return "e"
 
 
 @router.callback_query(F.data.startswith("inv:eat:"))
@@ -551,6 +563,9 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             return
         sec = _parse_sec_from_equip_callback(callback.data)
         item_id = int((callback.data or "").split(":")[2])
+        # source — 5-й сегмент в `inv:eq:{id}:{sec}:{src}`; default 'b' для совместимости со старыми кнопками.
+        parts = (callback.data or "").split(":")
+        source = "e" if (len(parts) > 4 and parts[4] == "e") else "b"
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
@@ -578,15 +593,18 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             f"{format_inventory_item_html(data)}\n\n"
             "<b>Статус:</b> ✓ Надето"
         )
+        # Источник 'e' (пользователь пришёл из «Что надето») → «Назад» возвращает туда же.
+        from_bag_after_eq = source != "e"
         kb = item_detail_keyboard(
             item.id,
             is_equipped=True,
             can_equip=can_equip,
-            from_bag=True,
+            from_bag=from_bag_after_eq,
             bag_page=0,
             inv_section=sec,
             show_ration_eat=False,
             show_bread_eat=False,
+            source=source,
         )
         await push_game_ui(
             state,
@@ -610,6 +628,8 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
             return
         parts = (callback.data or "").split(":")
         item_id = int(parts[2])
+        # source: `inv:uneq:{id}:{src}`; default 'e' (раньше unequip был только из карточки экипа).
+        source = "b" if (len(parts) > 3 and parts[3] == "b") else "e"
         _, char = await _load_character(session, callback.from_user.id)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
@@ -639,6 +659,9 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
             f"{format_inventory_item_html(data)}\n\n"
             f"<b>Статус:</b> в сумке"
         )
+        # После снятия предмет в сумке — кнопка «Назад» ведёт в сумку (это удобно: можно сразу
+        # надеть замену из этой же категории). Источник 'e'/'b' пробрасываем дальше через
+        # повторный equip — чтобы возврат к «Что надето» отрабатывал корректно.
         kb = item_detail_keyboard(
             item.id,
             is_equipped=False,
@@ -648,6 +671,7 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
             inv_section=sec,
             show_ration_eat=item.bag_slot is not None and utag == "stamina_flat",
             show_bread_eat=item.bag_slot is not None and utag == "heal_hp_flat",
+            source=source,
         )
         await push_game_ui(
             state,

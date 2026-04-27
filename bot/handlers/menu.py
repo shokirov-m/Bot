@@ -264,6 +264,46 @@ async def menu_portal_open(callback: CallbackQuery, session: AsyncSession, state
         await callback.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data.regexp(r"^mnu:prtpg:(?:\d+|nop)$"))
+async def menu_portal_page(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Пагинация портала."""
+    try:
+        if callback.message is None or callback.from_user is None or callback.data is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer("Сначала заверши бой.", show_alert=True)
+            return
+        if callback.data.endswith(":nop"):
+            await callback.answer()
+            return
+        _, char = await _char_or_alert(session, callback)
+        if char is None:
+            return
+        loc = get_locale(char, callback.from_user.language_code)
+        page = int(callback.data.split(":")[2])
+        floors_txt = ", ".join(str(x) for x in PORTAL_DESTINATION_FLOORS)
+        body = t(loc, "portal_intro", floors=floors_txt)
+        kb = portal_screen_keyboard(
+            locale=loc,
+            highest_floor_reached=int(char.highest_floor_reached),
+            page=page,
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=body,
+            reply_markup=kb,
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("mnu:prtpg")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data.regexp(r"^mnu:prt:\d+$"))
 async def menu_portal_travel(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     """Переход на этаж из портала (callback mnu:prt:<n>)."""

@@ -10,6 +10,7 @@ from functools import lru_cache
 from game.floors import floor_data
 from game.floors.monsters import (
     MonsterTemplate,
+    floor_spawn_indices,
     major_boss_for_zone,
     mini_boss_for_zone,
     zone_monster_templates,
@@ -73,6 +74,15 @@ def _pick_hunt_monster(zone_key: str, floor: int) -> MonsterTemplate:
     pool = zone_monster_templates(zone_key)
     if not pool:
         raise RuntimeError(f"Нет пула монстров для зоны {zone_key}")
+    # Берём только тех монстров, что РЕАЛЬНО спавнятся на этом этаже,
+    # чтобы охота не оказалась невыполнимой.
+    spawn_indices = floor_spawn_indices(int(floor), 6)
+    if spawn_indices:
+        # Стабильный выбор: первый из заспавненных (любой подойдёт, главное — он гарантированно есть).
+        idx = spawn_indices[max(0, floor - 1) % len(spawn_indices)]
+        if 0 <= idx < len(pool):
+            return pool[idx]
+    # Фоллбэк на старое поведение, если спавны пусты.
     i = max(0, floor - 1) % len(pool)
     return pool[i]
 

@@ -144,6 +144,82 @@ async def on_city_pet_summon(
         await query.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data.regexp(r"^cty:pet_hub:(\d+)$"))
+async def on_city_pet_hub(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Агрегатор «Животновод»: храм призыва (3 этаж) + общий гача-призыв в городах."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши текущий бой.", show_alert=True)
+            return
+        floor_key = int(query.data.split(":")[2])
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не в этом городе.", show_alert=True)
+            return
+        loc = get_locale(char, query.from_user.language_code)
+        if floor_data.get_city_for_floor(char.floor_number) is None:
+            await query.answer("Здесь нет животновода.", show_alert=True)
+            return
+
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        from bot.keyboards.menu_kb import menu_nav_button_row
+
+        f = int(char.floor_number)
+        rows: list[list[InlineKeyboardButton]] = []
+        lines = [
+            "🐾 <b>Животновод</b>",
+            "<i>Дом для духовных спутников. Здесь обряды храма и обычные призывы — в одном месте.</i>",
+        ]
+        if f == 3 and not temple_floor3.temple_ritual_done(char):
+            lines.append("\n⛪ <b>Храм призыва</b> доступен — один бесплатный ритуал.")
+            rows.append(
+                [InlineKeyboardButton(text="⛪ Войти в храм", callback_data=f"cty:mkt:{f}:temple")],
+            )
+        elif f == 3:
+            lines.append("\n⛪ <b>Храм призыва</b>: ритуал уже завершён.")
+        c1, c3, _r = pets_mod.city_summon_price_band(char)
+        left = pets_mod.city_pet_pulls_remaining_today(char)
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "city_pet_summon_1", cost=c1, left=left),
+                    callback_data=f"cty:pet:1:{f}",
+                ),
+            ],
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=t(loc, "city_pet_summon_3", cost=c3, left=left),
+                    callback_data=f"cty:pet:3:{f}",
+                ),
+            ],
+        )
+        rows.append([InlineKeyboardButton(text="⬅ В город", callback_data=f"fl:{f}:city")])
+        rows.append(menu_nav_button_row())
+        await query.message.edit_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("cty:pet_hub")
+        await query.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data.regexp(r"^cty:mkt:(\d+)(?::([a-z_]+))?$"))
 async def on_city_floor3_market(
     query: CallbackQuery,
@@ -198,16 +274,70 @@ async def on_city_floor3_market(
             return
 
         if act == "skills":
-            await character_repo.lock_character_row(session, char.id)
-            from game.characters import player_skills as psk
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-            psk.ensure_skill_meta(char)
-            await session.flush()
-            body = _temple_skills_shop_html(char, loc)
+            from bot.keyboards.menu_kb import menu_nav_button_row
+            from game.archetypes import manager as arc_mgr
+            from game.archetypes.data import ARCHETYPES, SKILLS
+
+            arch = arc_mgr.get_character_archetype(char)
+            children_keys = arc_mgr.tier2_children(arch.key)
+            current_skill_keys = {sk.key for sk in arc_mgr.get_unlocked_skills(char)}
+            lvl = int(getattr(char, "level", 1) or 1)
+            lines = [
+                "📜 <b>Каталог навыков класса</b>",
+                f"<i>Архетип:</i> {html_mod.escape(arch.name_ru)} (тир {arch.tier})",
+                "",
+                "<b>Текущая ветка:</b>",
+            ]
+            for sk_key in arch.skills:
+                sk = SKILLS.get(sk_key)
+                if sk is None:
+                    continue
+                if sk.key in current_skill_keys:
+                    flag = "✅"
+                else:
+                    flag = "🔒"
+                lines.append(
+                    f"{flag} <b>{html_mod.escape(sk.name_ru)}</b> — "
+                    f"{html_mod.escape(sk.description)}",
+                )
+            if children_keys:
+                lines.append("")
+                lines.append("<b>Доступные специализации (тир 2):</b>")
+                for ck in children_keys:
+                    child = ARCHETYPES.get(ck)
+                    if child is None:
+                        continue
+                    req_lvl = int(child.requirements.get("level", 30))
+                    open_flag = "✅" if lvl >= req_lvl else f"🔒 ур.{req_lvl}+"
+                    lines.append(
+                        f"{open_flag} <b>{html_mod.escape(child.name_ru)}</b> "
+                        f"<i>{html_mod.escape(child.description)}</i>",
+                    )
+                    for sk_key in child.skills:
+                        sk = SKILLS.get(sk_key)
+                        if sk is None:
+                            continue
+                        lines.append(
+                            f"   • {html_mod.escape(sk.name_ru)} — "
+                            f"{html_mod.escape(sk.description)}",
+                        )
+            lines.append("")
+            lines.append(
+                "<i>Это каталог: навыки открываются по прогрессу персонажа, "
+                "покупка отключена.</i>",
+            )
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="⬅ На рынок", callback_data=f"cty:mkt:{floor_key}:open")],
+                    menu_nav_button_row(),
+                ],
+            )
             await query.message.edit_text(
-                body,
+                "\n".join(lines),
                 parse_mode=ParseMode.HTML,
-                reply_markup=temple_skills_shop_keyboard(floor_key, char),
+                reply_markup=kb,
             )
             await query.answer()
             return

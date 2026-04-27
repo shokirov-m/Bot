@@ -44,7 +44,10 @@ CITIES: dict[int, CityInfo] = {
 }
 
 # Быстрый переход через меню «Портал»
-PORTAL_DESTINATION_FLOORS: tuple[int, ...] = (3, 8, 10)
+# Города-хабы (3/31/61/91), сюжетные этажи (8/10) и кратные 5 (5..100).
+PORTAL_DESTINATION_FLOORS: tuple[int, ...] = tuple(
+    sorted({3, 8, 10, 31, 61, 91} | {f for f in range(5, 101, 5)}),
+)
 
 # Уникальные «комнаты» внутри зоны — циклически по этажу
 EPITHETS: dict[str, tuple[str, ...]] = {

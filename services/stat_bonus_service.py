@@ -135,14 +135,95 @@ async def equipped_gear_defense_total(session: AsyncSession, character_id: int) 
     return total
 
 
+# Поля item_data, дающие "шансы" в боевых формулах (доли в [0..1] либо в %).
+# Значения нормализуем в долях единицы.
+_CHANCE_FIELDS: tuple[str, ...] = (
+    "crit_bonus",
+    "dodge_bonus",
+    "stun_chance",
+    "bleed_chance",
+    "poison_chance",
+    "burn_chance",
+    "freeze_chance",
+    "lifesteal_chance",
+    "block_chance",
+    "miss_reduction",
+)
+
+
+def _coerce_chance(v: Any) -> float:
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return 0.0
+    # Эвристика: если кто-то записал число > 1.0 — считаем, что это проценты.
+    return x / 100.0 if x > 1.0 else x
+
+
+async def aggregate_chance_bonuses(
+    session: AsyncSession, character_id: int
+) -> dict[str, float]:
+    """Сумма «шансовых» бонусов с надетой экипировки (в долях, 0.05 = 5%)."""
+    out: dict[str, float] = {k: 0.0 for k in _CHANCE_FIELDS}
+    items = await inventory_repo.list_equipped_items(session, character_id)
+    for it in items:
+        data = dict(it.item_data or {})
+        for k in _CHANCE_FIELDS:
+            if k in data:
+                out[k] += _coerce_chance(data.get(k))
+    # Поля, что могли лежать в "stat_bonus" подсловаре.
+    for it in items:
+        sub = (it.item_data or {}).get("stat_bonus") or {}
+        if isinstance(sub, dict):
+            for k in _CHANCE_FIELDS:
+                if k in sub:
+                    out[k] += _coerce_chance(sub.get(k))
+    return out
+
+
+def format_chance_bonuses_html(bonuses: dict[str, float]) -> str:
+    """HTML-блок «Бонусы экипировки» с шансами. Возвращает '' если ничего нет."""
+    labels = {
+        "crit_bonus":      "💥 Крит",
+        "dodge_bonus":     "💨 Уклонение",
+        "stun_chance":     "⭐ Оглушение",
+        "bleed_chance":    "🩸 Кровотечение",
+        "poison_chance":   "☠️ Яд",
+        "burn_chance":     "🔥 Поджог",
+        "freeze_chance":   "❄️ Заморозка",
+        "lifesteal_chance":"🩻 Вампиризм",
+        "block_chance":    "🛡️ Блок",
+        "miss_reduction":  "🎯 –Промах",
+    }
+    parts: list[str] = []
+    for k in _CHANCE_FIELDS:
+        v = float(bonuses.get(k, 0.0) or 0.0)
+        if v > 0.0:
+            parts.append(f"{labels[k]}: +{v*100:.1f}%")
+    if not parts:
+        return ""
+    return " · ".join(parts)
+
+
 async def effective_primary_stats(session: AsyncSession, character: Character) -> dict[str, int]:
-    """Статы в бою/профиле: база из БД + экип + титул(ы)."""
+    """Статы в бою/профиле: база из БД + экип + титул(ы) + бонус топ-1 «статы»."""
     gear, title_b = await extra_stat_bonuses(session, character)
     extra = merge_stat_maps(gear, title_b)
-    return {
+    base = {
         "str": int(character.stat_strength) + extra["str"],
         "dex": int(character.stat_dexterity) + extra["dex"],
         "int": int(character.stat_intelligence) + extra["int"],
         "vit": int(character.stat_vitality) + extra["vit"],
         "luck": int(character.stat_luck) + extra["luck"],
     }
+    # Множитель ко всем статам за место в топе сумы статов.
+    try:
+        from services import leaderboard_bonuses as _lbn
+
+        ranks = await _lbn.per_board_ranks(session, character)
+        m = _lbn.all_stats_multiplier(ranks)
+        if m > 1.0:
+            base = {k: int(round(v * m)) for k, v in base.items()}
+    except Exception:
+        pass
+    return base

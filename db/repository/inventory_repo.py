@@ -17,6 +17,44 @@ from game.items.equipment.slots import (
     ring_slot_is_explicit,
 )
 from game.items import equipment as equip_meta
+from game.items import item_categories as ic
+
+
+# Поля, наличие которых делает предмет "нестакаемым" (заточка/прочность/руны).
+_NON_STACK_DATA_KEYS: tuple[str, ...] = (
+    "enchant",
+    "enchant_level",
+    "enchant_tier",
+    "durability",
+    "durability_max",
+    "runes",
+    "rune_slots",
+    "sockets",
+)
+
+
+def _is_stackable_kind(data: dict) -> bool:
+    """True если предмет относится к Ресурсам или Расходникам и не имеет per-instance состояния."""
+    cat = ic.bag_category_for_item_data(data)
+    if cat not in (ic.BAG_CAT_USE, ic.BAG_CAT_OTHER):
+        return False
+    for key in _NON_STACK_DATA_KEYS:
+        if key in data and data.get(key) not in (None, 0, "", [], {}):
+            return False
+    return True
+
+
+def _stack_signature(data: dict) -> tuple:
+    """Идентичность для стакания: kind+name+rarity+tier+use_tag+use_value (+item_id если есть)."""
+    return (
+        str(data.get("kind") or ""),
+        str(data.get("name") or ""),
+        str(data.get("rarity") or ""),
+        int(data.get("tier") or 0),
+        str(data.get("use_tag") or ""),
+        int(data.get("use_value") or 0),
+        str(data.get("item_id") or data.get("key") or ""),
+    )
 
 
 async def get_bag_item_at_slot(
@@ -250,9 +288,28 @@ async def add_bag_item(
     *,
     bag_slot: int | None = None,
 ) -> InventoryItem:
-    """Добавить предмет в сумку (bag_slot можно назначить позже)."""
+    """
+    Добавить предмет в сумку.
+    Для ресурсов/расходников — стакуется в существующую запись (`item_data["count"] += n`),
+    иначе создаётся новая запись (снаряжение, заточка, руны и т.п.).
+    Если стакаемый предмет приходит без `bag_slot` и в сумке нет существующего стака —
+    автоматически берётся первый свободный слот, чтобы он не оказался "невидимым".
+    """
     data = copy.deepcopy(item_data)
     apply_item_payload_defaults(data)
+    if _is_stackable_kind(data):
+        existing = await find_stack(session, character_id, data)
+        if existing is not None:
+            ed = dict(existing.item_data or {})
+            add_n = max(1, int(data.get("count") or 1))
+            ed["count"] = max(1, int(ed.get("count") or 1)) + add_n
+            existing.item_data = ed
+            await session.flush()
+            return existing
+        if "count" not in data:
+            data["count"] = 1
+        if bag_slot is None:
+            bag_slot = await first_free_bag_slot(session, character_id)
     row = InventoryItem(
         character_id=character_id,
         is_equipped=False,
@@ -263,3 +320,51 @@ async def add_bag_item(
     session.add(row)
     await session.flush()
     return row
+
+
+async def find_stack(
+    session: AsyncSession,
+    character_id: int,
+    item_data: dict,
+) -> InventoryItem | None:
+    """Поиск существующего стака с такой же сигнатурой в сумке."""
+    if not _is_stackable_kind(item_data):
+        return None
+    target_sig = _stack_signature(item_data)
+    bag = await list_bag_items(session, character_id)
+    for it in bag:
+        d = it.item_data or {}
+        if not _is_stackable_kind(d):
+            continue
+        if _stack_signature(d) == target_sig:
+            return it
+    return None
+
+
+async def consume_one_from_stack(
+    session: AsyncSession,
+    item: InventoryItem,
+) -> int:
+    """
+    Списать одну единицу из стака.
+    Если count > 1 — уменьшаем count на 1; иначе удаляем запись целиком.
+    Возвращает оставшееся количество (0 = запись удалена).
+    """
+    data = dict(item.item_data or {})
+    cur = max(1, int(data.get("count") or 1))
+    if cur > 1:
+        data["count"] = cur - 1
+        item.item_data = data
+        await session.flush()
+        return cur - 1
+    await session.delete(item)
+    await session.flush()
+    return 0
+
+
+def stack_count(item: InventoryItem) -> int:
+    """Текущее количество в стаке (для нестакаемых — всегда 1)."""
+    d = item.item_data or {}
+    if not _is_stackable_kind(d):
+        return 1
+    return max(1, int(d.get("count") or 1))

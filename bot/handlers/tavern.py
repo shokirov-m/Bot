@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards.tavern_kb import buyer_quest_keyboard, tavern_menu_keyboard
+from bot.keyboards.tavern_kb import buyer_quest_keyboard, tavern_daily_keyboard, tavern_menu_keyboard
 from db.repository import character_repo, user_repo
 from game.locations import tavern as tavern_loc
 from services import tavern_service
@@ -174,6 +174,100 @@ async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession) -
         await query.answer("✅ Шаг выполнен!")
     except Exception:
         logger.exception("tvr:bq:claim")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+# ── Дневная ротация: чертежи и снаряжение ────────────────────────────────────
+
+
+async def _render_tavern_daily(query: CallbackQuery, char) -> None:
+    text = tavern_service.format_tavern_daily_html(char)
+    offers = tavern_service.daily_offers_for_character(char)
+    state = tavern_service._tavern_daily_state(char)
+    bb = set(state.get("bought_blueprints") or [])
+    bg = set(state.get("bought_gears") or [])
+    known = set(tavern_service.known_recipes(char))
+    if query.message is not None:
+        await query.message.edit_text(
+            text,
+            reply_markup=tavern_daily_keyboard(int(char.floor_number), offers, bb, bg, known),
+            parse_mode="HTML",
+        )
+
+
+@router.callback_query(F.data.regexp(r"^tvr:daily:\d+$"))
+async def tavern_daily_open(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не в этом городе.", show_alert=True)
+            return
+        if not tavern_loc.tavern_available_on_floor(char.floor_number):
+            await query.answer("Здесь нет таверны.", show_alert=True)
+            return
+        await _render_tavern_daily(query, char)
+        await query.answer()
+    except Exception:
+        logger.exception("tvr:daily:open")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^tvr:daily:\d+:nop$"))
+async def tavern_daily_nop(query: CallbackQuery) -> None:
+    await query.answer()
+
+
+@router.callback_query(F.data.regexp(r"^tvr:daily:bp:\d+:[A-Za-z0-9_]+$"))
+async def tavern_daily_buy_blueprint(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[3])
+        recipe_id = parts[4]
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не в этом городе.", show_alert=True)
+            return
+        ok, msg = await tavern_service.try_buy_daily_blueprint(session, char, recipe_id)
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        await session.commit()
+        await _render_tavern_daily(query, char)
+        await query.answer("Куплено!")
+    except Exception:
+        logger.exception("tvr:daily:bp")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^tvr:daily:gr:\d+:[A-Za-z0-9_]+$"))
+async def tavern_daily_buy_gear(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[3])
+        gear_key = parts[4]
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не в этом городе.", show_alert=True)
+            return
+        ok, msg = await tavern_service.try_buy_daily_gear(session, char, gear_key)
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        await session.commit()
+        await _render_tavern_daily(query, char)
+        await query.answer("Куплено!")
+    except Exception:
+        logger.exception("tvr:daily:gr")
         await query.answer("Ошибка.", show_alert=True)
 
 

@@ -39,7 +39,7 @@ from game.characters import pets as pets_mod
 from game.characters.classes import get_class_or_none
 from game.archetypes import manager as arch_manager
 from game.characters.global_passives import format_unlocked_global_passives_ru, refresh_global_passives
-from game.characters.path_ranks import path_rank_name_ru
+from game.characters.path_ranks import path_rank_lore, path_rank_name_ru
 from services.character_service import experience_needed_for_next_level
 from game.characters.player_skills import (
     SKILL_BY_KEY,
@@ -50,7 +50,11 @@ from game.characters.player_skills import (
 )
 from game.characters.skills import passive_combat_modifiers_merged
 from game.characters.titles import TITLE_BY_KEY, format_title_bonus_brief
-from game.characters.weapon_mastery import mastery_profile_lines, weapon_type_from_item_data
+from game.characters.weapon_mastery import (
+    mastery_all_types_line,
+    mastery_profile_lines,
+    weapon_type_from_item_data,
+)
 from game.combat import formulas
 from utils.game_images_prefs import game_images_enabled
 from utils.profile_portraits import portrait_path_for_character
@@ -141,6 +145,8 @@ def _build_profile_text(
     ranker_name_prefix: str = "",
     locale: str = "ru",
     gear_defense: int = 0,
+    chance_bonuses_line: str = "",
+    achievement_bonuses_line: str = "",
 ) -> str:
     arch = arch_manager.get_archetype(char.class_key)
     if arch:
@@ -150,6 +156,8 @@ def _build_profile_text(
     loc = locale if locale in ("ru", "en") else "ru"
     rank_raw = path_rank_name_ru(char)
     rank_s = html.escape(rank_raw) if rank_raw else "—"
+    rank_lore_raw = path_rank_lore(char) if rank_raw else None
+    rank_lore_s = html.escape(rank_lore_raw) if rank_lore_raw else ""
     sec_raw = (char.meta_progress or {}).get("active_title_secondary_name_ru")
     sec_s = str(sec_raw).strip() if sec_raw else ""
     t1 = html.escape(char.active_title) if char.active_title else "—"
@@ -169,7 +177,7 @@ def _build_profile_text(
         "luck": int(char.stat_luck),
     }
 
-    crit_pct = dodge_pct = 0.0
+    crit_pct = dodge_pct = miss_pct = hit_pct = 0.0
     dmg_lo = dmg_hi = 0
     if not compact:
         mods = passive_combat_modifiers_merged(char)
@@ -181,6 +189,7 @@ def _build_profile_text(
             int(eff["dex"]),
             dodge_bonus_flat=float(mods.get("dodge_bonus", 0.0)),
         )
+        miss_p = formulas.miss_chance_percent(int(eff["dex"]))
         dmg_lo, dmg_hi = formulas.physical_damage_range(
             int(eff["str"]),
             weapon_attack,
@@ -189,6 +198,8 @@ def _build_profile_text(
         )
         crit_pct = crit_p * 100.0
         dodge_pct = dodge_p * 100.0
+        miss_pct = miss_p * 100.0
+        hit_pct = max(0.0, 100.0 - miss_pct)
 
     gp_plain = global_passives_line.strip()
     gid_disp = str(int(char.game_id)) if char.game_id is not None else "—"
@@ -282,9 +293,13 @@ def _build_profile_text(
         LINE_SEP,
         head_row_full,
         f"🎖️ Звание: {rank_combine}",
+    ]
+    if rank_lore_s:
+        lines.append(f"<i>📖 {rank_lore_s} (только лор, без эффектов)</i>")
+    lines.extend([
         "🏆 Титулы:",
         "",
-    ]
+    ])
     lines.append(_title_row("①", title_slots[0]))
     lines.append(_title_row("②", title_slots[1]))
     lines.append("")
@@ -331,7 +346,11 @@ def _build_profile_text(
         ],
     )
     m1, m2 = mastery_profile_lines(char, weapon_type)
-    lines.extend([m1, "", m2, LINE_SEP])
+    lines.extend([m1, "", m2])
+    all_m = mastery_all_types_line(char)
+    if all_m:
+        lines.append(f"📚 Все типы: <i>{all_m}</i>")
+    lines.append(LINE_SEP)
     elem_ln = (
         "🔮 Элемент: нейтральный"
         if not char.element
@@ -341,9 +360,22 @@ def _build_profile_text(
         [
             f"🗡️ Удар (физ.): {dmg_lo}–{dmg_hi}",
             f"💥 Крит: {crit_pct:.1f}%    💨 Уклонение: {dodge_pct:.1f}%",
+            f"🎯 Попадание: {hit_pct:.1f}%    💨 Промах: {miss_pct:.1f}%",
             LINE_SEP,
         ],
     )
+    if chance_bonuses_line:
+        lines.extend([
+            "✨ Бонусы экипировки:",
+            f" {chance_bonuses_line}",
+            LINE_SEP,
+        ])
+    if achievement_bonuses_line:
+        lines.extend([
+            "🏅 От достижений:",
+            f" {achievement_bonuses_line}",
+            LINE_SEP,
+        ])
     unspent = int(getattr(char, "unspent_stat_points", 0) or 0)
     if unspent > 0:
         lines.append(f"✨ Свободных очков характеристик: {unspent} — /stats")
@@ -402,6 +434,12 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     loc = get_locale(char, None)
     lb_rank = await leaderboard_service.best_leaderboard_rank(session, char)
     rp = t(loc, "profile_ranker_name_badge") if lb_rank is not None else ""
+
+    chance_bonuses = await stat_bonus_service.aggregate_chance_bonuses(session, int(char.id))
+    chance_line = stat_bonus_service.format_chance_bonuses_html(chance_bonuses)
+    from services import achievement_service as _achs
+    ach_line = _achs.format_achievement_bonuses_html(char)
+
     base = _build_profile_text(
         char,
         compact=False,
@@ -414,6 +452,8 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         ranker_name_prefix=rp,
         locale=loc,
         gear_defense=gear_def,
+        chance_bonuses_line=chance_line,
+        achievement_bonuses_line=ach_line,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=False)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"

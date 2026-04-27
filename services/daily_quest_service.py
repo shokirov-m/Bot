@@ -44,7 +44,7 @@ from game.quests.daily_quests import (
     tier_for_floor,
     type_label,
 )
-from services import character_service
+from services import character_service, fame_service
 from services.fame_bonuses import daily_quest_slots_count
 
 META_KEY = "daily_quests_v1"
@@ -280,6 +280,11 @@ async def claim_quest(
     if runes > 0:
         character.rune_stones = int(character.rune_stones or 0) + runes
 
+    # Слава: +1 за обычное, +2 за элиту, +3 за босса. Так репутация растёт даже при застое в башне.
+    qtype = str(quest.get("type", ""))
+    fame_amt = 3 if qtype == "kills_boss" else 2 if qtype == "kills_elite" else 1
+    fame_service.add_fame(character, fame_amt)
+
     quest["claimed"] = True
     meta = dict(character.meta_progress or {})
     _save(character, meta, state)
@@ -287,10 +292,11 @@ async def claim_quest(
 
     lv_html = character_service.level_up_notice_html(character, lv)
     rune_html = f"\n⚗️ +{runes} рунных камней" if runes > 0 else ""
+    fame_html = f"\n🏅 +{fame_amt} славы" if fame_amt > 0 else ""
     return True, (
         f"🎁 <b>{quest['title']}</b>\n"
         f"Награда получена!\n"
-        f"💰 +{gold} золота  ✨ +{xp} опыта{rune_html}{lv_html}"
+        f"💰 +{gold} золота  ✨ +{xp} опыта{rune_html}{fame_html}{lv_html}"
     )
 
 

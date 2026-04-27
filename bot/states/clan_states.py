@@ -18,6 +18,10 @@ class ClanDonateStates(StatesGroup):
     waiting_amount = State()
 
 
+class ClanSalaryStates(StatesGroup):
+    waiting_amount = State()
+
+
 class ClanSettingsStates(StatesGroup):
     waiting_description = State()
     waiting_tag = State()

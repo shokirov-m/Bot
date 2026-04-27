@@ -254,16 +254,26 @@ def apply_dot_damage_monster(state: dict[str, Any]) -> list[str]:
 
 
 def regen_mp_passive(state: dict[str, Any]) -> list[str]:
+    logs: list[str] = []
     regen = int(_mods(state).get("mp_regen_turn", 0))
-    if regen <= 0:
-        return []
-    cur = int(state["player_mp"])
-    mx = int(state["player_mp_max"])
-    new = min(mx, cur + regen)
-    state["player_mp"] = new
-    if new > cur:
-        return [f"💙 MP +{new - cur} (пассив класса)."]
-    return []
+    if regen > 0:
+        cur = int(state["player_mp"])
+        mx = int(state["player_mp_max"])
+        new = min(mx, cur + regen)
+        state["player_mp"] = new
+        if new > cur:
+            logs.append(f"💙 MP +{new - cur} (пассив класса).")
+    hp_pct = float(_mods(state).get("hp_regen_pct_turn", 0.0))
+    if hp_pct > 0.0:
+        cur_hp = int(state["player_hp"])
+        mx_hp = int(state["player_hp_max"])
+        if cur_hp > 0 and cur_hp < mx_hp:
+            heal = max(1, int(mx_hp * hp_pct))
+            new_hp = min(mx_hp, cur_hp + heal)
+            state["player_hp"] = new_hp
+            if new_hp > cur_hp:
+                logs.append(f"💚 HP +{new_hp - cur_hp} (пассив класса).")
+    return logs
 
 
 def tick_cooldowns(state: dict[str, Any]) -> None:
@@ -439,13 +449,39 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     if pdm < 0.999:
         dmg = max(1, int(dmg * pdm))
 
-    # Поглощение рун голема
+    _m_obj = _m(state)
+    is_boss_target = bool(_m_obj.get("is_major_boss")) or bool(_m_obj.get("is_mini_boss"))
+    is_elite_target = str(state.get("spawn_slot") or "") == "e"
+    bdm = float(mods.get("boss_dmg_mult", 1.0))
+    if is_boss_target and bdm > 1.0001:
+        dmg = max(1, int(round(dmg * bdm)))
+    edm = float(mods.get("elite_dmg_mult", 1.0))
+    if is_elite_target and edm > 1.0001:
+        dmg = max(1, int(round(dmg * edm)))
+
     dmg = apply_rune_golem_absorb(state, dmg, logs)
 
     if crit:
         logs.append(f"→ Ты нанёс 🗡️ {dmg} урона [КРИТ💥]")
     else:
         logs.append(f"→ Ты нанёс 🗡️ {dmg} урона")
+
+    obc = float(mods.get("on_hit_bleed_chance", 0.0))
+    if obc > 0 and random.random() < obc:
+        effects.add_effect("monster", state, "Кровотечение", "bleed", 3, {"potency_percent": 4})
+        logs.append("🩸 Враг кровоточит от твоего удара!")
+    obrn = float(mods.get("on_hit_burn_chance", 0.0))
+    if obrn > 0 and random.random() < obrn:
+        effects.add_effect("monster", state, "Поджог", "burn", 3, {"potency_percent": 4})
+        logs.append("🔥 Враг охвачен огнём!")
+    ofz = float(mods.get("on_hit_freeze_chance", 0.0))
+    if ofz > 0 and random.random() < ofz:
+        state["monster_skip_next"] = True
+        logs.append("❄️ Враг скован льдом — пропустит ход!")
+    opo = float(mods.get("on_hit_poison_chance", 0.0))
+    if opo > 0 and random.random() < opo:
+        effects.add_effect("monster", state, "Яд", "poison", 3, {"potency_percent": 4})
+        logs.append("☠️ Враг отравлен!")
 
     syn = str(state.get("rune_synergy_name") or "")
     if syn and not state.get("rune_syn_logged"):
@@ -848,6 +884,9 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     ftkm = float(state.get("fe_monster_to_player_mult", 1.0))
     if ftkm < 0.999:
         dmg = max(1, int(round(dmg * ftkm)))
+    dtm = float(_mods(state).get("dmg_taken_mult", 1.0))
+    if dtm < 0.999:
+        dmg = max(1, int(round(dmg * dtm)))
     extra_mult = float(m.get("strike_ailment_mult") or 0.0)
     if extra_mult > 0:
         extra = max(0, int(base * extra_mult))
@@ -896,6 +935,8 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
         dmg2 = max(1, base2 - eff_defense)
         if ftkm < 0.999:
             dmg2 = max(1, int(round(dmg2 * ftkm)))
+        if dtm < 0.999:
+            dmg2 = max(1, int(round(dmg2 * dtm)))
         shield2 = int(state.get("player_shield_hp", 0))
         if shield2 > 0:
             absorbed2 = min(shield2, dmg2)

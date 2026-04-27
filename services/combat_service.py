@@ -31,7 +31,13 @@ from game.characters.classes import get_class_or_none
 from game.characters.path_ranks import PATH_RANK_BY_KEY
 from game.characters.player_skills import battle_skills_tuple, ensure_skill_meta
 from game.characters.skills import passive_combat_modifiers_merged, skills_for_class
-from game.characters.weapon_mastery import damage_multiplier_for_type, record_strike, weapon_type_from_item_data
+from game.characters.weapon_mastery import (
+    damage_multiplier_for_type,
+    mastery_combat_bonus,
+    record_strike,
+    tier_for_hits,
+    weapon_type_from_item_data,
+)
 from game.combat import consumables, effects, engine, formulas, monster_ai, night_mode as combat_night, passive_gear
 from game.items import runes as rune_items
 from game.balance import (
@@ -716,6 +722,7 @@ async def start_combat(
     combat_state["weapon_attack"] = wa
     combat_state["player_weapon_type"] = wtype
     combat_state["weapon_mastery_mult"] = wmult
+    _apply_mastery_combat_bonuses(character, combat_state)
     combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
     _eqs = await inventory_repo.list_equipped_items(session, character.id)
     _glogs = passive_gear.apply_to_combat_state(
@@ -917,6 +924,7 @@ async def start_tutorial_combat(
     combat_state["weapon_attack"] = wa
     combat_state["player_weapon_type"] = wtype
     combat_state["weapon_mastery_mult"] = wmult
+    _apply_mastery_combat_bonuses(character, combat_state)
     _apply_weapon_runes_to_state(combat_state, character, w_item)
     combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
     _teq = await inventory_repo.list_equipped_items(session, character.id)
@@ -1104,6 +1112,25 @@ async def _apply_tower_progress_after_victory(
     )
 
 
+def _apply_mastery_combat_bonuses(character: Character, combat_state: dict[str, Any]) -> None:
+    """Слить бонусы тиров мастерства (крит/–промах/стан) в passive_mods боевого стейта."""
+    wt = str(combat_state.get("player_weapon_type") or "blade")
+    tier = tier_for_hits(
+        int(((character.meta_progress or {}).get("weapon_mastery_v1") or {}).get(wt, {}).get("hits", 0))
+    )
+    bonuses = mastery_combat_bonus(tier)
+    mods = combat_state.get("passive_mods") or {}
+    if not isinstance(mods, dict):
+        mods = {}
+    mods["crit_bonus"] = float(mods.get("crit_bonus", 0.0)) + float(bonuses.get("crit_bonus", 0.0))
+    # У промаха подставка отрицательная: уменьшаем шанс промаха через extra_miss_chance.
+    if bonuses.get("miss_reduction", 0.0) > 0:
+        cur = float(mods.get("extra_miss_chance", 0.0))
+        mods["extra_miss_chance"] = cur - float(bonuses["miss_reduction"])
+    mods["stun_chance"] = float(mods.get("stun_chance", 0.0)) + float(bonuses.get("stun_chance", 0.0))
+    combat_state["passive_mods"] = mods
+
+
 async def _flush_weapon_mastery(
     session: AsyncSession,
     character: Character,
@@ -1114,6 +1141,7 @@ async def _flush_weapon_mastery(
     wt = str(combat_state.get("player_weapon_type") or "blade")
     record_strike(character, wt)
     combat_state["weapon_mastery_mult"] = damage_multiplier_for_type(character, wt)
+    _apply_mastery_combat_bonuses(character, combat_state)
     await session.flush()
 
 
@@ -1418,6 +1446,15 @@ async def _victory_sequence(
         _clan_delta = 10
     elif spawn.is_elite:
         _clan_delta = 3
+    # Бонус за топ кланов: +10% к очкам клана за боссов на 1-м месте.
+    if spawn.is_mini_boss or spawn.is_major_boss:
+        try:
+            from services import leaderboard_bonuses as _lbn
+
+            _ranks = await _lbn.per_board_ranks(session, character)
+            _clan_delta = max(_clan_delta, int(round(_clan_delta * _lbn.clan_boss_score_multiplier(_ranks))))
+        except Exception:
+            pass
     await clan_service.on_monster_win_add_clan_xp(session, character, delta=_clan_delta)
 
     # Дроп клановых материалов: 🪵 с лесных/растительных, 🪨 с каменных/голем, 🌿 с болотных
@@ -1432,6 +1469,14 @@ async def _victory_sequence(
             _mat_chance = 0.65  # было 50% → 65%
         elif spawn.is_elite:
             _mat_chance = 0.40  # было 30% → 40%
+        # Бонус за топ "этаж (рекорд)": +5% к шансу выпадения материалов на 1-м месте.
+        try:
+            from services import leaderboard_bonuses as _lbn
+
+            _ranks = await _lbn.per_board_ranks(session, character)
+            _mat_chance = min(1.0, _mat_chance * _lbn.material_drop_multiplier(_ranks))
+        except Exception:
+            pass
         # Определяем тип материала по зоне монстра
         from game.data.monsters import KEY_TO_ZONE
         _zone = KEY_TO_ZONE.get(_tkey2, "")
@@ -1956,7 +2001,7 @@ async def _apply_combat_item(
         logs = consumables.apply_consumable(combat_state, data)
     except ValueError:
         return False, "Предмет испорчен.", []
-    await inventory_repo.delete_inventory_item(session, item)
+    await inventory_repo.consume_one_from_stack(session, item)
     await session.flush()
     return True, None, logs
 

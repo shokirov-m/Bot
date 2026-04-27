@@ -48,25 +48,24 @@ def inventory_hub_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🦺 Броня", callback_data=f"inv:sec:{ic.INV_SEC_ARMOR_BODY}:0"),
             ],
             [
-                InlineKeyboardButton(
-                    text="💍 Кольца · амулет",
-                    callback_data=f"inv:sec:{ic.INV_SEC_ACCESSORY}:0",
-                ),
                 InlineKeyboardButton(text="⛑️ Шлем", callback_data=f"inv:sec:{ic.INV_SEC_HELMET}:0"),
-            ],
-            [
                 InlineKeyboardButton(text="👖 Поножи", callback_data=f"inv:sec:{ic.INV_SEC_PANTS}:0"),
-                InlineKeyboardButton(text="🧪 Расходники", callback_data=f"inv:sec:{ic.INV_SEC_CONSUMABLE}:0"),
             ],
             [
-                InlineKeyboardButton(text="📦 Ресурсы", callback_data=f"inv:sec:{ic.INV_SEC_RESOURCE}:0"),
                 InlineKeyboardButton(
                     text="🧤 Перчатки",
                     callback_data=f"inv:sec:{ic.INV_SEC_OTHER_GEAR}:0",
                 ),
+                InlineKeyboardButton(
+                    text="💍 Кольца · амулет",
+                    callback_data=f"inv:sec:{ic.INV_SEC_ACCESSORY}:0",
+                ),
+            ],
+            [
+                InlineKeyboardButton(text="🧪 Расходники", callback_data=f"inv:sec:{ic.INV_SEC_CONSUMABLE}:0"),
+                InlineKeyboardButton(text="📦 Ресурсы", callback_data=f"inv:sec:{ic.INV_SEC_RESOURCE}:0"),
             ],
             [InlineKeyboardButton(text="⚔️ Что надето", callback_data="inv:tab:eq")],
-            [InlineKeyboardButton(text="✖ Закрыть", callback_data="inv:close")],
             menu_nav_button_row(),
         ],
     )
@@ -116,7 +115,6 @@ def bag_tab_keyboard(
         rows.append(nav)
     rows.append([InlineKeyboardButton(text="⬅ Категории", callback_data="inv:hub")])
     rows.append([InlineKeyboardButton(text="⚔️ Что надето", callback_data="inv:tab:eq")])
-    rows.append([InlineKeyboardButton(text="✖ Закрыть", callback_data="inv:close")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -146,7 +144,6 @@ def equipment_tab_keyboard(equipped: list[InventoryItem]) -> InlineKeyboardMarku
                 ],
             )
     rows.append([InlineKeyboardButton(text="🎒 Сумка", callback_data="inv:hub")])
-    rows.append([InlineKeyboardButton(text="✖ Закрыть", callback_data="inv:close")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -161,15 +158,36 @@ def item_detail_keyboard(
     inv_section: str,
     show_ration_eat: bool = False,
     show_bread_eat: bool = False,
+    source: str = "b",
 ) -> InlineKeyboardMarkup:
+    """
+    `source` — откуда пришёл пользователь к карточке предмета: `"b"` (сумка) или `"e"` (Что надето).
+    Источник пробрасывается через колбэки eq/uneq, чтобы кнопка «Назад» возвращала туда же,
+    откуда был сделан переход (учёт «последнего действия» от пользователя).
+    """
     ic = item_categories
     sec = inv_section if inv_section in ic.ALL_INV_SECTIONS else ic.INV_SEC_WEAPON
+    src = "e" if str(source).lower() == "e" else "b"
     back_cd = f"inv:sec:{sec}:{bag_page}" if from_bag else "inv:tab:eq"
     rows: list[list[InlineKeyboardButton]] = []
     if is_equipped:
-        rows.append([InlineKeyboardButton(text="✓ Снять в сумку", callback_data=f"inv:uneq:{item_id}")])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✓ Снять в сумку",
+                    callback_data=f"inv:uneq:{item_id}:{src}",
+                ),
+            ],
+        )
     elif can_equip:
-        rows.append([InlineKeyboardButton(text="📤 Надеть", callback_data=f"inv:eq:{item_id}:{sec}")])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="📤 Надеть",
+                    callback_data=f"inv:eq:{item_id}:{sec}:{src}",
+                ),
+            ],
+        )
     if show_ration_eat:
         rows.append(
             [

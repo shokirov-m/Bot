@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from db.models.character import Character
 from game.balance import (
+    BALANCE_V2_ENABLED,
+    HP_PER_VIT,
     PROGRESSION_BASE_EXP,
     PROGRESSION_LEVEL1_XP_NEEDED,
     PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2,
@@ -63,8 +65,11 @@ def experience_needed_for_next_level(level: int, floor_number: int) -> int:
 
 
 def _compute_hp_max(vitality: int, strength: int, arch: Archetype) -> int:
-    """Базовый расчёт HP с учётом ВЫН/СИЛ и пассива архетипа."""
-    base = 40 + vitality * 6 + strength * 5
+    """Базовый расчёт HP с учётом ВЫН/СИЛ и пассива архетипа.
+    BALANCE_V2: hp/VIT снижено с 6 до 4 (см. game/balance.py).
+    """
+    hp_per_vit = int(HP_PER_VIT) if BALANCE_V2_ENABLED else 6
+    base = 40 + vitality * hp_per_vit + strength * 5
     return max(1, int(round(float(base) * float(arch.hp_multiplier))))
 
 

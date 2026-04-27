@@ -83,6 +83,17 @@ def _pick_indices(floor_number: int, count: int, pool_len: int) -> list[int]:
     return indices
 
 
+def floor_spawn_indices(floor_number: int, count: int = 6) -> list[int]:
+    """
+    Публичный хелпер: возвращает индексы (в `zone_monster_templates`)
+    тех монстров, что реально могут заспавниться на этаже.
+    Используется в квестах, чтобы не выдавать охоту на «несуществующего» моба.
+    """
+    zone = floor_data.get_zone_for_floor(floor_number)
+    pool = _pool(zone.key)
+    return _pick_indices(int(floor_number), int(count), len(pool))
+
+
 def mini_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterTemplate:
     """Уникальный мини-босс по зоне."""
     table: dict[str, str] = {

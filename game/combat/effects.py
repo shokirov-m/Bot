@@ -56,7 +56,21 @@ def tick_effect_turns(side: str, state: dict[str, Any]) -> list[str]:
 def add_effect(side: str, state: dict[str, Any], name: str, key: str, turns: int, payload: dict[str, Any] | None = None) -> None:
     key_list = _list_key(side)
     state.setdefault(key_list, [])
-    entry = {"name": name, "key": key, "turns": turns}
+    eff_turns = int(turns)
+    # BALANCE_V2: ВЫН снижает длительность кровотечения/яда у игрока.
+    if side == "player" and str(key) in ("bleed", "poison"):
+        try:
+            from game.balance import BALANCE_V2_ENABLED, vit_status_resist_fraction
+
+            if BALANCE_V2_ENABLED:
+                stats = state.get("player_stats") or state.get("stats") or {}
+                vit = int(stats.get("vit", 0) or 0)
+                resist = vit_status_resist_fraction(vit)
+                if resist > 0:
+                    eff_turns = max(1, int(round(eff_turns * (1.0 - resist))))
+        except Exception:
+            pass
+    entry = {"name": name, "key": key, "turns": eff_turns}
     if payload:
         entry.update(payload)
     state[key_list].append(entry)

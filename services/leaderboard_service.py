@@ -66,14 +66,21 @@ async def victory_rank_reward_multipliers(
 ) -> tuple[float, float, str]:
     """
     (gold_mult, xp_mult, html_note) для экрана победы.
+
+    Используем РАЗДЕЛЬНЫЕ бонусы:
+    - множитель к золоту считается из места в топе золота;
+    - множитель к опыту — из места в топе уровня;
+    - заметка показывает все активные бонусы по топам, в которых игрок засветился.
     """
-    rank = await best_leaderboard_rank(session, character)
-    gm, xm = rank_victory_gold_xp_multipliers(rank)
-    if rank is None:
+    from services import leaderboard_bonuses as lbn
+
+    ranks = await lbn.per_board_ranks(session, character)
+    gm = lbn.gold_multiplier(ranks)
+    xm = lbn.xp_multiplier(ranks)
+    note_block = lbn.format_active_bonuses_html(ranks)
+    if not note_block:
         return 1.0, 1.0, ""
-    note_key = f"combat_leader_tier_{rank}_note" if rank <= 3 else "combat_leader_tier_mid_note"
-    note = t(locale, note_key)
-    return gm, xm, note
+    return gm, xm, note_block
 
 
 async def profile_ranker_status_line(session: AsyncSession, character: Character, *, locale: str) -> str:
@@ -116,7 +123,7 @@ def format_leaderboard_html(
 ) -> str:
     titles = {
         "lvl": "📈 <b>Топ по уровню</b>",
-        "flr": "🗺️ <b>Топ по этажу</b>",
+        "flr": "🗺️ <b>Топ по этажу</b> <i>(рекорд)</i>",
         "pow": "💪 <b>Топ по сумме статов</b> <i>(СИЛ+ЛОВ+ИНТ+ВЫН+УДА)</i>",
         "gld": "💰 <b>Топ по золоту</b>",
         "warrior": "⚔️ <b>Топ Воинов</b>",
@@ -144,10 +151,14 @@ def format_leaderboard_html(
                 else f"Ур.{c.level} · опыт {int(c.experience):,}"
             )
         elif category == "flr":
-            extra = f"этаж {c.floor_number} · Ур.{c.level}"
+            best = max(int(c.highest_floor_reached or 0), int(c.floor_number or 0))
+            cur = int(c.floor_number or 0)
+            cur_part = f" · сейчас {cur}" if cur != best and cur > 0 else ""
+            extra = f"рекорд {best}{cur_part} · Ур.{c.level}"
         elif category == "pow":
             s = leaderboard_repo.character_total_stats(c)
-            extra = f"сумма статов {s} · Ур.{c.level} · этаж {c.floor_number}"
+            best = max(int(c.highest_floor_reached or 0), int(c.floor_number or 0))
+            extra = f"сумма статов {s} · Ур.{c.level} · этаж {best}"
         else:
             extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
         lines.append(f"{med} <b>{tag_prefix}{name}</b>{ranker_suffix}\n   <i>{extra}</i>")

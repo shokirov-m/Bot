@@ -16,6 +16,7 @@ from bot.i18n import get_locale
 from bot.keyboards.economy_kb import bank_safe_keyboard, economy_hub_keyboard
 from bot.keyboards.forge_kb import city_hub_keyboard
 from db.repository import character_repo, user_repo
+from game.economy import sinks as sink_rules
 from game.floors import floor_data
 from services import economy_sink_service
 
@@ -125,10 +126,19 @@ async def _refresh_bank_safe_screen(query: CallbackQuery, char, floor_key: int) 
         return
     text = economy_sink_service.bank_safe_intro_html(char)
     bb = economy_sink_service.bank_ui_back(char)
+    has_term = sink_rules.bank_term_state(char) is not None
+    has_pi = sink_rules.bank_pending_interest(char) > 0
+    seal = sink_rules.bank_seal_active(char)
     try:
         await query.message.edit_text(
             text,
-            reply_markup=bank_safe_keyboard(floor_key, bank_back=bb),
+            reply_markup=bank_safe_keyboard(
+                floor_key,
+                bank_back=bb,
+                has_term=has_term,
+                has_pending_interest=has_pi,
+                seal_active=seal,
+            ),
             parse_mode=ParseMode.HTML,
         )
     except TelegramBadRequest as e:
@@ -213,7 +223,7 @@ async def economy_safe_view(query: CallbackQuery, session: AsyncSession) -> None
             return
         parts = query.data.split(":")
         floor_key = int(parts[2])
-        char = await _load_char(session, query.from_user.id)
+        char = await _load_char_for_mutation(session, query.from_user.id)
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
@@ -224,17 +234,8 @@ async def economy_safe_view(query: CallbackQuery, session: AsyncSession) -> None
             economy_sink_service.set_bank_ui_back(char, "mkt")
         else:
             economy_sink_service.set_bank_ui_back(char, "hub")
-        text = economy_sink_service.bank_safe_intro_html(char)
-        bb = economy_sink_service.bank_ui_back(char)
-        try:
-            await query.message.edit_text(
-                text,
-                reply_markup=bank_safe_keyboard(floor_key, bank_back=bb),
-                parse_mode=ParseMode.HTML,
-            )
-        except TelegramBadRequest as e:
-            if not _is_message_not_modified(e):
-                raise
+        await economy_sink_service.flush(session, char)
+        await _refresh_bank_safe_screen(query, char, floor_key)
         await query.answer()
     except Exception:
         logger.exception("ecy:sfv")
@@ -311,5 +312,114 @@ async def economy_safe_upgrade(query: CallbackQuery, session: AsyncSession) -> N
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:sfu")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("ecy:sfi:"))
+async def economy_safe_claim_interest(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char_for_mutation(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        ok, msg = economy_sink_service.try_claim_bank_interest(char, floor_key=floor_key)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await economy_sink_service.flush(session, char)
+        await _refresh_bank_safe_screen(query, char, floor_key)
+        await query.answer(msg[:180], show_alert=True)
+    except Exception:
+        logger.exception("ecy:sfi")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("ecy:sfs:"))
+async def economy_safe_seal(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char_for_mutation(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        ok, msg = economy_sink_service.try_unlock_bank_seal(char, floor_key=floor_key)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await economy_sink_service.flush(session, char)
+        await _refresh_bank_safe_screen(query, char, floor_key)
+        await query.answer(msg[:180], show_alert=True)
+    except Exception:
+        logger.exception("ecy:sfs")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("ecy:topn:"))
+async def economy_term_open(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[2])
+        term_h = int(parts[3])
+        char = await _load_char_for_mutation(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        bal = sink_rules.bank_safe_balance(char)
+        if bal < 100:
+            await query.answer("В сейфе должно быть минимум 100 💰 для срочного вклада.", show_alert=True)
+            return
+        ok, msg = economy_sink_service.try_open_bank_term(
+            char,
+            floor_key=floor_key,
+            amount=bal,
+            term_h=term_h,
+        )
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await economy_sink_service.flush(session, char)
+        await _refresh_bank_safe_screen(query, char, floor_key)
+        await query.answer(msg[:180], show_alert=True)
+    except Exception:
+        logger.exception("ecy:topn")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("ecy:tcl:"))
+async def economy_term_close(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[2])
+        force_early = bool(int(parts[3]))
+        char = await _load_char_for_mutation(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        ok, msg = economy_sink_service.try_close_bank_term(
+            char,
+            floor_key=floor_key,
+            force_early=force_early,
+        )
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await economy_sink_service.flush(session, char)
+        await _refresh_bank_safe_screen(query, char, floor_key)
+        await query.answer(msg[:180], show_alert=True)
+    except Exception:
+        logger.exception("ecy:tcl")
         await query.answer("Ошибка.", show_alert=True)
 

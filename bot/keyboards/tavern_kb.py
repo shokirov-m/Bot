@@ -22,11 +22,50 @@ def tavern_menu_keyboard(floor_number: int) -> InlineKeyboardMarkup:
             ],
         )
     rows.append(
+        [InlineKeyboardButton(text="📜 Дневные предложения", callback_data=f"tvr:daily:{floor_number}")],
+    )
+    rows.append(
         [InlineKeyboardButton(text="🪙 Скупщик Орин", callback_data=f"tvr:buyer:{floor_number}")],
     )
     rows.append(
         [InlineKeyboardButton(text="⬅ В город", callback_data=f"frg:city:{floor_number}")],
     )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def tavern_daily_keyboard(
+    floor_number: int,
+    offers: dict,
+    bought_blueprints: set[str],
+    bought_gears: set[str],
+    known_recipes: set[str],
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for rid, name, price in offers.get("blueprints", []):
+        if rid in known_recipes:
+            text = f"📜 {name} — известен"
+            cd = f"tvr:daily:{floor_number}:nop"
+        elif rid in bought_blueprints:
+            text = f"✅ {name} (куплен)"
+            cd = f"tvr:daily:{floor_number}:nop"
+        else:
+            text = f"📜 {name} — {price}💰"
+            cd = f"tvr:daily:bp:{floor_number}:{rid}"
+        if len(text) > 64:
+            text = text[:61] + "…"
+        rows.append([InlineKeyboardButton(text=text, callback_data=cd)])
+    for key, idata, price in offers.get("gears", []):
+        nm = str(idata.get("name", key))
+        if key in bought_gears:
+            text = f"✅ {nm} (куплено)"
+            cd = f"tvr:daily:{floor_number}:nop"
+        else:
+            text = f"🛒 {nm} — {price}💰"
+            cd = f"tvr:daily:gr:{floor_number}:{key}"
+        if len(text) > 64:
+            text = text[:61] + "…"
+        rows.append([InlineKeyboardButton(text=text, callback_data=cd)])
+    rows.append([InlineKeyboardButton(text="⬅ Таверна", callback_data=f"tvr:open:{floor_number}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

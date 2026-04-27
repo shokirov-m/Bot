@@ -37,12 +37,13 @@ async def top_by_level(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> 
 
 
 async def top_by_floor(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> list[Character]:
+    """Топ по рекорду этажа: highest_floor_reached, не текущий floor_number."""
     stmt = (
         select(Character)
         .join(User, Character.user_id == User.id)
         .where(User.is_banned.is_(False))
         .order_by(
-            desc(Character.floor_number),
+            desc(Character.highest_floor_reached),
             desc(Character.level),
             desc(Character.experience),
         )

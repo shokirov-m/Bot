@@ -46,21 +46,64 @@ def economy_hub_intro_html(character: Character) -> str:
 
 
 def bank_safe_intro_html(character: Character) -> str:
+    sink_rules.accrue_bank_interest(character)
     bal = sink_rules.bank_safe_balance(character)
     cap = sink_rules.bank_safe_capacity(character)
     lvl = sink_rules.bank_safe_capacity_level(character)
     next_cost = sink_rules.bank_safe_upgrade_cost_gold(character)
-    return "\n".join(
-        [
-            "🏦 <b>Сейф гильдии</b>",
-            f"В сейфе: <b>{bal}</b> / <b>{cap}</b> 💰",
-            "<i>Золото в сейфе не списывается при поражении в башне.</i>",
-            LINE_SEP,
-            f"Уровень хранилища: <b>{lvl}</b>. Следующее улучшение: <b>{next_cost}</b> 💰 (+500 к лимиту).",
-            LINE_SEP,
-            "Вноси и снимай кнопками. «Всё влезет» — переносит из кошелька столько, сколько помещается.",
-        ],
-    )
+    rate = sink_rules.bank_interest_rate_per_hour(character) * 100
+    cap_pct = sink_rules.bank_interest_cap_pct(character) * 100
+    pending = sink_rules.bank_pending_interest(character)
+    seal = "✅ Печать активна" if sink_rules.bank_seal_active(character) else "—"
+    lines = [
+        "🏦 <b>Сейф гильдии</b>",
+        f"В сейфе: <b>{bal}</b> / <b>{cap}</b> 💰",
+        "<i>Золото в сейфе не списывается при поражении в башне.</i>",
+        LINE_SEP,
+        f"Уровень хранилища: <b>{lvl}</b>. Следующее улучшение: <b>{next_cost}</b> 💰 (+500 к лимиту).",
+        LINE_SEP,
+        f"📈 Ставка: <b>{rate:.2f}%/ч</b>, шапка процентов: <b>{cap_pct:.0f}%</b> от тела.",
+        f"💰 Накоплено процентов: <b>{pending}</b> · Печать: {seal}",
+    ]
+    term = sink_rules.bank_term_state(character)
+    if term:
+        amt = int(term.get("amount") or 0)
+        rate_t = float(term.get("rate") or 0.0)
+        h = int(term.get("term_h") or 0)
+        matures = sink_rules.bank_term_matures_at(term)
+        ms = matures.strftime("%Y-%m-%d %H:%M UTC") if matures else "?"
+        lines.append(LINE_SEP)
+        lines.append(f"⏳ Срочный вклад: <b>{amt}</b> 💰, {h}ч, ставка <b>{rate_t*100:.0f}%</b>. Созреет: {ms}.")
+    else:
+        lines.append(LINE_SEP)
+        lines.append("⏳ Срочные вклады: 24ч·1% / 72ч·4% / 7д·12%.")
+    lines.append(LINE_SEP)
+    lines.append("Вноси и снимай кнопками. «Всё влезет» — переносит из кошелька столько, сколько помещается.")
+    return "\n".join(lines)
+
+
+def try_claim_bank_interest(character: Character, *, floor_key: int) -> tuple[bool, str]:
+    if not _in_city_hub(character, floor_key):
+        return False, "Сейф только в городе-хабе."
+    return sink_rules.claim_bank_interest_to_wallet(character)
+
+
+def try_unlock_bank_seal(character: Character, *, floor_key: int) -> tuple[bool, str]:
+    if not _in_city_hub(character, floor_key):
+        return False, "Сейф только в городе-хабе."
+    return sink_rules.try_unlock_bank_seal(character)
+
+
+def try_open_bank_term(character: Character, *, floor_key: int, amount: int, term_h: int) -> tuple[bool, str]:
+    if not _in_city_hub(character, floor_key):
+        return False, "Сейф только в городе-хабе."
+    return sink_rules.try_open_bank_term(character, amount=amount, term_h=term_h)
+
+
+def try_close_bank_term(character: Character, *, floor_key: int, force_early: bool) -> tuple[bool, str]:
+    if not _in_city_hub(character, floor_key):
+        return False, "Сейф только в городе-хабе."
+    return sink_rules.try_close_bank_term(character, force_early=force_early)
 
 
 def _in_city_hub(character: Character, floor_key: int) -> bool:

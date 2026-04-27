@@ -6,31 +6,35 @@ from __future__ import annotations
 
 import random
 
+from game import balance as _bal
+
 
 def clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
 def crit_chance_percent(luck: int, *, crit_bonus_flat: float = 0.0) -> float:
-    """Крит: каждые 5 УДА = +1%, макс 40%. crit_bonus_flat — плоская добавка в долях."""
-    base = (int(luck) // 5) * 0.01
-    return clamp(base + crit_bonus_flat, 0.0, 0.40)
+    """Крит: каждые 5 УДА = +1% (BALANCE_V2: шапка 50%; иначе 40%)."""
+    base = (int(luck) // 5) * float(_bal.LUCK_CRIT_PER_5)
+    cap = float(_bal.LUCK_CRIT_CAP) if _bal.BALANCE_V2_ENABLED else 0.40
+    return clamp(base + crit_bonus_flat, 0.0, cap)
 
 
 def dodge_chance_percent(dexterity: int, *, dodge_bonus_flat: float = 0.0) -> float:
-    """Уклонение: каждые 5 ЛОВ = +1%, макс 40%."""
-    base = (int(dexterity) // 5) * 0.01
-    return clamp(base + dodge_bonus_flat, 0.0, 0.40)
+    """Уклонение: каждые 5 ЛОВ = +1% (BALANCE_V2: шапка 45%; иначе 40%)."""
+    base = (int(dexterity) // 5) * float(_bal.DEX_DODGE_PER_5)
+    cap = float(_bal.DEX_DODGE_CAP) if _bal.BALANCE_V2_ENABLED else 0.40
+    return clamp(base + dodge_bonus_flat, 0.0, cap)
 
 
 def miss_chance_percent(dexterity: int, *, extra_miss_chance: float = 0.0) -> float:
     """
-    Шанс промаха игрока: база 20% − каждые 5 ЛОВ снимают 1%.
-    Минимум 3% (нельзя полностью устранить промах), максимум 20%.
-    Например: ЛОВ 0 → 20%, ЛОВ 25 → 15%, ЛОВ 50 → 10%, ЛОВ 85 → 3%.
+    Шанс промаха игрока: база 15%/20% (V2) − каждые 5 ЛОВ снимают 1%.
+    Минимум 3% (нельзя полностью устранить промах).
     """
-    base = 0.20 - (int(dexterity) // 5) * 0.01
-    return clamp(base + float(extra_miss_chance), 0.03, 0.80)
+    base_v = float(_bal.DEX_MISS_BASE) if _bal.BALANCE_V2_ENABLED else 0.20
+    base = base_v - (int(dexterity) // 5) * 0.01
+    return clamp(base + float(extra_miss_chance), 0.03, max(0.20, base_v))
 
 
 def roll_crit(luck: int, *, crit_bonus_flat: float = 0.0) -> bool:

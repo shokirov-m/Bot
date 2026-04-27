@@ -14,7 +14,8 @@ from db.models.inventory import InventoryItem
 from db.repository import inventory_repo
 from services import character_service
 
-SCRAP_FLOOR = 3
+SCRAP_FLOOR = 3  # legacy: первый город-хаб
+SCRAP_FLOORS: tuple[int, ...] = (3, 31, 61, 91)
 RARITY_MULT: dict[str, float] = {
     "common": 1.0,
     "uncommon": 1.15,
@@ -25,7 +26,7 @@ RARITY_MULT: dict[str, float] = {
 
 
 def scrap_gold_for_item_data(data: dict[str, Any]) -> int:
-    """Цена скупки одного предмета (минимум 1)."""
+    """Цена скупки за всю запись (учитывает count для стаков)."""
     r = str(data.get("rarity") or "common").lower().strip()
     mul = RARITY_MULT.get(r, 1.0)
     atk = int(data.get("attack", data.get("atk", 0)) or 0)
@@ -34,16 +35,36 @@ def scrap_gold_for_item_data(data: dict[str, Any]) -> int:
     base = 4 + atk * 2 + defe * 2
     if kind == "rune" or data.get("rune_tier") is not None:
         base = max(base, 8 + int(data.get("rune_power", 0) or 0) * 2)
-    if str(data.get("kind") or "") == "consumable":
+    if kind == "consumable":
         base = max(3, base // 2)
-    return max(1, int(round(base * mul * 0.9)))
+    per_unit = max(1, int(round(base * mul * 0.9)))
+    count = max(1, int(data.get("count") or 1))
+    return per_unit * count
+
+
+def is_scrap_floor(floor_number: int) -> bool:
+    return int(floor_number) in SCRAP_FLOORS
+
+
+def nearest_scrap_floor(floor_number: int) -> int:
+    f = int(floor_number)
+    return min(SCRAP_FLOORS, key=lambda x: (abs(x - f), x))
+
+
+def scrap_unavailable_message(floor_number: int) -> str:
+    near = nearest_scrap_floor(int(floor_number))
+    cities = " / ".join(str(c) for c in SCRAP_FLOORS)
+    return (
+        f"Скупщик доступен только в городах: <b>{cities}</b>. "
+        f"Ближайший — этаж <b>{near}</b>."
+    )
 
 
 def format_scrap_menu_html(character: Character, items: list[InventoryItem]) -> str:
     lines = [
         "💰 <b>Скупщик</b>",
         "────────────",
-        f"<i>Этаж {SCRAP_FLOOR}. Продай лут из сумки — золото сразу на руки.</i>",
+        f"<i>Этаж {int(character.floor_number)} (город). Продай лут из сумки — золото сразу на руки.</i>",
         "",
     ]
     if not items:
@@ -55,7 +76,9 @@ def format_scrap_menu_html(character: Character, items: list[InventoryItem]) -> 
         nm = html.escape(str(d.get("name", "Предмет")))
         price = scrap_gold_for_item_data(d)
         slot = int(it.bag_slot) if it.bag_slot is not None else "?"
-        lines.append(f"• [{slot}] {nm} — <b>{price}</b> 💰")
+        cnt = max(1, int(d.get("count") or 1))
+        cnt_part = f" ×{cnt}" if cnt > 1 else ""
+        lines.append(f"• [{slot}] {nm}{cnt_part} — <b>{price}</b> 💰")
     return "\n".join(lines)
 
 
@@ -68,8 +91,8 @@ async def try_sell_bag_item_by_id(
     username: str | None = None,
     bot: Any = None,
 ) -> tuple[bool, str]:
-    if int(character.floor_number) != SCRAP_FLOOR:
-        return False, "Скупщик только на <b>3 этаже</b>."
+    if not is_scrap_floor(character.floor_number):
+        return False, scrap_unavailable_message(int(character.floor_number))
     it = await inventory_repo.get_item_for_character(session, int(character.id), int(item_id))
     if it is None or it.is_equipped or it.bag_slot is None:
         return False, "Предмет не в сумке."

@@ -440,6 +440,131 @@ async def try_donate_gold(
     return True, f"💰 Внесено <b>{actual:,}</b> в казну клана. Вклад +{pts}."
 
 
+# ─────────────────────────── Распределение ЗП из казны ─────────────────────
+
+def _salary_pool(payload: dict[str, Any]) -> dict[str, int]:
+    """Накопленная ЗП по character_id (как str)."""
+    return dict(payload.get("salary_pool") or {})
+
+
+def pending_salary_for(character: Character, payload: dict[str, Any] | None = None) -> int:
+    """Сколько ЗП ждёт персонажа (по его character_id)."""
+    if payload is None:
+        return 0
+    pool = _salary_pool(payload)
+    return int(pool.get(str(int(character.id)), 0))
+
+
+async def allocate_salary(
+    session: AsyncSession,
+    actor: Character,
+    target_char_id: int,
+    amount: int,
+) -> tuple[bool, str]:
+    """
+    Лидер/офицер: списать `amount` из казны и добавить в salary_pool[target_char_id].
+    Сама ЗП лежит в payload, забрать её участник может через `claim_salary`.
+    """
+    amt = int(amount)
+    if amt <= 0:
+        return False, "Сумма ЗП должна быть положительной."
+    m_actor = await clan_repo.get_membership(session, int(actor.id))
+    if m_actor is None:
+        return False, "Ты не в клане."
+    if not can_manage(m_actor.role):
+        return False, "Только лидер или офицер может выделять ЗП."
+    m_target = await clan_repo.get_membership(session, int(target_char_id))
+    if m_target is None or int(m_target.clan_id) != int(m_actor.clan_id):
+        return False, "Этот игрок не состоит в твоём клане."
+    clan = await clan_repo.get_clan(session, int(m_actor.clan_id))
+    if clan is None:
+        return False, "Клан не найден."
+    payload = _payload(clan)
+    tg = _treasury_gold(payload)
+    if tg < amt:
+        return False, f"В казне всего {tg:,} 💰 — недостаточно."
+    pool = _salary_pool(payload)
+    key = str(int(target_char_id))
+    pool[key] = int(pool.get(key, 0)) + amt
+    payload["salary_pool"] = pool
+    payload["treasury_gold"] = tg - amt
+    target_name = "?"
+    try:
+        from db.repository import character_repo as _crepo
+
+        tgt_char = await _crepo.get_by_id(session, int(target_char_id))
+        if tgt_char is not None:
+            target_name = str(tgt_char.display_name or "?")
+    except Exception:
+        pass
+    _add_event(
+        payload,
+        f"{html.escape(actor.display_name)} выделил ЗП {amt:,} 💰 → {html.escape(target_name)}",
+    )
+    await clan_repo.update_payload(session, clan, payload)
+    return True, f"💼 Выделено <b>{amt:,}</b> 💰 для <b>{html.escape(target_name)}</b>. Игрок заберёт её сам."
+
+
+async def list_pending_salary(
+    session: AsyncSession, clan_id: int
+) -> list[tuple[int, int, str, str]]:
+    """[(character_id, amount, name, role)] — кому какую ЗП выделили, ещё не забрали."""
+    clan = await clan_repo.get_clan(session, int(clan_id))
+    if clan is None:
+        return []
+    payload = _payload(clan)
+    pool = _salary_pool(payload)
+    if not pool:
+        return []
+    out: list[tuple[int, int, str, str]] = []
+    members = await clan_repo.get_members_with_characters(session, int(clan_id))
+    by_id: dict[int, tuple[Character, str]] = {}
+    for mbr, ch in members:
+        by_id[int(ch.id)] = (ch, mbr.role)
+    for k, v in pool.items():
+        try:
+            cid = int(k)
+        except (TypeError, ValueError):
+            continue
+        amt = int(v or 0)
+        if amt <= 0:
+            continue
+        info = by_id.get(cid)
+        if info is None:
+            out.append((cid, amt, "(вышел из клана)", "—"))
+        else:
+            ch, role = info
+            out.append((cid, amt, str(ch.display_name or "?"), role))
+    out.sort(key=lambda r: r[1], reverse=True)
+    return out
+
+
+async def claim_salary(session: AsyncSession, character: Character) -> tuple[bool, str]:
+    """Участник забирает накопленную ЗП в личное золото."""
+    m = await clan_repo.get_membership(session, int(character.id))
+    if m is None:
+        return False, "Ты не в клане."
+    clan = await clan_repo.get_clan(session, int(m.clan_id))
+    if clan is None:
+        return False, "Клан не найден."
+    payload = _payload(clan)
+    pool = _salary_pool(payload)
+    key = str(int(character.id))
+    amt = int(pool.get(key, 0))
+    if amt <= 0:
+        return False, "Тебе пока не выделили ЗП."
+    pool[key] = 0
+    # Чистим ноль чтобы не плодить мусор.
+    pool = {k: v for k, v in pool.items() if int(v or 0) > 0}
+    payload["salary_pool"] = pool
+    from services import character_service as _csvc
+
+    _csvc.add_gold(character, amt)
+    _add_event(payload, f"{html.escape(character.display_name)} забрал ЗП {amt:,} 💰")
+    await clan_repo.update_payload(session, clan, payload)
+    return True, f"📥 Получено <b>{amt:,}</b> 💰 от клана."
+
+
 async def try_donate_materials(
     session: AsyncSession, character: Character, wood: int = 0, stone: int = 0, herbs: int = 0
 ) -> tuple[bool, str]:

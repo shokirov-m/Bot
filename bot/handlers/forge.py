@@ -451,9 +451,15 @@ async def forge_rune_remove_apply(query: CallbackQuery, session: AsyncSession) -
         await query.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("frg:dis:"))
+def _norm_filter(v: str) -> str | None:
+    if not v or v == "all":
+        return None
+    return str(v).lower()
+
+
+@router.callback_query(F.data.regexp(r"^frg:dis:\d+$"))
 async def forge_disassemble_menu(query: CallbackQuery, session: AsyncSession) -> None:
-    """Показать список предметов из сумки для разбора."""
+    """Показать список предметов из сумки для разбора (без фильтров)."""
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -467,32 +473,90 @@ async def forge_disassemble_menu(query: CallbackQuery, session: AsyncSession) ->
         if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
             await query.answer("Здесь нет кузницы.", show_alert=True)
             return
-
-        # только если в query.data нет item_id — показываем список
-        bag = await inventory_repo.list_bag_items(session, char.id)
-        _SKIP_KINDS = {"consumable", "rune", "material", "misc"}
-        pairs: list[tuple[int, str]] = []
-        for it in sorted(bag, key=lambda x: x.bag_slot or 0):
-            d = dict(it.item_data or {})
-            if str(d.get("kind") or "").lower() in _SKIP_KINDS:
-                continue
-            nm = str(d.get("name", "Предмет"))
-            rar = str(d.get("rarity") or "common")
-            pairs.append((int(it.id), f"[{rar[:3]}] {nm}"))
-
+        pairs = await forge_service.list_disassemblable_items(session, char)
         if not pairs:
             await query.answer("В сумке нет предметов для разбора.", show_alert=True)
             return
-
         await query.message.edit_text(
             "🔨 <b>Разбор предмета</b>\n"
-            "<i>Выбери вещь — получишь материалы заточки той же редкости (1–5 шт.).</i>",
+            "<i>Выбери вещь или используй фильтры/свип ниже.</i>",
             reply_markup=forge_dis_bag_keyboard(floor_key, pairs),
             parse_mode="HTML",
         )
         await query.answer("Выбери предмет для разбора")
     except Exception:
         logger.exception("frg:dis")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:disf:\d+:[a-z]+:[a-z]+$"))
+async def forge_disassemble_filter(query: CallbackQuery, session: AsyncSession) -> None:
+    """Применить фильтры (редкость/тип) для списка разбора."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[2])
+        rar_code = parts[3]
+        knd_code = parts[4]
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не на этом этаже.", show_alert=True)
+            return
+        if not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Здесь нет кузницы.", show_alert=True)
+            return
+        rar = _norm_filter(rar_code)
+        knd = _norm_filter(knd_code)
+        pairs = await forge_service.list_disassemblable_items(
+            session, char, rarity_filter=rar, kind_filter=knd,
+        )
+        title = "🔨 <b>Разбор предмета</b>"
+        if rar or knd:
+            title += f"\n<i>Фильтр:</i> {rar or 'все'} / {knd or 'все типы'}"
+        if not pairs:
+            title += "\n<i>Под фильтр ничего не попало.</i>"
+        await query.message.edit_text(
+            title,
+            reply_markup=forge_dis_bag_keyboard(
+                floor_key, pairs, rarity_filter=rar, kind_filter=knd,
+            ),
+            parse_mode="HTML",
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("frg:disf")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:dsweep:\d+:[a-z]+$"))
+async def forge_disassemble_sweep(query: CallbackQuery, session: AsyncSession) -> None:
+    """Свип: разобрать всё (≤max_rarity) пачкой."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[2])
+        max_rar = parts[3]
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key:
+            await query.answer("Ты не на этом этаже.", show_alert=True)
+            return
+        ok, msg = await forge_service.try_sweep_disassemble(session, char, max_rarity=max_rar)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        body = await forge_service.build_forge_message_html(session, char)
+        await query.message.edit_text(
+            f"{body}\n\n{msg}",
+            reply_markup=forge_actions_keyboard(char.floor_number),
+            parse_mode="HTML",
+        )
+        await query.answer("Свип готов!")
+    except Exception:
+        logger.exception("frg:dsweep")
         await query.answer("Ошибка.", show_alert=True)
 
 

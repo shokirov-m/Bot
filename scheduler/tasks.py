@@ -114,6 +114,19 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         replace_existing=True,
     )
 
+    async def job_bank_interest() -> None:
+        try:
+            await task_bank_interest_tick()
+        except Exception:
+            logger.exception("[BANK] Ошибка задачи начисления процентов")
+
+    scheduler.add_job(
+        job_bank_interest,
+        IntervalTrigger(hours=1),
+        id="tower_bank_interest_hourly",
+        replace_existing=True,
+    )
+
 
 def schedule_rest_completion_notification(
     bot: Bot,
@@ -273,6 +286,39 @@ async def task_daily_reset() -> None:
         logger.info("[DAILY] Ежедневный сброс выполнен, аукцион закрыто лотов: {}", auc_n)
     except Exception:
         logger.exception("[DAILY] Ошибка ежедневного сброса")
+
+
+async def task_bank_interest_tick() -> None:
+    """Раз в час: начислить проценты по обычным депозитам и закрыть созревшие срочные вклады."""
+    from datetime import UTC, datetime
+
+    from db.database import get_session_factory
+    from db.models.character import Character
+    from game.economy import sinks as sink_rules
+
+    factory = get_session_factory()
+    accrued = 0
+    matured = 0
+    async with factory() as session:
+        rows = (await session.execute(select(Character))).scalars().all()
+        now = datetime.now(UTC)
+        for ch in rows:
+            try:
+                if sink_rules.bank_safe_balance(ch) > 0:
+                    delta = sink_rules.accrue_bank_interest(ch, now_dt=now)
+                    if delta > 0:
+                        accrued += 1
+                term = sink_rules.bank_term_state(ch)
+                if term:
+                    matures = sink_rules.bank_term_matures_at(term)
+                    if matures and now >= matures:
+                        ok, _msg = sink_rules.try_close_bank_term(ch, force_early=False)
+                        if ok:
+                            matured += 1
+            except Exception:
+                logger.exception("[BANK] tick char=%s", getattr(ch, "id", "?"))
+        await session.commit()
+    logger.info("[BANK] Накоплено: {} · Закрыто срочных: {}", accrued, matured)
 
 
 async def task_leaderboard_update() -> None:

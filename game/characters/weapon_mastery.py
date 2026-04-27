@@ -92,6 +92,12 @@ def damage_multiplier_for_type(character: Character, weapon_type: str) -> float:
     return MULT_BY_TIER[tier_for_hits(hits)]
 
 
+def tier_for_character_weapon(character: Character, weapon_type: str) -> int:
+    data = _load_mastery(character.meta_progress or {})
+    row = data.get(weapon_type, {"hits": 0})
+    return tier_for_hits(int(row.get("hits", 0)))
+
+
 def record_strike(character: Character, weapon_type: str) -> tuple[int, int]:
     """
     +1 удар для типа. Возвращает (hits_после, tier).
@@ -125,6 +131,49 @@ def mastery_profile_lines(character: Character, weapon_type: str) -> tuple[str, 
         bar = _mono_bar(h, nxt, _BAR_LEN)
         line2 = f"✨ {bar}  {format_number(h)}/{format_number(nxt)}уд."
     return line1, line2
+
+
+_WEAPON_EMOJI: dict[str, str] = {
+    "blade": "🗡",
+    "staff": "🪄",
+    "bow": "🏹",
+    "dagger": "🗡",
+    "axe": "🪓",
+    "polearm": "🛡️",
+    "hammer": "🔨",
+    "unarmed": "👊",
+}
+
+
+def mastery_all_types_line(character: Character) -> str:
+    """Все ненулевые мастерства в одну строку: «🗡 blade ур.3 (1240 уд.) · 🏹 bow ур.1 (160)…»."""
+    data = _load_mastery(character.meta_progress or {})
+    if not data:
+        return ""
+    parts: list[str] = []
+    items = sorted(data.items(), key=lambda kv: int(kv[1].get("hits", 0)), reverse=True)
+    for wtype, row in items:
+        h = int(row.get("hits", 0))
+        if h <= 0:
+            continue
+        emo = _WEAPON_EMOJI.get(wtype, "🗡")
+        tier = tier_for_hits(h)
+        parts.append(f"{emo} {wtype} ур.{tier} ({h})")
+    if not parts:
+        return ""
+    return " · ".join(parts)
+
+
+# Боевые бонусы за тиры мастерства (применяются для текущего типа оружия).
+# tier 0..4. Используем поверх crit_bonus / extra_miss_chance / stun_chance.
+def mastery_combat_bonus(tier: int) -> dict[str, float]:
+    t = max(0, min(int(tier), 4))
+    return {
+        # tier 2 → +2% крит, tier 3 → −1% промах, tier 4 → +5% оглушение.
+        "crit_bonus": 0.02 if t >= 2 else 0.0,
+        "miss_reduction": 0.01 if t >= 3 else 0.0,
+        "stun_chance": 0.05 if t >= 4 else 0.0,
+    }
 
 
 def mastery_summary_line(character: Character, weapon_type: str) -> str:

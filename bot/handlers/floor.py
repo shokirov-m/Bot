@@ -362,8 +362,10 @@ async def on_floor_callback(
             if query.message is None:
                 await query.answer()
                 return
-            if floor != 3:
-                await query.answer("Скупщик только на 3 этаже.", show_alert=True)
+            from services import scrap_merchant_service as _scrap
+
+            if not _scrap.is_scrap_floor(floor):
+                await query.answer(_scrap.scrap_unavailable_message(int(floor)), show_alert=True)
                 return
             from bot.keyboards.scrap_kb import scrap_merchant_keyboard, set_scrap_ui_back
             from db.repository import inventory_repo

@@ -286,23 +286,10 @@ async def add_materials_to_bag(
     rarity: str,
     count: int,
 ) -> None:
-    """Добавить материалы в сумку — стаковать в существующий слот или создать новый."""
-    bag = await inventory_repo.list_bag_items(session, character_id)
+    """Добавить материалы в сумку — общий стак через inventory_repo.add_bag_item."""
     r = str(rarity or "common").lower()
-    for it in bag:
-        d = it.item_data or {}
-        if str(d.get("kind")) == "material" and str(d.get("rarity")) == r:
-            nd = dict(d)
-            nd["count"] = max(1, int(nd.get("count", 1))) + count
-            it.item_data = nd
-            await session.flush()
-            return
-    # нет существующего стака — создать новый
-    free = await inventory_repo.first_free_bag_slot(session, character_id)
-    if free is None:
-        return  # сумка полна — материалы теряются (редкий случай)
     payload = mat_sys.material_payload(r, count)
-    await inventory_repo.add_bag_item(session, character_id, payload, bag_slot=free)
+    await inventory_repo.add_bag_item(session, character_id, payload)
     await session.flush()
 
 
@@ -311,21 +298,9 @@ async def add_boss_trophy_to_bag(
     character_id: int,
     count: int = 1,
 ) -> None:
-    """Добавить трофеи босса в сумку — стаковать или создать новый слот."""
-    bag = await inventory_repo.list_bag_items(session, character_id)
-    for it in bag:
-        d = it.item_data or {}
-        if str(d.get("kind")) == "boss_trophy":
-            nd = dict(d)
-            nd["count"] = max(1, int(nd.get("count", 1))) + count
-            it.item_data = nd
-            await session.flush()
-            return
-    free = await inventory_repo.first_free_bag_slot(session, character_id)
-    if free is None:
-        return
+    """Добавить трофеи босса в сумку — общий стак через inventory_repo.add_bag_item."""
     payload = mat_sys.boss_trophy_payload(count)
-    await inventory_repo.add_bag_item(session, character_id, payload, bag_slot=free)
+    await inventory_repo.add_bag_item(session, character_id, payload)
     await session.flush()
 
 
@@ -368,6 +343,88 @@ async def try_disassemble_bag_item(
         f"🔨 <b>Разобрано:</b> {name}\n"
         f"+{count} {mat_name} → сумка.{bonus_note}"
     )
+
+
+_RARITY_ORDER: tuple[str, ...] = ("common", "uncommon", "rare", "epic", "legendary", "mythic")
+
+
+def _rarity_le(a: str, b: str) -> bool:
+    a = (a or "").lower()
+    b = (b or "").lower()
+    if a not in _RARITY_ORDER or b not in _RARITY_ORDER:
+        return False
+    return _RARITY_ORDER.index(a) <= _RARITY_ORDER.index(b)
+
+
+async def list_disassemblable_items(
+    session: AsyncSession,
+    character: Character,
+    *,
+    rarity_filter: str | None = None,
+    kind_filter: str | None = None,
+) -> list[tuple[int, str]]:
+    """Список предметов для разбора с учётом фильтров. (item_id, label)."""
+    bag = await inventory_repo.list_bag_items(session, character.id)
+    skip_kinds = {"consumable", "rune", "material", "boss_trophy", "misc"}
+    rows: list[tuple[int, str]] = []
+    for it in sorted(bag, key=lambda x: x.bag_slot or 0):
+        if it.is_equipped:
+            continue
+        d = dict(it.item_data or {})
+        kind = str(d.get("kind") or "").lower()
+        if kind in skip_kinds:
+            continue
+        rar = str(d.get("rarity") or "common").lower()
+        if rarity_filter and rar != rarity_filter:
+            continue
+        if kind_filter and kind != kind_filter:
+            continue
+        nm = str(d.get("name", "Предмет"))
+        rows.append((int(it.id), f"[{rar[:3]}] {nm}"))
+    return rows
+
+
+SWEEP_LIMIT = 32
+
+
+async def try_sweep_disassemble(
+    session: AsyncSession,
+    character: Character,
+    *,
+    max_rarity: str = "uncommon",
+    limit: int = SWEEP_LIMIT,
+) -> tuple[bool, str]:
+    """Свип-разбор: разобрать всё (≤max_rarity) пачкой, до limit предметов."""
+    if not forge_loc.forge_available_on_floor(character.floor_number):
+        return False, "Свип — только в кузнице города."
+    bag = await inventory_repo.list_bag_items(session, character.id)
+    skip_kinds = {"consumable", "rune", "material", "boss_trophy", "misc"}
+    home_bonus = home_service.home_disassemble_bonus(character)
+    totals: dict[str, int] = {}
+    processed = 0
+    for it in sorted(bag, key=lambda x: x.bag_slot or 0):
+        if processed >= int(limit):
+            break
+        if it.is_equipped:
+            continue
+        d = dict(it.item_data or {})
+        kind = str(d.get("kind") or "").lower()
+        if kind in skip_kinds:
+            continue
+        rar = str(d.get("rarity") or "common").lower()
+        if not _rarity_le(rar, max_rarity):
+            continue
+        count = mat_sys.disassemble_material_count(rar) + home_bonus
+        await inventory_repo.delete_inventory_item(session, it)
+        totals[rar] = totals.get(rar, 0) + count
+        processed += 1
+    if processed == 0:
+        return False, f"Нет вещей до редкости «{max_rarity}» для свипа."
+    for rar, cnt in totals.items():
+        await add_materials_to_bag(session, character.id, rar, cnt)
+    await session.flush()
+    breakdown = ", ".join(f"+{cnt} {html.escape(mat_sys.material_name(r))}" for r, cnt in totals.items())
+    return True, f"🧹 Свип-разбор: <b>{processed}</b> шт. → {breakdown}"
 
 
 async def try_enchant_equipped_weapon(

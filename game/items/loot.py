@@ -41,11 +41,11 @@ def roll_victory_item_payload(floor_number: int, spawn: FloorMonsterSpawn) -> di
 def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     elixir = {
         "name": "Настой странника",
-        "kind": "misc",
+        "kind": "consumable",
         "rarity": "common",
-        "use_tag": "heal_hp_flat",
-        "use_value": min(120, 22 + fl * 3),
-        "summary": "Восстанавливает HP после боя; можно применить в бою.",
+        "use_tag": "heal_hp_pct",
+        "use_value": min(35, 18 + fl // 6),
+        "summary": "В бою: восстанавливает % от макс. HP.",
         "image_url": item_gear_png("loot_elixir_flat"),
     }
     mp_vial = {
@@ -80,11 +80,11 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
 def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     elixir = {
         "name": "Флакон эликсира",
-        "kind": "misc",
+        "kind": "consumable",
         "rarity": "common",
-        "use_tag": "heal_hp_flat",
-        "use_value": min(140, 35 + fl * 3),
-        "summary": "Сильнее добычи с обычных целей.",
+        "use_tag": "heal_hp_pct",
+        "use_value": min(50, 25 + fl // 5),
+        "summary": "В бою: сильнее восстанавливает HP в процентах.",
         "image_url": item_gear_png("elite_elixir"),
     }
     ether = {
@@ -109,11 +109,11 @@ def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
 def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     bundle = {
         "name": "Запас претендента",
-        "kind": "misc",
+        "kind": "consumable",
         "rarity": "uncommon",
-        "use_tag": "heal_hp_flat",
-        "use_value": min(200, 55 + fl * 4),
-        "summary": "Мощное восстановление HP.",
+        "use_tag": "heal_hp_pct",
+        "use_value": min(60, 35 + fl // 4),
+        "summary": "В бою: мощное восстановление HP в процентах.",
         "image_url": item_gear_png("mini_bundle"),
     }
     mini_options: tuple[tuple[float, dict[str, Any]], ...] = (
