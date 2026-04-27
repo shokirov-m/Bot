@@ -475,6 +475,7 @@ async def try_brew_city_elixir(
         spend_for="Кузница: настой кузницы",
         spend_kind="forge",
     )
+    payload = {
         "name": "Настой кузницы",
         "kind": "consumable",
         "rarity": "common",
@@ -635,6 +636,7 @@ async def craft_rune_merge(
         spend_for=f"Кузница: слияние руны {el} ранг {target_rank}",
         spend_kind="forge",
     )
+    for it in found:
         await inventory_repo.delete_inventory_item(session, it)
 
     new_rune = rune_sys.RuneData(element=el, rank=target_rank)
