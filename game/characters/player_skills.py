@@ -5,7 +5,26 @@ from __future__ import annotations
 from typing import Any
 from db.models.character import Character
 from game.archetypes import manager as arch_manager
+from game.archetypes.models import PassiveV2
 from game.characters.skills import SkillDef, skills_for_class
+
+
+def skill_emoji(kind: str) -> str:
+    """⚔️ для физ. навыков, 🔮 для магических."""
+    return "🔮" if kind == "mag" else "⚔️"
+
+
+def passive_emoji(modifiers: dict) -> str:
+    """Эмодзи пассивки по типу модификатора."""
+    if "mag_bonus_percent" in modifiers:
+        return "🔮"
+    if "crit_bonus" in modifiers:
+        return "🎯"
+    if "dodge_bonus" in modifiers:
+        return "💨"
+    if "mp_regen_turn" in modifiers:
+        return "💧"
+    return "🛡️"
 
 # Compatibility shim: skills are now tree-based, not shop-based.
 # Populated lazily so it reflects all registered archetype skills.
@@ -75,6 +94,30 @@ def set_equipped_slot(character: Character, slot_index: int, skill_key: str | No
     meta["equipped_skill_keys"] = eq
     character.meta_progress = meta
     return True
+
+def learned_passives(character: Character) -> list[PassiveV2]:
+    """Все пассивки персонажа (из архетипа)."""
+    arch = arch_manager.get_character_archetype(character)
+    return list(arch.passives)
+
+
+def equipped_passive_key(character: Character) -> str | None:
+    """Ключ экипированной пассивки из meta_progress."""
+    meta = character.meta_progress or {}
+    return meta.get("equipped_passive_key") or None
+
+
+def set_passive_slot(character: Character, passive_key: str | None) -> bool:
+    """Экипировать пассивку в отдельный слот. None — снять."""
+    arch = arch_manager.get_character_archetype(character)
+    available_keys = {p.key for p in arch.passives}
+    if passive_key and passive_key not in available_keys:
+        return False
+    meta = dict(character.meta_progress or {})
+    meta["equipped_passive_key"] = passive_key or ""
+    character.meta_progress = meta
+    return True
+
 
 def try_buy_temple_skill(character: Character, skill_key: str) -> tuple[bool, str]:
     return False, "Навыки теперь открываются автоматически при выборе пути."

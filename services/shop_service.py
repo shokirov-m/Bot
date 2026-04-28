@@ -157,12 +157,16 @@ async def try_buy_good(
     if free is None:
         return False, "Не удалось найти свободный слот в сумке."
 
+    payload = copy.deepcopy(good.item_data)
     character_service.add_gold(
         character,
         -price,
         spend_for=f"Магазин: {good.name}",
         spend_kind="shop",
     )
+    if used_discount:
+        mp["merchant_discount_charges"] = disc_left - 1
+        character.meta_progress = mp
     await inventory_repo.add_bag_item(session, character.id, payload, bag_slot=free)
     await session.flush()
 

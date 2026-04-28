@@ -21,7 +21,11 @@ from config import settings
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
 from bot.keyboards.menu_kb import main_menu_keyboard
-from bot.keyboards.city_market_kb import profile_skills_main_keyboard, profile_skills_pick_keyboard
+from bot.keyboards.city_market_kb import (
+    profile_skills_main_keyboard,
+    profile_skills_pick_keyboard,
+    profile_passive_pick_keyboard,
+)
 from bot.keyboards.profile_kb import (
     profile_full_stats_keyboard,
     profile_pet_picker_keyboard,
@@ -45,8 +49,13 @@ from game.characters.player_skills import (
     SKILL_BY_KEY,
     ensure_skill_meta,
     equipped_skill_key_slots,
+    equipped_passive_key,
     learned_skill_keys,
+    learned_passives,
+    passive_emoji,
     set_equipped_slot,
+    set_passive_slot,
+    skill_emoji,
 )
 from game.characters.skills import passive_combat_modifiers_merged
 from game.characters.titles import TITLE_BY_KEY, format_title_bonus_brief
@@ -87,19 +96,40 @@ def clamp_profile_caption_for_photo(html: str, max_len: int = 1000) -> str:
 
 
 def build_skills_screen_html(char: Character, *, locale: str) -> str:
-    """Экран экипировки трёх боевых навыков (магия/физ. — как в combat engine)."""
+    """Экран экипировки трёх боевых навыков + слот пассивки."""
     loc = locale if locale in ("ru", "en") else "ru"
     ensure_skill_meta(char)
     slots = equipped_skill_key_slots(char)
     lines = [
         t(loc, "skills_screen_title"),
         "",
+        "<b>⚔️ Активные навыки:</b>",
     ]
     for i, key in enumerate(slots):
         sk = SKILL_BY_KEY.get(key) if key else None
-        nm = html.escape(sk.name) if sk else "—"
+        if sk:
+            emoji = skill_emoji(sk.kind)
+            nm = f"{emoji} {html.escape(sk.name)}"
+        else:
+            nm = "— (не выбран)"
         slot_label = html.escape(t(loc, "skills_slot_btn", n=i + 1))
-        lines.append(f"<b>{slot_label}</b>: {nm}")
+        lines.append(f"  <b>{slot_label}:</b> {nm}")
+
+    # Слот пассивки
+    lines.append("")
+    lines.append("<b>🛡️ Пассивный навык:</b>")
+    pas_key = equipped_passive_key(char)
+    if pas_key:
+        pas_list = {p.key: p for p in learned_passives(char)}
+        p = pas_list.get(pas_key)
+        if p:
+            em = passive_emoji(p.modifiers)
+            lines.append(f"  {em} {html.escape(p.name_ru)} — <i>{html.escape(p.description_ru)}</i>")
+        else:
+            lines.append("  — (не выбрана)")
+    else:
+        lines.append("  — (не выбрана)")
+
     lines.extend(["", t(loc, "skills_equip_hint")])
     return "\n".join(lines)
 
@@ -845,6 +875,9 @@ async def on_profile_stat_help(
     except Exception:
         logger.exception("prf:stathelp")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^prf:sk_slot:\d+$"))
 async def on_profile_skills_slot(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if callback.from_user is None or callback.message is None or callback.bot is None or callback.data is None:
@@ -855,7 +888,7 @@ async def on_profile_skills_slot(callback: CallbackQuery, session: AsyncSession,
             await callback.answer()
             return
         slot = int(m.group(1))
-        if slot not in (0, 1, 2):
+        if slot not in (0, 1, 2, 3):
             await callback.answer()
             return
         user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
@@ -867,15 +900,32 @@ async def on_profile_skills_slot(callback: CallbackQuery, session: AsyncSession,
             await callback.answer("Нет персонажа.", show_alert=True)
             return
         ensure_skill_meta(char)
-        learned = sorted(learned_skill_keys(char))
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+
+        # Слот 3 — выбор пассивки
+        if slot == 3:
+            passives = learned_passives(char)
+            if not passives:
+                await callback.answer("У тебя нет пассивных навыков.", show_alert=True)
+                return
+            await push_game_ui(
+                state, callback.bot,
+                chat_id=callback.message.chat.id,
+                text=build_skills_screen_html(char, locale=loc),
+                reply_markup=profile_passive_pick_keyboard(passives),
+                target_message=callback.message,
+                photo_path=None,
+            )
+            await callback.answer()
+            return
+
+        # Слоты 0-2 — выбор активного навыка
+        learned = sorted(learned_skill_keys(char))
         if not learned:
-            hint = "Сначала купи навыки в школе у храма на 3 этаже." if loc == "ru" else "Buy skills at the temple school on floor 3."
-            await callback.answer(hint, show_alert=True)
+            await callback.answer("Нет разблокированных навыков.", show_alert=True)
             return
         await push_game_ui(
-            state,
-            callback.bot,
+            state, callback.bot,
             chat_id=callback.message.chat.id,
             text=build_skills_screen_html(char, locale=loc),
             reply_markup=profile_skills_pick_keyboard(slot=slot, learned_keys=learned),
@@ -900,7 +950,7 @@ async def on_profile_skills_equip(callback: CallbackQuery, session: AsyncSession
             return
         slot = int(m.group(1))
         skill_key = m.group(2).strip()
-        if slot not in (0, 1, 2):
+        if slot not in (0, 1, 2, 3):
             await callback.answer()
             return
         user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
@@ -912,6 +962,25 @@ async def on_profile_skills_equip(callback: CallbackQuery, session: AsyncSession
             await callback.answer("Нет персонажа.", show_alert=True)
             return
         ensure_skill_meta(char)
+
+        if slot == 3:
+            # Экипировка пассивки
+            if not set_passive_slot(char, skill_key):
+                await callback.answer("Эта пассивка недоступна.", show_alert=True)
+                return
+            await session.flush()
+            loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+            await push_game_ui(
+                state, callback.bot,
+                chat_id=callback.message.chat.id,
+                text=build_skills_screen_html(char, locale=loc),
+                reply_markup=profile_skills_main_keyboard(locale=loc),
+                target_message=callback.message,
+                photo_path=None,
+            )
+            await callback.answer("🛡️ Пассивка выбрана!")
+            return
+
         if not set_equipped_slot(char, slot, skill_key):
             await callback.answer("Нельзя назначить этот навык.", show_alert=True)
             return
@@ -927,7 +996,7 @@ async def on_profile_skills_equip(callback: CallbackQuery, session: AsyncSession
             target_message=callback.message,
             photo_path=None,
         )
-        await callback.answer()
+        await callback.answer("✅ Навык экипирован!")
     except Exception:
         logger.exception("prf:sk_eq")
         await callback.answer("Ошибка.", show_alert=True)

@@ -10,7 +10,10 @@ from game.characters.player_skills import (
     SKILL_BY_KEY,
     TEMPLE_SKILL_PRICES_GOLD,
     learned_skill_keys,
+    passive_emoji,
+    skill_emoji,
 )
+from game.archetypes.models import PassiveV2
 
 
 def city_floor3_market_keyboard(floor_number: int) -> InlineKeyboardMarkup:
@@ -79,15 +82,18 @@ def temple_skills_shop_keyboard(floor_number: int, character: Character) -> Inli
 
 
 def profile_skills_pick_keyboard(*, slot: int, learned_keys: list[str]) -> InlineKeyboardMarkup:
+    """Список активных навыков для выбора в слот."""
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
     for k in learned_keys:
         sk = SKILL_BY_KEY.get(k)
         if sk is None:
             continue
+        emoji = skill_emoji(sk.kind)
+        label = f"{emoji} {sk.name}"[:20]
         row.append(
             InlineKeyboardButton(
-                text=str(sk.name)[:18],
+                text=label,
                 callback_data=f"prf:sk_eq:{slot}:{k}",
             ),
         )
@@ -96,7 +102,22 @@ def profile_skills_pick_keyboard(*, slot: int, learned_keys: list[str]) -> Inlin
             row = []
     if row:
         rows.append(row)
-    rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data="prf:skills")])
+    rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data="prf:skills_equip")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def profile_passive_pick_keyboard(passives: list[PassiveV2]) -> InlineKeyboardMarkup:
+    """Список пассивок для выбора в слот пассивки."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for p in passives:
+        emoji = passive_emoji(p.modifiers)
+        label = f"{emoji} {p.name_ru}"[:24]
+        rows.append([InlineKeyboardButton(
+            text=label,
+            callback_data=f"prf:sk_eq:3:{p.key}",
+        )])
+    rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data="prf:skills_equip")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -111,6 +132,9 @@ def profile_skills_main_keyboard(*, locale: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=t(loc, "skills_slot_btn", n=1), callback_data="prf:sk_slot:0"),
                 InlineKeyboardButton(text=t(loc, "skills_slot_btn", n=2), callback_data="prf:sk_slot:1"),
                 InlineKeyboardButton(text=t(loc, "skills_slot_btn", n=3), callback_data="prf:sk_slot:2"),
+            ],
+            [
+                InlineKeyboardButton(text="🛡️ Пассивка", callback_data="prf:sk_slot:3"),
             ],
             [InlineKeyboardButton(text=t(loc, "profile_back_compact"), callback_data="prf:back")],
             menu_nav_button_row(),

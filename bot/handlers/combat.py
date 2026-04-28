@@ -98,6 +98,11 @@ async def on_combat_callback(
         parts = query.data.split(":")
         code = parts[1] if len(parts) > 1 else ""
 
+        # Информационная кнопка (пассивка в бою) — просто закрыть тост
+        if code == "noop":
+            await query.answer()
+            return
+
         action = code
         skill_index: int | None = None
         item_id: int | None = None

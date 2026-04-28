@@ -12,6 +12,7 @@ from bot.keyboards.home_kb import (
     alchemy_keyboard,
     home_main_keyboard,
     library_keyboard,
+    mine_farm_keyboard,
     wardrobe_keyboard,
     wardrobe_preview_keyboard,
     workbench_keyboard,
@@ -110,8 +111,7 @@ async def home_mine_menu(callback: CallbackQuery, session: AsyncSession, state: 
         if not home_service.is_mine_unlocked(char):
             await callback.answer("Шахта откроется на ур. 4 дома.", show_alert=True)
             return
-            
-        from bot.keyboards.home_kb import mine_farm_keyboard
+
         await callback.message.edit_text(
             home_service.format_mine_farm_menu_html(char),
             parse_mode="HTML",
@@ -133,7 +133,6 @@ async def home_mine_buy(callback: CallbackQuery, session: AsyncSession, state: F
             await callback.answer(msg, show_alert=True)
             return
         await session.flush()
-        from bot.keyboards.home_kb import mine_farm_keyboard
         await callback.message.edit_text(
             home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
             parse_mode="HTML",
@@ -154,7 +153,6 @@ async def home_npc_hire(callback: CallbackQuery, session: AsyncSession, state: F
             await callback.answer(msg, show_alert=True)
             return
         await session.flush()
-        from bot.keyboards.home_kb import mine_farm_keyboard
         await callback.message.edit_text(
             home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
             parse_mode="HTML",
@@ -175,7 +173,6 @@ async def home_mine_upgrade(callback: CallbackQuery, session: AsyncSession, stat
             await callback.answer(msg, show_alert=True)
             return
         await session.flush()
-        from bot.keyboards.home_kb import mine_farm_keyboard
         await callback.message.edit_text(
             home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
             parse_mode="HTML",

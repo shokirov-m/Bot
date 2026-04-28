@@ -445,7 +445,10 @@ async def try_donate_gold(
     payload["treasury_gold"] = cur + actual
     pts = max(1, actual // 1000)
     await clan_repo.add_contribution(session, m, pts)
-    _add_event(payload, f"{html.escape(character.display_name)} пожертвовал {actual:,} 💰 (вклад +{pts})")
+    _add_event(
+        payload,
+        f"{html.escape(str(character.display_name or '?'))} пожертвовал {actual:,} 💰 (вклад +{pts})",
+    )
     await clan_repo.update_payload(session, clan, payload)
     return True, f"💰 Внесено <b>{actual:,}</b> в казну клана. Вклад +{pts}."
 
