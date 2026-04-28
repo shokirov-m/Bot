@@ -79,7 +79,7 @@ def pop_next_win_xp_multiplier(character: Any) -> float:
 
 def lottery_ticket_cost_gold(floor_number: int) -> int:
     """Цена билета растёт с «весом» города (этаж хаба)."""
-    f = max(3, min(100, int(floor_number)))
+    f = max(3, min(135, int(floor_number)))
     base = 24 + (f // 2) + (f // 10) * 6
     return int(base * 1.06)
 

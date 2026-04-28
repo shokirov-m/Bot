@@ -169,8 +169,8 @@ def _two_quests_for_floor(floor: int) -> list[QuestTemplate]:
 
 
 def generate_quest_pool() -> dict[int, list[QuestTemplate]]:
-    """Квесты для каждого этажа 3, 6, …, 99."""
-    return {f: _two_quests_for_floor(f) for f in range(3, 100, 3)}
+    """Квесты для каждого этажа 3, 6, …, 135."""
+    return {f: _two_quests_for_floor(f) for f in range(3, 136, 3)}
 
 
 @lru_cache(maxsize=1)
@@ -179,7 +179,7 @@ def quest_pool() -> dict[int, list[QuestTemplate]]:
 
 
 def templates_for_floor(floor: int) -> list[QuestTemplate]:
-    if floor <= 0 or floor % 3 != 0 or floor >= 100:
+    if floor <= 0 or floor % 3 != 0 or floor > 135:
         return []
     return list(quest_pool().get(floor, []))
 

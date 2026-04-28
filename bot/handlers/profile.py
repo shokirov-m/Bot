@@ -416,7 +416,7 @@ def _build_profile_text(
     lines.extend(
         [
             elem_ln,
-            f"📍 Этаж: {char.floor_number} / 100 · открыто до: {int(char.highest_floor_reached)}",
+            f"📍 Этаж: {char.floor_number} / 135 · открыто до: {int(char.highest_floor_reached)}",
         ],
     )
     return "\n".join(lines)

@@ -1082,8 +1082,8 @@ async def _apply_tower_progress_after_victory(
     if not needed.issubset(set(cleared)):
         return ""
 
-    if cur >= 100:
-        character.highest_floor_reached = max(int(character.highest_floor_reached), 100)
+    if cur >= 135:
+        character.highest_floor_reached = max(int(character.highest_floor_reached), 135)
         extra["slots_cleared"] = []
         row.extra = extra
         return "\n👁️ <b>Вершина башни:</b> страж повержен."
@@ -1106,10 +1106,39 @@ async def _apply_tower_progress_after_victory(
     room_next = floor_data.epithet_for_floor(zone_next, nxt)
     return (
         f"\n🪜 <b>Этаж зачищен!</b>\n"
-        f"Поднимись на <b>{nxt}</b> / 100 — <i>{html.escape(room_next)}</i> "
+        f"Поднимись на <b>{nxt}</b> / 135 — <i>{html.escape(room_next)}</i> "
         f"(кнопка «Следующий этаж» или ⬆️ Выше).\n"
         f"<i>{html.escape(zone_next.description)}</i>"
     )
+
+
+def _add_faction_reputation(character: Character, floor_number: int, amount: int = 10) -> str:
+    """Добавляет репутацию фракции после победы на этаже Войны Фракций."""
+    from game.floors.floor_data import get_zone_floor_type, get_zone_raw, get_zone_for_floor
+    if get_zone_floor_type(floor_number) != "faction_war":
+        return ""
+    zone = get_zone_for_floor(floor_number)
+    zone_raw = get_zone_raw(floor_number)
+    factions = zone_raw.get("factions", {})
+    mp = dict(character.meta_progress or {})
+    chosen = mp.get(f"faction_choice_{zone.key}")
+    if not chosen or chosen not in factions:
+        return ""
+    fac = factions[chosen]
+    rep_key = f"faction_rep_{zone.key}"
+    rep_data = dict(mp.get(rep_key) or {})
+    old_rep = int(rep_data.get(chosen, 0))
+    new_rep = old_rep + amount
+    rep_data[chosen] = new_rep
+    mp[rep_key] = rep_data
+    character.meta_progress = mp
+    req = int(zone_raw.get("reputation_required", 1000))
+    if old_rep < req <= new_rep:
+        return (
+            f"\n⚔️ <b>Репутация {fac['emoji']} {fac['name']}:</b> {new_rep}/{req} ✅ "
+            f"Генерал готов к бою!"
+        )
+    return f"\n⚔️ <b>Репутация {fac['emoji']}:</b> {new_rep}/{req}"
 
 
 def _apply_mastery_combat_bonuses(character: Character, combat_state: dict[str, Any]) -> None:
@@ -1599,6 +1628,7 @@ async def _victory_sequence(
     mname = html.escape(str(combat_state.get("monster", {}).get("name", "Враг")))
     floor_before = int(character.floor_number)
     old_highest_reached = int(character.highest_floor_reached)
+    faction_rep_note = _add_faction_reputation(character, floor_before)
     floor_banner = await _apply_tower_progress_after_victory(session, character, spawn)
     floor_after = int(character.floor_number)
     new_highest_reached = int(character.highest_floor_reached)
@@ -1713,6 +1743,8 @@ async def _victory_sequence(
             )
             if (floor_banner or "").strip():
                 gg_body += floor_banner
+            if faction_rep_note:
+                gg_body += faction_rep_note
             gg_body += f"{ml_debt_note}{gg_tail}"
             await _safe_edit_combat_message_text(
                 state,
@@ -1742,6 +1774,7 @@ async def _victory_sequence(
                 if is_last:
                     suffix = (
                         floor_banner
+                        + faction_rep_note
                         + level_battle_suffix
                         + quest_suffix
                         + city_suffix

@@ -12,7 +12,7 @@ from utils.image_assets import item_gear_png
 
 
 def _clamp_floor(floor_number: int) -> int:
-    return max(1, min(100, int(floor_number)))
+    return max(1, min(135, int(floor_number)))
 
 
 def _weighted_payload(options: tuple[tuple[float, dict[str, Any]], ...]) -> dict[str, Any]:

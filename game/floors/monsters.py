@@ -113,8 +113,8 @@ def mini_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterT
 
 def major_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterTemplate:
     """Сильный босс на каждом 10-м этаже."""
-    # Для этажа 100 — финальный страж
-    if floor_number >= 100:
+    # Для этажа 135 — финальный страж
+    if floor_number >= 135:
         return _template("boss_tower_core")
     table: dict[str, str] = {
         "forest_beginnings": "boss_ancient_treant",
@@ -126,6 +126,9 @@ def major_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> Monster
         "sky_citadel": "boss_sky_tyrant",
         "chaos_abyss": "boss_chaos_avatar",
         "eternity_hall": "boss_eternity_judge",
+        "jade_labyrinth": "boss_eternity_judge",
+        "frozen_wastes": "boss_chaos_avatar",
+        "faction_war_plains": "boss_eternity_judge",
     }
     return _template(table.get(zone.key, table["forest_beginnings"]))
 
@@ -138,7 +141,7 @@ def build_spawns_for_floor(floor_number: int) -> list[FloorMonsterSpawn]:
     # Этаж 3 — только город-хаб: боёв на карте нет (монстры, тайник, привал — убраны с экрана).
     if int(floor_number) == 3:
         return []
-    if floor_number >= 100:
+    if floor_number >= 135:
         zone = floor_data.ZONE_FINAL
         bb = major_boss_for_zone(zone, floor_number)
         return [

@@ -162,7 +162,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "lang_set": "Язык интерфейса (меню): <b>{lang}</b>",
         "daily_header": "📅 <b>Ежедневка</b>",
         "hub_title": "🏰 <b>Башня — штаб</b>",
-        "hub_floor_line": "📍 Этаж <b>{floor}</b> / 100 · Ур. <b>{level}</b>",
+        "hub_floor_line": "📍 Этаж <b>{floor}</b> / 135 · Ур. <b>{level}</b>",
         "hub_rank_line": "🎖️ Звание: <b>{rank}</b>",
         "hub_title_line": "🏆 Титул: <b>{title}</b>",
         "hub_pet_line": (
@@ -474,7 +474,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "lang_set": "Menu language: <b>{lang}</b>",
         "daily_header": "📅 <b>Daily reward</b>",
         "hub_title": "🏰 <b>Tower — HQ</b>",
-        "hub_floor_line": "📍 Floor <b>{floor}</b> / 100 · Lv. <b>{level}</b>",
+        "hub_floor_line": "📍 Floor <b>{floor}</b> / 135 · Lv. <b>{level}</b>",
         "hub_rank_line": "🎖️ Path rank: <b>{rank}</b>",
         "hub_title_line": "🏆 Title: <b>{title}</b>",
         "hub_pet_line": (

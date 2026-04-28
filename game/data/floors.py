@@ -85,13 +85,78 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
     },
 )
 
+
+# Тип этажа: "normal" | "survival" | "faction_war"
+# survival: глобальный дебафф — нужен защитный предмет
+# faction_war: война фракций — 1000 репутации для вызова босса
+
+ZONES_RAW = ZONES_RAW + (
+    {
+        "key": "jade_labyrinth",
+        "name": "Нефритовый Лабиринт",
+        "emoji": "💚",
+        "floor_from": 101,
+        "floor_to": 110,
+        "description": "Запутанные залы нефритового храма. Слепые стражи и ловушки древних мудрецов.",
+        "floor_type": "normal",
+    },
+    {
+        "key": "frozen_wastes",
+        "name": "Морозные Пустоши",
+        "emoji": "🥶",
+        "floor_from": 111,
+        "floor_to": 120,
+        "description": (
+            "Выживание: смертельный холод отнимает HP каждую минуту. "
+            "Для защиты нужен Амулет Тепла (алхимик в Городе Новичков)."
+        ),
+        "floor_type": "survival",
+        "debuff": {
+            "kind": "hp_decay",
+            "hp_per_min": 50,
+            "protection_item": "warmth_amulet",
+            "protection_item_name": "Амулет Тепла",
+            "damage_reduction": 0.0,
+        },
+    },
+    {
+        "key": "faction_war_plains",
+        "name": "Поля Вечной Войны",
+        "emoji": "⚔️",
+        "floor_from": 121,
+        "floor_to": 134,
+        "description": "Война Фракций: Эльфы Света vs Орки Крови. Выбери сторону и набери 1000 репутации чтобы вызвать генерала.",
+        "floor_type": "faction_war",
+        "factions": {
+            "light_elves": {
+                "name": "Эльфы Света",
+                "emoji": "🧝",
+                "enemy_key": "blood_orcs",
+                "reward_passive": "elven_grace",
+                "reward_passive_name": "Эльфийская Грация",
+                "reward_passive_desc": "+15% уклонение, +10% к скорости атаки",
+            },
+            "blood_orcs": {
+                "name": "Орки Крови",
+                "emoji": "👹",
+                "enemy_key": "light_elves",
+                "reward_passive": "orc_fury",
+                "reward_passive_name": "Ярость Орков",
+                "reward_passive_desc": "+20% физ. урон, +15% к максимальному HP",
+            },
+        },
+        "reputation_required": 1000,
+    },
+)
+
 ZONE_FINAL_RAW: dict[str, Any] = {
     "key": "tower_warden",
     "name": "Страж Башни",
     "emoji": "👁️",
-    "floor_from": 100,
-    "floor_to": 100,
+    "floor_from": 135,
+    "floor_to": 135,
     "description": "Финальный страж. Три фазы, легендарный лут.",
+    "floor_type": "normal",
 }
 
 CITIES_RAW: dict[int, dict[str, Any]] = {

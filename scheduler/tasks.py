@@ -127,6 +127,19 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         replace_existing=True,
     )
 
+    async def job_survival_decay() -> None:
+        try:
+            await task_survival_floor_hp_decay(bot)
+        except Exception:
+            logger.exception("[SURVIVAL] Ошибка задачи HP-урон на этажах выживания")
+
+    scheduler.add_job(
+        job_survival_decay,
+        IntervalTrigger(minutes=1),
+        id="tower_survival_hp_decay",
+        replace_existing=True,
+    )
+
 
 def schedule_rest_completion_notification(
     bot: Bot,
@@ -222,6 +235,48 @@ async def task_stamina_regen() -> None:
         logger.info("[STAMINA] Восстановлено у {} игроков", count)
     except Exception:
         logger.exception("[STAMINA] Ошибка задачи восстановления")
+
+
+async def task_survival_floor_hp_decay(bot: Bot) -> None:
+    """HP-урон каждую минуту для игроков на этажах выживания (111-120) без защитного предмета."""
+    from db.database import get_session_factory
+    from db.models.character import Character
+    from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+
+    # Survival zone: floors 111-120 (frozen_wastes)
+    SURVIVAL_FLOOR_FROM = 111
+    SURVIVAL_FLOOR_TO = 120
+
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            result = await session.execute(
+                select(Character).where(
+                    Character.floor_number >= SURVIVAL_FLOOR_FROM,
+                    Character.floor_number <= SURVIVAL_FLOOR_TO,
+                    Character.hp_current > 1,
+                )
+            )
+            chars = list(result.scalars().all())
+            if not chars:
+                return
+            affected = 0
+            for char in chars:
+                zone = get_zone_for_floor(int(char.floor_number))
+                zone_raw = get_zone_raw(int(char.floor_number))
+                debuff = zone_raw.get("debuff", {})
+                mp = dict(char.meta_progress or {})
+                if mp.get(f"survival_prot_{zone.key}"):
+                    continue
+                hp_loss = int(debuff.get("hp_per_min", 50))
+                char.hp_current = max(1, int(char.hp_current) - hp_loss)
+                affected += 1
+            if affected:
+                await session.commit()
+                logger.info("[SURVIVAL] HP-урон {} HP применён к {} игрокам на этажах выживания",
+                            hp_loss, affected)
+    except Exception:
+        logger.exception("[SURVIVAL] Ошибка задачи HP-урон выживания")
 
 
 async def task_passive_hp_mp_full() -> None:

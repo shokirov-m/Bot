@@ -7,7 +7,7 @@ from __future__ import annotations
 
 
 def _fl(floor_number: int) -> int:
-    return max(1, min(100, int(floor_number)))
+    return max(1, min(135, int(floor_number)))
 
 
 # --- Общие куски (обычный лут, fl <= 12) ---

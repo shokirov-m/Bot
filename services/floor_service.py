@@ -197,7 +197,7 @@ def _format_floor3_city_only(character: Character) -> str:
         lines.append(
             "🌑 <b>[НОЧЬ UTC]</b> <i>На боевых ярусах враги сильнее; здесь — безопасная зона.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  {zone.emoji} <b>{html.escape(zone.name)}</b>")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  {zone.emoji} <b>{html.escape(zone.name)}</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if city:
         lines.append(
@@ -223,7 +223,7 @@ def _format_explore_floor_4_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  🌿 <b>Лес Начал</b>")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  🌿 <b>Лес Начал</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
         "<i>Густой лес хранит тайны. Исследуй чащу, находи добычу и сразись "
@@ -248,7 +248,7 @@ def _format_explore_floor_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  🗻 <b>Пещера Первородных</b>")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  🗻 <b>Пещера Первородных</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
         "<i>Тёмная пещера скрывает множество тайн. Исследуй каждый угол, "
@@ -273,7 +273,7 @@ def _format_explore_floor_22_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  🕳️ <b>Пещеры Теней</b>")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  🕳️ <b>Пещеры Теней</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
         "<i>Тьма здесь живая. Каждый шаг — риск. Исследуй пещеру, "
@@ -312,7 +312,7 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>. Играй с оглядкой.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 100  {zone.emoji} <b>{html.escape(zone.name)}</b>")
+    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  {zone.emoji} <b>{html.escape(zone.name)}</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if not long_floor_mod.is_long_floor_active(character):
         zd = zone.description
@@ -363,6 +363,53 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
 
     if rotten_swamps_mod.is_rotten_swamps_zone(n):
         lines.append("🌿 <b>Болота:</b> туман −5 HP перед боем · пиявки · лагерь (кнопка).")
+
+    # Survival floor banner (frozen_wastes, floors 111-120)
+    floor_type = floor_data.get_zone_floor_type(n)
+    if floor_type == "survival":
+        zone_raw = floor_data.get_zone_raw(n)
+        debuff = zone_raw.get("debuff", {})
+        prot_name = debuff.get("protection_item_name", "защитный предмет")
+        hp_loss = debuff.get("hp_per_min", 50)
+        mp = dict(character.meta_progress or {})
+        has_protection = bool(mp.get(f"survival_prot_{zone.key}"))
+        if has_protection:
+            lines.append(f"🧊 <b>Выживание:</b> защита активна ✅ (−{hp_loss} HP/мин без неё).")
+        else:
+            lines.append(
+                f"🥶 <b>⚠️ ВЫЖИВАНИЕ:</b> каждую минуту −{hp_loss} HP от холода! "
+                f"Скрафти <b>{html.escape(prot_name)}</b> у алхимика, чтобы защититься."
+            )
+
+    # Faction war floor banner (faction_war_plains, floors 121-134)
+    if floor_type == "faction_war":
+        zone_raw = floor_data.get_zone_raw(n)
+        factions = zone_raw.get("factions", {})
+        req = zone_raw.get("reputation_required", 1000)
+        mp = dict(character.meta_progress or {})
+        chosen = mp.get(f"faction_choice_{zone.key}")
+        rep_data = mp.get(f"faction_rep_{zone.key}", {})
+        if chosen and chosen in factions:
+            fac = factions[chosen]
+            rep = int(rep_data.get(chosen, 0))
+            enemy_fac = factions.get(fac.get("enemy_key", ""), {})
+            enemy_name = enemy_fac.get("name", "враг")
+            if rep >= req:
+                lines.append(
+                    f"⚔️ <b>Война Фракций</b> — {fac['emoji']} {fac['name']}: "
+                    f"репутация <b>{rep}/{req}</b> ✅ Генерал доступен! (босс-кнопка)"
+                )
+            else:
+                lines.append(
+                    f"⚔️ <b>Война Фракций</b> — {fac['emoji']} {fac['name']}: "
+                    f"репутация <b>{rep}/{req}</b> · убивай {html.escape(enemy_name)}."
+                )
+        else:
+            fac_list = " / ".join(f"{v['emoji']} {v['name']}" for v in factions.values())
+            lines.append(
+                f"⚔️ <b>Война Фракций:</b> выбери сторону — {fac_list}. "
+                f"(кнопка «Выбрать фракцию»)"
+            )
 
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi}")

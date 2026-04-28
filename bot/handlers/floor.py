@@ -422,6 +422,114 @@ async def on_floor_callback(
             await query.answer()
             return
 
+        if code == "survival_info":
+            from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+            zone_s = get_zone_for_floor(floor)
+            zone_raw_s = get_zone_raw(floor)
+            debuff_s = zone_raw_s.get("debuff", {})
+            prot_name_s = debuff_s.get("protection_item_name", "защитный предмет")
+            hp_s = debuff_s.get("hp_per_min", 50)
+            mp_s = dict(char.meta_progress or {})
+            has_prot_s = bool(mp_s.get(f"survival_prot_{zone_s.key}"))
+            if has_prot_s:
+                await query.answer(
+                    f"🛡️ Защита активна! {prot_name_s} защищает тебя от −{hp_s} HP/мин холода.",
+                    show_alert=True,
+                )
+            else:
+                await query.answer(
+                    f"🥶 Смертельный холод! Каждую минуту −{hp_s} HP.\n"
+                    f"Скрафти «{prot_name_s}» у алхимика в городе (действует 12ч).",
+                    show_alert=True,
+                )
+            return
+
+        if code == "faction_choose":
+            from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+            zone_fw = get_zone_for_floor(floor)
+            zone_raw_fw = get_zone_raw(floor)
+            factions_fw = zone_raw_fw.get("factions", {})
+            if not factions_fw:
+                await query.answer("Нет данных о фракциях.", show_alert=True)
+                return
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            btn_rows = []
+            for fkey, fdata in factions_fw.items():
+                btn_rows.append([InlineKeyboardButton(
+                    text=f"{fdata['emoji']} {fdata['name']} — {fdata.get('reward_passive_desc', '')}",
+                    callback_data=f"fl:{floor}:faction_join:{fkey}",
+                )])
+            btn_rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data=f"fl:{floor}:back")])
+            kb_fw = InlineKeyboardMarkup(inline_keyboard=btn_rows)
+            if query.message:
+                from aiogram.enums import ParseMode
+                fac_list = "\n".join(
+                    f"{fd['emoji']} <b>{fd['name']}</b>\n"
+                    f"  • Пассивка за верность: <i>{fd.get('reward_passive_desc', '?')}</i>"
+                    for fd in factions_fw.values()
+                )
+                req_fw = zone_raw_fw.get("reputation_required", 1000)
+                txt = (
+                    f"⚔️ <b>Война Фракций — {zone_fw.name}</b>\n\n"
+                    f"Убивай врагов выбранной фракции, чтобы набрать <b>{req_fw}</b> репутации.\n"
+                    f"Достигнув порога, сможешь вызвать Генерала — финального босса этажа.\n\n"
+                    f"<b>Фракции:</b>\n{fac_list}\n\n"
+                    f"<i>Выбор постоянный для этой зоны.</i>"
+                )
+                from bot.utils.game_ui import push_game_ui
+                await push_game_ui(state, query.bot, chat_id=query.message.chat.id,
+                                   text=txt, reply_markup=kb_fw, target_message=query.message)
+            await query.answer()
+            return
+
+        if code.startswith("faction_join:"):
+            faction_key = code.split(":", 1)[1]
+            from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+            zone_fw2 = get_zone_for_floor(floor)
+            zone_raw_fw2 = get_zone_raw(floor)
+            factions_fw2 = zone_raw_fw2.get("factions", {})
+            if faction_key not in factions_fw2:
+                await query.answer("Неизвестная фракция.", show_alert=True)
+                return
+            mp_fw2 = dict(char.meta_progress or {})
+            existing_choice = mp_fw2.get(f"faction_choice_{zone_fw2.key}")
+            if existing_choice:
+                fac_name = factions_fw2.get(existing_choice, {}).get("name", existing_choice)
+                await query.answer(f"Ты уже выбрал: {fac_name}. Смена невозможна.", show_alert=True)
+                return
+            mp_fw2[f"faction_choice_{zone_fw2.key}"] = faction_key
+            char.meta_progress = mp_fw2
+            await session.flush()
+            fac_name2 = factions_fw2[faction_key]["name"]
+            fac_emoji2 = factions_fw2[faction_key]["emoji"]
+            await query.answer(f"✅ Ты вступил в {fac_emoji2} {fac_name2}! Убивай врагов для репутации.", show_alert=True)
+            if query.message:
+                await push_floor_screen_ui(
+                    session, state, query.bot,
+                    chat_id=query.message.chat.id, character=char,
+                    reply_markup=await floor_keyboard_for_character(session, char),
+                    target_message=query.message,
+                )
+            return
+
+        if code.startswith("faction_boss:"):
+            faction_key_boss = code.split(":", 1)[1]
+            from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+            zone_bw = get_zone_for_floor(floor)
+            zone_raw_bw = get_zone_raw(floor)
+            factions_bw = zone_raw_bw.get("factions", {})
+            req_bw = int(zone_raw_bw.get("reputation_required", 1000))
+            if faction_key_boss not in factions_bw:
+                await query.answer("Неизвестная фракция.", show_alert=True)
+                return
+            mp_bw = dict(char.meta_progress or {})
+            rep_bw = int(mp_bw.get(f"faction_rep_{zone_bw.key}", {}).get(faction_key_boss, 0))
+            if rep_bw < req_bw:
+                await query.answer(f"Нужно {req_bw} репутации. У тебя: {rep_bw}.", show_alert=True)
+                return
+            # Start boss fight with faction general (use eternity_judge boss as placeholder)
+            code = "b"  # route to major boss fight
+
         if code == "ascend":
             if query.message is None:
                 await query.answer()

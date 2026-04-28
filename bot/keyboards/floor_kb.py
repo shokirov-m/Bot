@@ -110,6 +110,36 @@ def floor_screen_keyboard(
             ],
         )
 
+    # Survival floor button (frozen_wastes, floors 111-120)
+    if floor_data.get_zone_floor_type(floor_number) == "survival":
+        mp_s = dict(character.meta_progress or {})
+        zone_s = floor_data.get_zone_for_floor(floor_number)
+        has_prot_s = bool(mp_s.get(f"survival_prot_{zone_s.key}"))
+        surv_lbl = "🛡️ Защита от холода ✅" if has_prot_s else "🥶 ⚠️ Нет защиты (инфо)"
+        rows.append([InlineKeyboardButton(text=surv_lbl, callback_data=_cb(floor_number, "survival_info"))])
+
+    # Faction war floor button (faction_war_plains, floors 121-134)
+    if floor_data.get_zone_floor_type(floor_number) == "faction_war":
+        mp_fw = dict(character.meta_progress or {})
+        zone_fw = floor_data.get_zone_for_floor(floor_number)
+        chosen_fw = mp_fw.get(f"faction_choice_{zone_fw.key}")
+        zone_raw_fw = floor_data.get_zone_raw(floor_number)
+        req_fw = int(zone_raw_fw.get("reputation_required", 1000))
+        factions_fw = zone_raw_fw.get("factions", {})
+        if chosen_fw and chosen_fw in factions_fw:
+            fac_fw = factions_fw[chosen_fw]
+            rep_fw = int(mp_fw.get(f"faction_rep_{zone_fw.key}", {}).get(chosen_fw, 0))
+            if rep_fw >= req_fw:
+                rows.append([InlineKeyboardButton(
+                    text=f"⚔️ Вызвать Генерала {fac_fw['emoji']}",
+                    callback_data=_cb(floor_number, f"faction_boss:{chosen_fw}"),
+                )])
+        else:
+            rows.append([InlineKeyboardButton(
+                text="⚔️ Выбрать фракцию",
+                callback_data=_cb(floor_number, "faction_choose"),
+            )])
+
     wnpc = None if floor_number == 3 else wandering_npcs_mod.wandering_npc_for_floor(
         int(character.id),
         floor_number,

@@ -436,7 +436,8 @@ async def try_donate_gold(
     actual = min(amount, limit - cur)
     if actual <= 0:
         return False, f"Казна переполнена ({cur:,}/{limit:,} 💰). Сначала обновите клан или постройте сокровищницу."
-    character_service.add_gold(
+    from services import character_service as _csvc
+    _csvc.add_gold(
         character,
         -actual,
         spend_for=f"Клан «{clan.name}»: взнос в казну",

@@ -247,7 +247,7 @@ def roll_rune_drop(floor: int, is_boss: bool) -> RuneData | None:
     """Случайная руна с весами ранга по этажу; is_boss поднимает верхнюю границу ранга."""
     if random.random() > 0.08:
         return None
-    f = max(1, min(100, int(floor)))
+    f = max(1, min(135, int(floor)))
     if f <= 20:
         lo, hi = 1, 2
     elif f <= 60:

@@ -449,7 +449,7 @@ async def try_enchant_equipped_weapon(
 
 
 def brew_elixir_cost_gold(floor_number: int) -> int:
-    f = max(1, min(100, int(floor_number)))
+    f = max(1, min(135, int(floor_number)))
     return 20 + min(f, 60) // 3
 
 

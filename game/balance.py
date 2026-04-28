@@ -12,6 +12,10 @@ PROGRESSION_LEVEL1_XP_NEEDED = 100
 PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2 = 4
 
 # Верхняя граница этажа зоны → множитель опыта (как в ТЗ)
+# Максимальный этаж башни
+MAX_FLOOR = 135
+
+# Верхняя граница этажа зоны → множитель опыта (как в ТЗ)
 ZONE_MULTIPLIER_BY_MAX_FLOOR: tuple[tuple[int, float], ...] = (
     (15, 1.0),
     (25, 2.5),
@@ -19,7 +23,8 @@ ZONE_MULTIPLIER_BY_MAX_FLOOR: tuple[tuple[int, float], ...] = (
     (60, 7.0),
     (80, 12.0),
     (99, 20.0),
-    (10_000, 25.0),
+    (115, 30.0),
+    (10_000, 38.0),
 )
 
 # --- Награды за победу (золото / опыт / шансы) ---
