@@ -53,9 +53,9 @@ CITIES: dict[int, CityInfo] = {
 }
 
 # Быстрый переход через меню «Портал»
-# Города-хабы (3/31/61/91/121), сюжетные этажи (8/10) и кратные 5 (5..135).
+# Города-хабы (1/31/61/91/121), сюжетные этажи (8/10) и кратные 5 (5..135).
 PORTAL_DESTINATION_FLOORS: tuple[int, ...] = tuple(
-    sorted({3, 8, 10, 31, 61, 91, 121} | {f for f in range(5, 136, 5)}),
+    sorted({1, 8, 10, 31, 61, 91, 121} | {f for f in range(5, 136, 5)}),
 )
 
 # Уникальные «комнаты» внутри зоны — циклически по этажу
@@ -249,8 +249,8 @@ def has_quest_npc(floor_number: int) -> bool:
 
 
 def has_trader(floor_number: int) -> bool:
-    """Торговец на 3 этаже (лавка снаряжения) и на каждом 5-м."""
-    if floor_number == 3:
+    """Торговец на 1 этаже (лавка снаряжения) и на каждом 5-м."""
+    if floor_number == 1:
         return True
     return floor_number > 0 and floor_number % 5 == 0
 

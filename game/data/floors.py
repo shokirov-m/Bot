@@ -1,4 +1,4 @@
-"""
+﻿"""
 Зоны, финал, города-хабы — сырые dict для game/floors/floor_data.py.
 Эпитеты и функции этажей остаются в floor_data.
 """
@@ -160,8 +160,8 @@ ZONE_FINAL_RAW: dict[str, Any] = {
 }
 
 CITIES_RAW: dict[int, dict[str, Any]] = {
-    3: {
-        "floor": 3,
+    1: {
+        "floor": 1,
         "name": "Тихий Ручей",
         "emoji": "🏘️",
         "theme_ru": "Деревня новичков у подножия башни — тёплый очаг и простые советы",

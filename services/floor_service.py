@@ -167,7 +167,7 @@ def format_city_hub_message(character: Character) -> str:
         return ""
     rich = city_locations.format_city_hub_rich_html(city)
     loc = get_locale(character, None)
-    if int(n) == 3:
+    if int(n) == 1:
         hub = (
             "🛠️ <b>Сервисы:</b> кузница, таверна, <b>рынок</b> (лавка, скупщик, сейф банка, храм призыва питомца), "
             "NPC с лёгкими поручениями и стражник."
@@ -186,8 +186,8 @@ def format_city_hub_message(character: Character) -> str:
     return f"{rich}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
 
 
-def _format_floor3_city_only(character: Character) -> str:
-    """Этаж 3: только город, без монстров / тайника / привала на карте."""
+def _format_floor1_city_only(character: Character) -> str:
+    """Этаж 1: только город (Тихий Ручей), без монстров / тайника / привала на карте."""
     n = int(character.floor_number)
     zone = floor_data.get_zone_for_floor(n)
     room = floor_data.epithet_for_floor(zone, n)
@@ -204,6 +204,7 @@ def _format_floor3_city_only(character: Character) -> str:
             f"{city.emoji} <b>{html.escape(city.name)}</b> — мирный хаб. "
             "Зайди в «Город»: кузница, таверна, рынок (лавка, скупщик, банк, храм призыва).",
         )
+    lines.append("📜 <b>Сюжетные NPC</b> — три необычных жителя ждут тебя здесь.")
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi}")
     pend = tower_next_floor_pending(character)
@@ -291,8 +292,8 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
     """Текстовое описание текущего этажа (HTML) — коротко, без воды."""
     long_floor_mod.ensure_long_floor_started(character)
     n = character.floor_number
-    if int(n) == 3 and not long_floor_mod.is_long_floor_active(character):
-        return _format_floor3_city_only(character)
+    if int(n) == 1 and not long_floor_mod.is_long_floor_active(character):
+        return _format_floor1_city_only(character)
     # Этаж 4 — специальный экран исследования леса
     if exp4_mod.is_explore_floor_4(int(n)):
         return _format_explore_floor_4_message(character)
@@ -358,7 +359,7 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
     if wn:
         lines.append(f"🎭 <b>{html.escape(wn['title'])}</b> — кнопка «{html.escape(wn['button'])}».")
 
-    if tutorial_battle_pending(character) and n == 1:
+    if tutorial_battle_pending(character) and n == 2:
         lines.append("🎓 <b>Учебный бой</b> наставника — кнопка ниже.")
 
     if rotten_swamps_mod.is_rotten_swamps_zone(n):
@@ -427,16 +428,16 @@ def format_floor_message_photo_caption(character: Character) -> str:
     """
     long_floor_mod.ensure_long_floor_started(character)
     n = character.floor_number
-    if int(n) == 3 and not long_floor_mod.is_long_floor_active(character):
+    if int(n) == 1 and not long_floor_mod.is_long_floor_active(character):
         zone = floor_data.get_zone_for_floor(n)
         room = floor_data.epithet_for_floor(zone, n)
         city = floor_data.get_city_for_floor(n)
         pend = tower_next_floor_pending(character)
         bits = [
-            f"{zone.emoji} <b>{html.escape(zone.name)}</b> · <b>3</b>/100",
+            f"{zone.emoji} <b>{html.escape(zone.name)}</b> · <b>1</b>/135",
             f"📍 <i>{html.escape(room)}</i>",
             f"{city.emoji} <b>{html.escape(city.name)}</b> — мирный хаб, рынок в городе",
-            "Без боёв на карте · тайник и привал — с 4-го",
+            "Без боёв на карте · тайник и привал — со 2-го",
         ]
         if pend is not None:
             bits.append(f"✅ Подъём на <b>{pend}</b>")
@@ -819,9 +820,9 @@ async def try_secret_search(
     Один бросок тайника на текущем «заходе» этажа (счётчик visits в floor_progress).
     """
     n = int(character.floor_number)
-    if n == 3:
+    if n == 1:
         return SecretSearchOutcome(
-            alert="На третьем ярусе только город — тайников здесь нет.",
+            alert="На первом ярусе только город — тайников здесь нет.",
             body_html=None,
         )
     row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
@@ -830,8 +831,10 @@ async def try_secret_search(
     if int(extra.get("secret_attempt_visit", -1)) == visits:
         return SecretSearchOutcome(
             alert=(
-                "Ты уже обыскал всё здесь после последнего боя. "
-                "Победи ещё раз на этом этаже — и можно снова."
+                "🔍 Тайник уже обыскан.\n\n"
+                "После каждой победы в бою на этом этаже тайник обновляется — "
+                "победи монстра и попробуй снова.\n"
+                "(Шанс найти: 15%)"
             ),
             body_html=None,
         )
@@ -845,8 +848,8 @@ async def try_secret_search(
             alert=None,
             body_html=(
                 "🔍 <b>Ничего.</b>\n"
-                "Трещина в камне оказалась бликом факела — "
-                "ни сундука, ни прохода."
+                "Трещина в камне оказалась бликом факела — ни сундука, ни прохода.\n\n"
+                "<i>Победи в бою на этом этаже, чтобы обыскать снова.</i>"
             ),
         )
 

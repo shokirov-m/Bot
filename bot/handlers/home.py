@@ -127,7 +127,9 @@ async def home_mine_menu(callback: CallbackQuery, session: AsyncSession, state: 
 async def home_mine_buy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(callback, session)
-        if char is None: return
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
         ok, msg = home_service.try_buy_mine(char)
         if not ok:
             await callback.answer(msg, show_alert=True)
@@ -141,13 +143,16 @@ async def home_mine_buy(callback: CallbackQuery, session: AsyncSession, state: F
         await callback.answer("Поздравляем!")
     except Exception:
         logger.exception("hom:mine_buy")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data == "hom:npc_hire")
 async def home_npc_hire(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(callback, session)
-        if char is None: return
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
         ok, msg = home_service.try_hire_npc(char)
         if not ok:
             await callback.answer(msg, show_alert=True)
@@ -161,13 +166,16 @@ async def home_npc_hire(callback: CallbackQuery, session: AsyncSession, state: F
         await callback.answer("Рабочий нанят!")
     except Exception:
         logger.exception("hom:npc_hire")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data == "hom:mine_up")
 async def home_mine_upgrade(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(callback, session)
-        if char is None: return
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
         ok, msg = home_service.try_upgrade_mine(char)
         if not ok:
             await callback.answer(msg, show_alert=True)
@@ -181,13 +189,16 @@ async def home_mine_upgrade(callback: CallbackQuery, session: AsyncSession, stat
         await callback.answer("Улучшено!")
     except Exception:
         logger.exception("hom:mine_up")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data == "hom:pet_train")
 async def home_pet_train(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(callback, session)
-        if char is None: return
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
         from bot.keyboards.home_kb import pet_training_keyboard
         from game.characters import pets as pets_mod
         
@@ -209,14 +220,19 @@ async def home_pet_train(callback: CallbackQuery, session: AsyncSession, state: 
         await callback.answer()
     except Exception:
         logger.exception("hom:pet_train")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("hom:pet_xp:"))
 async def home_pet_xp(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.data is None: return
+        if callback.data is None:
+            await callback.answer()
+            return
         char = await _char(callback, session)
-        if char is None: return
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
         pet_key = callback.data.removeprefix("hom:pet_xp:").strip()
         
         ok, msg = home_service.try_feed_pet_for_xp(char, pet_key)
@@ -241,6 +257,7 @@ async def home_pet_xp(callback: CallbackQuery, session: AsyncSession, state: FSM
         await callback.answer("Приятного аппетита!" if ok else msg[:180], show_alert=not ok)
     except Exception:
         logger.exception("hom:pet_xp")
+        await callback.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data == "hom:ward")

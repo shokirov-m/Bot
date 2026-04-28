@@ -53,6 +53,7 @@ from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
 from bot.handlers.stats_alloc import router as stats_alloc_router
 from bot.handlers.tutorial import router as tutorial_router
+from bot.handlers.floor_zero import router as floor_zero_router
 from bot.middlewares.activity import ActivityMiddleware
 from bot.middlewares.auth import RegistrationAuthMiddleware
 from bot.middlewares.database import DbSessionMiddleware
@@ -127,6 +128,7 @@ def _register_update_middlewares(dp: Dispatcher) -> None:
 def _register_routers(dp: Dispatcher) -> None:
     # clans_router — /clan; forest_beginnings_router — flf:*; floor_router — fl:* и scr:* (скупщик).
     dp.include_router(start_router)
+    dp.include_router(floor_zero_router)
     dp.include_router(tutorial_router)
     dp.include_router(admin_router)
     dp.include_router(profile_router)

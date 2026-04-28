@@ -150,11 +150,6 @@ async def create_character_for_user(
     arch = arch_manager.get_archetype(class_key) or arch_manager.get_archetype("wanderer")
     
     name = (display_name or "Странник")[:64]
-    hp_max = _compute_hp_max(int(getattr(character_repo, "starter_vit", 10)), int(getattr(character_repo, "starter_str", 10)), arch)
-    # Wait, I should use the stats from the archetype or defaults.
-    # Actually, character_service usually gets the base stats from the class.
-    
-    # Correction: use stats from the arch or defaults
     st_str = arch.base_stats.get("str", 10)
     st_vit = arch.base_stats.get("vit", 10)
     st_int = arch.base_stats.get("int", 10)
@@ -185,14 +180,14 @@ async def create_character_for_user(
         mp_max=mp_max,
         stamina=settings.MAX_STAMINA,
         last_stamina_regen_at=now,
-        floor_number=1,
-        highest_floor_reached=1,
+        floor_number=0,
+        highest_floor_reached=0,
         level=1,
         experience=0,
         gold=0,
         rune_stones=0,
         active_title=None,
-        element=cls.default_element,
+        element=getattr(arch, "default_element", None),
         unspent_stat_points=0,
         meta_progress=meta,
     )
@@ -203,7 +198,7 @@ async def create_character_for_user(
     await inventory_repo.add_starter_equipped_weapon(
         session,
         char.id,
-        item_data=starter_weapon_payload(cls.key),
+        item_data=starter_weapon_payload(arch.key),
     )
     for slot in (0, 1, 2):
         await inventory_repo.add_bag_item(
@@ -218,7 +213,7 @@ async def create_character_for_user(
         copy.deepcopy(starter_pants_payload()),
         bag_slot=3,
     )
-    if cls.key == "assassin":
+    if arch.key == "assassin":
         await inventory_repo.add_bag_item(
             session,
             char.id,

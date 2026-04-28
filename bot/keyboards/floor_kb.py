@@ -66,7 +66,7 @@ def floor_screen_keyboard(
 
     rows.extend(_class_arc_rows(character))
 
-    if tutorial_battle_pending(character) and floor_number == 1:
+    if tutorial_battle_pending(character) and floor_number == 2:
         rows.append(
             [
                 InlineKeyboardButton(
@@ -76,11 +76,20 @@ def floor_screen_keyboard(
             ],
         )
 
+    # Сюжетные NPC на Этаже 1
+    if floor_number == 1:
+        rows.append([
+            InlineKeyboardButton(
+                text="📜 Сюжетные NPC",
+                callback_data=_cb(floor_number, "story_npc"),
+            )
+        ])
+
     rows.extend(_pet_rows(character, floor_number))
 
     if (
         forest_beginnings_mod.is_forest_beginnings_zone(floor_number)
-        and floor_number != 3
+        and floor_number != 1
         and not long_floor_mod.is_long_floor_active(character)
     ):
         camp_lbl = "🏕️ Привал (полн. HP, без ⚡)"
@@ -140,7 +149,7 @@ def floor_screen_keyboard(
                 callback_data=_cb(floor_number, "faction_choose"),
             )])
 
-    wnpc = None if floor_number == 3 else wandering_npcs_mod.wandering_npc_for_floor(
+    wnpc = None if floor_number == 1 else wandering_npcs_mod.wandering_npc_for_floor(
         int(character.id),
         floor_number,
     )
@@ -165,7 +174,7 @@ def floor_screen_keyboard(
             rows.append(buffer)
             buffer = []
 
-    if not (tutorial_battle_pending(character) and floor_number == 1):
+    if not (tutorial_battle_pending(character) and floor_number == 2):
         for sp in spawns:
             base = sp.display_name
             if (
@@ -256,7 +265,7 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
 
     rows.extend(_class_arc_rows(character))
 
-    if tutorial_battle_pending(character) and floor_number == 1:
+    if tutorial_battle_pending(character) and floor_number == 2:
         rows.append(
             [
                 InlineKeyboardButton(
@@ -270,7 +279,7 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
 
     if (
         forest_beginnings_mod.is_forest_beginnings_zone(floor_number)
-        and floor_number != 3
+        and floor_number != 1
         and not long_floor_mod.is_long_floor_active(character)
     ):
         camp_lbl = "🏕️ Привал (полн. HP, без ⚡)"
@@ -300,7 +309,7 @@ def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
             ],
         )
 
-    wnpc = None if floor_number == 3 else wandering_npcs_mod.wandering_npc_for_floor(
+    wnpc = None if floor_number == 1 else wandering_npcs_mod.wandering_npc_for_floor(
         int(character.id),
         floor_number,
     )

@@ -893,8 +893,8 @@ async def start_tutorial_combat(
     character: Character,
 ) -> bool:
     """Разовый учебный бой на 1 этаже. Стамину не тратит."""
-    if int(character.floor_number) != 1:
-        await query.answer("Обучение только на первом этаже.", show_alert=True)
+    if int(character.floor_number) != 2:
+        await query.answer("Обучение у наставника доступно на 2 этаже.", show_alert=True)
         return False
     if not tutorial_battle_pending(character):
         await query.answer("Ты уже прошёл обучение у наставника.", show_alert=True)

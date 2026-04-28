@@ -1032,23 +1032,38 @@ def format_mine_farm_menu_html(character: Character) -> str:
     o, f = tick_mine_farm_stores(character)
     lv = mine_level(character)
     npc = is_npc_hired(character)
-    
+
+    cap = _MINE_CAP_BASE + (lv - 1) * 4
+    if npc:
+        cap += 10
+
+    ore_line = f"• Руда: <b>{o}/{cap}</b> ед."
+    food_line = f"• Корм: <b>{f}/{cap}</b> ед."
+    if o >= cap:
+        ore_line += " ⚠️ <b>Склад полон!</b> Забери руду — иначе новая не копится."
+    if f >= cap:
+        food_line += " ⚠️ <b>Склад полон!</b> Забери корм."
+
     lines = [
         f"⛏ <b>Шахта и Ферма (уровень {lv})</b>",
         f"Статус рабочего: {'👷 Нанят' if npc else '❌ Не нанят'}",
         "",
-        f"📦 <b>Склад:</b>",
-        f"• Руда: <b>{o}</b> ед.",
-        f"• Корм: <b>{f}</b> ед.",
+        "📦 <b>Склад:</b>",
+        ore_line,
+        food_line,
         "",
-        "<i>Ресурсы копятся автоматически. Рабочий ускоряет процесс и увеличивает склад.</i>"
+        "📌 <b>Куда идут ресурсы после сбора?</b>",
+        "• <b>Руда</b> → в твою сумку как материал для заточки (Кузница → Заточить).",
+        "• <b>Корм</b> → запас для тренировки питомцев (кнопка «Питомцы»).",
+        "",
+        "<i>Ресурсы копятся автоматически. Рабочий ускоряет процесс и увеличивает склад.</i>",
     ]
-    
+
     if not npc:
         lines.append(f"\n🤝 Можно нанять рабочего за <b>{NPC_HIRE_GOLD:,} 💰</b>")
-    
+
     up_cost = mine_upgrade_cost(character)
     if up_cost:
         lines.append(f"⬆ Улучшение шахты: <b>{up_cost:,} 💰</b>")
-        
+
     return "\n".join(lines)

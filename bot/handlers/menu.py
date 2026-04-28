@@ -216,6 +216,11 @@ async def menu_floor(callback: CallbackQuery, session: AsyncSession, state: FSMC
         _, char = await _char_or_alert(session, callback)
         if char is None:
             return
+        # Новый игрок — показать Этаж 0 (туториал)
+        if int(char.floor_number) == 0:
+            from bot.handlers.floor_zero import show_floor0_from_callback
+            await show_floor0_from_callback(callback, state)
+            return
         kb = await floor_keyboard_for_character(session, char)
         await push_floor_screen_ui(
             session,

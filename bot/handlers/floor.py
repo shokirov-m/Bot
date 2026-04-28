@@ -68,6 +68,11 @@ async def cmd_floor(message: Message, session: AsyncSession, state: FSMContext) 
             await message.answer("Создай героя через /start.")
             return
 
+        if int(char.floor_number) == 0:
+            from bot.handlers.floor_zero import show_floor0
+            await show_floor0(message, state)
+            return
+
         kb = await floor_keyboard_for_character(session, char)
         await push_floor_screen_ui(
             session,
@@ -278,13 +283,18 @@ async def on_floor_callback(
             await query.answer("Сначала /start.", show_alert=True)
             return
 
+        if int(char.floor_number) == 0:
+            from bot.handlers.floor_zero import show_floor0_from_callback
+            await show_floor0_from_callback(query, state)
+            return
+
         if floor != char.floor_number:
             await query.answer("Этаж устарел. Открой /floor снова.", show_alert=True)
             return
 
         if code == "tutorial":
-            if int(char.floor_number) != 1:
-                await query.answer("Обучение только на 1 этаже.", show_alert=True)
+            if int(char.floor_number) != 2:
+                await query.answer("Обучение у наставника доступно на 2 этаже.", show_alert=True)
                 return
             if query.message is None:
                 await query.answer()
@@ -324,6 +334,42 @@ async def on_floor_callback(
             kb = InlineKeyboardMarkup(inline_keyboard=rows)
             if query.message is not None:
                 await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+            await query.answer()
+            return
+
+        if code == "story_npc":
+            if int(char.floor_number) != 1:
+                await query.answer("Сюжетные NPC только на 1 этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+            from game.quests.story_quests import STORY_QUESTS, get_quest_state, claim_quest_reward, accept_quest
+            rows_npc: list[list[InlineKeyboardButton]] = []
+            for sq in STORY_QUESTS:
+                st = get_quest_state(char, sq.quest_id)
+                label = f"{sq.npc_emoji} {sq.npc_name}"
+                if st == "done":
+                    label += " ✅"
+                elif st == "active":
+                    label += " 🔄"
+                rows_npc.append([InlineKeyboardButton(
+                    text=label,
+                    callback_data=f"sq:npc:{sq.npc_key}",
+                )])
+            rows_npc.append([InlineKeyboardButton(text="⬅ Назад", callback_data=f"fl:{floor}:back")])
+            text_npc = (
+                "📜 <b>Сюжетные NPC — Тихий Ручей</b>\n\n"
+                "Здесь живут необычные обитатели Башни. "
+                "У каждого — своя история и задание для тебя.\n\n"
+                "🔄 = задание активно\n✅ = выполнено\n"
+            )
+            await query.message.edit_text(
+                text_npc,
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=rows_npc),
+            )
             await query.answer()
             return
 
@@ -1267,4 +1313,168 @@ async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession) -> None:
         await query.answer("🎁 Награда получена!")
     except Exception:
         logger.exception("wnpc:claim")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("sq:npc:"))
+async def story_npc_screen(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Показать диалог сюжетного NPC."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        npc_key = query.data.removeprefix("sq:npc:").strip()
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        from game.quests.story_quests import (
+            STORY_QUESTS_BY_NPC,
+            get_quest_state,
+            check_quest_completion,
+        )
+
+        sq = STORY_QUESTS_BY_NPC.get(npc_key)
+        if sq is None:
+            await query.answer("NPC не найден.", show_alert=True)
+            return
+
+        st = get_quest_state(char, sq.quest_id)
+        rows: list[list[InlineKeyboardButton]] = []
+
+        if st == "pending":
+            text = sq.npc_intro
+            rows.append([InlineKeyboardButton(
+                text=f"📜 Принять задание: {sq.quest_title}",
+                callback_data=f"sq:accept:{sq.quest_id}",
+            )])
+        elif st == "active":
+            if check_quest_completion(char, sq):
+                text = (
+                    f"{sq.npc_in_progress}\n\n"
+                    f"✅ <b>Задание выполнено!</b> Можно сдавать."
+                )
+                rows.append([InlineKeyboardButton(
+                    text="🎁 Сдать задание",
+                    callback_data=f"sq:claim:{sq.quest_id}",
+                )])
+            else:
+                from db.models.character import Character as CharacterModel
+                mp = dict(char.meta_progress or {})
+                current = int(mp.get(sq.condition_key, 0) or 0)
+                text = (
+                    f"{sq.npc_in_progress}\n\n"
+                    f"📊 Прогресс: <b>{current}/{sq.condition_target}</b>"
+                )
+        else:
+            text = sq.npc_completed
+
+        rows.append([InlineKeyboardButton(text="⬅ К списку NPC", callback_data="fl:1:story_npc")])
+        rows.append([InlineKeyboardButton(text="⬅ На этаж", callback_data="fl:1:back")])
+        await query.message.edit_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("sq:npc")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("sq:accept:"))
+async def story_quest_accept(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Принять сюжетный квест."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        quest_id = query.data.removeprefix("sq:accept:").strip()
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        from game.quests.story_quests import STORY_QUESTS_BY_ID, accept_quest
+
+        sq = STORY_QUESTS_BY_ID.get(quest_id)
+        if sq is None:
+            await query.answer("Квест не найден.", show_alert=True)
+            return
+
+        ok = accept_quest(char, quest_id)
+        if not ok:
+            await query.answer("Квест уже взят или выполнен.", show_alert=True)
+            return
+        await session.flush()
+
+        rows = [
+            [InlineKeyboardButton(text="⬅ К NPC", callback_data=f"sq:npc:{sq.npc_key}")],
+            [InlineKeyboardButton(text="⬅ На этаж", callback_data="fl:1:back")],
+        ]
+        await query.message.edit_text(
+            f"✅ <b>Задание принято!</b>\n\n<b>{sq.quest_title}</b>\n{sq.quest_desc}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+        await query.answer("Задание принято!")
+    except Exception:
+        logger.exception("sq:accept")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("sq:claim:"))
+async def story_quest_claim(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Сдать сюжетный квест и получить награду."""
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        quest_id = query.data.removeprefix("sq:claim:").strip()
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        from game.quests.story_quests import STORY_QUESTS_BY_ID, claim_quest_reward
+
+        sq = STORY_QUESTS_BY_ID.get(quest_id)
+        if sq is None:
+            await query.answer("Квест не найден.", show_alert=True)
+            return
+
+        ok, result_text = claim_quest_reward(char, sq)
+        if not ok:
+            await query.answer(result_text[:180], show_alert=True)
+            return
+        await session.flush()
+
+        rows = [
+            [InlineKeyboardButton(text="⬅ К списку NPC", callback_data="fl:1:story_npc")],
+            [InlineKeyboardButton(text="⬅ На этаж", callback_data="fl:1:back")],
+        ]
+        await query.message.edit_text(
+            result_text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+        await query.answer("🎁 Награда получена!")
+    except Exception:
+        logger.exception("sq:claim")
         await query.answer("Ошибка.", show_alert=True)

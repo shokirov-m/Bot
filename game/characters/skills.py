@@ -70,4 +70,9 @@ def passive_combat_modifiers_merged(character: Character) -> dict[str, float | i
     
     merged = merge_passive_row(merged, path_passive_delta(character.meta_progress))
     merged = merge_passive_row(merged, global_passive_delta(character.meta_progress))
-    return merge_passive_row(merged, pets_mod.pet_passive_delta(character))
+    merged = merge_passive_row(merged, pets_mod.pet_passive_delta(character))
+
+    # Floor 0 passive (chosen at tutorial)
+    from game.floors.floor_zero import get_floor0_passive_modifiers
+    merged = merge_passive_row(merged, get_floor0_passive_modifiers(character))
+    return merged
