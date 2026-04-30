@@ -11,7 +11,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.database import async_session_factory
+from db.database import get_session_factory
 from db.models.character import Character
 from db.models.user import User
 from game.archetypes import manager as arch_manager
@@ -53,7 +53,7 @@ async def run_tier2_reset(bot: "Bot") -> None:
     """Find all Tier-2 characters with level < 50, reset them to Tier-1 parent and notify."""
     results: list[_ResetResult] = []
 
-    async with async_session_factory() as session:
+    async with get_session_factory()() as session:
         rows = await session.execute(
             select(Character, User)
             .join(User, User.id == Character.user_id)
