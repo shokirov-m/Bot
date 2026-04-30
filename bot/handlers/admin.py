@@ -855,6 +855,27 @@ async def cb_admin_stamina(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "adm:reset_tier2", IsAdmin())
+async def cb_admin_reset_tier2(callback: CallbackQuery, state: FSMContext) -> None:
+    """Запустить одноразовый сброс Тир-2 классов у игроков ниже 50 уровня."""
+    if callback.message is None or callback.bot is None:
+        await callback.answer()
+        return
+    try:
+        await callback.answer("⏳ Запускаю сброс Тир-2 классов…", show_alert=False)
+        await callback.message.answer("⏳ <b>Сброс Тир-2 классов запущен.</b> Ожидай результата…", parse_mode=ParseMode.HTML)
+        from services.tier2_migration_service import run_tier2_reset
+        await run_tier2_reset(callback.bot)
+        await callback.message.answer(
+            "✅ <b>Сброс завершён.</b>\n"
+            "Все игроки с классом 2-го Тира ниже 50 уровня сброшены обратно на Тир-1 и уведомлены.",
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception("adm:reset_tier2")
+        await callback.message.answer("❌ Ошибка при сбросе. Смотри логи.", parse_mode=ParseMode.HTML)
+
+
 @router.callback_query(F.data == "adm:ban", IsAdmin())
 async def cb_admin_ban(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
