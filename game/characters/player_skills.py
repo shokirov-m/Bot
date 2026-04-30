@@ -56,8 +56,8 @@ def ensure_skill_meta(character: Character) -> None:
     pass
 
 def learned_skill_keys(character: Character) -> set[str]:
-    arch = arch_manager.get_character_archetype(character)
-    return set(arch.skills)
+    unlocked = arch_manager.get_unlocked_skills(character)
+    return {sk.key for sk in unlocked}
 
 def equipped_skill_key_slots(character: Character) -> list[str]:
     # Use meta_progress to get equipped skills or default to first 3 unlocked
