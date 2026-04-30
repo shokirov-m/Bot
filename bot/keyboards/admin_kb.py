@@ -50,6 +50,9 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="🔄 Сброс Тир-2 классов", callback_data="adm:reset_tier2"),
             ],
+            [
+                InlineKeyboardButton(text="🎒 Пополнить предметы (себе)", callback_data="adm:give_items"),
+            ],
         ],
     )
 

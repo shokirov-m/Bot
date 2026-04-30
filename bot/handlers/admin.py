@@ -855,6 +855,31 @@ async def cb_admin_stamina(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "adm:give_items", IsAdmin())
+async def cb_admin_give_items(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Выдать себе все расходники + пополнить все ресурсы до 10 000."""
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
+    try:
+        u = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        ch = await character_repo.get_by_user_id(session, u.id) if u else None
+        if ch is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        from services.admin_utils import ensure_admin_resources, give_admin_all_items
+        await ensure_admin_resources(session, ch)
+        added = await give_admin_all_items(session, ch)
+        await session.commit()
+        await callback.answer(
+            f"✅ Ресурсы пополнены до 10 000. Добавлено позиций: {added}.",
+            show_alert=True,
+        )
+    except Exception:
+        logger.exception("adm:give_items")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data == "adm:reset_tier2", IsAdmin())
 async def cb_admin_reset_tier2(callback: CallbackQuery, state: FSMContext) -> None:
     """Запустить одноразовый сброс Тир-2 классов у игроков ниже 50 уровня."""

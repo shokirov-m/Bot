@@ -283,6 +283,15 @@ async def on_floor_callback(
             await query.answer("Сначала /start.", show_alert=True)
             return
 
+        # Авто-пополнение ресурсов для администратора
+        from config import is_admin as _is_admin
+        if _is_admin(query.from_user.id):
+            try:
+                from services.admin_utils import ensure_admin_resources
+                await ensure_admin_resources(session, char)
+            except Exception:
+                pass
+
         if int(char.floor_number) == 0:
             from bot.handlers.floor_zero import show_floor0_from_callback
             await show_floor0_from_callback(query, state)
@@ -580,12 +589,26 @@ async def on_floor_callback(
             if query.message is None:
                 await query.answer()
                 return
-            from game.floors.tower_ascent import tower_next_floor_pending
+            from game.floors.tower_ascent import tower_next_floor_pending, set_tower_ascent_pending
+            from config import is_admin as _is_admin
 
             pend = tower_next_floor_pending(char)
             if pend is None:
-                await query.answer("Сначала победи все цели на этом этаже.", show_alert=True)
-                return
+                if _is_admin(query.from_user.id):
+                    # Администратор: автоматически открываем следующий этаж
+                    next_fl = int(char.floor_number) + 1
+                    if next_fl > 135:
+                        await query.answer("Это максимальный этаж.", show_alert=True)
+                        return
+                    set_tower_ascent_pending(char, next_fl)
+                    # Обновить highest_floor_reached если нужно
+                    if next_fl > int(char.highest_floor_reached):
+                        char.highest_floor_reached = next_fl
+                    await session.flush()
+                    pend = next_fl
+                else:
+                    await query.answer("Сначала победи все цели на этом этаже.", show_alert=True)
+                    return
             ok, err = await travel_to_floor(
                 session,
                 char,
