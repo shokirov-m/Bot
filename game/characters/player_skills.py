@@ -74,8 +74,34 @@ def equipped_skill_key_slots(character: Character) -> list[str]:
     return res
 
 def battle_skills_tuple(character: Character) -> tuple[SkillDef, SkillDef, SkillDef]:
-    # Pass character to skills_for_class to use Tree skills
-    return skills_for_class(str(character.class_key or "wanderer"), character=character)
+    """Возвращает 3 слота навыков для боя, уважая экипировку игрока."""
+    all_unlocked = arch_manager.get_unlocked_skills(character)
+    unlocked_by_key = {sk.key: sk for sk in all_unlocked}
+
+    meta = character.meta_progress or {}
+    equipped = list(meta.get("equipped_skill_keys") or [])
+
+    result: list = []
+    for key in equipped[:3]:
+        if key and key in unlocked_by_key:
+            result.append(unlocked_by_key[key])
+
+    # Заполнить пустые слоты первыми незадействованными навыками
+    used_keys = {sk.key for sk in result}
+    for sk in all_unlocked:
+        if len(result) >= 3:
+            break
+        if sk.key not in used_keys:
+            result.append(sk)
+            used_keys.add(sk.key)
+
+    # Гарантируем ровно 3 слота
+    fallback = arch_manager.get_skill("wn_strike")
+    while len(result) < 3:
+        result.append(fallback)
+
+    from game.characters.skills import _map_v2_to_def
+    return (_map_v2_to_def(result[0]), _map_v2_to_def(result[1]), _map_v2_to_def(result[2]))
 
 def set_equipped_slot(character: Character, slot_index: int, skill_key: str | None) -> bool:
     if slot_index < 0 or slot_index > 2:

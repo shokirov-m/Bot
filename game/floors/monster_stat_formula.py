@@ -132,6 +132,21 @@ def compute_formula_stat_bundle(floor_number: int, spawn: FloorMonsterSpawn) -> 
         atk_out = max(1, int(atk_out * m1819))
         def_out = max(0, int(def_out * m1819))
 
+    # Прогрессивный буст для этажей 20+
+    _fl = int(floor_number)
+    if _fl >= 50:
+        hp_out  = max(1, int(hp_out  * 2.0))
+        atk_out = max(1, int(atk_out * 1.85))
+        def_out = max(0, int(def_out * 1.85))
+    elif _fl >= 30:
+        hp_out  = max(1, int(hp_out  * 1.70))
+        atk_out = max(1, int(atk_out * 1.55))
+        def_out = max(0, int(def_out * 1.55))
+    elif _fl >= 20:
+        hp_out  = max(1, int(hp_out  * 1.40))
+        atk_out = max(1, int(atk_out * 1.30))
+        def_out = max(0, int(def_out * 1.30))
+
     if (
         int(floor_number) == 20
         and spawn.is_major_boss

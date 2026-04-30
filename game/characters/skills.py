@@ -64,10 +64,21 @@ def passive_combat_modifiers_merged(character: Character) -> dict[str, float | i
     # Use new archetype passives
     base = passive_combat_modifiers(str(character.class_key or "wanderer"))
     
-    # Merge with Tree passives
+    # Merge with Tree passives (passive_bonus / stat_boost nodes)
     tree_b = arch_manager.get_tree_bonuses(character)
     merged = merge_passive_row(base, tree_b)
-    
+
+    # Merge equipped passive slot bonus (если игрок выбрал конкретную пассивку)
+    meta = character.meta_progress or {}
+    eq_passive_key = meta.get("equipped_passive_key") or ""
+    if eq_passive_key:
+        arch = arch_manager.get_character_archetype(character)
+        for pas in arch.passives:
+            if pas.key == eq_passive_key:
+                # Добавляем её бонусы поверх всего (double-stacking, но это намеренно)
+                merged = merge_passive_row(merged, dict(pas.modifiers))
+                break
+
     merged = merge_passive_row(merged, path_passive_delta(character.meta_progress))
     merged = merge_passive_row(merged, global_passive_delta(character.meta_progress))
     merged = merge_passive_row(merged, pets_mod.pet_passive_delta(character))
