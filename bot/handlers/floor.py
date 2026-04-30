@@ -1365,9 +1365,11 @@ async def story_npc_screen(query: CallbackQuery, session: AsyncSession, state: F
                     callback_data=f"sq:claim:{sq.quest_id}",
                 )])
             else:
-                from db.models.character import Character as CharacterModel
-                mp = dict(char.meta_progress or {})
-                current = int(mp.get(sq.condition_key, 0) or 0)
+                if sq.condition_type == "floor_reached":
+                    current = int(getattr(char, sq.condition_key, 0) or 0)
+                else:
+                    mp = dict(char.meta_progress or {})
+                    current = int(mp.get(sq.condition_key, 0) or 0)
                 text = (
                     f"{sq.npc_in_progress}\n\n"
                     f"📊 Прогресс: <b>{current}/{sq.condition_target}</b>"

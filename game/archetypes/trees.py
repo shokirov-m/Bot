@@ -22,7 +22,7 @@ TREES: dict[str, dict[str, SkillTreeNode]] = {
             cost_sp=5, parent_keys=("war_g3",),
         ),
         # --- Berserker Branch ---
-        "war_b1": SkillTreeNode("war_b1", "🔥 Ярость", "+5% к урону.", "passive_bonus", {"phys_dmg_mult": 0.05}, cost_sp=2),
+        "war_b1": SkillTreeNode("war_b1", "🔥 Ярость", "+5% к урону.", "passive_bonus", {"atk_bonus_pct": 5}, cost_sp=2),
         "war_b2": SkillTreeNode(
             "war_b2", "🪓 Тяжелый удар", "Мощная атака.", "active_skill", "war_heavy",
             cost_sp=3, parent_keys=("war_b1",),
@@ -44,7 +44,7 @@ TREES: dict[str, dict[str, SkillTreeNode]] = {
             cost_sp=3, parent_keys=("mag_e1",),
         ),
         "mag_e3": SkillTreeNode(
-            "mag_e3", "❄️ Обледенение", "Шанс заморозки.", "passive_bonus", {"freeze_chance_bonus": 0.1},
+            "mag_e3", "❄️ Обледенение", "Шанс заморозки.", "passive_bonus", {"on_hit_freeze_chance": 0.1},
             cost_sp=4, parent_keys=("mag_e2",),
         ),
         "mag_e4": SkillTreeNode(
@@ -62,13 +62,13 @@ TREES: dict[str, dict[str, SkillTreeNode]] = {
             cost_sp=4, parent_keys=("mag_a2",),
         ),
         "mag_a4": SkillTreeNode(
-            "mag_a4", "🌀 Чароплет", "-1 ход перезарядки.", "passive_bonus", {"cooldown_reduction": 1},
+            "mag_a4", "🌀 Чароплет", "+3 реген маны за ход.", "passive_bonus", {"mp_regen_turn": 3},
             cost_sp=5, parent_keys=("mag_a3",),
         ),
     },
     "scout": {
         # --- Assassin Branch ---
-        "sct_a1": SkillTreeNode("sct_a1", "🗡️ Заточка", "+5% крит. урона.", "passive_bonus", {"crit_dmg_mult": 0.05}, cost_sp=2),
+        "sct_a1": SkillTreeNode("sct_a1", "🗡️ Заточка", "+5% шанс крита.", "passive_bonus", {"crit_bonus": 0.05}, cost_sp=2),
         "sct_a2": SkillTreeNode(
             "sct_a2", "🐍 Яд", "Наносит урон ядом.", "active_skill", "sct_poison",
             cost_sp=3, parent_keys=("sct_a1",),
@@ -98,7 +98,7 @@ TREES: dict[str, dict[str, SkillTreeNode]] = {
     },
     "acolyte": {
         # --- Light Branch ---
-        "aco_l1": SkillTreeNode("aco_l1", "🙏 Молитва", "+10% лечение.", "passive_bonus", {"heal_bonus_pct": 10}, cost_sp=2),
+        "aco_l1": SkillTreeNode("aco_l1", "🙏 Молитва", "+5 реген HP за ход.", "passive_bonus", {"hp_regen_pct_turn": 0.02}, cost_sp=2),
         "aco_l2": SkillTreeNode(
             "aco_l2", "✨ Исцеление", "Восстанавливает HP.", "active_skill", "aco_heal",
             cost_sp=3, parent_keys=("aco_l1",),

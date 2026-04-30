@@ -64,7 +64,7 @@ class Settings(BaseSettings):
         ge=60,
         description="Интервал полного восстановления HP и MP всем персонажам (фоновая задача), секунды",
     )
-    MAX_STAMINA: int = Field(default=30)
+    MAX_STAMINA: int = Field(default=25)
     ANTICHEAT_ENABLED: bool = Field(default=True)
     SEASON_DURATION_DAYS: int = Field(default=30)
     DISPLAY_NAME_CHANGE_GOLD: int = Field(
@@ -110,3 +110,10 @@ class Settings(BaseSettings):
 
 # Единый экземпляр настроек для импорта из main и сервисов
 settings = Settings()
+
+
+def is_admin(telegram_id: int | None) -> bool:
+    """Проверить, является ли пользователь администратором."""
+    if telegram_id is None:
+        return False
+    return int(telegram_id) in settings.ADMIN_IDS

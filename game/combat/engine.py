@@ -183,8 +183,10 @@ def apply_floor_aura_effects(state: dict[str, Any]) -> list[str]:
 
 
 def apply_elixir_buffs(state: dict[str, Any], dmg: int) -> int:
-    """Apply multipliers from active elixirs."""
-    return max(1, int(int(dmg) * float(_mods(state).get("atk_mult", 1.0))))
+    """Apply multipliers from active elixirs and passive tree bonuses."""
+    mult = float(_mods(state).get("atk_mult", 1.0))
+    bonus_pct = float(_mods(state).get("atk_bonus_pct", 0.0))
+    return max(1, int(int(dmg) * mult * (1.0 + bonus_pct / 100.0)))
 
 
 def apply_dot_damage_player(state: dict[str, Any]) -> list[str]:
@@ -321,10 +323,24 @@ def monster_armor_value(state: dict[str, Any]) -> int:
 
 
 def elemental_bonus_percent(attacker_element: str | None, defender_element: str | None) -> int:
-    """+15% если стихия атаки совпадает с «руной» игрока (здесь = элемент персонажа)."""
+    """
+    Элементальный бонус атаки:
+    +25% если атакуем слабость врага, -15% если атакуем устойчивость,
+    +10% если стихии совпадают (синергия одинаковых стихий).
+    """
     if not attacker_element or not defender_element:
         return 0
-    return 15 if attacker_element == defender_element else 0
+    from game.items.runes import ELEMENT_WEAKNESS, ELEMENT_RESISTANCE
+    # Check weakness: defender is weak to attacker's element
+    if ELEMENT_WEAKNESS.get(defender_element) == attacker_element:
+        return 25
+    # Check resistance: defender resists attacker's element
+    if ELEMENT_RESISTANCE.get(defender_element) == attacker_element:
+        return -15
+    # Same-element synergy
+    if attacker_element == defender_element:
+        return 10
+    return 0
 
 
 def _apply_weapon_mastery_to_damage(state: dict[str, Any], dmg: int) -> int:

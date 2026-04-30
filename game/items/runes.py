@@ -52,6 +52,29 @@ SYNERGIES: dict[frozenset[str], dict[str, Any]] = {
 
 MASTERY_SAME_ELEMENT_BONUS = 50  # при 2+ рунах одной стихии
 
+# Таблица слабостей: ключ — атакуемый элемент, значение — стихия, к которой он слаб.
+# Атакуя монстра стихией, к которой он слаб, урон +25%.
+ELEMENT_WEAKNESS: dict[str, str] = {
+    "fire": "ice",        # огонь слаб к льду
+    "ice": "lightning",   # лёд слаб к молнии
+    "lightning": "earth", # молния слаба к земле
+    "earth": "fire",      # земля слаба к огню
+    "dark": "light",      # тьма слаба к свету
+    "light": "dark",      # свет слаб к тьме
+    "poison": "light",    # яд слаб к свету
+}
+
+# Резистентности: ключ — атакуемый элемент, значение — стихия, к которой он устойчив (-15%).
+ELEMENT_RESISTANCE: dict[str, str] = {
+    "fire": "earth",      # огонь устойчив к земле
+    "ice": "earth",       # лёд устойчив к земле
+    "lightning": "ice",   # молния устойчива к льду
+    "earth": "poison",    # земля устойчива к яду
+    "dark": "poison",     # тьма устойчива к яду
+    "light": "fire",      # свет устойчив к огню
+    "poison": "dark",     # яд устойчив к тьме
+}
+
 
 @dataclass(frozen=True, slots=True)
 class RuneData:

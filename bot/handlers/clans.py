@@ -765,14 +765,18 @@ async def cb_clan_building_detail(
         mats = _mat(payload)
         tg = _treasury_gold(payload)
         lv = int(clan.clan_level)
+        from config import is_admin as _is_admin
+        _is_adm = _is_admin(callback.from_user.id if callback.from_user else None)
         can_build = (
             not bstate.get("built")
             and not bstate.get("build_until")
-            and lv >= bdef["unlock_level"]
-            and tg >= bdef["cost_gold"]
-            and mats["wood"] >= bdef["cost_wood"]
-            and mats["stone"] >= bdef["cost_stone"]
-            and mats["herbs"] >= bdef["cost_herbs"]
+            and (lv >= bdef["unlock_level"] or _is_adm)
+            and (_is_adm or (
+                tg >= bdef["cost_gold"]
+                and mats["wood"] >= bdef["cost_wood"]
+                and mats["stone"] >= bdef["cost_stone"]
+                and mats["herbs"] >= bdef["cost_herbs"]
+            ))
         )
         locked = lv < bdef["unlock_level"]
         text = (
@@ -812,7 +816,9 @@ async def cb_clan_building_build(
             return
         parts = (callback.data or "").split(":")
         key = parts[2] if len(parts) >= 4 else ""
-        ok, msg = await clan_service.try_start_building(session, char, key)
+        from config import is_admin as _is_admin
+        _bypass = _is_admin(callback.from_user.id if callback.from_user else None)
+        ok, msg = await clan_service.try_start_building(session, char, key, admin_bypass=_bypass)
         await callback.answer(msg, show_alert=not ok)
         if ok:
             # Обновить экран построек

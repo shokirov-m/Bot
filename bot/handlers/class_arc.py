@@ -99,7 +99,7 @@ async def on_archetype_list(callback: CallbackQuery, session: AsyncSession) -> N
             await callback.answer("Специализация уже выбрана.", show_alert=True)
             return
         target_tier = 1 if current.tier <= 0 else 2
-        required_level = 10 if target_tier == 1 else 30
+        required_level = 10 if target_tier == 1 else 50
         if char.level < required_level:
             await callback.answer(f"Нужен {required_level} уровень для выбора пути.", show_alert=True)
             return

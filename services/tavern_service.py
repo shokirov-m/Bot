@@ -148,11 +148,19 @@ async def try_buy_offer(
         before = int(character.stamina)
         character.stamina = min(mx, before + 3)
         gained = int(character.stamina) - before
+        # Overnight rest also restores 50% HP and 40% MP
+        hp_restore = max(0, int(character.hp_max) // 2 - int(character.hp_current))
+        mp_restore = max(0, int(int(character.mp_max) * 0.4) - int(character.mp_current))
+        character.hp_current = min(int(character.hp_max), int(character.hp_current) + int(character.hp_max) // 2)
+        character.mp_current = min(int(character.mp_max), int(character.mp_current) + int(int(character.mp_max) * 0.4))
+        hp_line = f", ❤️ +{min(hp_restore, int(character.hp_max)//2)} HP" if hp_restore > 0 else ""
+        mp_line = f", 💙 +{min(mp_restore, int(int(character.mp_max)*0.4))} MP" if mp_restore > 0 else ""
         _increment_lodging_uses(character)
         uses_now = _lodging_uses_today(character)
         left = LODGING_DAILY_LIMIT - uses_now
         msg = (
-            f"🛏️ Выспался. Стамина <b>+{gained}</b> (сейчас {character.stamina}/{mx}).\n"
+            f"🛏️ Выспался. Стамина <b>+{gained}</b>{hp_line}{mp_line} "
+            f"(⚡ {character.stamina}/{mx}).\n"
             f"<i>Ночлегов осталось сегодня: {left}/{LODGING_DAILY_LIMIT}.</i>"
         )
     else:

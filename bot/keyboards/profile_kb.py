@@ -22,7 +22,7 @@ def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -
     arch = arch_manager.get_character_archetype(character)
     if arch.tier <= 0 and character.level >= 10:
         rows.append([InlineKeyboardButton(text="🌟 Выбрать путь", callback_data="prf:arch_pick")])
-    elif arch.tier == 1 and character.level >= 30:
+    elif arch.tier == 1 and character.level >= 50:
         rows.append([InlineKeyboardButton(text="🌟 Выбрать специализацию", callback_data="prf:arch_pick")])
 
     rows.extend([
@@ -55,6 +55,7 @@ def profile_full_stats_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
     loc = locale if locale in ("ru", "en") else "ru"
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text="📖 Что дают статы", callback_data="prf:stathelp")],
+        [InlineKeyboardButton(text="🔮 Стихии и слабости", callback_data="prf:elements_info")],
         [InlineKeyboardButton(text=t(loc, "profile_back_compact"), callback_data="prf:back")],
         [
             InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),

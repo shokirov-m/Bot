@@ -644,7 +644,9 @@ async def start_combat(
     """Начать бой. True если бой начат.
     free_stamina=True — не списывать стамину (бой в рамках той же комнаты/серии).
     """
-    if not free_stamina:
+    from config import is_admin as _is_admin
+    _admin_bypass = _is_admin(query.from_user.id if query.from_user else None)
+    if not free_stamina and not _admin_bypass:
         if not can_start_combat(character, settings.MAX_STAMINA):
             await query.answer("Недостаточно стамины (нужна 1).", show_alert=True)
             return False
@@ -664,7 +666,7 @@ async def start_combat(
         await query.answer("Ты уже в бою.", show_alert=True)
         return False
 
-    if not free_stamina:
+    if not free_stamina and not _admin_bypass:
         spent = await spend_stamina(session, int(character.id))
         if not spent:
             await query.answer("Не удалось списать стамину. Попробуй ещё раз.", show_alert=True)
@@ -731,6 +733,10 @@ async def start_combat(
     )
     if _glogs:
         _append_logs(combat_state, _glogs)
+    # Lifesteal from skill tree passive nodes goes into gear_lifesteal_percent
+    _tree_ls = float(combat_state.get("passive_mods", {}).get("lifesteal_percent", 0) or 0)
+    if _tree_ls > 0:
+        combat_state["gear_lifesteal_percent"] = float(combat_state.get("gear_lifesteal_percent", 0.0)) + _tree_ls
     _apply_weapon_runes_to_state(combat_state, character, w_item)
 
     if swamp_prefight_logs:
@@ -1314,9 +1320,10 @@ async def _victory_sequence(
 
     gg_first = False
     if str(spawn.template.key or "") == golden_goblin_service.TEMPLATE_KEY:
-        gg_first = await golden_goblin_service.try_claim_first_blood(
-            session, int(combat_state.get("golden_goblin_wave") or 0)
-        )
+        gg_wave = int(combat_state.get("golden_goblin_wave") or 0)
+        if gg_wave <= 0:
+            gg_wave = await golden_goblin_service.current_wave(session)
+        gg_first = await golden_goblin_service.try_claim_first_blood(session, gg_wave)
 
     loc_victory = get_locale(character, message.from_user.language_code if message.from_user else None)
 
@@ -1412,6 +1419,17 @@ async def _victory_sequence(
     levels_battle = await character_service.add_experience_async(session, character, xp, bot=message.bot)
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
+
+    # Сюжетный квест Эйрис: убийства волков на этажах 2–5
+    try:
+        _sq_floor = int(combat_state.get("floor", character.floor_number))
+        _sq_tkey = str(spawn.template.key or "").lower()
+        if 2 <= _sq_floor <= 5 and "wolf" in _sq_tkey:
+            from game.quests.story_quests import increment_kill_counter
+            increment_kill_counter(character, "sq_eyris_wolves")
+    except Exception:
+        pass
+
     try:
         pets_mod.record_pet_xp_on_battle_win(
             character,
@@ -1509,6 +1527,7 @@ async def _victory_sequence(
         # Определяем тип материала по зоне монстра
         from game.data.monsters import KEY_TO_ZONE
         _zone = KEY_TO_ZONE.get(_tkey2, "")
+        _floor_n = int(combat_state.get("floor", character.floor_number))
         if _zone in ("forest_beginnings",) or "ent" in _tkey2 or "treant" in _tkey2 or "vine" in _tkey2:
             _mat_drop = "wood"
         elif _zone in ("shadow_caves", "volcanic_ruins") or "golem" in _tkey2 or "stone" in _tkey2 or "sentinel" in _tkey2:
@@ -1518,14 +1537,24 @@ async def _victory_sequence(
         # Монстры 5-го этажа (комнаты rc_*) тоже дают дерево
         elif str(spawn.slot_code or "").startswith("rc_r"):
             _mat_drop = "wood"
+        # Дерево выпадает на всех лесных/природных этажах (10–40) если тип ещё не определён
+        if _mat_drop is None and 10 <= _floor_n <= 40:
+            if _zone in ("tower_ascent", "forest_beginnings") or "wolf" in _tkey2 or "beast" in _tkey2 or "bandit" in _tkey2:
+                _mat_drop = "wood"
         if _mat_drop and random.random() < _mat_chance:
             if spawn.is_major_boss:
-                _mat_amount = random.randint(5, 12)
+                _mat_amount = random.randint(2, 5)
             elif spawn.is_mini_boss:
                 _mat_amount = random.randint(3, 7)
             else:
                 _mat_amount = random.randint(1, 2)
             clan_service.add_material_drop(character, _mat_drop, _mat_amount)
+            # Сюжетный квест Совы: засчитываем материалы
+            try:
+                from game.quests.story_quests import increment_material_counter
+                increment_material_counter(character, "sq_owl_materials", _mat_amount)
+            except Exception:
+                pass
             _mat_icons = {"wood": "🪵", "stone": "🪨", "herbs": "🌿"}
             _mat_ru = {"wood": "дерево", "stone": "камень", "herbs": "травы"}
             _mat_note = f"\n{_mat_icons.get(_mat_drop, '📦')} +{_mat_amount} {_mat_ru.get(_mat_drop, _mat_drop)}"

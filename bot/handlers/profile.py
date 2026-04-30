@@ -776,7 +776,8 @@ async def on_tree_node_buy(callback: CallbackQuery, session: AsyncSession, state
         user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
         char = await character_repo.get_by_user_id(session, user.id)
         
-        ok, msg = arch_manager.try_unlock_node(char, node_key)
+        from config import is_admin as _is_admin
+        ok, msg = arch_manager.try_unlock_node(char, node_key, admin_bypass=_is_admin(callback.from_user.id))
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
@@ -874,6 +875,61 @@ async def on_profile_stat_help(
         await callback.answer()
     except Exception:
         logger.exception("prf:stathelp")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:elements_info")
+async def on_profile_elements_info(
+    callback: CallbackQuery, session: AsyncSession, state: FSMContext,
+) -> None:
+    """Справка по стихиям: слабости, резистентности."""
+    try:
+        if callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+        from game.items.runes import ELEMENTS, ELEMENT_WEAKNESS, ELEMENT_RESISTANCE
+        lines = [
+            "🔮 <b>Стихии монстров и слабости</b>",
+            "",
+            "При атаке монстра его слабой стихией — <b>+25% урона</b>.",
+            "При атаке устойчивой стихией — <b>-15% урона</b>.",
+            "Совпадение стихий — <b>+10% урона</b>.",
+            "",
+            "<b>Таблица слабостей:</b>",
+        ]
+        for elem_key, info in ELEMENTS.items():
+            weak_to = ELEMENT_WEAKNESS.get(elem_key, "—")
+            resist = ELEMENT_RESISTANCE.get(elem_key, "—")
+            weak_info = ELEMENTS.get(weak_to, {})
+            resist_info = ELEMENTS.get(resist, {})
+            weak_str = f"{weak_info.get('emoji','')}{weak_info.get('name', weak_to)}" if weak_to != "—" else "—"
+            resist_str = f"{resist_info.get('emoji','')}{resist_info.get('name', resist)}" if resist != "—" else "—"
+            lines.append(
+                f"{info['emoji']} <b>{info['name']}</b>: "
+                f"слаб к {weak_str} · устойчив к {resist_str}"
+            )
+        lines.extend([
+            "",
+            "<i>Узнать стихию монстра можно в бою — она указана рядом с именем врага.</i>",
+            "<i>Настроить свою стихию: экипируй оружие с руной нужного элемента.</i>",
+        ])
+        text = "\n".join(lines)
+        rows = [
+            [InlineKeyboardButton(text="📊 Полные характеристики", callback_data="prf:full")],
+            [InlineKeyboardButton(text="◀ Назад", callback_data="prf:back")],
+        ]
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:elements_info")
         await callback.answer("Ошибка.", show_alert=True)
 
 

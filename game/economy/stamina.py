@@ -48,14 +48,26 @@ def compute_minutes_to_next_regen(
 
 async def regen_stamina_all(session: AsyncSession) -> int:
     """
-    Batch UPDATE: всем, у кого stamina < MAX_STAMINA, +1 и last_stamina_regen_at = now.
-    Один запрос, без цикла по строкам.
+    Batch UPDATE: всем, у кого stamina < MAX_STAMINA и прошло >= REGEN_INTERVAL с последнего тика, +1.
+    Также обрезает stamina > MAX_STAMINA (после снижения лимита).
     """
     mx = _max_stamina()
+    interval_s = _regen_interval_seconds()
     now = datetime.now(UTC)
+    cutoff = now - timedelta(seconds=interval_s)
+    # Cap over-max values first
+    await session.execute(
+        update(Character)
+        .where(Character.stamina > mx)
+        .values(stamina=mx)
+    )
     stmt = (
         update(Character)
-        .where(Character.stamina < mx)
+        .where(
+            Character.stamina < mx,
+            # Only regen if enough time has passed (or never regenerated)
+            (Character.last_stamina_regen_at == None) | (Character.last_stamina_regen_at <= cutoff),  # noqa: E711
+        )
         .values(
             stamina=Character.stamina + 1,
             last_stamina_regen_at=now,

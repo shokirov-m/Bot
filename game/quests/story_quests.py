@@ -213,8 +213,11 @@ def check_quest_completion(character: Character, quest: StoryQuest) -> bool:
     """
     if get_quest_state(character, quest.quest_id) != "active":
         return False
-    mp = dict(character.meta_progress or {})
-    val = int(mp.get(quest.condition_key, 0) or 0)
+    if quest.condition_type == "floor_reached":
+        val = int(getattr(character, quest.condition_key, 0) or 0)
+    else:
+        mp = dict(character.meta_progress or {})
+        val = int(mp.get(quest.condition_key, 0) or 0)
     return val >= quest.condition_target
 
 

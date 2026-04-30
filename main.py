@@ -171,6 +171,9 @@ async def _polling_main() -> None:
     scheduler.start()
     asyncio.create_task(bootstrap_golden_goblin_if_needed(bot))
 
+    from services.tier2_migration_service import run_tier2_reset
+    asyncio.create_task(run_tier2_reset(bot))
+
     try:
         await dp.start_polling(bot)
     finally:
@@ -209,8 +212,10 @@ def _webhook_main() -> None:
         scheduler.start()
         logger.info("Webhook зарегистрирован у Telegram: {}", webhook_url)
         from scheduler.tasks import bootstrap_golden_goblin_if_needed
+        from services.tier2_migration_service import run_tier2_reset
 
         asyncio.create_task(bootstrap_golden_goblin_if_needed(b))
+        asyncio.create_task(run_tier2_reset(b))
 
     async def _stop_jobs(b: Bot) -> None:
         scheduler.shutdown(wait=False)

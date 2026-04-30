@@ -813,6 +813,48 @@ async def cb_admin_give(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "adm:give_runes", IsAdmin())
+async def cb_admin_give_runes(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="give_runes",
+        html_text="💎 Введи через пробел: <code>TELEGRAM_ID КОЛИЧЕСТВО_РУН</code>\nМаксимум 999 999.",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:heal", IsAdmin())
+async def cb_admin_heal(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="heal",
+        html_text="❤️ Введи <b>Telegram ID</b> игрока — полностью восстановить HP/MP.",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:stamina", IsAdmin())
+async def cb_admin_stamina(callback: CallbackQuery, state: FSMContext) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    await _prompt_fsm(
+        callback,
+        state,
+        kind="stamina",
+        html_text="⚡ Введи <b>Telegram ID</b> игрока — поставить стамину на максимум.",
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "adm:ban", IsAdmin())
 async def cb_admin_ban(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.message is None:
@@ -1068,6 +1110,60 @@ async def admin_fsm_text(message: Message, session: AsyncSession, state: FSMCont
             ok_n, fail_n = await _run_broadcast(message, session, text, actor_telegram_id=actor_id)
             await _try_restore_hub_from_state(message.bot, state)
             await message.answer(f"Готово: доставлено ~<b>{ok_n}</b>, ошибок <b>{fail_n}</b>.")
+            return
+
+        if kind == "give_runes":
+            parts = text.split()
+            if len(parts) < 2 or not parts[0].isdigit() or not parts[1].isdigit():
+                await message.answer("Формат: <code>ID КОЛИЧЕСТВО</code>", parse_mode=ParseMode.HTML)
+                return
+            tid2, amt2 = int(parts[0]), int(parts[1])
+            if amt2 <= 0 or amt2 > 999_999:
+                await message.answer("Количество рун: 1…999 999.")
+                return
+            u2 = await user_repo.get_by_telegram_id(session, tid2)
+            ch2 = await character_repo.get_by_user_id(session, u2.id) if u2 else None
+            if ch2 is None:
+                await finish(f"Персонаж <code>{tid2}</code> не найден.", ok=False)
+                return
+            ch2.rune_stones = int(ch2.rune_stones) + amt2
+            await anticheat_service.log_admin_action(
+                session, actor_telegram_id=actor_id, target_user_id=int(u2.id),
+                action="admin_give_runes", message=f"+{amt2}",
+                payload={"telegram_id": tid2, "amount": amt2},
+            )
+            await session.commit()
+            await finish(f"Начислено <b>{amt2}</b> 💎 руней игроку <code>{html.escape(ch2.display_name)}</code>.")
+            return
+
+        if kind == "heal":
+            if not text.isdigit():
+                await message.answer("Нужен числовой Telegram ID.")
+                return
+            u3 = await user_repo.get_by_telegram_id(session, int(text))
+            ch3 = await character_repo.get_by_user_id(session, u3.id) if u3 else None
+            if ch3 is None:
+                await finish(f"Персонаж <code>{text}</code> не найден.", ok=False)
+                return
+            ch3.hp_current = int(ch3.hp_max)
+            ch3.mp_current = int(ch3.mp_max)
+            await session.commit()
+            await finish(f"HP/MP игрока <b>{html.escape(ch3.display_name)}</b> полностью восстановлены.")
+            return
+
+        if kind == "stamina":
+            if not text.isdigit():
+                await message.answer("Нужен числовой Telegram ID.")
+                return
+            from config import settings as _settings
+            u4 = await user_repo.get_by_telegram_id(session, int(text))
+            ch4 = await character_repo.get_by_user_id(session, u4.id) if u4 else None
+            if ch4 is None:
+                await finish(f"Персонаж <code>{text}</code> не найден.", ok=False)
+                return
+            ch4.stamina = _settings.MAX_STAMINA
+            await session.commit()
+            await finish(f"Стамина игрока <b>{html.escape(ch4.display_name)}</b> установлена на {_settings.MAX_STAMINA}.")
             return
 
         if kind == "clear_inv":

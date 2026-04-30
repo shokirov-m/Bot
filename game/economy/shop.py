@@ -32,7 +32,7 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
         key="vita",
         name="Эликсир жизни",
         emoji="🧪",
-        price=32,
+        price=300,
         blurb="Восстанавливает 35% макс. HP при использовании.",
         item_data={
             "name": "Малый эликсир жизни",
@@ -48,7 +48,7 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
         key="ether",
         name="Эфир маны",
         emoji="💠",
-        price=36,
+        price=350,
         blurb="Восстанавливает 40% макс. MP при использовании.",
         item_data={
             "name": "Капля эфира маны",
@@ -61,26 +61,10 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
         },
     ),
     ShopGood(
-        key="ration",
-        name="Походный паёк",
-        emoji="🥖",
-        price=48,
-        blurb="+2 стамины вне боя (до максимума).",
-        item_data={
-            "name": "Походный паёк",
-            "kind": "consumable",
-            "rarity": "common",
-            "summary": "Съесть вне боя: +2 ⚡.",
-            "use_tag": "stamina_flat",
-            "use_value": 2,
-            "image_url": item_gear_png("shop_ration"),
-        },
-    ),
-    ShopGood(
         key="ration_stale",
         name="Зачерствевший паёк",
         emoji="🍞",
-        price=24,
+        price=180,
         blurb="Восстанавливает 10% макс. HP в бою.",
         item_data={
             "name": "Зачерствевший паёк",
@@ -96,7 +80,7 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
         key="ration_fresh",
         name="Свежий паёк",
         emoji="🥪",
-        price=58,
+        price=550,
         blurb="Восстанавливает 25% макс. HP в бою.",
         item_data={
             "name": "Свежий паёк",
@@ -112,7 +96,7 @@ SHOP_GOODS: tuple[ShopGood, ...] = (
         key="antidote",
         name="Противоядие",
         emoji="🧴",
-        price=22,
+        price=200,
         blurb="Снимает яд в бою (один заряд).",
         item_data={
             "name": "Противоядие",

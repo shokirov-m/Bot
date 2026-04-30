@@ -69,9 +69,11 @@ def combat_item_picker_keyboard(bag_items: list[InventoryItem]) -> InlineKeyboar
     for it in bag_items[:20]:
         data = it.item_data or {}
         gi = gear_icon_for_item_data(data)
-        name = str(data.get("name", "?"))[:16]
+        name = str(data.get("name", "?"))[:14]
+        count = int(data.get("count", 1))
+        count_str = f" ×{count}" if count > 1 else ""
         rows.append(
-            [InlineKeyboardButton(text=f"{gi} {name}"[:64], callback_data=f"cb:itm:{it.id}")],
+            [InlineKeyboardButton(text=f"{gi} {name}{count_str}"[:64], callback_data=f"cb:itm:{it.id}")],
         )
     rows.append(
         [InlineKeyboardButton(text="⬅ В бой", callback_data="cb:ret")],

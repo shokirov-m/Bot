@@ -16,22 +16,27 @@ def admin_panel_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="👤 Игрок", callback_data="adm:user"),
             ],
             [
-                InlineKeyboardButton(text="💰 Выдать золото", callback_data="adm:give"),
+                InlineKeyboardButton(text="💰 Золото", callback_data="adm:give"),
+                InlineKeyboardButton(text="💎 Руны", callback_data="adm:give_runes"),
+            ],
+            [
+                InlineKeyboardButton(text="❤️ Восст. HP/MP", callback_data="adm:heal"),
+                InlineKeyboardButton(text="⚡ Стамина макс.", callback_data="adm:stamina"),
+            ],
+            [
                 InlineKeyboardButton(text="📜 Логи", callback_data="adm:logs"),
-            ],
-            [
                 InlineKeyboardButton(text="📋 Логи (все)", callback_data="adm:logs_all"),
+            ],
+            [
                 InlineKeyboardButton(text="🎁 Промокоды", callback_data="adm:promo"),
-            ],
-            [
                 InlineKeyboardButton(text="🚫 Бан", callback_data="adm:ban"),
-                InlineKeyboardButton(text="✅ Разбан", callback_data="adm:unban"),
             ],
             [
+                InlineKeyboardButton(text="✅ Разбан", callback_data="adm:unban"),
                 InlineKeyboardButton(text="📢 Рассылка", callback_data="adm:broadcast"),
             ],
             [
-                InlineKeyboardButton(text="👥 Рефералы (по кого сколько)", callback_data="adm:referrals"),
+                InlineKeyboardButton(text="👥 Рефералы", callback_data="adm:referrals"),
             ],
             [
                 InlineKeyboardButton(text="🧙 Все игроки", callback_data="adm:players"),

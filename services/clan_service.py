@@ -660,7 +660,8 @@ async def try_level_up_clan(
 # ─────────────────────────── Постройки ──────────────────────────────────────
 
 async def try_start_building(
-    session: AsyncSession, character: Character, building_key: str
+    session: AsyncSession, character: Character, building_key: str,
+    *, admin_bypass: bool = False,
 ) -> tuple[bool, str]:
     if building_key not in BUILDING_DEFS:
         return False, "Неизвестная постройка."
@@ -685,23 +686,24 @@ async def try_start_building(
         return False, f"Строительство уже идёт, завершится {fin}."
     mats = _mat(payload)
     tg = _treasury_gold(payload)
-    missing: list[str] = []
-    if tg < bdef["cost_gold"]:
-        missing.append(f"{bdef['cost_gold']:,} 💰 (в казне {tg:,})")
-    if mats["wood"] < bdef["cost_wood"]:
-        missing.append(f"{bdef['cost_wood']} 🪵 (в казне {mats['wood']})")
-    if mats["stone"] < bdef["cost_stone"]:
-        missing.append(f"{bdef['cost_stone']} 🪨 (в казне {mats['stone']})")
-    if mats["herbs"] < bdef["cost_herbs"]:
-        missing.append(f"{bdef['cost_herbs']} 🌿 (в казне {mats['herbs']})")
-    if missing:
-        return False, "Не хватает ресурсов:\n• " + "\n• ".join(missing)
-    payload["treasury_gold"] = tg - bdef["cost_gold"]
-    payload["materials"] = {
-        "wood":  mats["wood"]  - bdef["cost_wood"],
-        "stone": mats["stone"] - bdef["cost_stone"],
-        "herbs": mats["herbs"] - bdef["cost_herbs"],
-    }
+    if not admin_bypass:
+        missing: list[str] = []
+        if tg < bdef["cost_gold"]:
+            missing.append(f"{bdef['cost_gold']:,} 💰 (в казне {tg:,})")
+        if mats["wood"] < bdef["cost_wood"]:
+            missing.append(f"{bdef['cost_wood']} 🪵 (в казне {mats['wood']})")
+        if mats["stone"] < bdef["cost_stone"]:
+            missing.append(f"{bdef['cost_stone']} 🪨 (в казне {mats['stone']})")
+        if mats["herbs"] < bdef["cost_herbs"]:
+            missing.append(f"{bdef['cost_herbs']} 🌿 (в казне {mats['herbs']})")
+        if missing:
+            return False, "Не хватает ресурсов:\n• " + "\n• ".join(missing)
+        payload["treasury_gold"] = tg - bdef["cost_gold"]
+        payload["materials"] = {
+            "wood":  mats["wood"]  - bdef["cost_wood"],
+            "stone": mats["stone"] - bdef["cost_stone"],
+            "herbs": mats["herbs"] - bdef["cost_herbs"],
+        }
     finish = datetime.now(UTC) + timedelta(hours=bdef["build_hours"])
     blds[building_key] = {"built": False, "build_until": finish.isoformat()}
     payload["buildings"] = blds

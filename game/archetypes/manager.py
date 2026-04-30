@@ -164,7 +164,7 @@ def get_tree_bonuses(character: Character) -> dict[str, float | int]:
                 
     return merged
 
-def try_unlock_node(character: Character, node_key: str) -> tuple[bool, str]:
+def try_unlock_node(character: Character, node_key: str, *, admin_bypass: bool = False) -> tuple[bool, str]:
     """Списывает cost_sp узла и открывает узел."""
     tree = get_character_tree(character)
     node = tree.get(node_key)
@@ -176,17 +176,18 @@ def try_unlock_node(character: Character, node_key: str) -> tuple[bool, str]:
         return False, "Узел уже изучен."
         
     sp = get_character_sp(character)
-    if sp < node.cost_sp:
+    if not admin_bypass and sp < node.cost_sp:
         return False, f"Недостаточно очков навыков (нужно {node.cost_sp})."
         
     # Check parents
-    for p_key in node.parent_keys:
-        if p_key not in unlocked:
-            return False, f"Сначала нужно изучить: {tree[p_key].name_ru}."
+    if not admin_bypass:
+        for p_key in node.parent_keys:
+            if p_key not in unlocked:
+                return False, f"Сначала нужно изучить: {tree[p_key].name_ru}."
             
     # Success
     mp = dict(character.meta_progress or {})
-    mp["unspent_sp"] = sp - node.cost_sp
+    mp["unspent_sp"] = max(0, sp - node.cost_sp) if not admin_bypass else sp
     node_list = list(unlocked)
     node_list.append(node_key)
     mp["unlocked_nodes"] = node_list

@@ -30,7 +30,7 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
     """Регистрация всех фоновых задач (UTC)."""
     global _apscheduler
     _apscheduler = scheduler
-    regen_secs = max(60, int(settings.STAMINA_REGEN_INTERVAL))
+    regen_secs = max(180, int(settings.STAMINA_REGEN_INTERVAL))  # минимум 3 мин между тиками
     passive_hp_mp_secs = max(60, int(settings.PASSIVE_HP_MP_INTERVAL_SECONDS))
 
     async def job_world_boss() -> None:

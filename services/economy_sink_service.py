@@ -115,9 +115,8 @@ def try_close_bank_term(character: Character, *, floor_key: int, force_early: bo
 
 
 def _in_city_hub(character: Character, floor_key: int) -> bool:
-    return int(character.floor_number) == int(floor_key) and floor_data.get_city_for_floor(
-        character.floor_number,
-    ) is not None
+    # Accept any city floor — the floor_key in old callbacks may differ if city was relocated.
+    return floor_data.get_city_for_floor(character.floor_number) is not None
 
 
 def try_play_lottery(character: Character, *, floor_key: int) -> tuple[bool, str]:
