@@ -27,6 +27,12 @@ from game.floors.tower_ascent import tower_next_floor_pending
 from services.tutorial_battle_service import tutorial_battle_pending
 
 
+def _navigation_max_floor(character: Character, nav_ceiling: int | None) -> int:
+    if nav_ceiling is not None:
+        return int(nav_ceiling)
+    return int(character.highest_floor_reached)
+
+
 def _cb(floor_number: int, code: str) -> str:
     """Короткий callback: fl:<этаж>:<код слота>."""
     return f"fl:{floor_number}:{code}"
@@ -57,10 +63,11 @@ def floor_screen_keyboard(
     spawns: list[FloorMonsterSpawn],
     *,
     defeated_slots: frozenset[str] | set[str] | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Кнопки этажа: ветка класса, цели, город, навигация 1..max."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -256,10 +263,10 @@ def floor_screen_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def long_floor_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
+def long_floor_screen_keyboard(character: Character, *, nav_ceiling: int | None = None) -> InlineKeyboardMarkup:
     """Клавиатура пилотного длинного этажа (этаж 15): фазы сценария + навигация как на обычном этаже."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     ph = long_floor_mod.current_phase(character)
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -421,10 +428,11 @@ def room_clear_floor_keyboard(
     character: Character,
     *,
     defeated_slots: frozenset[str] | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа 5 — зачистка комнат."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -479,10 +487,11 @@ def wave_floor_screen_keyboard(
     character: Character,
     *,
     defeated_slots: frozenset[str] | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа 10 — волны вторжения (последовательно)."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -536,10 +545,11 @@ def room_clear_floor_10_keyboard(
     character: Character,
     *,
     defeated_slots: frozenset[str] | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа 10 — Тёмные Катакомбы (зачистка комнат)."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -593,10 +603,11 @@ def explore_floor_4_keyboard(
     character: Character,
     *,
     extra: dict | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа 4 — механика исследования леса."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     _extra = extra if extra is not None else {}
     beaten = frozenset(str(x) for x in _extra.get("slots_cleared") or [])
     rows: list[list[InlineKeyboardButton]] = []
@@ -671,10 +682,11 @@ def explore_floor_keyboard(
     character: Character,
     *,
     extra: dict | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа 8 — механика исследования пещеры."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     _extra = extra if extra is not None else {}
     beaten = frozenset(str(x) for x in _extra.get("slots_cleared") or [])
     rows: list[list[InlineKeyboardButton]] = []
@@ -753,10 +765,11 @@ def explore_floor_22_keyboard(
     character: Character,
     *,
     extra: dict | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа 22 — механика исследования Пещеры Теней."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     _extra = extra if extra is not None else {}
     beaten = frozenset(str(x) for x in _extra.get("slots_cleared") or [])
     rows: list[list[InlineKeyboardButton]] = []
@@ -831,10 +844,11 @@ def room_clear_floor_24_keyboard(
     character: Character,
     *,
     defeated_slots: frozenset[str] | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа 24 — Пещеры Теней (зачистка комнат)."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -884,10 +898,11 @@ def wave_floor_27_keyboard(
     character: Character,
     *,
     defeated_slots: frozenset[str] | None = None,
+    nav_ceiling: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа 27 — волны теней."""
     floor_number = int(character.floor_number)
-    highest = int(character.highest_floor_reached)
+    highest = _navigation_max_floor(character, nav_ceiling)
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 

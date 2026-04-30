@@ -34,6 +34,7 @@ from bot.keyboards.floor_kb import (
 from bot.utils.game_ui import push_game_ui, remember_game_ui_anchor
 from db.models.character import Character
 from db.models.floor_progress import FloorProgress
+from config import is_admin as config_is_admin
 from db.repository import floor_progress_repo, inventory_repo
 from game.characters import pets as pets_mod
 from game.combat import night_mode as combat_night
@@ -88,6 +89,16 @@ async def get_spawns_for_character_session(
     return await golden_goblin_service.merge_spawns_if_active(session, character, base)
 
 
+def floor_navigation_ceiling_for_user(character: Character, telegram_user_id: int | None) -> int | None:
+    """
+    Для Telegram-админа навигация «Выше» до 135-го яруса; для остальных — по highest_floor_reached.
+    None: в клавиатуре используется highest_floor_reached персонажа.
+    """
+    if telegram_user_id is None:
+        return None
+    return 135 if config_is_admin(telegram_user_id) else None
+
+
 async def defeated_slot_codes_for_floor(
     session: AsyncSession,
     character_id: int,
@@ -105,58 +116,60 @@ async def defeated_slot_codes_for_floor(
 async def floor_keyboard_for_character(
     session: AsyncSession,
     character: Character,
+    telegram_user_id: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа с отметками ✅ у побеждённых целей."""
     n = int(character.floor_number)
+    nav_ceiling = floor_navigation_ceiling_for_user(character, telegram_user_id)
 
     # Этаж 4 — исследование леса
     if exp4_mod.is_explore_floor_4(n):
         row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
         _extra = dict(row.extra or {})
-        return explore_floor_4_keyboard(character, extra=_extra)
+        return explore_floor_4_keyboard(character, extra=_extra, nav_ceiling=nav_ceiling)
 
     # Этаж 5 — зачистка комнат
     if rc_mod.is_room_clear_floor(n):
         rc_mod.ensure_started(character)
         defeated = await defeated_slot_codes_for_floor(session, character.id, n)
-        return room_clear_floor_keyboard(character, defeated_slots=defeated)
+        return room_clear_floor_keyboard(character, defeated_slots=defeated, nav_ceiling=nav_ceiling)
 
     # Этаж 8 — исследование пещеры
     if exp_mod.is_explore_floor(n):
         row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
         _extra = dict(row.extra or {})
-        return explore_floor_keyboard(character, extra=_extra)
+        return explore_floor_keyboard(character, extra=_extra, nav_ceiling=nav_ceiling)
 
     # Этаж 10 — тёмные катакомбы (зачистка комнат)
     if rc10_mod.is_room_clear_floor_10(n):
         rc10_mod.ensure_started(character)
         defeated = await defeated_slot_codes_for_floor(session, character.id, n)
-        return room_clear_floor_10_keyboard(character, defeated_slots=defeated)
+        return room_clear_floor_10_keyboard(character, defeated_slots=defeated, nav_ceiling=nav_ceiling)
 
     # Этаж 22 — исследование Пещеры Теней
     if exp22_mod.is_explore_floor_22(n):
         row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
         _extra = dict(row.extra or {})
-        return explore_floor_22_keyboard(character, extra=_extra)
+        return explore_floor_22_keyboard(character, extra=_extra, nav_ceiling=nav_ceiling)
 
     # Этаж 24 — зачистка комнат Пещер Теней
     if rc24_mod.is_room_clear_floor_24(n):
         rc24_mod.ensure_started(character)
         defeated = await defeated_slot_codes_for_floor(session, character.id, n)
-        return room_clear_floor_24_keyboard(character, defeated_slots=defeated)
+        return room_clear_floor_24_keyboard(character, defeated_slots=defeated, nav_ceiling=nav_ceiling)
 
     # Этаж 27 — волны теней
     if wv27_mod.is_wave_floor_27(n):
         wv27_mod.ensure_started(character)
         defeated = await defeated_slot_codes_for_floor(session, character.id, n)
-        return wave_floor_27_keyboard(character, defeated_slots=defeated)
+        return wave_floor_27_keyboard(character, defeated_slots=defeated, nav_ceiling=nav_ceiling)
 
     long_floor_mod.ensure_long_floor_started(character)
     if long_floor_mod.is_long_floor_active(character):
-        return long_floor_screen_keyboard(character)
+        return long_floor_screen_keyboard(character, nav_ceiling=nav_ceiling)
     spawns = await get_spawns_for_character_session(session, character)
     defeated = await defeated_slot_codes_for_floor(session, character.id, character.floor_number)
-    return floor_screen_keyboard(character, spawns, defeated_slots=defeated)
+    return floor_screen_keyboard(character, spawns, defeated_slots=defeated, nav_ceiling=nav_ceiling)
 
 
 def format_city_hub_message(character: Character) -> str:
@@ -756,12 +769,22 @@ async def travel_to_floor(
     telegram_id: int | None = None,
     username: str | None = None,
     bot: Bot | None = None,
+    admin_floor_bypass: bool = False,
 ) -> tuple[bool, str | None]:
-    """Перейти на этаж в пределах 1..highest_floor_reached; сброс слотов целей на этом этаже."""
-    hi = int(character.highest_floor_reached)
-    if target_floor < 1 or target_floor > hi:
-        return False, "Этаж ещё не открыт или недоступен."
+    """Перейти на целевой этаж. Обычно 1..highest_floor_reached; админ — до 135 с автоподъёмом highest."""
+
+    tower_top = 135
     old_floor = int(character.floor_number)
+
+    if admin_floor_bypass:
+        if target_floor < 1 or target_floor > tower_top:
+            return False, f"Этаж вне допустимого диапазона (1–{tower_top})."
+        if int(character.highest_floor_reached) < target_floor:
+            character.highest_floor_reached = target_floor
+    else:
+        hi = int(character.highest_floor_reached)
+        if target_floor < 1 or target_floor > hi:
+            return False, "Этаж ещё не открыт или недоступен."
     if old_floor != int(target_floor):
         rotten_swamps_mod.on_travel_floor_change(character, old_floor, int(target_floor))
     if target_floor > old_floor:
@@ -799,6 +822,7 @@ async def travel_by_delta(
     telegram_id: int | None = None,
     username: str | None = None,
     bot: Bot | None = None,
+    admin_floor_bypass: bool = False,
 ) -> tuple[bool, str | None]:
     """Сдвиг текущего этажа на ±1 (или иной delta) в рамках открытых."""
     nxt = int(character.floor_number) + delta
@@ -809,6 +833,7 @@ async def travel_by_delta(
         telegram_id=telegram_id,
         username=username,
         bot=bot,
+        admin_floor_bypass=admin_floor_bypass,
     )
 
 

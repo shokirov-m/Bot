@@ -763,7 +763,7 @@ async def on_quest_callback(
                 query.bot,
                 chat_id=chat_id,
                 text=format_floor_message(char),
-                reply_markup=await floor_keyboard_for_character(session, char),
+                reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                 target_message=query.message,
             )
             await query.answer()
@@ -829,7 +829,7 @@ async def on_quest_callback(
                 query.bot,
                 chat_id=chat_id,
                 text=msg,
-                reply_markup=await floor_keyboard_for_character(session, char),
+                reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                 target_message=query.message,
             )
             await query.answer("Квест обновлён.")

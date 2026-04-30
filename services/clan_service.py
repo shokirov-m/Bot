@@ -674,7 +674,7 @@ async def try_start_building(
     if clan is None:
         return False, "Клан не найден."
     bdef = BUILDING_DEFS[building_key]
-    if int(clan.clan_level) < bdef["unlock_level"]:
+    if int(clan.clan_level) < bdef["unlock_level"] and not admin_bypass:
         return False, f"Нужен уровень клана {bdef['unlock_level']} (сейчас {clan.clan_level})."
     payload = _payload(clan)
     blds = _buildings(payload)
@@ -704,6 +704,12 @@ async def try_start_building(
             "stone": mats["stone"] - bdef["cost_stone"],
             "herbs": mats["herbs"] - bdef["cost_herbs"],
         }
+    if admin_bypass:
+        blds[building_key] = {"built": True, "build_until": None}
+        payload["buildings"] = blds
+        _add_event(payload, f"Постройка завершена: {bdef['name']} (админ)")
+        await clan_repo.update_payload(session, clan, payload)
+        return True, f"✅ <b>{bdef['name']}</b> готова (режим администратора)."
     finish = datetime.now(UTC) + timedelta(hours=bdef["build_hours"])
     blds[building_key] = {"built": False, "build_until": finish.isoformat()}
     payload["buildings"] = blds

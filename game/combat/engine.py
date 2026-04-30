@@ -36,20 +36,21 @@ COMBO_BONUS_MULT = 1.15
 
 def _log_weapon_rune_elemental_once(state: dict[str, Any], elem_bonus: int, logs: list[str]) -> None:
     """
-    Строка в лог боя: как руны на оружии пересекаются со стихией врага (бонус уже в формуле).
-    Показываем при каждом ударе/скилле, где учитывается weapon_rune_bonus_pct.
+    Строка в лог боя: как руны и таблица слабостей пересекаются со стихией врага.
+    pct — итог (weapon_rune_bonus_pct + элементальная таблица), уже учтён в формуле.
     """
     pct = int(elem_bonus)
     payloads = list(state.get("weapon_rune_payloads") or [])
     mon = state.get("monster") or {}
-    mon_el = str(mon.get("element") or "earth")
-    mon_meta = ELEMENTS.get(mon_el, ELEMENTS["earth"])
-    mon_lbl = f"{mon_meta.get('emoji', '')} {mon_meta.get('name', mon_el)}".strip()
-    if not payloads and pct <= 0:
-        return
+    mon_el_raw = str(mon.get("element") or "earth")
+    mon_meta = ELEMENTS.get(mon_el_raw.strip().lower(), ELEMENTS["earth"])
+    mon_lbl = f"{mon_meta.get('emoji', '')} {mon_meta.get('name', mon_el_raw)}".strip()
     if not payloads:
-        head = "🎯 <b>Слабое звено стихии!</b>" if pct >= 30 else "✨ <b>Стихийный резонанс</b>"
-        logs.append(f"{head} против <i>{mon_lbl}</i>: <b>+{pct}%</b> к урону.")
+        if pct > 0:
+            head = "🎯 <b>Слабое звено стихии!</b>" if pct >= 30 else "✨ <b>Стихийный резонанс</b>"
+            logs.append(f"{head} против <i>{mon_lbl}</i>: <b>+{pct}%</b> к урону.")
+        elif pct < 0:
+            logs.append(f"🛡️ <b>Стихия врага сопротивляется:</b> <b>{pct}%</b> к урону vs <i>{mon_lbl}</i>.")
         return
     bits: list[str] = []
     for raw in payloads:
@@ -65,7 +66,10 @@ def _log_weapon_rune_elemental_once(state: dict[str, Any], elem_bonus: int, logs
     if pct <= 0:
         if bits and not state.get("rune_neutral_logged"):
             state["rune_neutral_logged"] = True
-            logs.append(f"⚪ Руны ({rune_lbl}) без преимущества против <i>{mon_lbl}</i>.")
+            if pct < 0:
+                logs.append(f"⚠️ Руны ({rune_lbl}) vs <i>{mon_lbl}</i>: итого <b>{pct}%</b> к урону.")
+            else:
+                logs.append(f"⚪ Руны ({rune_lbl}) без преимущества против <i>{mon_lbl}</i>.")
         return
     head = "🎯 <b>Слабое звено стихии!</b>" if pct >= 30 else "✨ <b>Удар по стихии</b>"
     logs.append(f"{head} — {rune_lbl} vs <i>{mon_lbl}</i>: <b>+{pct}%</b> к урону.")
@@ -328,19 +332,56 @@ def elemental_bonus_percent(attacker_element: str | None, defender_element: str 
     +25% если атакуем слабость врага, -15% если атакуем устойчивость,
     +10% если стихии совпадают (синергия одинаковых стихий).
     """
-    if not attacker_element or not defender_element:
+    from game.items.runes import ELEMENT_RESISTANCE, ELEMENT_WEAKNESS, ELEMENTS
+
+    a = str(attacker_element or "").strip().lower()
+    d = str(defender_element or "").strip().lower()
+    if not a or not d or a not in ELEMENTS or d not in ELEMENTS:
         return 0
-    from game.items.runes import ELEMENT_WEAKNESS, ELEMENT_RESISTANCE
     # Check weakness: defender is weak to attacker's element
-    if ELEMENT_WEAKNESS.get(defender_element) == attacker_element:
+    if ELEMENT_WEAKNESS.get(d) == a:
         return 25
     # Check resistance: defender resists attacker's element
-    if ELEMENT_RESISTANCE.get(defender_element) == attacker_element:
+    if ELEMENT_RESISTANCE.get(d) == a:
         return -15
     # Same-element synergy
-    if attacker_element == defender_element:
+    if a == d:
         return 10
     return 0
+
+
+def player_attack_element_for_matchup(state: dict[str, Any], *, magic_skill: bool = False) -> str | None:
+    """
+    Стихия атакующего игрока для таблицы слабостей.
+    Физ. удары: приоритет у элементов рун на оружии, иначе стихия персонажа.
+    Магические навыки: стихия персонажа (руны задают отдельный % в combat_state).
+    """
+    from game.items.runes import ELEMENTS
+
+    if not magic_skill:
+        for raw in list(state.get("weapon_rune_payloads") or []):
+            if not isinstance(raw, dict):
+                continue
+            el = str(raw.get("element") or "").strip().lower()
+            if el in ELEMENTS:
+                return el
+    raw_ch = state.get("player_character_element")
+    ch = str(raw_ch).strip().lower() if raw_ch else ""
+    return ch if ch in ELEMENTS else None
+
+
+_ELEMENTAL_DAMAGE_PCT_CAP = 250
+_ELEMENTAL_DAMAGE_PCT_FLOOR = -50
+
+
+def combined_player_elemental_damage_percent(state: dict[str, Any], *, magic_skill: bool = False) -> int:
+    """weapon_rune_bonus_pct + таблица слабостей для цели текущего боя."""
+    rb = int(state.get("weapon_rune_bonus_pct", 0))
+    mon = str((_m(state)).get("element") or "earth").strip().lower()
+    atk_el = player_attack_element_for_matchup(state, magic_skill=magic_skill)
+    table = elemental_bonus_percent(atk_el, mon)
+    total = rb + table
+    return max(_ELEMENTAL_DAMAGE_PCT_FLOOR, min(_ELEMENTAL_DAMAGE_PCT_CAP, total))
 
 
 def _apply_weapon_mastery_to_damage(state: dict[str, Any], dmg: int) -> int:
@@ -431,7 +472,7 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
         logs.append("💨 Промах! Удар не достиг цели.")
         return logs, "continue", 0
 
-    elem_bonus = int(state.get("weapon_rune_bonus_pct", 0))
+    elem_bonus = combined_player_elemental_damage_percent(state)
     _log_weapon_rune_elemental_once(state, elem_bonus, logs)
 
     d_yes, _d_ne, elem_extra = formulas.physical_damage_split(
@@ -627,15 +668,18 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
 
     elem_skill = 0
     if sk.kind == "mag":
+        mag_elem = combined_player_elemental_damage_percent(state, magic_skill=True)
+        _log_weapon_rune_elemental_once(state, mag_elem, logs)
         base = formulas.magical_damage(
             int(st["int"]),
             max(2, player_weapon_attack_value(state) // 2),
             mdef,
             mag_bonus_percent=int(mods.get("mag_bonus_percent", 0)),
+            elemental_bonus_percent=mag_elem,
         )
         base = int(base * formulas.int_skill_mag_extra_scale(int(st["int"])))
     else:
-        rb = int(state.get("weapon_rune_bonus_pct", 0))
+        rb = combined_player_elemental_damage_percent(state, magic_skill=False)
         _log_weapon_rune_elemental_once(state, rb, logs)
         d_yes, d_ne, _ = formulas.physical_damage_split(
             int(st["str"]),

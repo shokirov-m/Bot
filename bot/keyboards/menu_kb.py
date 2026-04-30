@@ -132,14 +132,19 @@ def portal_screen_keyboard(
     locale: str = "ru",
     highest_floor_reached: int,
     page: int = 0,
+    portal_admin_unlock: bool = False,
 ) -> InlineKeyboardMarkup:
     """Портал: быстрый переход на важные этажи (список в floor_data.PORTAL_DESTINATION_FLOORS).
 
     Доступные этажи (≤ highest_floor_reached) показываются по `PORTAL_PAGE_SIZE` за страницу.
     Заблокированные не показываем — их слишком много при увеличенном пуле.
+    Админ: все точки портала видны и доступны для перехода из обработчика (блокировку снимает travel).
     """
     loc = locale if locale in ("ru", "en") else "ru"
-    available = [fl for fl in PORTAL_DESTINATION_FLOORS if int(highest_floor_reached) >= int(fl)]
+    if portal_admin_unlock:
+        available = list(PORTAL_DESTINATION_FLOORS)
+    else:
+        available = [fl for fl in PORTAL_DESTINATION_FLOORS if int(highest_floor_reached) >= int(fl)]
     total = len(available)
     if total == 0:
         rows: list[list[InlineKeyboardButton]] = [

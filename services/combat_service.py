@@ -471,6 +471,9 @@ def _build_combat_dict(
         "rune_armor_mult": 1.0,
         "weapon_rune_payloads": [],
         "rune_synergy_name": "",
+        "player_character_element": (
+            str(character.element).strip().lower() if (character.element and str(character.element).strip()) else None
+        ),
         "player_level_def_bonus": max(0, int(character.level) - 1) * int(PLAYER_DEFENSE_BONUS_PER_LEVEL),
         "battle_taunt_html": "",
         "combo_streak": 0,

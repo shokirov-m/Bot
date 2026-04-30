@@ -27,6 +27,7 @@ from bot.states.combat_states import CombatStates
 from bot.i18n import get_locale, t
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
+from config import is_admin
 from bot.handlers.quests import render_quests_hub
 from services import daily_service, title_service
 from services.daily_service import build_daily_body_html
@@ -221,7 +222,7 @@ async def menu_floor(callback: CallbackQuery, session: AsyncSession, state: FSMC
             from bot.handlers.floor_zero import show_floor0_from_callback
             await show_floor0_from_callback(callback, state)
             return
-        kb = await floor_keyboard_for_character(session, char)
+        kb = await floor_keyboard_for_character(session, char, telegram_user_id=callback.from_user.id)
         await push_floor_screen_ui(
             session,
             state,
@@ -253,7 +254,11 @@ async def menu_portal_open(callback: CallbackQuery, session: AsyncSession, state
         loc = get_locale(char, callback.from_user.language_code)
         floors_txt = ", ".join(str(x) for x in PORTAL_DESTINATION_FLOORS)
         body = t(loc, "portal_intro", floors=floors_txt)
-        kb = portal_screen_keyboard(locale=loc, highest_floor_reached=int(char.highest_floor_reached))
+        kb = portal_screen_keyboard(
+            locale=loc,
+            highest_floor_reached=int(char.highest_floor_reached),
+            portal_admin_unlock=is_admin(callback.from_user.id),
+        )
         await push_game_ui(
             state,
             callback.bot,
@@ -293,6 +298,7 @@ async def menu_portal_page(callback: CallbackQuery, session: AsyncSession, state
             locale=loc,
             highest_floor_reached=int(char.highest_floor_reached),
             page=page,
+            portal_admin_unlock=is_admin(callback.from_user.id),
         )
         await push_game_ui(
             state,
@@ -324,13 +330,14 @@ async def menu_portal_travel(callback: CallbackQuery, session: AsyncSession, sta
             return
         loc = get_locale(char, callback.from_user.language_code)
         target = int(callback.data.split(":")[2])
+        _adm_p = is_admin(callback.from_user.id)
         if target not in PORTAL_DESTINATION_FLOORS:
             await callback.answer()
             return
         if int(char.floor_number) == target:
             await callback.answer(t(loc, "portal_same_floor"), show_alert=True)
             return
-        if int(char.highest_floor_reached) < target:
+        if not _adm_p and int(char.highest_floor_reached) < target:
             await callback.answer(t(loc, "portal_locked_alert", n=target), show_alert=True)
             return
         ok, err = await travel_to_floor(
@@ -340,12 +347,13 @@ async def menu_portal_travel(callback: CallbackQuery, session: AsyncSession, sta
             telegram_id=callback.from_user.id,
             username=callback.from_user.username,
             bot=callback.bot,
+            admin_floor_bypass=_adm_p,
         )
         if not ok:
             await callback.answer(err or "Нельзя.", show_alert=True)
             return
         await session.commit()
-        kb = await floor_keyboard_for_character(session, char)
+        kb = await floor_keyboard_for_character(session, char, telegram_user_id=callback.from_user.id)
         await push_floor_screen_ui(
             session,
             state,

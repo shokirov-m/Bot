@@ -425,7 +425,7 @@ async def on_floor0_enter_tower(
             query.bot,
             chat_id=query.message.chat.id,
             character=char,
-            reply_markup=await floor_keyboard_for_character(session, char),
+            reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
             target_message=query.message,
         )
         await query.answer("Добро пожаловать в Башню!")

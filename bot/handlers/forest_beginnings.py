@@ -107,7 +107,7 @@ async def on_swamp_abandoned_camp(
             query.bot,
             chat_id=query.message.chat.id,
             character=char,
-            reply_markup=await floor_keyboard_for_character(session, char),
+            reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
             target_message=query.message,
             text_suffix=note,
         )
@@ -167,7 +167,7 @@ async def on_forest_camp(
             query.bot,
             chat_id=query.message.chat.id,
             character=char,
-            reply_markup=await floor_keyboard_for_character(session, char),
+            reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
             target_message=query.message,
             text_suffix=suffix,
         )
@@ -233,7 +233,7 @@ async def on_forest_mushroom(
             query.bot,
             chat_id=query.message.chat.id,
             character=char,
-            reply_markup=await floor_keyboard_for_character(session, char),
+            reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
             target_message=query.message,
             text_suffix=suffix,
         )
@@ -313,7 +313,7 @@ async def on_forest_spirit_choice(
             query.bot,
             chat_id=query.message.chat.id,
             character=char,
-            reply_markup=await floor_keyboard_for_character(session, char),
+            reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
             target_message=query.message,
             text_suffix=suffix,
         )

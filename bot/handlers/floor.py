@@ -21,6 +21,7 @@ from bot.keyboards.forest_kb import forest_mushroom_keyboard, forest_spirit_keyb
 from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
+from config import is_admin
 from game.characters import pets as pets_mod
 from game.floors import floor_data
 from game.floors import wandering_npcs as wandering_npcs_mod
@@ -73,7 +74,7 @@ async def cmd_floor(message: Message, session: AsyncSession, state: FSMContext) 
             await show_floor0(message, state)
             return
 
-        kb = await floor_keyboard_for_character(session, char)
+        kb = await floor_keyboard_for_character(session, char, telegram_user_id=tg.id)
         await push_floor_screen_ui(
             session,
             state,
@@ -109,6 +110,7 @@ async def on_floor_nav_step(
             await query.answer("Сначала /start.", show_alert=True)
             return
         delta = 1 if query.data == "flnav:up" else -1
+        _adm_nav = is_admin(query.from_user.id)
         ok, err = await travel_by_delta(
             session,
             char,
@@ -116,6 +118,7 @@ async def on_floor_nav_step(
             telegram_id=query.from_user.id,
             username=query.from_user.username,
             bot=query.bot,
+            admin_floor_bypass=_adm_nav,
         )
         if not ok:
             await query.answer(err or "Нельзя.", show_alert=True)
@@ -126,7 +129,7 @@ async def on_floor_nav_step(
             query.bot,
             chat_id=query.message.chat.id,
             character=char,
-            reply_markup=await floor_keyboard_for_character(session, char),
+            reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
             target_message=query.message,
         )
         await query.answer(f"Этаж {char.floor_number}")
@@ -168,7 +171,7 @@ async def on_scrap_merchant_callback(
                 query.bot,
                 chat_id=query.message.chat.id,
                 character=char,
-                reply_markup=await floor_keyboard_for_character(session, char),
+                reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                 target_message=query.message,
             )
             await query.answer()
@@ -181,7 +184,7 @@ async def on_scrap_merchant_callback(
                     query.bot,
                     chat_id=query.message.chat.id,
                     character=char,
-                    reply_markup=await floor_keyboard_for_character(session, char),
+                    reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                     target_message=query.message,
                 )
             else:
@@ -284,8 +287,7 @@ async def on_floor_callback(
             return
 
         # Авто-пополнение ресурсов для администратора
-        from config import is_admin as _is_admin
-        if _is_admin(query.from_user.id):
+        if is_admin(query.from_user.id):
             try:
                 from services.admin_utils import ensure_admin_resources
                 await ensure_admin_resources(session, char)
@@ -404,7 +406,7 @@ async def on_floor_callback(
                     query.bot,
                     chat_id=query.message.chat.id,
                     character=char,
-                    reply_markup=await floor_keyboard_for_character(session, char),
+                    reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                     target_message=query.message,
                 )
                 await query.answer(
@@ -454,7 +456,7 @@ async def on_floor_callback(
                 query.bot,
                 chat_id=query.message.chat.id,
                 character=char,
-                reply_markup=await floor_keyboard_for_character(session, char),
+                reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                 target_message=query.message,
             )
             await query.answer()
@@ -471,7 +473,7 @@ async def on_floor_callback(
                 query.bot,
                 chat_id=query.message.chat.id,
                 character=char,
-                reply_markup=await floor_keyboard_for_character(session, char),
+                reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                 target_message=query.message,
             )
             await query.answer()
@@ -562,7 +564,7 @@ async def on_floor_callback(
                 await push_floor_screen_ui(
                     session, state, query.bot,
                     chat_id=query.message.chat.id, character=char,
-                    reply_markup=await floor_keyboard_for_character(session, char),
+                    reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                     target_message=query.message,
                 )
             return
@@ -590,11 +592,10 @@ async def on_floor_callback(
                 await query.answer()
                 return
             from game.floors.tower_ascent import tower_next_floor_pending, set_tower_ascent_pending
-            from config import is_admin as _is_admin
 
             pend = tower_next_floor_pending(char)
             if pend is None:
-                if _is_admin(query.from_user.id):
+                if is_admin(query.from_user.id):
                     # Администратор: автоматически открываем следующий этаж
                     next_fl = int(char.floor_number) + 1
                     if next_fl > 135:
@@ -616,6 +617,7 @@ async def on_floor_callback(
                 telegram_id=query.from_user.id,
                 username=query.from_user.username,
                 bot=query.bot,
+                admin_floor_bypass=is_admin(query.from_user.id),
             )
             if not ok:
                 await query.answer(err or "Нельзя подняться.", show_alert=True)
@@ -626,7 +628,7 @@ async def on_floor_callback(
                 query.bot,
                 chat_id=query.message.chat.id,
                 character=char,
-                reply_markup=await floor_keyboard_for_character(session, char),
+                reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                 target_message=query.message,
             )
             await query.answer(f"Этаж {char.floor_number}")
@@ -643,6 +645,7 @@ async def on_floor_callback(
                 telegram_id=query.from_user.id,
                 username=query.from_user.username,
                 bot=query.bot,
+                admin_floor_bypass=is_admin(query.from_user.id),
             )
             if not ok:
                 await query.answer(err or "Нельзя.", show_alert=True)
@@ -653,7 +656,7 @@ async def on_floor_callback(
                 query.bot,
                 chat_id=query.message.chat.id,
                 character=char,
-                reply_markup=await floor_keyboard_for_character(session, char),
+                reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                 target_message=query.message,
             )
             await query.answer(f"Этаж {char.floor_number}")
@@ -917,7 +920,7 @@ async def on_floor_callback(
                     query.bot,
                     chat_id=query.message.chat.id,
                     character=char,
-                    reply_markup=await floor_keyboard_for_character(session, char),
+                    reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                     target_message=query.message,
                 )
                 await query.answer("Ключи найдены.")
@@ -934,7 +937,7 @@ async def on_floor_callback(
                     query.bot,
                     chat_id=query.message.chat.id,
                     character=char,
-                    reply_markup=await floor_keyboard_for_character(session, char),
+                    reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
                     target_message=query.message,
                 )
                 await query.answer()
