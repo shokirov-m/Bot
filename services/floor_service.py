@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import html
+import json
 import random
 from dataclasses import dataclass
 
@@ -762,6 +763,24 @@ class SecretSearchOutcome:
     body_html: str | None
 
 
+def _floor_progress_extra_as_dict(raw: object) -> dict[str, object]:
+    """Нормализация floor_progress.extra: JSON иногда приходит строкой — ``dict(raw)`` даёт ValueError."""
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return {}
+        try:
+            parsed = json.loads(s)
+            return dict(parsed) if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
 async def travel_to_floor(
     session: AsyncSession,
     character: Character,
@@ -852,9 +871,14 @@ async def try_secret_search(
             body_html=None,
         )
     row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
-    visits = int(row.visits)
-    extra = dict(row.extra or {})
-    if int(extra.get("secret_attempt_visit", -1)) == visits:
+    visits = int(row.visits or 0)
+    extra = _floor_progress_extra_as_dict(row.extra)
+    _prev_raw = extra.get("secret_attempt_visit", -1)
+    try:
+        prev_attempt = int(_prev_raw)
+    except (TypeError, ValueError):
+        prev_attempt = -1
+    if prev_attempt == visits:
         return SecretSearchOutcome(
             alert=(
                 "🔍 Тайник уже обыскан.\n\n"

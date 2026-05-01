@@ -1207,7 +1207,7 @@ async def on_floor_callback(
             if outcome.alert:
                 await query.answer(outcome.alert, show_alert=True)
                 return
-            await session.commit()
+            # Коммит делает DbSessionMiddleware после успешного хендлера; второй commit здесь ломал сессию (async/SQLite).
             await push_game_ui(
                 state,
                 query.bot,
