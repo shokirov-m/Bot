@@ -181,6 +181,43 @@ async def aggregate_chance_bonuses(
     return out
 
 
+def merge_equipment_chances_into_passive_mods(
+    passive_mods: dict[str, Any],
+    gear_chances: dict[str, float],
+) -> dict[str, Any]:
+    """
+    Вливает шансы с предметов в passive_mods боя (то же, что показывается в профиле).
+    Поля bleed/poison/burn/freeze на предметах мапятся на ключи, которые читает engine (on_hit_*).
+    lifesteal_chance в данных предметов не используется отдельным эффектом — только пассивы passive_gear / lifesteal_percent.
+    """
+    out: dict[str, Any] = dict(passive_mods)
+    for key in ("crit_bonus", "dodge_bonus"):
+        v = float(gear_chances.get(key, 0.0) or 0.0)
+        if v != 0.0:
+            out[key] = float(out.get(key, 0) or 0) + v
+    mapping = (
+        ("bleed_chance", "on_hit_bleed_chance"),
+        ("poison_chance", "on_hit_poison_chance"),
+        ("burn_chance", "on_hit_burn_chance"),
+        ("freeze_chance", "on_hit_freeze_chance"),
+    )
+    for src, dst in mapping:
+        v = float(gear_chances.get(src, 0.0) or 0.0)
+        if v != 0.0:
+            out[dst] = float(out.get(dst, 0) or 0) + v
+    st = float(gear_chances.get("stun_chance", 0.0) or 0.0)
+    if st != 0.0:
+        out["stun_chance"] = float(out.get("stun_chance", 0) or 0) + st
+    blk = float(gear_chances.get("block_chance", 0.0) or 0.0)
+    if blk != 0.0:
+        out["block_chance"] = float(out.get("block_chance", 0) or 0) + blk
+    mr = float(gear_chances.get("miss_reduction", 0.0) or 0.0)
+    if mr != 0.0:
+        cur = float(out.get("extra_miss_chance", 0) or 0)
+        out["extra_miss_chance"] = cur - mr
+    return out
+
+
 def format_chance_bonuses_html(bonuses: dict[str, float]) -> str:
     """HTML-блок «Бонусы экипировки» с шансами. Возвращает '' если ничего нет."""
     labels = {

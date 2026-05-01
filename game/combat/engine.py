@@ -152,6 +152,30 @@ def _mods(state: dict[str, Any]) -> dict[str, Any]:
     return mods
 
 
+def apply_equipment_on_hit_procs(state: dict[str, Any], mods: dict[str, Any], logs: list[str]) -> None:
+    """Проки статусов и оглушения с экипировки после успешного удара по HP монстра."""
+    obc = float(mods.get("on_hit_bleed_chance", 0.0))
+    if obc > 0 and random.random() < obc:
+        effects.add_effect("monster", state, "Кровотечение", "bleed", 3, {"potency_percent": 4})
+        logs.append("🩸 Враг кровоточит от твоего удара!")
+    obrn = float(mods.get("on_hit_burn_chance", 0.0))
+    if obrn > 0 and random.random() < obrn:
+        effects.add_effect("monster", state, "Поджог", "burn", 3, {"potency_percent": 4})
+        logs.append("🔥 Враг охвачен огнём!")
+    ofz = float(mods.get("on_hit_freeze_chance", 0.0))
+    if ofz > 0 and random.random() < ofz:
+        state["monster_skip_next"] = True
+        logs.append("❄️ Враг скован льдом — пропустит ход!")
+    opo = float(mods.get("on_hit_poison_chance", 0.0))
+    if opo > 0 and random.random() < opo:
+        effects.add_effect("monster", state, "Яд", "poison", 3, {"potency_percent": 4})
+        logs.append("☠️ Враг отравлен!")
+    ost = float(mods.get("stun_chance", 0.0))
+    if ost > 0 and random.random() < ost:
+        state["monster_skip_next"] = True
+        logs.append("⭐ Экипировка оглушает — враг может пропустить ход!")
+
+
 def apply_floor_aura_effects(state: dict[str, Any]) -> list[str]:
     logs = []
     aura = state.get("floor_aura")
@@ -466,9 +490,10 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     if check_and_consume_monster_shield(state, logs):
         return logs, "continue", 0
 
-    # Проверка промаха (зависит от ЛОВ: ЛОВ=0 → 20%, ЛОВ=85+ → 3%)
+    # Проверка промаха (зависит от ЛОВ; extra_miss_chance из ауры и экипировки / мастерства)
     aura_miss = float(state.get("player_aura_miss_chance", 0.0))
-    if formulas.roll_miss(int(st["dex"]), extra_miss_chance=aura_miss):
+    mod_miss = float(mods.get("extra_miss_chance", 0.0))
+    if formulas.roll_miss(int(st["dex"]), extra_miss_chance=aura_miss + mod_miss):
         logs.append("💨 Промах! Удар не достиг цели.")
         return logs, "continue", 0
 
@@ -523,22 +548,7 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     else:
         logs.append(f"→ Ты нанёс 🗡️ {dmg} урона")
 
-    obc = float(mods.get("on_hit_bleed_chance", 0.0))
-    if obc > 0 and random.random() < obc:
-        effects.add_effect("monster", state, "Кровотечение", "bleed", 3, {"potency_percent": 4})
-        logs.append("🩸 Враг кровоточит от твоего удара!")
-    obrn = float(mods.get("on_hit_burn_chance", 0.0))
-    if obrn > 0 and random.random() < obrn:
-        effects.add_effect("monster", state, "Поджог", "burn", 3, {"potency_percent": 4})
-        logs.append("🔥 Враг охвачен огнём!")
-    ofz = float(mods.get("on_hit_freeze_chance", 0.0))
-    if ofz > 0 and random.random() < ofz:
-        state["monster_skip_next"] = True
-        logs.append("❄️ Враг скован льдом — пропустит ход!")
-    opo = float(mods.get("on_hit_poison_chance", 0.0))
-    if opo > 0 and random.random() < opo:
-        effects.add_effect("monster", state, "Яд", "poison", 3, {"potency_percent": 4})
-        logs.append("☠️ Враг отравлен!")
+    apply_equipment_on_hit_procs(state, mods, logs)
 
     syn = str(state.get("rune_synergy_name") or "")
     if syn and not state.get("rune_syn_logged"):
@@ -813,6 +823,8 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     else:
         logs.append(f"{tag} {sk.name}: {dmg} урона")
 
+    apply_equipment_on_hit_procs(state, mods, logs)
+
     mon["hp"] = max(0, mhp - dmg)
     passive_gear.apply_lifesteal_for_damage(state, dmg, logs)
     lnx2 = maybe_lightning_execute_after_monster_damaged(state, logs)
@@ -970,6 +982,12 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             em = str(m.get("strike_ailment_emoji") or "✨")
             lab = str(m.get("strike_ailment_label_ru") or "особым ударом")
             logs.append(f"{em} Доп. урон {lab}: −{extra} HP")
+    blk_p = float(_mods(state).get("block_chance", 0.0))
+    if blk_p > 0.0 and dmg > 0 and random.random() < min(0.85, blk_p):
+        new_d = max(1, int(round(dmg * 0.38)))
+        if new_d < dmg:
+            logs.append("🛡️ Блок экипировки — входящий урон снижен.")
+        dmg = new_d
     pre_php = int(state["player_hp"])
     shield = int(state.get("player_shield_hp", 0))
     if shield > 0:
@@ -1012,6 +1030,12 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             dmg2 = max(1, int(round(dmg2 * ftkm)))
         if dtm < 0.999:
             dmg2 = max(1, int(round(dmg2 * dtm)))
+        blk_p2 = float(_mods(state).get("block_chance", 0.0))
+        if blk_p2 > 0.0 and dmg2 > 0 and random.random() < min(0.85, blk_p2):
+            nd2 = max(1, int(round(dmg2 * 0.38)))
+            if nd2 < dmg2:
+                logs.append("🛡️ Блок экипировки — второй удар ослаблен.")
+            dmg2 = nd2
         shield2 = int(state.get("player_shield_hp", 0))
         if shield2 > 0:
             absorbed2 = min(shield2, dmg2)

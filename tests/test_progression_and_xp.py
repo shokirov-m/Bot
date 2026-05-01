@@ -18,21 +18,25 @@ def test_zone_multiplier_edges() -> None:
 
 
 def test_experience_level1_threshold() -> None:
-    mult = zone_multiplier_for_floor(1)
-    n2 = max(1, int(PROGRESSION_BASE_EXP * (2**2.2) * mult))
+    n2 = max(1, int(PROGRESSION_BASE_EXP * (2**2.2)))
     assert experience_needed_for_next_level(1, 1) == max(1, n2 // PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2)
 
 
 def test_experience_level2_uses_divisor_vs_raw_formula() -> None:
     """С 2-го уровня порог = ceil(raw / divisor), не «как есть»."""
-    floor = 1
-    need = experience_needed_for_next_level(2, floor)
-    mult = zone_multiplier_for_floor(floor)
+    need = experience_needed_for_next_level(2)
     from game.balance import PROGRESSION_BASE_EXP
 
     n_next = 3
-    raw = max(1, int(PROGRESSION_BASE_EXP * (n_next**2.2) * mult))
+    raw = max(1, int(PROGRESSION_BASE_EXP * (n_next**2.2)))
     assert need == max(1, raw // PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2)
+
+
+def test_experience_needed_independent_of_floor() -> None:
+    """Порог до следующего уровня не должен зависеть от текущего этажа."""
+    ref = experience_needed_for_next_level(7)
+    for floor in (1, 16, 100):
+        assert experience_needed_for_next_level(7, floor) == ref
 
 
 def test_add_experience_single_level() -> None:

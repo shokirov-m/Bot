@@ -6,8 +6,8 @@
 from __future__ import annotations
 
 # --- Прогрессия (уровни / зоны) ---
-PROGRESSION_BASE_EXP = 80
-PROGRESSION_LEVEL1_XP_NEEDED = 100
+PROGRESSION_BASE_EXP = 120
+PROGRESSION_LEVEL1_XP_NEEDED = 150
 # После расчёта по формуле ТЗ делим порог (активно с уровня 2 → 3 и выше)
 PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2 = 4
 

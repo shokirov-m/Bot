@@ -423,6 +423,19 @@ async def _equipped_gear_defense_total(session: AsyncSession, character_id: int)
     return total
 
 
+async def _merge_equipment_chance_mods_into_combat(
+    session: AsyncSession,
+    character: Character,
+    combat_state: dict[str, Any],
+) -> None:
+    """Шансы с предметов (как в профиле) → passive_mods боя."""
+    gc = await stat_bonus_service.aggregate_chance_bonuses(session, character.id)
+    combat_state["passive_mods"] = stat_bonus_service.merge_equipment_chances_into_passive_mods(
+        combat_state.get("passive_mods") or {},
+        gc,
+    )
+
+
 def _build_combat_dict(
     character: Character,
     spawn: FloorMonsterSpawn,
@@ -736,6 +749,7 @@ async def start_combat(
     )
     if _glogs:
         _append_logs(combat_state, _glogs)
+    await _merge_equipment_chance_mods_into_combat(session, character, combat_state)
     # Lifesteal from skill tree passive nodes goes into gear_lifesteal_percent
     _tree_ls = float(combat_state.get("passive_mods", {}).get("lifesteal_percent", 0) or 0)
     if _tree_ls > 0:
@@ -943,6 +957,10 @@ async def start_tutorial_combat(
     )
     if _tlg:
         _append_logs(combat_state, _tlg)
+    await _merge_equipment_chance_mods_into_combat(session, character, combat_state)
+    _tree_ls_tut = float((combat_state.get("passive_mods") or {}).get("lifesteal_percent", 0) or 0)
+    if _tree_ls_tut > 0:
+        combat_state["gear_lifesteal_percent"] = float(combat_state.get("gear_lifesteal_percent", 0.0)) + _tree_ls_tut
     combat_state["is_tutorial"] = True
     combat_state["night_battle"] = False
     combat_state["tutorial_phase"] = 1

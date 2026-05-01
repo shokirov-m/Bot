@@ -220,7 +220,7 @@ def _build_profile_text(
     t2 = html.escape(sec_s) if sec_s else "—"
     titles_row = f"① {t1} · ② {t2}" if (char.active_title or sec_s) else "—"
 
-    xp_need = experience_needed_for_next_level(char.level, char.floor_number)
+    xp_need = experience_needed_for_next_level(char.level)
     st_hint = _stamina_minutes_hint(char.stamina, char.last_stamina_regen_at)
 
     gb = gear_stat_bonus or {k: 0 for k in ("str", "dex", "int", "vit", "luck")}

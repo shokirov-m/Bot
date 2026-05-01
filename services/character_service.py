@@ -105,17 +105,19 @@ def zone_multiplier_for_floor(floor_number: int) -> float:
     return ZONE_MULTIPLIER_BY_MAX_FLOOR[-1][1]
 
 
-def experience_needed_for_next_level(level: int, floor_number: int) -> int:
-    """Опыт до следующего уровня с учётом этажа (зона).
+def experience_needed_for_next_level(level: int, floor_number: int | None = None) -> int:
+    """Опыт до следующего уровня — только от текущего уровня персонажа.
 
-    Единая формула для всех уровней — без отдельного порога для 1→2,
-    чтобы не было резкого скачка «полоски опыта» сразу после первого аппа.
+    Параметр floor_number оставлен для совместимости вызовов и игнорируется:
+    раньше порог умножался на «зону этажа», из‑за чего при том же уровне требуемый опыт
+    менялся при переходе между этажами (например, после возврата на низкие этажи).
+    Начисление опыта за бои по-прежнему может зависеть от этажа отдельно.
     """
+    _ = floor_number  # совместимость API
     if level < 1:
         level = 1
     n_next = level + 1
-    mult = zone_multiplier_for_floor(floor_number)
-    need = max(1, int(PROGRESSION_BASE_EXP * (n_next**2.2) * mult))
+    need = max(1, int(PROGRESSION_BASE_EXP * (n_next**2.2)))
     need = max(1, need // PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2)
     return need
 
@@ -330,7 +332,7 @@ def add_experience(character: Character, amount: int) -> int:
     character.experience = int(character.experience) + amt
     levels = 0
     while True:
-        need = experience_needed_for_next_level(character.level, character.floor_number)
+        need = experience_needed_for_next_level(character.level)
         if character.experience < need:
             break
         character.experience -= need
