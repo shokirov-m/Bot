@@ -157,6 +157,23 @@ def build_spawns_for_floor(floor_number: int) -> list[FloorMonsterSpawn]:
     zone = floor_data.get_zone_for_floor(floor_number)
     pool = _pool(zone.key)
     picks = _pick_indices(floor_number, 6, len(pool))
+    # Квест «Волчья стража» (Эйрис): на 2–5 ярусах леса должна быть хотя бы одна цель-волк.
+    if zone.key == "forest_beginnings" and 2 <= int(floor_number) <= 5 and pool:
+        wolf_ix = [i for i, t in enumerate(pool) if "wolf" in (t.key or "").lower()]
+        if wolf_ix:
+            has_wolf = any("wolf" in pool[p].key.lower() for p in picks)
+            if not has_wolf:
+                w0 = wolf_ix[int(floor_number) % len(wolf_ix)]
+                picks = [w0] + [p for p in picks if p != w0]
+                cap = min(6, len(pool))
+                if len(picks) < cap:
+                    for cand in range(len(pool)):
+                        if len(picks) >= cap:
+                            break
+                        if cand not in picks:
+                            picks.append(cand)
+                picks = picks[:cap]
+
     spawns: list[FloorMonsterSpawn] = []
 
     for i, idx in enumerate(picks):

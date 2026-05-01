@@ -1423,11 +1423,12 @@ async def _victory_sequence(
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
 
-    # Сюжетный квест Эйрис: убийства волков на этажах 2–5
+    # Сюжетный квест Эйрис: убийства волков на этажах 2–5 (ключ или русское имя).
     try:
         _sq_floor = int(combat_state.get("floor", character.floor_number))
         _sq_tkey = str(spawn.template.key or "").lower()
-        if 2 <= _sq_floor <= 5 and "wolf" in _sq_tkey:
+        _sq_nm = str(spawn.template.name or "").lower()
+        if 2 <= _sq_floor <= 5 and ("wolf" in _sq_tkey or "волк" in _sq_nm):
             from game.quests.story_quests import increment_kill_counter
             increment_kill_counter(character, "sq_eyris_wolves")
     except Exception:
@@ -1646,7 +1647,7 @@ async def _victory_sequence(
         # Boss Trophies Drop (Guaranteed)
         if boss_like:
             from game.items import materials
-            trophy_count = 3 if spawn.is_major_boss else 1
+            trophy_count = 1
             slot_t = await inventory_repo.first_free_bag_slot(session, character.id)
             if slot_t is not None:
                 await inventory_repo.add_bag_item(
@@ -2154,6 +2155,18 @@ async def handle_combat_callback(
     lines: list[str] = []
     failed_escape = False
     combat_state["ui_logs"] = []
+
+    if action == "sk" and skill_index is not None:
+        br = engine.player_skill_blocked_reason(combat_state, skill_index)
+        if br is not None:
+            await query.answer(br, show_alert=True)
+            if query.from_user is not None:
+                await combat_idle_service.arm_combat_idle_after_player_turn(
+                    bot=query.bot,
+                    state=state,
+                    telegram_user_id=int(query.from_user.id),
+                )
+            return
 
     # Доты и пассивная регенерация MP в начале твоего хода
     lines.extend(engine.apply_dot_damage_player(combat_state))

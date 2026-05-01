@@ -572,6 +572,31 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     return logs, "continue", dmg
 
 
+def player_skill_blocked_reason(state: dict[str, Any], index: int) -> str | None:
+    """
+    Проверка до расхода хода: пустой слот, перезарядка или нехватка MP.
+    Оглушение обрабатывается отдельно в player_skill (тратит ход).
+    """
+    skill_src = str(state.get("combat_skill_class_key") or state.get("class_key") or "wanderer")
+    skills: tuple[SkillDef, SkillDef, SkillDef] = state.get("combat_skills") or skills_for_class(skill_src)
+    if index < 0 or index > 2:
+        return "Нет такого навыка."
+    sk: SkillDef = skills[index]
+    if sk.key == "_empty":
+        return "Пустой слот навыка — назначь способность в профиле."
+    cd = int(state["skill_cd"].get(str(index), 0))
+    if cd > 0:
+        return f"Навык на перезарядке ({cd} х.)."
+    mp = int(state["player_mp"])
+    cost = sk.mp_cost
+    mp_mult = float(state.get("player_mp_cost_mult", 1.0))
+    if mp_mult != 1.0:
+        cost = int(cost * mp_mult)
+    if mp < cost:
+        return f"Недостаточно MP (нужно {cost})."
+    return None
+
+
 def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome | None, int]:
     """
     Возвращает (логи, исход, урон_по_врагу) или (логи, None, 0) если навык не применён.
@@ -585,30 +610,20 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         logs.append("💫 Оглушён! Навык не сработал.")
         return logs, "continue", 0
 
-    skill_src = str(state.get("combat_skill_class_key") or state.get("class_key") or "wanderer")
-    skills: tuple[SkillDef, SkillDef, SkillDef] = state.get("combat_skills") or skills_for_class(skill_src)
-    if index < 0 or index > 2:
-        logs.append("Нет такого навыка.")
+    blocked = player_skill_blocked_reason(state, index)
+    if blocked is not None:
+        logs.append(blocked)
         return logs, None, 0
 
+    skill_src = str(state.get("combat_skill_class_key") or state.get("class_key") or "wanderer")
+    skills: tuple[SkillDef, SkillDef, SkillDef] = state.get("combat_skills") or skills_for_class(skill_src)
     sk: SkillDef = skills[index]
-    if sk.key == "_empty":
-        logs.append("Пустой слот навыка — экипируй навык в статусе.")
-        return logs, None, 0
-    cd = int(state["skill_cd"].get(str(index), 0))
-    if cd > 0:
-        logs.append(f"Навык на перезарядке ({cd} х.).")
-        return logs, None, 0
 
     mp = int(state["player_mp"])
     cost = sk.mp_cost
     mp_mult = float(state.get("player_mp_cost_mult", 1.0))
     if mp_mult != 1.0:
         cost = int(cost * mp_mult)
-
-    if mp < cost:
-        logs.append(f"Недостаточно MP (нужно {cost}).")
-        return logs, None, 0
 
     state["player_mp"] = mp - cost
     state["skill_cd"][str(index)] = sk.cooldown

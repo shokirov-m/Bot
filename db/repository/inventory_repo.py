@@ -287,13 +287,14 @@ async def add_bag_item(
     item_data: dict,
     *,
     bag_slot: int | None = None,
-) -> InventoryItem:
+) -> InventoryItem | None:
     """
     Добавить предмет в сумку.
     Для ресурсов/расходников — стакуется в существующую запись (`item_data["count"] += n`),
     иначе создаётся новая запись (снаряжение, заточка, руны и т.п.).
     Если стакаемый предмет приходит без `bag_slot` и в сумке нет существующего стака —
     автоматически берётся первый свободный слот, чтобы он не оказался "невидимым".
+    Если свободных слотов нет (лимит BAG_MAX_SLOT_INDEX), возвращает None — не создаёт запись с bag_slot=NULL.
     """
     data = copy.deepcopy(item_data)
     apply_item_payload_defaults(data)
@@ -310,6 +311,8 @@ async def add_bag_item(
             data["count"] = 1
         if bag_slot is None:
             bag_slot = await first_free_bag_slot(session, character_id)
+        if bag_slot is None:
+            return None
     row = InventoryItem(
         character_id=character_id,
         is_equipped=False,

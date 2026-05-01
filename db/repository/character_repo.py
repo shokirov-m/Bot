@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db.models.character import Character
+from game.economy import stamina as stamina_mod
 from db.models.user import User
 from services.meta_migration_service import apply_legacy_title_rank_migration
 
@@ -20,6 +21,7 @@ async def get_by_id(session: AsyncSession, character_id: int) -> Character | Non
     char = result.scalar_one_or_none()
     if char is not None:
         apply_legacy_title_rank_migration(char)
+        await stamina_mod.catch_up_stamina_for_character(session, char)
     return char
 
 
@@ -31,6 +33,7 @@ async def get_by_user_id(session: AsyncSession, user_id: int) -> Character | Non
     char = result.scalar_one_or_none()
     if char is not None:
         apply_legacy_title_rank_migration(char)
+        await stamina_mod.catch_up_stamina_for_character(session, char)
     return char
 
 
@@ -47,6 +50,7 @@ async def get_by_user_id_with_user(
     char = result.scalar_one_or_none()
     if char is not None:
         apply_legacy_title_rank_migration(char)
+        await stamina_mod.catch_up_stamina_for_character(session, char)
     return char
 
 
@@ -97,6 +101,7 @@ async def get_by_game_id(session: AsyncSession, game_id: int) -> Character | Non
     char = result.scalar_one_or_none()
     if char is not None:
         apply_legacy_title_rank_migration(char)
+        await stamina_mod.catch_up_stamina_for_character(session, char)
     return char
 
 

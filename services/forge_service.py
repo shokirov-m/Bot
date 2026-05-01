@@ -291,12 +291,15 @@ async def add_materials_to_bag(
     character_id: int,
     rarity: str,
     count: int,
-) -> None:
-    """Добавить материалы в сумку — общий стак через inventory_repo.add_bag_item."""
+) -> bool:
+    """Добавить материалы в сумку — общий стак через inventory_repo.add_bag_item. False если места нет."""
     r = str(rarity or "common").lower()
     payload = mat_sys.material_payload(r, count)
-    await inventory_repo.add_bag_item(session, character_id, payload)
+    row = await inventory_repo.add_bag_item(session, character_id, payload)
+    if row is None:
+        return False
     await session.flush()
+    return True
 
 
 async def add_boss_trophy_to_bag(

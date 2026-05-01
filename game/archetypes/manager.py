@@ -179,8 +179,6 @@ def get_tree_bonuses(character: Character) -> dict[str, float | int]:
 def format_skill_tree_node_effect_ru(node: SkillTreeNode) -> str:
     """Человекочитаемая расшифровка модификаторов узла (дополняет description_ru)."""
     val = node.value
-    if not isinstance(val, dict):
-        return ""
 
     stat_labels = {
         "str": "СИЛ",
@@ -189,6 +187,44 @@ def format_skill_tree_node_effect_ru(node: SkillTreeNode) -> str:
         "vit": "ВЫН",
         "luck": "УДА",
     }
+
+    effect_hints_ru: dict[str, str] = {
+        "heal": "моментальное восстановление HP",
+        "block_next": "ослабление следующего удара по тебе",
+        "shield": "щит, гасящий входящий урон",
+        "dodge_buff": "временное усиление уклонения",
+        "burn": "шанс поджога (урон во времени)",
+        "freeze": "шанс заморозки / пропуска хода врагом",
+        "poison": "шанс яда",
+        "bleed": "шанс кровотечения",
+        "stun": "шанс оглушения",
+        "slow": "ослабление исходящего урона врага",
+        "hot": "восстановление HP несколько ходов подряд",
+        "fortify": "временный рост защиты",
+        "shred_armor": "снижает броню цели",
+        "backstab": "бонус урона при высоком HP врага",
+        "low_hp_bonus": "бонус урона при низком HP игрока",
+    }
+
+    if node.node_type == "active_skill":
+        sk = get_skill(str(val))
+        if sk is None:
+            return "• Активная способность (данные навыка не найдены)."
+        kind_ru = "магический" if sk.kind == "mag" else "физический"
+        lines_act: list[str] = [
+            "• Режим: кнопка навыка в бою (один из первых трёх слотов)",
+            f"• Ресурс: {sk.mp_cost} MP · перезарядка: {sk.cooldown} ход.",
+            f"• Урон: {kind_ru} · множитель силы навыка ×{sk.power_mult:g}",
+        ]
+        hint = effect_hints_ru.get(str(sk.effect_key or ""))
+        if hint:
+            lines_act.append(f"• Механика: {hint}")
+        elif sk.effect_key:
+            lines_act.append(f"• Доп. эффект: {sk.effect_key}")
+        return "\n".join(lines_act)
+
+    if not isinstance(val, dict):
+        return ""
 
     lines: list[str] = []
 

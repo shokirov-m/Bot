@@ -4,10 +4,10 @@
 
 Уровни:
   1  🍺 Комната в таверне  (стартовый, бесплатно)
-  2  🏠 Домик              (10 000 💰)
-  3  🏘️ Дом в городе       (30 000 💰 + 10 трофеев босса)
-  4  🏛️ Особняк            (100 000 💰 + 30 трофеев босса)
-  5  🌆 Пентхаус           (300 000 💰 + 50 трофеев босса)
+  2  🏠 Домик              (14 000 💰)
+  3  🏘️ Дом в городе       (42 000 💰 + 15 трофеев босса)
+  4  🏛️ Особняк            (130 000 💰 + 45 трофеев босса)
+  5  🌆 Пентхаус           (380 000 💰 + 72 трофея босса)
 
 Бонусы:
   ур.2  +5% золота с боёв
@@ -41,17 +41,17 @@ HOME_LEVEL_NAMES: dict[int, str] = {
 
 # Цена перехода с уровня L на L+1: золото
 HOME_LEVEL_UPGRADE_COSTS: dict[int, int] = {
-    1: 10_000,
-    2: 30_000,
-    3: 100_000,
-    4: 300_000,
+    1: 14_000,
+    2: 42_000,
+    3: 130_000,
+    4: 380_000,
 }
 
 # Сколько трофеев босса нужно для улучшения на ур. N
 HOME_TROPHY_COSTS: dict[int, int] = {
-    3: 10,
-    4: 30,
-    5: 50,
+    3: 15,
+    4: 45,
+    5: 72,
 }
 
 # Верстак (сохраняется для обратной совместимости)
@@ -957,26 +957,42 @@ async def collect_mine_farm_rewards(
     if o <= 0 and f <= 0:
         return False, "Пока пусто. Ресурсы копятся со временем."
     
-    from db.repository import inventory_repo
+    from sqlalchemy.orm.attributes import flag_modified
     from services.forge_service import add_materials_to_bag
 
-    mp, b = _mine_farm_block(character)
     lines: list[str] = []
+    ore_ok = True
     if o > 0:
-        await add_materials_to_bag(session, int(character.id), "common", o)
-        lines.append(f"🪨 +{o} <b>осколка стали</b>")
+        ore_ok = await add_materials_to_bag(session, int(character.id), "common", o)
+        if ore_ok:
+            lines.append(f"🪨 +{o} <b>осколка стали</b>")
+        else:
+            lines.append(
+                f"⚠️ Руда ({o} ед.) не поместилась в сумку — нет свободной ячейки. Освободи место и нажми «Забрать» снова."
+            )
     if f > 0:
-        # Прямое начисление корма в meta питомцев
+        # Прямое начисление корма в meta питомцев (полностью заменяет meta_progress внутри функции)
         from game.characters import pets as pets_mod
         pets_mod.add_pet_treats(character, f)
         lines.append(f"🥕 +{f} <b>корма</b>")
 
-    b["ore"] = 0
-    b["food"] = 0
+    # После add_pet_treats нужно брать свежий meta_progress — иначе затрём питомцев и прочие ключи старым mp.
+    mp, b = _mine_farm_block(character)
+    if ore_ok:
+        b["ore"] = 0
+    if f > 0:
+        b["food"] = 0
     b["ts"] = int(time.time())
     mp[META_MINE_FARM] = b
     character.meta_progress = mp
+    try:
+        flag_modified(character, "meta_progress")
+    except Exception:
+        pass
     await session.flush()
+
+    if o > 0 and not ore_ok and f <= 0:
+        return False, lines[0] if lines else "Сумка полна."
     return True, " ".join(lines)
 
 

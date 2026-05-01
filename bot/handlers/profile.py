@@ -737,8 +737,9 @@ async def on_profile_skills(callback: CallbackQuery, session: AsyncSession, stat
 
         text = (
             "🌳 <b>Древо навыков</b>\n\n"
-            "Здесь вы можете тратить очки навыков (SP) на изучение новых способностей и усиление персонажа.\n"
-            "Очки SP даются за каждый уровень после 10-го."
+            "Здесь ты тратишь очки навыков (SP): они начисляются после <b>10 уровня</b>. "
+            "Узлы дают постоянные бонусы или открывают активные способности для боевых кнопок.\n\n"
+            "<i>В карточке узла — текст ветки, блок «Эффект» с цифрами, для активных навыков ещё MP, КД и тип урона.</i>"
         )
         await push_game_ui(
             state,
@@ -803,7 +804,8 @@ async def on_tree_node_view(callback: CallbackQuery, session: AsyncSession, stat
                 text += (
                     f"🔮 <b>Активный навык:</b> {html.escape(sk.name_ru)}\n"
                     f"<i>{html.escape(sk.description_ru)}</i>\n"
-                    f"Ресурс: <b>{sk.mp_cost}</b> MP · перезарядка <b>{sk.cooldown}</b> ход.\n\n"
+                    f"Ресурс: <b>{sk.mp_cost}</b> MP · перезарядка <b>{sk.cooldown}</b> ход. · "
+                    f"{'магия' if sk.kind == 'mag' else 'физ'} · сила ×{sk.power_mult:g}\n\n"
                 )
 
         if node.parent_keys:

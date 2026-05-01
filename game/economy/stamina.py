@@ -80,15 +80,53 @@ async def regen_stamina_all(session: AsyncSession) -> int:
 async def spend_stamina(session: AsyncSession, character_id: int) -> bool:
     """
     Списать 1 стамину атомарно (UPDATE … WHERE stamina > 0).
+    Обновляет last_stamina_regen_at — от него считается следующее восстановление.
     True если строка обновлена.
     """
+    now = datetime.now(UTC)
     stmt = (
         update(Character)
         .where(Character.id == character_id, Character.stamina > 0)
-        .values(stamina=Character.stamina - 1)
+        .values(stamina=Character.stamina - 1, last_stamina_regen_at=now)
     )
     res = await session.execute(stmt)
     return int(res.rowcount or 0) > 0
+
+
+# Ограничение «догоняния» стамины за один запрос (антивзлом и разумный офлайн).
+_MAX_STAMINA_CATCH_UP_TICKS = 144
+
+
+async def catch_up_stamina_for_character(session: AsyncSession, character: Character) -> None:
+    """
+    Начислить пропущенные тики стамины по интервалу REGEN (если бот простаивал или игрок долго не открывал игру).
+    Не даёт больше MAX_STAMINA; число тиков за вызов ограничено.
+    """
+    mx = _max_stamina()
+    st = int(character.stamina or 0)
+    if st >= mx:
+        return
+    interval = float(_regen_interval_seconds())
+    if interval <= 0:
+        return
+    now = datetime.now(UTC)
+    last = character.last_stamina_regen_at
+    if last is not None and last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    if last is None:
+        anchor = character.created_at
+        if anchor.tzinfo is None:
+            anchor = anchor.replace(tzinfo=UTC)
+        last = anchor
+    elapsed = (now - last).total_seconds()
+    if elapsed < interval:
+        return
+    raw_ticks = int(elapsed // interval)
+    gain = min(raw_ticks, mx - st, _MAX_STAMINA_CATCH_UP_TICKS)
+    if gain <= 0:
+        return
+    character.stamina = min(mx, st + gain)
+    character.last_stamina_regen_at = last + timedelta(seconds=gain * interval)
 
 
 async def minutes_to_next_regen(session: AsyncSession, character_id: int) -> int:
