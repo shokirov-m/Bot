@@ -537,7 +537,6 @@ async def on_floor_callback(
                     f"<b>Фракции:</b>\n{fac_list}\n\n"
                     f"<i>Выбор постоянный для этой зоны.</i>"
                 )
-                from bot.utils.game_ui import push_game_ui
                 await push_game_ui(state, query.bot, chat_id=query.message.chat.id,
                                    text=txt, reply_markup=kb_fw, target_message=query.message)
             await query.answer()
