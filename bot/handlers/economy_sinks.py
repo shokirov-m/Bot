@@ -378,10 +378,11 @@ async def economy_term_open(query: CallbackQuery, session: AsyncSession) -> None
         if bal < 100:
             await query.answer("В сейфе должно быть минимум 100 💰 для срочного вклада.", show_alert=True)
             return
+        amt = bal if bal < 200 else max(100, bal // 2)
         ok, msg = economy_sink_service.try_open_bank_term(
             char,
             floor_key=floor_key,
-            amount=bal,
+            amount=amt,
             term_h=term_h,
         )
         if not ok:

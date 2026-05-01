@@ -3,6 +3,8 @@ Manager service for Archetypes 2.0.
 """
 from __future__ import annotations
 from typing import Any
+from sqlalchemy.orm.attributes import flag_modified
+
 from db.models.character import Character
 from game.archetypes.data import ARCHETYPES, SKILLS
 from game.archetypes.models import Archetype, SkillV2, SkillTreeNode
@@ -164,6 +166,78 @@ def get_tree_bonuses(character: Character) -> dict[str, float | int]:
                 
     return merged
 
+
+def format_skill_tree_node_effect_ru(node: SkillTreeNode) -> str:
+    """Человекочитаемая расшифровка модификаторов узла (дополняет description_ru)."""
+    val = node.value
+    if not isinstance(val, dict):
+        return ""
+
+    stat_labels = {
+        "str": "СИЛ",
+        "dex": "ЛОВ",
+        "int": "ИНТ",
+        "vit": "ВЫН",
+        "luck": "УДА",
+    }
+
+    lines: list[str] = []
+
+    if node.node_type == "stat_boost":
+        for k in sorted(val.keys(), key=str):
+            raw = val[k]
+            label = stat_labels.get(str(k), str(k).upper())
+            try:
+                n = float(raw)
+                if abs(n - round(n)) < 1e-9:
+                    lines.append(f"• +{int(round(n))} к {label}")
+                else:
+                    lines.append(f"• +{n:g} к {label}")
+            except (TypeError, ValueError):
+                lines.append(f"• {label}: {raw}")
+        return "\n".join(lines)
+
+    if node.node_type != "passive_bonus":
+        return ""
+
+    passive_labels: dict[str, str] = {
+        "def_bonus": "Защита",
+        "atk_bonus_pct": "Физ. урон",
+        "mag_bonus_percent": "Маг. урон",
+        "lifesteal_percent": "Вампиризм (от урона)",
+        "mp_regen_turn": "Реген MP за ход",
+        "crit_bonus": "Шанс критического удара",
+        "dodge_bonus": "Шанс уклонения",
+        "on_hit_freeze_chance": "Шанс заморозки при попадании",
+        "hp_regen_pct_turn": "Реген HP за ход (% от макс.)",
+    }
+
+    def fmt_pct_label(key: str, x: float) -> str:
+        base = passive_labels.get(key, key)
+        if key in {"crit_bonus", "dodge_bonus", "on_hit_freeze_chance", "hp_regen_pct_turn"} and x <= 1.0:
+            return f"{base}: +{x * 100:.0f}%"
+        if key in {"atk_bonus_pct", "mag_bonus_percent", "lifesteal_percent"}:
+            return f"{base}: +{x:.0f}%"
+        return f"{base}: +{x:g}"
+
+    for key in sorted(val.keys(), key=str):
+        raw = val[key]
+        try:
+            x = float(raw)
+        except (TypeError, ValueError):
+            lines.append(f"• {passive_labels.get(key, key)}: {raw}")
+            continue
+        if key == "mp_regen_turn":
+            lines.append(f"• {passive_labels[key]}: +{int(round(x))}")
+            continue
+        if key == "def_bonus":
+            lines.append(f"• {passive_labels[key]}: +{x:g}")
+            continue
+        lines.append(f"• {fmt_pct_label(key, x)}")
+
+    return "\n".join(lines)
+
+
 def try_unlock_node(character: Character, node_key: str, *, admin_bypass: bool = False) -> tuple[bool, str]:
     """Списывает cost_sp узла и открывает узел."""
     tree = get_character_tree(character)
@@ -192,5 +266,6 @@ def try_unlock_node(character: Character, node_key: str, *, admin_bypass: bool =
     node_list.append(node_key)
     mp["unlocked_nodes"] = node_list
     character.meta_progress = mp
-    
+    flag_modified(character, "meta_progress")
+
     return True, f"Изучено: {node.name_ru}!"

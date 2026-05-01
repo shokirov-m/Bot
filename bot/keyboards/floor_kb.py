@@ -38,6 +38,11 @@ def _cb(floor_number: int, code: str) -> str:
     return f"fl:{floor_number}:{code}"
 
 
+def show_floor_secret_search_button(floor_number: int) -> bool:
+    """Кнопка тайника на карте этажа (логика совпадает с services.floor_service.try_secret_search)."""
+    return int(floor_number) >= 2
+
+
 def _pet_rows(character: Character, floor_number: int) -> list[list[InlineKeyboardButton]]:
     rows: list[list[InlineKeyboardButton]] = []
     if floor_number in pets_mod.pet_gacha_floors_for_pet_switch():
@@ -244,7 +249,7 @@ def floor_screen_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    if floor_number != 3:
+    if show_floor_secret_search_button(floor_number):
         nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     if nav:
         rows.append(nav)
@@ -405,7 +410,7 @@ def long_floor_screen_keyboard(character: Character, *, nav_ceiling: int | None 
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    if floor_number != 3:
+    if show_floor_secret_search_button(floor_number):
         nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     if nav:
         rows.append(nav)
@@ -476,7 +481,8 @@ def room_clear_floor_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     rows.append(nav)
 
     rows.append(menu_nav_button_row())
@@ -534,7 +540,8 @@ def wave_floor_screen_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     rows.append(nav)
 
     rows.append(menu_nav_button_row())
@@ -592,7 +599,8 @@ def room_clear_floor_10_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     rows.append(nav)
 
     rows.append(menu_nav_button_row())
@@ -643,7 +651,8 @@ def explore_floor_4_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     rows.append(nav)
 
     rows.append(menu_nav_button_row())
@@ -724,7 +733,8 @@ def explore_floor_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     rows.append(nav)
 
     rows.append(menu_nav_button_row())
@@ -805,7 +815,8 @@ def explore_floor_22_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     rows.append(nav)
 
     rows.append(menu_nav_button_row())
@@ -887,7 +898,8 @@ def room_clear_floor_24_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     rows.append(nav)
 
     rows.append(menu_nav_button_row())
@@ -942,7 +954,8 @@ def wave_floor_27_keyboard(
         nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
     if floor_number > 1:
         nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
-    nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
     rows.append(nav)
 
     rows.append(menu_nav_button_row())

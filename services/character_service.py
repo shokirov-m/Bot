@@ -17,7 +17,6 @@ from game.balance import (
     BALANCE_V2_ENABLED,
     HP_PER_VIT,
     PROGRESSION_BASE_EXP,
-    PROGRESSION_LEVEL1_XP_NEEDED,
     PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2,
     ZONE_MULTIPLIER_BY_MAX_FLOOR,
 )
@@ -107,16 +106,17 @@ def zone_multiplier_for_floor(floor_number: int) -> float:
 
 
 def experience_needed_for_next_level(level: int, floor_number: int) -> int:
-    """Опыт до следующего уровня с учётом этажа (зона)."""
+    """Опыт до следующего уровня с учётом этажа (зона).
+
+    Единая формула для всех уровней — без отдельного порога для 1→2,
+    чтобы не было резкого скачка «полоски опыта» сразу после первого аппа.
+    """
     if level < 1:
         level = 1
-    if level == 1:
-        return PROGRESSION_LEVEL1_XP_NEEDED
     n_next = level + 1
     mult = zone_multiplier_for_floor(floor_number)
     need = max(1, int(PROGRESSION_BASE_EXP * (n_next**2.2) * mult))
-    if level >= 2:
-        need = max(1, need // PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2)
+    need = max(1, need // PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2)
     return need
 
 

@@ -58,8 +58,10 @@ def bank_safe_intro_html(character: Character) -> str:
     seal = "✅ Печать активна" if sink_rules.bank_seal_active(character) else "—"
     lines = [
         "🏦 <b>Сейф гильдии</b>",
-        f"В сейфе: <b>{bal}</b> / <b>{cap}</b> 💰",
-        "<i>Золото в сейфе не списывается при поражении в башне.</i>",
+        "<i>Золото в кошельке и в сейфе — разные места: во вклад уходит только то, что лежит в сейфе.</i>",
+        "",
+        f"В сейфе: <b>{bal}</b> / <b>{cap}</b> 💰 · в кошельке: <b>{int(character.gold)}</b> 💰",
+        "<i>В сейфе не сгорает при поражении в башне.</i>",
         LINE_SEP,
         f"Уровень хранилища: <b>{lvl}</b>. Следующее улучшение: <b>{next_cost}</b> 💰 (+500 к лимиту).",
         LINE_SEP,
@@ -74,10 +76,21 @@ def bank_safe_intro_html(character: Character) -> str:
         matures = sink_rules.bank_term_matures_at(term)
         ms = matures.strftime("%Y-%m-%d %H:%M UTC") if matures else "?"
         lines.append(LINE_SEP)
-        lines.append(f"⏳ Срочный вклад: <b>{amt}</b> 💰, {h}ч, ставка <b>{rate_t*100:.0f}%</b>. Созреет: {ms}.")
+        lines.append(
+            f"⏳ Срочный вклад: <b>{amt}</b> 💰 <i>(заблокировано из сейфа)</i>, "
+            f"{h}ч, ставка <b>{rate_t*100:.0f}%</b>. Созреет: {ms}."
+        )
+        lines.append(
+            "<i>Кнопки: «Забрать с процентами» — когда срок вышел; "
+            "«Разорвать досрочно» — вернут тело без процентов.</i>"
+        )
     else:
         lines.append(LINE_SEP)
-        lines.append("⏳ Срочные вклады: 24ч·1% / 72ч·4% / 7д·12%.")
+        lines.append("⏳ Срочный вклад берёт золото <b>из сейфа</b> (не из кошелька): 24ч·1% / 72ч·4% / 7д·12%.")
+        lines.append(
+            "<i>По умолчанию в блок уходит <b>половина</b> золота сейфа (минимум 100 💰), "
+            "остальное остаётся доступным.</i>"
+        )
     lines.append(LINE_SEP)
     lines.append("Вноси и снимай кнопками. «Всё влезет» — переносит из кошелька столько, сколько помещается.")
     return "\n".join(lines)

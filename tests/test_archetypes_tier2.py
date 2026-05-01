@@ -31,7 +31,8 @@ def test_tier2_requires_parent_path() -> None:
 
 
 def test_tier2_stat_requirement_uses_real_character_columns() -> None:
-    c = _char(class_key="warrior", stat_strength=40, stat_vitality=30)
+    # Страж (tier 2): в данных нужен ур. 50+ и пороги по колонкам stat_*.
+    c = _char(class_key="warrior", level=50, stat_strength=40, stat_vitality=30)
     ok, _ = arch_manager.can_unlock_archetype(c, "guardian")
     assert ok is True
 

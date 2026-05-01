@@ -106,7 +106,7 @@ def mini_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterT
         "sky_citadel": "mini_storm_herald",
         "chaos_abyss": "mini_chaos_knight",
         "eternity_hall": "mini_time_judge",
-        floor_data.ZONE_FINAL_KEY: "final_warden",
+        floor_data.ZONE_FINAL_KEY: "tower_warden",
     }
     return _template(table.get(zone.key, table["forest_beginnings"]))
 

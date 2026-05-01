@@ -366,7 +366,11 @@ def try_open_bank_term(character: Any, *, amount: int, term_h: int) -> tuple[boo
         "rate": float(rate),
     }
     _set_meta(character, mp)
-    return True, f"Открыт срочный вклад на <b>{amt}</b> 💰 ({term_h}ч, ставка {rate*100:.0f}%)."
+    left = bank_safe_balance(character)
+    return True, (
+        f"Открыт срочный вклад на <b>{amt}</b> 💰 ({term_h}ч, ставка {rate*100:.0f}%). "
+        f"В сейфе осталось свободно: <b>{left}</b> 💰."
+    )
 
 
 def try_close_bank_term(character: Any, *, force_early: bool = False) -> tuple[bool, str]:

@@ -39,7 +39,15 @@ def city_quest_template(floor_number: int) -> CityQuestTemplate | None:
     name_esc = html.escape(city.name)
     role_esc = html.escape(guard_npc_title_for_floor(floor_number).capitalize())
     reward_gear: dict[str, Any] | None = None
-    if cf == 3:
+    if cf == 1:
+        # Стартовый хаб (Тихий Ручей): раньше попадал в ветку else (как этаж 91) — неверный баланс и ощущение «сломанного» квеста.
+        need, rg, rx = 1, 15, 12
+        intro = (
+            f"{role_esc} у ворот <b>{name_esc}</b>: "
+            "«Шебуршат тени у башни — докажи, что не беспомощен. "
+            f"Одолей <b>{need}</b> врага где угодно на ярусах — скромная плата, но честная.»"
+        )
+    elif cf == 3:
         need, rg, rx = 2, 28, 18
         intro = (
             f"{role_esc} <b>{name_esc}</b> беспокоится: "
@@ -67,7 +75,11 @@ def city_quest_template(floor_number: int) -> CityQuestTemplate | None:
             "«Бездна шевелится. "
             f"Низвергни <b>{need}</b> тварей башни — награда достойная.»"
         )
-    qtitle = f"Поручение старосты — {city.name}" if cf == 3 else f"Поручение стражи — {city.name}"
+    qtitle = (
+        f"Поручение старосты — {city.name}"
+        if cf in (1, 3)
+        else f"Поручение стражи — {city.name}"
+    )
     return CityQuestTemplate(
         quest_key=f"city_task_{cf}",
         title=qtitle,

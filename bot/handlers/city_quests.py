@@ -6,7 +6,6 @@ import html
 import re
 
 from aiogram import F, Router
-from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger
@@ -16,6 +15,7 @@ from bot.i18n import get_locale
 from bot.keyboards.city_quest_kb import city_quest_hub_only_keyboard, city_quest_offer_keyboard
 from bot.keyboards.forge_kb import city_hub_keyboard
 from bot.states.combat_states import CombatStates
+from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, quest_repo, user_repo
 from game.floors import floor_data
 from game.quests.city_quests import city_quest_template
@@ -77,10 +77,14 @@ async def on_city_quest_callback(
         pending_msg = await city_quest_service.try_claim_pending_rewards(session, char)
 
         if code == "hub":
-            await query.message.edit_text(
-                format_city_hub_message(char) + pending_msg,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=format_city_hub_message(char) + pending_msg,
                 reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
-                parse_mode=ParseMode.HTML,
+                target_message=query.message,
+                photo_path=None,
             )
             await query.answer()
             return
@@ -92,28 +96,44 @@ async def on_city_quest_callback(
                 if body is None:
                     await query.answer("Нет поручения.", show_alert=True)
                     return
-                await query.message.edit_text(
-                    f"⚔️ <b>Стража</b>\n\n{body}{pending_msg}",
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=f"⚔️ <b>Стража</b>\n\n{body}{pending_msg}",
                     reply_markup=city_quest_offer_keyboard(char.floor_number),
-                    parse_mode=ParseMode.HTML,
+                    target_message=query.message,
+                    photo_path=None,
                 )
             elif row.status == "completed":
-                await query.message.edit_text(
-                    f"🏛️ <b>{html.escape(tpl.title)}</b>\n"
-                    f"Страж кивает: в этом городе ты уже всё сделал.{pending_msg}",
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=(
+                        f"🏛️ <b>{html.escape(tpl.title)}</b>\n"
+                        f"Страж кивает: в этом городе ты уже всё сделал.{pending_msg}"
+                    ),
                     reply_markup=city_quest_hub_only_keyboard(char.floor_number),
-                    parse_mode=ParseMode.HTML,
+                    target_message=query.message,
+                    photo_path=None,
                 )
             else:
                 p = dict(row.progress or {})
                 k = int(p.get("kills", 0))
                 need = int(p.get("need", tpl.kills_needed))
-                await query.message.edit_text(
-                    f"🏛️ <b>{html.escape(tpl.title)}</b>\n"
-                    f"Прогресс: побед в башне — <b>{k}/{need}</b>.\n"
-                    f"Сражайся на этажах и возвращайся.{pending_msg}",
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=(
+                        f"🏛️ <b>{html.escape(tpl.title)}</b>\n"
+                        f"Прогресс: побед в башне — <b>{k}/{need}</b>.\n"
+                        f"Сражайся на этажах и возвращайся.{pending_msg}"
+                    ),
                     reply_markup=city_quest_hub_only_keyboard(char.floor_number),
-                    parse_mode=ParseMode.HTML,
+                    target_message=query.message,
+                    photo_path=None,
                 )
             await query.answer()
             return
@@ -125,10 +145,14 @@ async def on_city_quest_callback(
                 short = msg.replace("<b>", "").replace("</b>", "")[:160]
                 await query.answer(short, show_alert=True)
                 return
-            await query.message.edit_text(
-                msg,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=msg,
                 reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
-                parse_mode=ParseMode.HTML,
+                target_message=query.message,
+                photo_path=None,
             )
             await query.answer("Поручение записано.")
             return

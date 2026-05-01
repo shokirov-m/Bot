@@ -376,10 +376,14 @@ async def on_floor_callback(
                 "У каждого — своя история и задание для тебя.\n\n"
                 "🔄 = задание активно\n✅ = выполнено\n"
             )
-            await query.message.edit_text(
-                text_npc,
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text_npc,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=rows_npc),
+                target_message=query.message,
+                photo_path=None,
             )
             await query.answer()
             return
@@ -1203,6 +1207,7 @@ async def on_floor_callback(
             if outcome.alert:
                 await query.answer(outcome.alert, show_alert=True)
                 return
+            await session.commit()
             await push_game_ui(
                 state,
                 query.bot,
@@ -1343,7 +1348,11 @@ async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("sq:npc:"))
-async def story_npc_screen(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+async def story_npc_screen(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
     """Показать диалог сюжетного NPC."""
     try:
         if query.data is None or query.from_user is None or query.message is None:
@@ -1357,6 +1366,9 @@ async def story_npc_screen(query: CallbackQuery, session: AsyncSession, state: F
         char = await character_repo.get_by_user_id(session, user.id)
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if int(char.floor_number) != 1:
+            await query.answer("Сюжетные NPC доступны только на первом ярусе.", show_alert=True)
             return
 
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1405,10 +1417,14 @@ async def story_npc_screen(query: CallbackQuery, session: AsyncSession, state: F
 
         rows.append([InlineKeyboardButton(text="⬅ К списку NPC", callback_data="fl:1:story_npc")])
         rows.append([InlineKeyboardButton(text="⬅ На этаж", callback_data="fl:1:back")])
-        await query.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            target_message=query.message,
+            photo_path=None,
         )
         await query.answer()
     except Exception:
@@ -1417,7 +1433,11 @@ async def story_npc_screen(query: CallbackQuery, session: AsyncSession, state: F
 
 
 @router.callback_query(F.data.startswith("sq:accept:"))
-async def story_quest_accept(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+async def story_quest_accept(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
     """Принять сюжетный квест."""
     try:
         if query.data is None or query.from_user is None or query.message is None:
@@ -1446,15 +1466,20 @@ async def story_quest_accept(query: CallbackQuery, session: AsyncSession, state:
             await query.answer("Квест уже взят или выполнен.", show_alert=True)
             return
         await session.flush()
+        await session.commit()
 
         rows = [
             [InlineKeyboardButton(text="⬅ К NPC", callback_data=f"sq:npc:{sq.npc_key}")],
             [InlineKeyboardButton(text="⬅ На этаж", callback_data="fl:1:back")],
         ]
-        await query.message.edit_text(
-            f"✅ <b>Задание принято!</b>\n\n<b>{sq.quest_title}</b>\n{sq.quest_desc}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=f"✅ <b>Задание принято!</b>\n\n<b>{sq.quest_title}</b>\n{sq.quest_desc}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            target_message=query.message,
+            photo_path=None,
         )
         await query.answer("Задание принято!")
     except Exception:
@@ -1463,7 +1488,11 @@ async def story_quest_accept(query: CallbackQuery, session: AsyncSession, state:
 
 
 @router.callback_query(F.data.startswith("sq:claim:"))
-async def story_quest_claim(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+async def story_quest_claim(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
     """Сдать сюжетный квест и получить награду."""
     try:
         if query.data is None or query.from_user is None or query.message is None:
@@ -1492,15 +1521,20 @@ async def story_quest_claim(query: CallbackQuery, session: AsyncSession, state: 
             await query.answer(result_text[:180], show_alert=True)
             return
         await session.flush()
+        await session.commit()
 
         rows = [
             [InlineKeyboardButton(text="⬅ К списку NPC", callback_data="fl:1:story_npc")],
             [InlineKeyboardButton(text="⬅ На этаж", callback_data="fl:1:back")],
         ]
-        await query.message.edit_text(
-            result_text,
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=result_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            target_message=query.message,
+            photo_path=None,
         )
         await query.answer("🎁 Награда получена!")
     except Exception:

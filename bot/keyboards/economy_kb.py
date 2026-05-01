@@ -52,16 +52,31 @@ def bank_safe_keyboard(
     if not seal_active:
         rows.append([InlineKeyboardButton(text="📜 Купить «Банковскую печать»", callback_data=f"ecy:sfs:{f}")])
     if has_term:
-        rows.append([InlineKeyboardButton(text="🏁 Закрыть срочный вклад", callback_data=f"ecy:tcl:{f}:0")])
-        rows.append([InlineKeyboardButton(text="⛔ Закрыть досрочно", callback_data=f"ecy:tcl:{f}:1")])
+        rows.append(
+            [
+                InlineKeyboardButton(text="🏁 Забрать вклад + проценты", callback_data=f"ecy:tcl:{f}:0"),
+            ],
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="⛔ Разорвать досрочно (без процентов)",
+                    callback_data=f"ecy:tcl:{f}:1",
+                ),
+            ],
+        )
     else:
-        rows.append([
-            InlineKeyboardButton(text="⏳ Открыть 24ч (1%)", callback_data=f"ecy:topn:{f}:24"),
-            InlineKeyboardButton(text="⏳ 72ч (4%)", callback_data=f"ecy:topn:{f}:72"),
-        ])
-        rows.append([
-            InlineKeyboardButton(text="⏳ 7 дней (12%)", callback_data=f"ecy:topn:{f}:168"),
-        ])
+        rows.append(
+            [
+                InlineKeyboardButton(text="⏳ Вклад 24ч (1%) — половина сейфа", callback_data=f"ecy:topn:{f}:24"),
+                InlineKeyboardButton(text="⏳ 72ч (4%)", callback_data=f"ecy:topn:{f}:72"),
+            ],
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(text="⏳ 7 дней (12%)", callback_data=f"ecy:topn:{f}:168"),
+            ],
+        )
     rows.append([InlineKeyboardButton(text=back_txt, callback_data=back_cd)])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
