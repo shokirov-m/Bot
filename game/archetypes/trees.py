@@ -32,7 +32,7 @@ TREES: dict[str, dict[str, SkillTreeNode]] = {
             cost_sp=4, parent_keys=("war_b2",),
         ),
         "war_b4": SkillTreeNode(
-            "war_b4", "🌪️ Вихрь стали", "Сильный урон.", "active_skill", "war_heavy",
+            "war_b4", "🌪️ Вихрь стали", "Сильный урон.", "active_skill", "war_whirlwind",
             cost_sp=5, parent_keys=("war_b3",),
         ),
     },

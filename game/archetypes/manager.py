@@ -2,6 +2,7 @@
 Manager service for Archetypes 2.0.
 """
 from __future__ import annotations
+import html
 from typing import Any
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -131,9 +132,17 @@ def get_unlocked_node_keys(character: Character) -> set[str]:
     return set((character.meta_progress or {}).get("unlocked_nodes", []))
 
 def get_character_tree(character: Character) -> dict[str, SkillTreeNode]:
-    """Returns the skill tree for the character's current archetype."""
+    """Древо SP: у tier‑2 классов используется дерево родительского tier‑1 (ключи узлов те же)."""
     arch_key = str(character.class_key or "wanderer").lower()
-    return TREES.get(arch_key, {})
+    tree = TREES.get(arch_key)
+    if tree:
+        return tree
+    parent_key = _TIER2_PARENT.get(arch_key)
+    if parent_key:
+        parent_tree = TREES.get(parent_key)
+        if parent_tree:
+            return parent_tree
+    return {}
 
 def get_unlocked_skills(character: Character) -> list[SkillV2]:
     """Returns list of active skills unlocked in the tree."""
@@ -236,6 +245,33 @@ def format_skill_tree_node_effect_ru(node: SkillTreeNode) -> str:
         lines.append(f"• {fmt_pct_label(key, x)}")
 
     return "\n".join(lines)
+
+
+def format_skill_tree_passives_profile_html_ru(character: Character) -> str:
+    """HTML-фрагмент для экрана полных характеристик: пассивные и стат-буст узлы древа SP."""
+    tree = get_character_tree(character)
+    if not tree:
+        return ""
+    unlocked = get_unlocked_node_keys(character)
+    chunks: list[str] = []
+    for node_key in sorted(unlocked):
+        node = tree.get(node_key)
+        if not node or node.node_type not in ("passive_bonus", "stat_boost"):
+            continue
+        fx = format_skill_tree_node_effect_ru(node).strip()
+        if not fx:
+            continue
+        nm = html.escape(node.name_ru)
+        desc_raw = (node.description_ru or "").strip()
+        if desc_raw:
+            head = f"<b>{nm}</b> — <i>{html.escape(desc_raw)}</i>"
+        else:
+            head = f"<b>{nm}</b>"
+        sublines = [" " + html.escape(ln.strip()) for ln in fx.split("\n") if ln.strip()]
+        if not sublines:
+            continue
+        chunks.append(head + "\n" + "\n".join(sublines))
+    return "\n\n".join(chunks)
 
 
 def try_unlock_node(character: Character, node_key: str, *, admin_bypass: bool = False) -> tuple[bool, str]:

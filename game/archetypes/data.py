@@ -13,6 +13,15 @@ SKILLS: dict[str, SkillV2] = {
     "war_heavy": SkillV2("war_heavy", "Тяжелый удар", "Мощный замах, игнорирующий часть брони.", 15, 0, 1.9, "phys"),
     "war_bash": SkillV2("war_bash", "Удар щитом", "Шанс оглушить врага.", 20, 3, 1.5, "phys", effect_key="stun", effect_chance=0.35),
     "war_roar": SkillV2("war_roar", "Боевой клич", "Усиливает защиту.", 18, 4, 0.0, "phys", effect_key="fortify", effect_chance=1.0),
+    "war_whirlwind": SkillV2(
+        "war_whirlwind",
+        "Вихрь стали",
+        "Широкий размах клинком по нескольким целям.",
+        22,
+        3,
+        2.2,
+        "phys",
+    ),
     
     # --- Mage (Tier 1) ---
     "mag_fire": SkillV2("mag_fire", "Огненный шар", "Поджигает цель.", 22, 0, 2.1, "mag", effect_key="burn", effect_chance=0.45),

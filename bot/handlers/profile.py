@@ -130,6 +130,12 @@ def build_skills_screen_html(char: Character, *, locale: str) -> str:
     else:
         lines.append("  — (не выбрана)")
 
+    lines.append("")
+    lines.append(
+        "<i>Пассивные узлы из древа (Ярость, Жажда крови и др.) работают автоматически "
+        "и не попадают в список ниже — только активные навыки можно поставить в слоты 1–3.</i>"
+    )
+
     learned = sorted(learned_skill_keys(char))
     if learned:
         lines.extend(["", "<b>📚 Изученные активные навыки</b> (можно поставить в слоты):"])
@@ -196,6 +202,7 @@ def _build_profile_text(
     chance_bonuses_line: str = "",
     achievement_bonuses_line: str = "",
     stat_derivatives_block: str = "",
+    skill_tree_passives_block: str = "",
 ) -> str:
     arch = arch_manager.get_archetype(char.class_key)
     if arch:
@@ -428,6 +435,15 @@ def _build_profile_text(
             f" {achievement_bonuses_line}",
             LINE_SEP,
         ])
+    stp = skill_tree_passives_block.strip()
+    if stp:
+        lines.extend([
+            "<b>🌳 Древо навыков (пассивные узлы)</b>",
+            "<i>Не в слотах 1–3 — бонусы действуют сами по себе.</i>",
+            "",
+            stp,
+            LINE_SEP,
+        ])
     unspent = int(getattr(char, "unspent_stat_points", 0) or 0)
     if unspent > 0:
         lines.append(f"✨ Свободных очков характеристик: {unspent} — /stats")
@@ -493,6 +509,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     ach_line = _achs.format_achievement_bonuses_html(char)
 
     deriv = stat_bonus_service.format_stat_derived_effects_ru(eff)
+    tree_pass_html = arch_manager.format_skill_tree_passives_profile_html_ru(char)
     base = _build_profile_text(
         char,
         compact=False,
@@ -508,6 +525,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
         chance_bonuses_line=chance_line,
         achievement_bonuses_line=ach_line,
         stat_derivatives_block=deriv,
+        skill_tree_passives_block=tree_pass_html,
     )
     pet_blk = pets_mod.format_pet_profile_block_html(char, locale=loc, compact_status_line=False)
     return f"{base}\n{LINE_SEP}\n{pet_blk}"

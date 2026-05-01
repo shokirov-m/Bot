@@ -1272,6 +1272,13 @@ async def on_floor_callback(
         )
     except Exception:
         logger.exception("Ошибка в callback этажа")
+        try:
+            await query.answer(
+                "Не удалось выполнить действие. Открой экран этажа снова (/floor).",
+                show_alert=True,
+            )
+        except Exception:
+            pass
 
 
 # ── Обработчики заданий путников (wnpc:*) ─────────────────────────────────────

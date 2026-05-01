@@ -15,6 +15,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from bot.i18n import get_locale
 from bot.keyboards.floor_kb import (
@@ -866,6 +867,7 @@ async def try_secret_search(
 
     extra["secret_attempt_visit"] = visits
     row.extra = extra
+    flag_modified(row, "extra")
 
     if random.random() >= floor_data.SECRET_ROOM_CHANCE:
         await session.flush()
