@@ -586,7 +586,7 @@ async def reset_all_progress_keep_identity(session: AsyncSession, character: Cha
     character.stamina = settings.MAX_STAMINA
     character.last_stamina_regen_at = now
     character.floor_number = 1
-    character.highest_floor_reached = 1
+    character.highest_floor_reached = 2
     character.level = 1
     character.unspent_stat_points = 0
     character.experience = 0

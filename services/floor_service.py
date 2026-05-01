@@ -58,7 +58,6 @@ from game.floors import explore_floor_4 as exp4_mod
 from game.floors import explore_floor_22 as exp22_mod
 from game.floors.tower_ascent import (
     clear_tower_ascent_pending,
-    ensure_peaceful_city_hub_ascent,
     tower_next_floor_pending,
 )
 from services.rest_service import apply_completed_rest_if_needed
@@ -122,6 +121,10 @@ async def floor_keyboard_for_character(
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа с отметками ✅ у побеждённых целей."""
     n = int(character.floor_number)
+    # Город на 1 этаже не даёт боя — следующий ярус доступен без зачистки (кнопка «Выше»).
+    if n == 1 and int(character.highest_floor_reached) < 2:
+        character.highest_floor_reached = 2
+        await session.flush()
     nav_ceiling = floor_navigation_ceiling_for_user(character, telegram_user_id)
 
     # Этаж 4 — исследование леса
@@ -663,8 +666,6 @@ async def push_floor_screen_ui(
 ) -> None:
     """Экран этажа: случайное событие (10%), заставка при первом заходе (visits==0), затем полный текст."""
     if apply_completed_rest_if_needed(character):
-        await session.flush()
-    if ensure_peaceful_city_hub_ascent(character):
         await session.flush()
     n = int(character.floor_number)
     row = await floor_progress_repo.ensure_floor_row(session, character.id, n)

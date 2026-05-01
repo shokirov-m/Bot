@@ -139,7 +139,7 @@ def build_spawns_for_floor(floor_number: int) -> list[FloorMonsterSpawn]:
     плюс мини-босс / сильный босс по правилам этажа.
     """
     # Этаж 1 — только город-хаб: боёв на карте нет (монстры, тайник, привал — убраны с экрана).
-    if int(floor_number) in (1, 3):
+    if int(floor_number) == 1:
         return []
     if floor_number >= 135:
         zone = floor_data.ZONE_FINAL

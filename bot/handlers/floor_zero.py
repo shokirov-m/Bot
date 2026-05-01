@@ -413,7 +413,7 @@ async def on_floor0_enter_tower(
             return
 
         char.floor_number = 1
-        char.highest_floor_reached = max(int(char.highest_floor_reached), 1)
+        char.highest_floor_reached = max(int(char.highest_floor_reached), 2)
         # Restore HP after tutorial
         char.hp_current = int(char.hp_max)
         await session.flush()

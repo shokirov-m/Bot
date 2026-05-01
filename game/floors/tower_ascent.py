@@ -35,36 +35,3 @@ def clear_tower_ascent_pending(character: Character) -> None:
         return
     mp.pop(META_TOWER_ASCENT_PENDING, None)
     character.meta_progress = mp
-
-
-def is_peaceful_city_hub_floor(floor_number: int) -> bool:
-    """Этажи без боёв на карте — только хаб (сейчас этаж 3)."""
-    return int(floor_number) == 3
-
-
-def ensure_peaceful_city_hub_ascent(character: Character) -> bool:
-    """
-    На мирном хабе сразу можно подняться на следующий этаж (без зачистки целей).
-    Возвращает True, если в meta_progress появился или подтверждён флаг подъёма.
-    """
-    if not is_peaceful_city_hub_floor(int(character.floor_number)):
-        return False
-    from game.floors.monsters import build_spawns_for_floor
-
-    if build_spawns_for_floor(3):
-        return False
-    cur = int(character.floor_number)
-    if cur >= 100:
-        return False
-    nxt = cur + 1
-    if tower_next_floor_pending(character) == nxt:
-        # Всё ещё обновим highest, чтобы можно было зайти на следующий ярус без боя.
-        hi = int(character.highest_floor_reached)
-        if hi < nxt:
-            character.highest_floor_reached = nxt
-        return hi < nxt
-    set_tower_ascent_pending(character, nxt)
-    hi = int(character.highest_floor_reached)
-    if hi < nxt:
-        character.highest_floor_reached = nxt
-    return True
