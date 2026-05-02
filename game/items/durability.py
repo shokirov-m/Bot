@@ -13,7 +13,6 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.repository import inventory_repo
 from game.items.equipment.slots import resolve_equip_slot_for_item_data
 
 DEFAULT_DURABILITY_MAX: int = 300
@@ -139,6 +138,8 @@ async def wear_equipped_items_after_battle(session: AsyncSession, character_id: 
     Износ всех надетых предметов с прочностью. Возвращает HTML-суффикс для экрана победы
     (если что-то сломалось).
     """
+    from db.repository import inventory_repo  # avoid circular import with inventory_repo
+
     broken_names: list[str] = []
     items = await inventory_repo.list_equipped_items(session, character_id)
     changed = False
@@ -162,6 +163,8 @@ async def wear_equipped_items_after_battle(session: AsyncSession, character_id: 
 
 
 async def total_repair_cost_equipped(session: AsyncSession, character_id: int) -> int:
+    from db.repository import inventory_repo  # avoid circular import with inventory_repo
+
     total = 0
     for it in await inventory_repo.list_equipped_items(session, character_id):
         data = dict(it.item_data or {})
