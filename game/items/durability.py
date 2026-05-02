@@ -98,6 +98,16 @@ def repair_gold_cost(data: dict[str, Any] | None) -> int:
     return steps * per
 
 
+def durability_wear_percent(data: dict[str, Any] | None) -> float:
+    """Доля «поломки» 0–100%: 0 = как новый, 100 = сломан (нет прочности)."""
+    if not data or not payload_supports_durability(data):
+        return 0.0
+    dcur, dmax = durability_pair(data)
+    if dmax <= 0:
+        return 0.0
+    return max(0.0, min(100.0, 100.0 - (dcur / dmax) * 100.0))
+
+
 def format_durability_line_html(data: dict[str, Any] | None) -> str:
     """Строка «Прочность» с полосой [████] и процентами (HTML)."""
     if not data or not payload_supports_durability(data):

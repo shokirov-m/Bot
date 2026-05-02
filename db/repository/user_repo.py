@@ -104,6 +104,17 @@ async def list_telegram_ids_for_broadcast(session: AsyncSession) -> list[int]:
     return [int(row[0]) for row in r.fetchall()]
 
 
+async def list_telegram_ids_for_golden_goblin_broadcast(session: AsyncSession) -> list[int]:
+    """Не забаненные, у кого включены оповещения о золотом гоблине."""
+    r = await session.execute(
+        select(User.telegram_id).where(
+            User.is_banned.is_(False),
+            User.notify_golden_goblin.is_(True),
+        ),
+    )
+    return [int(row[0]) for row in r.fetchall()]
+
+
 async def count_users_with_referrer(session: AsyncSession) -> int:
     """Сколько аккаунтов зарегистрировано с указанным пригласившим (referred_by_user_id не NULL)."""
     r = await session.execute(

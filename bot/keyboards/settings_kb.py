@@ -9,10 +9,20 @@ from db.models.character import Character
 from utils.game_images_prefs import game_images_enabled
 
 
-def settings_screen_keyboard(*, locale: str, character: Character | None = None) -> InlineKeyboardMarkup:
+def settings_screen_keyboard(
+    *,
+    locale: str,
+    character: Character | None = None,
+    notify_golden_goblin: bool = True,
+) -> InlineKeyboardMarkup:
     loc = locale if locale in ("ru", "en") else "ru"
     hide = character is not None and not game_images_enabled(character)
     img_btn = t(loc, "settings_images_enable") if hide else t(loc, "settings_images_disable")
+    goblin_btn = (
+        t(loc, "settings_golden_goblin_notify_disable")
+        if notify_golden_goblin
+        else t(loc, "settings_golden_goblin_notify_enable")
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -59,6 +69,12 @@ def settings_screen_keyboard(*, locale: str, character: Character | None = None)
                 InlineKeyboardButton(
                     text=img_btn,
                     callback_data="stg:img",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=goblin_btn,
+                    callback_data="stg:gob_notif",
                 ),
             ],
             [

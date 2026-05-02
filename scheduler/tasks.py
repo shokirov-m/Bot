@@ -413,7 +413,7 @@ async def broadcast_golden_goblin_html(bot: Bot, floor_n: int, wave: int) -> Non
         f"<i>Волна <code>{wave}</code>.</i>\n"
         "━━━━━━━━━━━━━━━━━━━━"
     )
-    await _broadcast_html(bot, text_msg)
+    await _broadcast_golden_goblin_html(bot, text_msg)
 
 
 async def broadcast_golden_goblin_slain(
@@ -432,7 +432,7 @@ async def broadcast_golden_goblin_slain(
         "Гоблин исчез — событие закрыто.\n"
         "━━━━━━━━━━━━━━━━━━━━"
     )
-    await _broadcast_html(bot, text_msg)
+    await _broadcast_golden_goblin_html(bot, text_msg)
 
 
 async def task_golden_goblin_tick(bot: Bot) -> None:
@@ -477,7 +477,7 @@ async def broadcast_golden_goblin_escaped(bot: Bot, floor_n: int) -> None:
         "<i>Хитрец исчез в тенях башни с полными карманами золота...</i>\n"
         "━━━━━━━━━━━━━━━━━━━━"
     )
-    await _broadcast_html(bot, text_msg)
+    await _broadcast_golden_goblin_html(bot, text_msg)
 
 
 async def task_world_boss_spawn(bot: Bot) -> None:
@@ -536,6 +536,31 @@ async def _sum_active_floors(session: AsyncSession) -> int:
     return int((await session.execute(stmt)).scalar_one())
 
 
+async def _send_html_broadcast(bot: Bot, html: str, ids: list[int], *, log_prefix: str) -> None:
+    ok = 0
+    for tid in ids:
+        try:
+            await bot.send_message(chat_id=tid, text=html, parse_mode="HTML")
+            ok += 1
+        except (TelegramForbiddenError, TelegramNotFound):
+            pass
+        except Exception:
+            logger.exception("{} Не удалось отправить игроку {}", log_prefix, tid)
+        await asyncio.sleep(0.05)
+    logger.info("{} Уведомления отправлены: {}/{}", log_prefix, ok, len(ids))
+
+
+async def _broadcast_golden_goblin_html(bot: Bot, html: str) -> None:
+    """Рассылка HTML только игрокам с включённым флагом notify_golden_goblin."""
+    from db.database import get_session_factory
+    from db.repository import user_repo
+
+    factory = get_session_factory()
+    async with factory() as session:
+        ids = await user_repo.list_telegram_ids_for_golden_goblin_broadcast(session)
+    await _send_html_broadcast(bot, html, ids, log_prefix="[GOLDEN_GOBLIN]")
+
+
 async def _broadcast_html(bot: Bot, html: str) -> None:
     from db.database import get_session_factory
     from db.models.user import User
@@ -545,14 +570,4 @@ async def _broadcast_html(bot: Bot, html: str) -> None:
         res = await session.execute(select(User.telegram_id).where(User.is_banned.is_(False)))
         ids = [int(r[0]) for r in res.all()]
 
-    ok = 0
-    for tid in ids:
-        try:
-            await bot.send_message(chat_id=tid, text=html, parse_mode="HTML")
-            ok += 1
-        except (TelegramForbiddenError, TelegramNotFound):
-            pass
-        except Exception:
-            logger.exception("[WORLD_BOSS] Не удалось отправить игроку {}", tid)
-        await asyncio.sleep(0.05)
-    logger.info("[WORLD_BOSS] Уведомления отправлены: {}/{}", ok, len(ids))
+    await _send_html_broadcast(bot, html, ids, log_prefix="[WORLD_BOSS]")

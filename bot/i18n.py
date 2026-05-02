@@ -86,6 +86,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "settings_tips_btn": "💡 Подсказки",
         "settings_images_disable": "🖼 Выключить фото этажа и портрет",
         "settings_images_enable": "🖼 Включить фото этажа и портрет",
+        "settings_golden_goblin_notify_disable": "💰 Отключить оповещения о золотом гоблине",
+        "settings_golden_goblin_notify_enable": "💰 Включить оповещения о золотом гоблине",
         "settings_reset_btn": "🗑️ Сбросить весь прогресс",
         "settings_reset_warn": (
             "⚠️ <b>Сбросить весь прогресс?</b>\n\n"
@@ -398,6 +400,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "settings_tips_btn": "💡 Tips",
         "settings_images_disable": "🖼 Turn off floor & portrait photos",
         "settings_images_enable": "🖼 Turn on floor & portrait photos",
+        "settings_golden_goblin_notify_disable": "💰 Turn off golden goblin alerts",
+        "settings_golden_goblin_notify_enable": "💰 Turn on golden goblin alerts",
         "settings_reset_btn": "🗑️ Reset all progress",
         "settings_reset_warn": (
             "⚠️ <b>Reset all progress?</b>\n\n"

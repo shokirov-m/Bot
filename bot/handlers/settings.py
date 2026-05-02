@@ -10,7 +10,7 @@ from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +44,14 @@ def _settings_body_html(locale: str) -> str:
     )
 
 
+def _settings_reply_kb(locale: str, char, user) -> InlineKeyboardMarkup:
+    return settings_screen_keyboard(
+        locale=locale,
+        character=char,
+        notify_golden_goblin=bool(user.notify_golden_goblin),
+    )
+
+
 async def _char_gate(
     session: AsyncSession,
     message: Message | CallbackQuery,
@@ -72,13 +80,13 @@ async def cmd_settings(message: Message, session: AsyncSession, state: FSMContex
         if pair is None:
             await message.answer("Сначала /start.")
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, message.from_user.language_code)
         await state.clear()
         await message.answer(
             _settings_body_html(loc),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
     except Exception:
         logger.exception("cmd_settings")
@@ -99,7 +107,7 @@ async def menu_open_settings(callback: CallbackQuery, session: AsyncSession, sta
         if pair is None:
             await callback.answer("Сначала /start.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
         await push_game_ui(
@@ -107,7 +115,7 @@ async def menu_open_settings(callback: CallbackQuery, session: AsyncSession, sta
             callback.bot,
             chat_id=callback.message.chat.id,
             text=_settings_body_html(loc),
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
             target_message=callback.message,
             photo_path=None,
         )
@@ -134,7 +142,7 @@ async def stg_rename_start(callback: CallbackQuery, session: AsyncSession, state
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         cost = int(settings.DISPLAY_NAME_CHANGE_GOLD)
         await state.set_state(SettingsStates.waiting_new_name)
@@ -163,7 +171,7 @@ async def stg_promo_start(callback: CallbackQuery, session: AsyncSession, state:
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.set_state(SettingsStates.waiting_promo)
         await callback.message.edit_text(
@@ -190,7 +198,7 @@ async def stg_stat_reset_prompt(callback: CallbackQuery, session: AsyncSession, 
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         if not character_service.stat_alloc_reset_available_today(char):
             await callback.answer(t(loc, "settings_stat_reset_today"), show_alert=True)
@@ -227,13 +235,13 @@ async def stg_stat_reset_back(callback: CallbackQuery, session: AsyncSession, st
             await state.clear()
             await callback.answer()
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
         await callback.message.edit_text(
             _settings_body_html(loc),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer()
     except Exception:
@@ -254,7 +262,7 @@ async def stg_stat_reset_execute(callback: CallbackQuery, session: AsyncSession,
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         pts = character_service.count_allocated_stat_points_over_nominal(char)
         cost = int(character_service.STAT_ALLOC_RESET_COST_GOLD)
@@ -265,7 +273,7 @@ async def stg_stat_reset_execute(callback: CallbackQuery, session: AsyncSession,
             await callback.message.edit_text(
                 _settings_body_html(loc),
                 parse_mode=ParseMode.HTML,
-                reply_markup=settings_screen_keyboard(locale=loc, character=char),
+                reply_markup=_settings_reply_kb(loc, char, user),
             )
             return
         await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
@@ -275,7 +283,7 @@ async def stg_stat_reset_execute(callback: CallbackQuery, session: AsyncSession,
             f"{t(loc, 'settings_title')}\n{LINE_SEP}\n"
             f"{t(loc, 'settings_stat_reset_done', points=pts, gold=cost)}",
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer()
     except Exception:
@@ -296,7 +304,7 @@ async def stg_referral(callback: CallbackQuery, session: AsyncSession, state: FS
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         un = await resolve_bot_username_for_referral(callback.bot)
         if not un:
@@ -308,7 +316,7 @@ async def stg_referral(callback: CallbackQuery, session: AsyncSession, state: FS
             f"{t(loc, 'settings_referral_title')}\n{LINE_SEP}\n"
             f"{t(loc, 'settings_referral_body', link=safe_link)}",
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer()
     except Exception:
@@ -326,7 +334,7 @@ async def stg_lang_toggle(callback: CallbackQuery, session: AsyncSession, state:
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         cur = get_locale(char, callback.from_user.language_code)
         nxt = "en" if cur == "ru" else "ru"
         set_locale(char, nxt)
@@ -334,7 +342,7 @@ async def stg_lang_toggle(callback: CallbackQuery, session: AsyncSession, state:
         await callback.message.edit_text(
             _settings_body_html(nxt),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=nxt, character=char),
+            reply_markup=_settings_reply_kb(nxt, char, user),
         )
         await callback.answer(t(nxt, "settings_lang_switched", lang=nxt.upper()), show_alert=False)
     except Exception:
@@ -355,18 +363,46 @@ async def stg_game_images_toggle(callback: CallbackQuery, session: AsyncSession,
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         set_game_images_hidden(char, game_images_enabled(char))
         await session.commit()
         await callback.message.edit_text(
             _settings_body_html(loc),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer()
     except Exception:
         logger.exception("stg:img")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stg:gob_notif")
+async def stg_golden_goblin_notify_toggle(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer(t("ru", "settings_combat_block"), show_alert=True)
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer("Нет героя.", show_alert=True)
+            return
+        user, char = pair
+        user.notify_golden_goblin = not bool(user.notify_golden_goblin)
+        await session.commit()
+        loc = get_locale(char, callback.from_user.language_code)
+        await callback.message.edit_text(
+            _settings_body_html(loc),
+            parse_mode=ParseMode.HTML,
+            reply_markup=_settings_reply_kb(loc, char, user),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:gob_notif")
         await callback.answer("Ошибка.", show_alert=True)
 
 
@@ -380,13 +416,13 @@ async def stg_my_id(callback: CallbackQuery, session: AsyncSession) -> None:
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         tid = callback.from_user.id
         await callback.message.edit_text(
             t(loc, "settings_my_id", tid=tid),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer()
     except Exception:
@@ -407,7 +443,7 @@ async def stg_reset_prompt(callback: CallbackQuery, session: AsyncSession, state
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
         await callback.message.edit_text(
@@ -432,13 +468,13 @@ async def stg_reset_back(callback: CallbackQuery, session: AsyncSession, state: 
             await state.clear()
             await callback.answer()
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
         await callback.message.edit_text(
             _settings_body_html(loc),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer()
     except Exception:
@@ -459,7 +495,7 @@ async def stg_reset_execute(callback: CallbackQuery, session: AsyncSession, stat
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await character_repo.lock_character_row(session, char.id)
         await character_service.reset_all_progress_keep_identity(session, char)
@@ -468,7 +504,7 @@ async def stg_reset_execute(callback: CallbackQuery, session: AsyncSession, stat
         await callback.message.edit_text(
             t(loc, "settings_reset_done"),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer()
     except Exception:
@@ -486,12 +522,12 @@ async def stg_tips(callback: CallbackQuery, session: AsyncSession) -> None:
         if pair is None:
             await callback.answer("Нет героя.", show_alert=True)
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await callback.message.edit_text(
             t(loc, "settings_tips_body"),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer()
     except Exception:
@@ -510,13 +546,13 @@ async def stg_cancel(callback: CallbackQuery, session: AsyncSession, state: FSMC
             await state.clear()
             await callback.answer()
             return
-        _, char = pair
+        user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
         await callback.message.edit_text(
             _settings_body_html(loc),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
         await callback.answer(t(loc, "settings_fsm_cancelled"))
     except Exception:
@@ -537,7 +573,7 @@ async def on_new_name_text(message: Message, session: AsyncSession, state: FSMCo
         if pair is None:
             await state.clear()
             return
-        _, char = pair
+        user, char = pair
         loc = _loc_from_message(message, char)
         cost = int(settings.DISPLAY_NAME_CHANGE_GOLD)
         ok, err_key = try_paid_rename(char, message.text)
@@ -556,7 +592,7 @@ async def on_new_name_text(message: Message, session: AsyncSession, state: FSMCo
         await message.answer(
             t(loc, "settings_rename_done", name=nm, gold=cost),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
     except Exception:
         logger.exception("on_new_name_text")
@@ -630,7 +666,7 @@ async def on_promo_text(message: Message, session: AsyncSession, state: FSMConte
                 pet_part=pet_part,
             ),
             parse_mode=ParseMode.HTML,
-            reply_markup=settings_screen_keyboard(locale=loc, character=char),
+            reply_markup=_settings_reply_kb(loc, char, user),
         )
     except Exception:
         logger.exception("on_promo_text")

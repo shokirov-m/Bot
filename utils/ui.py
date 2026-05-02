@@ -146,8 +146,16 @@ def render_enchant_stars(level: int) -> str:
     return f"+{level} ⭐⭐"
 
 
-def format_inventory_item_html(data: dict[str, Any] | None) -> str:
-    """Карточка предмета: русский тип слота, редкость с эмодзи, статы, набор."""
+def format_inventory_item_html(
+    data: dict[str, Any] | None,
+    *,
+    compact: bool = False,
+) -> str:
+    """Карточка предмета: русский тип слота, редкость с эмодзи, статы, набор.
+
+    compact=True — без лор-текста (summary), без длинного блока шансов; для кузницы и т.п.,
+    чтобы сообщение умещалось в лимит Telegram (4096 символов).
+    """
     if not data:
         return "<i>Нет данных</i>"
     lines: list[str] = []
@@ -164,12 +172,17 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
         elif str(data.get("hand") or "main").lower() in ("off", "offhand", "second", "left"):
             lines.append("⚙️ Надевается во <b>вторую руку</b>.")
     slot = resolve_equip_slot_for_item_data(data)
-    if str(kind).lower() == "ring" and slot and not ring_slot_is_explicit(data):
-        lines.append("📌 Тип: 💍 Кольцо (первый свободный слот I или II)")
+    if not compact:
+        if str(kind).lower() == "ring" and slot and not ring_slot_is_explicit(data):
+            lines.append("📌 Тип: 💍 Кольцо (первый свободный слот I или II)")
+        elif slot and slot in SLOT_LABEL_RU:
+            lines.append(f"📌 Тип: {SLOT_LABEL_RU[slot]}")
+        elif kind:
+            lines.append(f"📌 Тип: {html.escape(str(kind))}")
     elif slot and slot in SLOT_LABEL_RU:
-        lines.append(f"📌 Тип: {SLOT_LABEL_RU[slot]}")
+        lines.append(f"📌 {SLOT_LABEL_RU[slot]}")
     elif kind:
-        lines.append(f"📌 Тип: {html.escape(str(kind))}")
+        lines.append(f"📌 {html.escape(str(kind))}")
     ench = enchant_rules.current_enchant_level(data)
     mult = enchant_rules.enchant_stat_multiplier(ench)
     atk = data.get("attack", data.get("atk"))
@@ -194,9 +207,10 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     st_line = format_item_stat_bonus_line(data)
     if st_line:
         lines.append(st_line)
-    proc_line = format_chance_map_html(chance_map_from_item_data(data))
-    if proc_line:
-        lines.append(f"🎯 <b>Срабатывания (из данных предмета):</b> {proc_line}")
+    if not compact:
+        proc_line = format_chance_map_html(chance_map_from_item_data(data))
+        if proc_line:
+            lines.append(f"🎯 <b>Срабатывания (из данных предмета):</b> {proc_line}")
     sk = data.get("set_key")
     if sk:
         set_titles = {"messenger": "Посланник башни"}
@@ -207,10 +221,11 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     cnt = max(1, int(data.get("count") or 1))
     if cnt > 1:
         lines.append(f"📦 Количество: <b>×{cnt}</b>")
-    summary = data.get("summary")
-    if summary:
-        lines.append("<i>Лор / текст карточки (не заменяет параметры выше):</i>")
-        lines.append(f"<i>{html.escape(str(summary))}</i>")
+    if not compact:
+        summary = data.get("summary")
+        if summary:
+            lines.append("<i>Лор / текст карточки (не заменяет параметры выше):</i>")
+            lines.append(f"<i>{html.escape(str(summary))}</i>")
     return "\n".join(lines)
 
 

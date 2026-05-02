@@ -32,6 +32,13 @@ class User(Base):
     is_muted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
     muted_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Уведомления в чат: появление / победа / побег золотого гоблина (мировой босс не зависит от этого).
+    notify_golden_goblin: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="1",
+    )
+
     # Рефералка: кто пригласил (users.id); после выплаты пригласившему за L2 приглашённого — True
     referred_by_user_id: Mapped[int | None] = mapped_column(
         Integer,

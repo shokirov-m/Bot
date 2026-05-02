@@ -93,7 +93,7 @@ def format_equipped_slot_block_html(equip_slot: str, item: InventoryItem | None)
             f"\n💰 Следующая: <b>{gold_cost}</b> золота + "
             f"<b>{mat_cost}</b> {html.escape(mat_name)}"
         )
-    card = format_inventory_item_html(data)
+    card = format_inventory_item_html(data, compact=True)
     dur_line = ""
     if durability_mod.payload_supports_durability(data):
         dur_line = "\n" + durability_mod.format_durability_line_html(data)
@@ -676,7 +676,7 @@ async def craft_rune_auto_pair_rank1(
 
 
 async def build_repair_message_html(session: AsyncSession, character: Character) -> str:
-    """Экран починки: баланс, сумма «всё», список слотов с прочностью и ценой."""
+    """Экран починки: баланс, сумма «всё», компактный список только надетых вещей с прочностью."""
     city = floor_data.get_city_for_floor(character.floor_number)
     cname = html.escape(city.name if city else "Город")
     cemoji = city.emoji if city else "🏙️"
@@ -695,12 +695,10 @@ async def build_repair_message_html(session: AsyncSession, character: Character)
     ]
     equipped = await inventory_repo.list_equipped_items(session, character.id)
     by_slot = {str(it.equip_slot): it for it in equipped if it.equip_slot}
+    any_shown = False
     for slot in equip_meta.EQUIP_ORDER:
         it = by_slot.get(slot)
-        lab = equip_meta.SLOT_LABEL_RU.get(slot, slot)
         if it is None:
-            lines.append("")
-            lines.append(f"{html.escape(lab)}: <i>пусто</i>")
             continue
         data = dict(it.item_data or {})
         if not durability_mod.payload_supports_durability(data):
@@ -709,11 +707,14 @@ async def build_repair_message_html(session: AsyncSession, character: Character)
         r = str(data.get("rarity") or "common").lower()
         em = equip_meta.RARITY_EMOJI.get(r, "⚪")
         nm = html.escape(str(data.get("name", "?")))
+        wear = durability_mod.durability_wear_percent(data)
+        broken = durability_mod.item_is_broken(data)
+        warn = " 💀" if broken else ""
+        lines.append(f"{em} <b>{nm}</b> — поломка <b>{wear:.0f}%</b>{warn}")
+        any_shown = True
+    if not any_shown:
         lines.append("")
-        lines.append(f"⚙️ {em} <b>{html.escape(lab)}:</b> {nm}")
-        lines.append(durability_mod.format_durability_line_html(data))
-        cost = durability_mod.repair_gold_cost(data)
-        lines.append(f"🔧 Починка: <b>{cost}</b> 💰")
+        lines.append("<i>Нет надетых вещей с прочностью.</i>")
     lines.append("")
     lines.append(
         "<i>Тариф: за каждые 2% недостающей прочности — "
@@ -741,13 +742,12 @@ async def list_repair_slot_button_rows(
         c = durability_mod.repair_gold_cost(data)
         if c <= 0:
             continue
+        r = str(data.get("rarity") or "common").lower()
+        em = equip_meta.RARITY_EMOJI.get(r, "⚪")
         short = str(data.get("name", "?"))
-        if len(short) > 14:
-            short = short[:11] + "…"
-        sl = equip_meta.SLOT_LABEL_RU.get(slot, slot)
-        if " " in sl:
-            sl = sl.split(maxsplit=1)[1]
-        lab = f"🔧 {sl[:10]} · {short} · {c}💰"
+        if len(short) > 18:
+            short = short[:15] + "…"
+        lab = f"🔧 {em} {short} · {c}💰"
         out.append((slot, lab[:58]))
     return out
 

@@ -134,6 +134,33 @@ def patch_sqlite_users_referral_columns() -> None:
         logger.exception("Патч SQLite (users referral) не удался: {}", p)
 
 
+def patch_sqlite_users_notify_golden_goblin() -> None:
+    """Колонка users.notify_golden_goblin (оповещения о золотом гоблине)."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            cols = {row[1] for row in con.execute("PRAGMA table_info(users)").fetchall()}
+            if not cols:
+                return
+            if "notify_golden_goblin" not in cols:
+                con.execute(
+                    "ALTER TABLE users ADD COLUMN notify_golden_goblin BOOLEAN NOT NULL DEFAULT 1",
+                )
+                con.commit()
+                logger.info("Патч SQLite: добавлена колонка users.notify_golden_goblin")
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (users notify_golden_goblin) не удался: {}", p)
+
+
 def patch_sqlite_promo_offers_table() -> None:
     """Таблица promo_offers (промокоды из админки)."""
     import sqlite3
@@ -677,6 +704,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_characters_columns()
     patch_sqlite_character_game_id()
     patch_sqlite_users_referral_columns()
+    patch_sqlite_users_notify_golden_goblin()
     patch_sqlite_app_global_table()
     patch_sqlite_game_events_table()
     patch_sqlite_auction_lots_table()
