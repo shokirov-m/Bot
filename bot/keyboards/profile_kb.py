@@ -35,7 +35,7 @@ def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -
 
 
 def profile_view_keyboard(character: Character | None = None, *, locale: str = "ru") -> InlineKeyboardMarkup:
-    """Компактный статус (передышка — в разделе «Дом»)."""
+    """Компактный статус."""
     loc = locale if locale in ("ru", "en") else "ru"
     rows: list[list[InlineKeyboardButton]] = [
         [

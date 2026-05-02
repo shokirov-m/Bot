@@ -18,6 +18,7 @@ from bot.keyboards.forge_kb import (
     forge_dis_bag_keyboard,
     forge_enchant_slots_keyboard,
     forge_quest_keyboard,
+    forge_repair_keyboard,
     forge_rune_bag_pick_keyboard,
     forge_rune_menu_keyboard,
     forge_rune_socket_pick_keyboard,
@@ -66,6 +67,96 @@ async def forge_open_main(query: CallbackQuery, session: AsyncSession) -> None:
         await query.answer()
     except Exception:
         logger.exception("frg:main")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:rpr:\d+$"))
+async def forge_repair_menu(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(str(query.data).split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Кузница недоступна.", show_alert=True)
+            return
+        text = await forge_service.build_repair_message_html(session, char)
+        rows = await forge_service.list_repair_slot_button_rows(session, char.id)
+        await query.message.edit_text(
+            text,
+            reply_markup=forge_repair_keyboard(char.floor_number, rows),
+            parse_mode=ParseMode.HTML,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("frg:rpr")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:rpr1:\d+:\w+$"))
+async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        _, _, fl_s, slot = str(query.data).split(":", 3)
+        floor_key = int(fl_s)
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Кузница недоступна.", show_alert=True)
+            return
+        ok, lines = await forge_service.try_repair_equipped_slot(session, char, slot)
+        if ok:
+            text = await forge_service.build_repair_message_html(session, char)
+            rows = await forge_service.list_repair_slot_button_rows(session, char.id)
+            await query.message.edit_text(
+                text,
+                reply_markup=forge_repair_keyboard(char.floor_number, rows),
+                parse_mode=ParseMode.HTML,
+            )
+            await query.answer("Починено.", show_alert=False)
+        else:
+            await query.answer(lines[0] if lines else "Нельзя.", show_alert=True)
+    except Exception:
+        logger.exception("frg:rpr1")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:rpra:\d+$"))
+async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(str(query.data).split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Кузница недоступна.", show_alert=True)
+            return
+        ok, lines = await forge_service.try_repair_all_equipped(session, char)
+        if ok:
+            text = await forge_service.build_repair_message_html(session, char)
+            rows = await forge_service.list_repair_slot_button_rows(session, char.id)
+            await query.message.edit_text(
+                text,
+                reply_markup=forge_repair_keyboard(char.floor_number, rows),
+                parse_mode=ParseMode.HTML,
+            )
+            await query.answer("Вся экипировка починена.", show_alert=False)
+        else:
+            await query.answer(lines[0] if lines else "Нельзя.", show_alert=True)
+    except Exception:
+        logger.exception("frg:rpra")
         await query.answer("Ошибка.", show_alert=True)
 
 

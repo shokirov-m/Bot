@@ -81,6 +81,7 @@ from game.floors.monsters import FloorMonsterSpawn, MonsterTemplate, build_spawn
 from game.economy import sinks as sink_rules
 from game.floors.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
 from game.items import enchant as enchant_rules
+from game.items import durability as durability_mod
 from game.items.rarity_scaling import scaled_armor_defense_value
 from game.items import loot as loot_tables
 from game.characters.global_passives import refresh_global_passives
@@ -359,24 +360,31 @@ async def _weapon_profile(
 
     off_atk = 0
     off_data: dict | None = dict(off.item_data or {}) if off else None
-    if off_data:
+    if off_data and not durability_mod.item_is_broken(off_data):
         oa = int(off_data.get("attack", off_data.get("atk", 0)) or 0)
         if oa > 0:
             off_atk = character_service.weapon_attack_value_from_item_data(off_data, level=lv, floor_number=fl)
 
-    if weapon is None:
-        if off_atk > 0 and off_data is not None:
-            wtype = weapon_type_from_item_data(off_data)
-            return off_atk, wtype, damage_multiplier_for_type(character, wtype), off_data
+    main_data: dict | None = None
+    main_atk = 0
+    if weapon is not None:
+        wd = dict(weapon.item_data or {})
+        if not durability_mod.item_is_broken(wd):
+            main_data = wd
+            main_atk = character_service.weapon_attack_value_from_item_data(wd, level=lv, floor_number=fl)
+
+    if main_data is None and off_atk > 0 and off_data is not None:
+        wtype = weapon_type_from_item_data(off_data)
+        return off_atk, wtype, damage_multiplier_for_type(character, wtype), off_data
+
+    if main_data is None:
         atk = character_service.weapon_attack_value_from_item_data(None, level=lv, floor_number=fl)
         wtype = "unarmed"
         return atk, wtype, damage_multiplier_for_type(character, wtype), None
 
-    data = dict(weapon.item_data or {})
-    main_atk = character_service.weapon_attack_value_from_item_data(data, level=lv, floor_number=fl)
     atk = main_atk + off_atk
-    wtype = weapon_type_from_item_data(data)
-    return atk, wtype, damage_multiplier_for_type(character, wtype), data
+    wtype = weapon_type_from_item_data(main_data)
+    return atk, wtype, damage_multiplier_for_type(character, wtype), main_data
 
 
 def _apply_weapon_runes_to_state(
@@ -415,6 +423,8 @@ async def _equipped_gear_defense_total(session: AsyncSession, character_id: int)
     total = 0
     for it in items:
         data = it.item_data or {}
+        if durability_mod.item_is_broken(dict(data)):
+            continue
         base_def = int(data.get("defense", data.get("armor", 0)) or 0)
         def_val = scaled_armor_defense_value(base_def, data)
         ench = enchant_rules.current_enchant_level(data)
@@ -743,9 +753,13 @@ async def start_combat(
     _apply_mastery_combat_bonuses(character, combat_state)
     combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
     _eqs = await inventory_repo.list_equipped_items(session, character.id)
+    _gear_passive = [
+        e.item_data for e in _eqs
+        if not durability_mod.item_is_broken(dict(e.item_data or {}))
+    ]
     _glogs = passive_gear.apply_to_combat_state(
         combat_state,
-        [e.item_data for e in _eqs],
+        _gear_passive,
     )
     if _glogs:
         _append_logs(combat_state, _glogs)
@@ -951,9 +965,13 @@ async def start_tutorial_combat(
     _apply_weapon_runes_to_state(combat_state, character, w_item)
     combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
     _teq = await inventory_repo.list_equipped_items(session, character.id)
+    _tgear_passive = [
+        e.item_data for e in _teq
+        if not durability_mod.item_is_broken(dict(e.item_data or {}))
+    ]
     _tlg = passive_gear.apply_to_combat_state(
         combat_state,
-        [e.item_data for e in _teq],
+        _tgear_passive,
     )
     if _tlg:
         _append_logs(combat_state, _tlg)
@@ -1460,7 +1478,8 @@ async def _victory_sequence(
     except Exception:
         pass
     daily_service.record_kill(character)
-    
+    durability_note = await durability_mod.wear_equipped_items_after_battle(session, character.id)
+
     # Decrement elixirs
     mp_win = dict(character.meta_progress or {})
     buffs_win = dict(mp_win.get("active_elixirs") or {})
@@ -1785,6 +1804,7 @@ async def _victory_sequence(
                 + pioneer_suffix
                 + gg_kill_note
                 + _mat_note
+                + durability_note
             )
             gg_body = (
                 "🏆 <b>Победа!</b> 💰 Золотой гоблин\n"
@@ -1837,6 +1857,7 @@ async def _victory_sequence(
                         + pioneer_suffix
                         + gg_kill_note
                         + _mat_note
+                        + durability_note
                     )
                 gold_line = f"💰 +{net_gold} золота"
                 if gross_gold != net_gold and is_last:
@@ -2020,6 +2041,8 @@ async def _defeat_sequence(
             weapon.item_data = data
             enchant_msg = f"\n⚠️ Заточка оружия снижена до +{ench - 1}."
 
+    dur_note = await durability_mod.wear_equipped_items_after_battle(session, character.id)
+
     character.hp_current = max(1, int(character.hp_max * 0.4))
     character.mp_current = max(0, int(character.mp_max * 0.4))
 
@@ -2034,6 +2057,7 @@ async def _defeat_sequence(
         "💀 Ты пал… Сброс на начало текущего этажа.\n"
         f"{gold_line}"
         f"{enchant_msg}"
+        f"{dur_note}"
     )
     loc = get_locale(character, None)
     defeat_rows: list[list[InlineKeyboardButton]] = [

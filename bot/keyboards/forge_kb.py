@@ -12,6 +12,7 @@ __all__ = [
     "forge_actions_keyboard",
     "forge_dis_bag_keyboard",
     "forge_enchant_slots_keyboard",
+    "forge_repair_keyboard",
     "forge_rune_bag_pick_keyboard",
     "forge_rune_menu_keyboard",
     "forge_rune_socket_pick_keyboard",
@@ -186,6 +187,34 @@ def forge_dis_bag_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def forge_repair_keyboard(
+    floor_number: int,
+    slot_rows: list[tuple[str, str]],
+) -> InlineKeyboardMarkup:
+    rows_btn: list[list[InlineKeyboardButton]] = []
+    if slot_rows:
+        rows_btn.append(
+            [
+                InlineKeyboardButton(
+                    text="🔧 Починить всё",
+                    callback_data=f"frg:rpra:{floor_number}",
+                ),
+            ],
+        )
+    for slot, lab in slot_rows[:12]:
+        rows_btn.append(
+            [
+                InlineKeyboardButton(
+                    text=lab[:64],
+                    callback_data=f"frg:rpr1:{floor_number}:{slot}",
+                ),
+            ],
+        )
+    rows_btn.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
+    rows_btn.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows_btn)
+
+
 def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -196,6 +225,7 @@ def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
                     callback_data=f"frg:enchw:{floor_number}",
                 ),
             ],
+            [InlineKeyboardButton(text="🔨 Починка экипировки", callback_data=f"frg:rpr:{floor_number}")],
             [InlineKeyboardButton(text="🔨 Разобрать предмет", callback_data=f"frg:dis:{floor_number}")],
             [InlineKeyboardButton(text="💎 Руны на оружии", callback_data=f"frg:rnm:{floor_number}")],
             [InlineKeyboardButton(text="🧪 Сварить настой (HP)", callback_data=f"frg:brew:{floor_number}")],

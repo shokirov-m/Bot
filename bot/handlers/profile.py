@@ -35,10 +35,7 @@ from bot.keyboards.profile_kb import (
 from bot.keyboards.tree_kb import skill_tree_keyboard, node_action_keyboard
 from bot.utils.game_ui import push_game_ui
 from services import character_service, fame_service, leaderboard_service, stat_bonus_service, title_service
-from services.rest_service import (
-    apply_completed_rest_if_needed,
-    format_rest_status_line_html,
-)
+from services.rest_service import apply_completed_rest_if_needed
 from game.characters import pets as pets_mod
 from game.characters.classes import get_class_or_none
 from game.archetypes import manager as arch_manager
@@ -306,8 +303,6 @@ def _build_profile_text(
                     wrap_bar_in_code=False,
                 ),
                 "",
-                format_rest_status_line_html(char),
-                "",
                 render_exp_bar(int(char.experience), xp_need, wrap_bar_in_code=False),
                 LINE_SEP,
                 "📊 <b>Характеристики</b>",
@@ -388,8 +383,6 @@ def _build_profile_text(
                 minutes_to_next=st_hint,
                 wrap_bar_in_code=False,
             ),
-            "",
-            format_rest_status_line_html(char),
             "",
             render_exp_bar(int(char.experience), xp_need, wrap_bar_in_code=False),
             LINE_SEP,
@@ -488,7 +481,7 @@ async def build_profile_html_async(session: AsyncSession, char: Character) -> st
 
 
 async def build_profile_full_stats_html_async(session: AsyncSession, char: Character) -> str:
-    """Полные боевые и вспомогательные бонусы, передышка, урон/крит/уклонение."""
+    """Полные боевые и вспомогательные бонусы, урон/крит/уклонение."""
     if pets_mod.repair_pet_meta_if_needed(char):
         await session.flush()
     refresh_global_passives(char)

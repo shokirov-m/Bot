@@ -8,6 +8,8 @@ import html
 from typing import Any
 
 from game.items import enchant as enchant_rules
+from game.items.chance_fields import chance_map_from_item_data, format_chance_map_html
+from game.items import durability as durability_mod
 from game.items.equipment import (
     RARITY_EMOJI,
     RARITY_NAME_RU,
@@ -17,11 +19,7 @@ from game.items.equipment import (
     resolve_equip_slot_for_item_data,
     ring_slot_is_explicit,
 )
-from game.items.rarity_scaling import (
-    armor_enchant_defensive_bonus,
-    scaled_armor_defense_value,
-    scaled_weapon_attack_value,
-)
+from game.items.rarity_scaling import scaled_armor_defense_value, scaled_weapon_attack_value
 from game.items.stat_bonuses import format_item_stat_bonus_line
 
 # Базовый разделитель (совместимость со старыми экранами).
@@ -173,23 +171,32 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
     elif kind:
         lines.append(f"📌 Тип: {html.escape(str(kind))}")
     ench = enchant_rules.current_enchant_level(data)
+    mult = enchant_rules.enchant_stat_multiplier(ench)
     atk = data.get("attack", data.get("atk"))
     if atk is not None:
-        eff_atk = scaled_weapon_attack_value(int(atk), data) + ench
+        base_atk = scaled_weapon_attack_value(int(atk), data)
+        eff_atk = max(1, int(round(base_atk * mult)))
         lines.append(f"⚔️ Атака: <b>{eff_atk}</b>")
     defense = data.get("defense", data.get("armor"))
     if defense is not None:
         bd = int(defense)
-        eff_def = scaled_armor_defense_value(bd, data) + armor_enchant_defensive_bonus(ench, data)
+        base_def = scaled_armor_defense_value(bd, data)
+        eff_def = max(0, int(round(base_def * mult)))
         lines.append(f"🛡️ Защита: <b>{eff_def}</b>")
     hpb = max(0, int(data.get("hp_bonus", 0) or 0))
     if hpb > 0:
         lines.append(f"❤️ Макс. HP: <b>+{hpb}</b>")
     if ench > 0:
         lines.append(f"✨ Заточка: {html.escape(render_enchant_stars(ench))}")
+    dur_html = durability_mod.format_durability_line_html(data)
+    if dur_html:
+        lines.append(dur_html)
     st_line = format_item_stat_bonus_line(data)
     if st_line:
         lines.append(st_line)
+    proc_line = format_chance_map_html(chance_map_from_item_data(data))
+    if proc_line:
+        lines.append(f"🎯 <b>Срабатывания (из данных предмета):</b> {proc_line}")
     sk = data.get("set_key")
     if sk:
         set_titles = {"messenger": "Посланник башни"}
@@ -202,6 +209,7 @@ def format_inventory_item_html(data: dict[str, Any] | None) -> str:
         lines.append(f"📦 Количество: <b>×{cnt}</b>")
     summary = data.get("summary")
     if summary:
+        lines.append("<i>Лор / текст карточки (не заменяет параметры выше):</i>")
         lines.append(f"<i>{html.escape(str(summary))}</i>")
     return "\n".join(lines)
 
@@ -218,7 +226,10 @@ def item_bag_button_label(data: dict[str, Any] | None, _bag_slot: int | None = N
     name = str(data.get("name", "?"))[:name_budget]
     atk = data.get("attack", data.get("atk"))
     if atk is not None:
-        s = f"{gi}{em} {name} {atk}{cnt_suffix}"
+        ench = enchant_rules.current_enchant_level(data)
+        mult = enchant_rules.enchant_stat_multiplier(ench)
+        eff = max(1, int(round(scaled_weapon_attack_value(int(atk), data) * mult)))
+        s = f"{gi}{em} {name} {eff}{cnt_suffix}"
     else:
         s = f"{gi}{em} {name}{cnt_suffix}"
     return s[:30]

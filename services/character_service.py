@@ -26,6 +26,7 @@ from db.models.inventory import InventoryItem
 from db.models.quest import QuestProgress
 from db.models.user import User
 from db.repository import character_repo, inventory_repo
+from game.items import durability as durability_mod
 from game.archetypes import manager as arch_manager
 from game.archetypes.models import Archetype
 from game.characters.classes import get_class_or_none
@@ -248,11 +249,14 @@ async def equipped_weapon_attack_value(session: AsyncSession, character: Charact
     fl = int(character.floor_number)
     total = 0
     if weapon is not None:
-        total += weapon_attack_value_from_item_data(dict(weapon.item_data or {}), level=lv, floor_number=fl)
+        wd = dict(weapon.item_data or {})
+        if not durability_mod.item_is_broken(wd):
+            total += weapon_attack_value_from_item_data(wd, level=lv, floor_number=fl)
     if off is not None:
         od = dict(off.item_data or {})
         if int(od.get("attack", od.get("atk", 0)) or 0) > 0:
-            total += weapon_attack_value_from_item_data(od, level=lv, floor_number=fl)
+            if not durability_mod.item_is_broken(od):
+                total += weapon_attack_value_from_item_data(od, level=lv, floor_number=fl)
     if weapon is None and off is None:
         return weapon_attack_value_from_item_data(None, level=lv, floor_number=fl)
     if total <= 0:

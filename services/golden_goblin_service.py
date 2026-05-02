@@ -1,6 +1,8 @@
 """
-Мировое событие «Золотой гоблин»: раз в несколько часов один этаж (5–20),
-первый победитель получает фиксированную награду (остальные — обычную с каталога).
+Мировое событие «Золотой гоблин»: раз в несколько часов один «обычный» этаж в диапазоне 5–20
+(без исследований, комнат, волнового сценария и этажей с мини-/мажор-боссом по правилам башни).
+
+Первый победитель получает фиксированную награду (остальные — обычную с каталога).
 
 Состояние в AppGlobal(id=1).payload: gg_wave, gg_floor, gg_claimed.
 """
@@ -22,6 +24,49 @@ TEMPLATE_KEY = "golden_goblin"
 SLOT_CODE = "gg"
 FLOOR_MIN = 5
 FLOOR_MAX = 20
+
+
+def floor_accepts_golden_goblin_event(floor_number: int) -> bool:
+    """
+    Этаж, где гоблин может появиться у игрока: не исследование, не зачистка комнат,
+    не волны «wv_*», не этаж сильного или мини-босса по сетке башни.
+    """
+    fl = int(floor_number)
+    if fl < FLOOR_MIN or fl > FLOOR_MAX:
+        return False
+    from game.floors import explore_floor_4 as e4_mod
+    from game.floors import explore_floor as e8_mod
+    from game.floors import explore_floor_22 as e22_mod
+    from game.floors import floor_data as fd_mod
+    from game.floors import room_clear_floor as rc5_mod
+    from game.floors import room_clear_floor_10 as rc10_mod
+    from game.floors import room_clear_floor_24 as rc24_mod
+    from game.floors import wave_floor as wv_mod
+
+    if (
+        e4_mod.is_explore_floor_4(fl)
+        or e8_mod.is_explore_floor(fl)
+        or e22_mod.is_explore_floor_22(fl)
+    ):
+        return False
+    if (
+        rc5_mod.is_room_clear_floor(fl)
+        or rc10_mod.is_room_clear_floor_10(fl)
+        or rc24_mod.is_room_clear_floor_24(fl)
+    ):
+        return False
+    if wv_mod.is_wave_floor(fl):
+        return False
+    if fd_mod.is_major_boss_floor(fl) or fd_mod.is_mini_boss_floor(fl):
+        return False
+    return True
+
+
+def _pick_random_event_floor() -> int:
+    eligible = [n for n in range(FLOOR_MIN, FLOOR_MAX + 1) if floor_accepts_golden_goblin_event(n)]
+    if not eligible:
+        return 11
+    return int(random.choice(eligible))
 
 
 def build_spawn() -> FloorMonsterSpawn:
@@ -68,7 +113,7 @@ async def ensure_initial_spawn(session: AsyncSession) -> tuple[bool, int | None,
     base = _payload(row)
     if base.get("gg_wave") is not None:
         return False, None, None
-    fl = random.randint(FLOOR_MIN, FLOOR_MAX)
+    fl = _pick_random_event_floor()
     base["gg_wave"] = 1
     base["gg_floor"] = fl
     base["gg_claimed"] = False
@@ -84,7 +129,7 @@ async def roll_next_spawn(session: AsyncSession) -> tuple[int, int]:
     row = await _ensure_row(session)
     base = _payload(row)
     wave = int(base.get("gg_wave", 0)) + 1
-    fl = random.randint(FLOOR_MIN, FLOOR_MAX)
+    fl = _pick_random_event_floor()
     base["gg_wave"] = wave
     base["gg_floor"] = fl
     base["gg_claimed"] = False
@@ -136,7 +181,10 @@ async def is_active_on_floor(session: AsyncSession, floor_number: int) -> bool:
     base = dict(row.payload or {})
     if base.get("gg_claimed"):
         return False
-    return int(base.get("gg_floor") or 0) == int(floor_number)
+    gf = int(base.get("gg_floor") or 0)
+    if gf != int(floor_number):
+        return False
+    return floor_accepts_golden_goblin_event(gf)
 
 
 async def merge_spawns_if_active(
@@ -144,22 +192,11 @@ async def merge_spawns_if_active(
     character: Character,
     spawns: list[FloorMonsterSpawn],
 ) -> list[FloorMonsterSpawn]:
-    # Не добавляем гоблина на этажах со своим сценарием — там своя клавиатура.
+    fl = int(character.floor_number)
+    # Пилотный длинный этаж (15): свой UI и последовательность — без гоблина.
     if long_floor_mod.is_long_floor_active(character):
         return spawns
-    fl = int(character.floor_number)
-    from game.floors import room_clear_floor as rc_mod, wave_floor as wv_mod
-    if rc_mod.is_room_clear_floor(fl) or wv_mod.is_wave_floor(fl):
-        return spawns
-    # Не добавляем на этажах с боссом (мини и мажор).
-    from game.floors import floor_data as fd_mod
-    if fd_mod.is_major_boss_floor(fl) or fd_mod.is_mini_boss_floor(fl):
-        return spawns
-    # Не добавляем на этажах-исследованиях (4 и 8).
-    _EXPLORE_FLOORS = {4, 8}
-    if fl in _EXPLORE_FLOORS:
-        return spawns
-    if fl < FLOOR_MIN or fl > FLOOR_MAX:
+    if not floor_accepts_golden_goblin_event(fl):
         return spawns
     if not await is_active_on_floor(session, fl):
         return spawns
@@ -184,7 +221,7 @@ async def try_claim_first_blood(session: AsyncSession, expected_wave: int) -> bo
 
 async def html_banner_for_floor(session: AsyncSession, floor_number: int) -> str:
     """Строка для текста этажа (HTML), если событие активно на этом ярусе."""
-    if int(floor_number) < FLOOR_MIN or int(floor_number) > FLOOR_MAX:
+    if not floor_accepts_golden_goblin_event(int(floor_number)):
         return ""
     row = await session.get(AppGlobal, 1)
     if row is None:

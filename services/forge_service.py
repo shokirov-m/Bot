@@ -15,6 +15,7 @@ from db.models.character import Character
 from db.models.inventory import InventoryItem
 from db.repository import inventory_repo
 from game.floors import floor_data
+from game.items import durability as durability_mod
 from game.items import enchant as enchant_rules
 from game.items import equipment as equip_meta
 from game.items import runes as rune_sys
@@ -29,6 +30,8 @@ def format_forge_intro_html(city_name: str, city_emoji: str) -> str:
     return (
         f"{city_emoji} <b>Кузница</b> — {html.escape(city_name)}\n"
         "Здесь кузнец усиливает <b>надетую экипировку</b> (оружие, броня, шлем и др.).\n"
+        "После боёв снаряжение <b>теряет прочность</b>; при 0 предмет ломается — "
+        "чините в разделе «Починка экипировки» за золото.\n"
         "Провал может оставить уровень как есть или снизить заточку на 1.\n"
         "⚗️ <b>Рунный камень</b> можно вложить в попытку — "
         "катастрофа не снизит заточку (останется провал без −1).\n"
@@ -91,13 +94,16 @@ def format_equipped_slot_block_html(equip_slot: str, item: InventoryItem | None)
             f"<b>{mat_cost}</b> {html.escape(mat_name)}"
         )
     card = format_inventory_item_html(data)
+    dur_line = ""
+    if durability_mod.payload_supports_durability(data):
+        dur_line = "\n" + durability_mod.format_durability_line_html(data)
     extra_runes = (
         "".join(_rune_lines_for_weapon_data(data))
         if str(data.get("kind")) == "weapon"
         else ""
     )
     return (
-        f"<b>{label}</b>\n{card}{stat_s}\n"
+        f"<b>{label}</b>\n{card}{dur_line}{stat_s}\n"
         f"✨ Сейчас: {html.escape(render_enchant_stars(lv))}{next_hint}"
         f"{extra_runes}"
     )
@@ -667,3 +673,146 @@ async def craft_rune_auto_pair_rank1(
         if len(lst) >= 2:
             return await craft_rune_merge(session, character, element=el, target_rank=2)
     return False, "Нет двух рун ранга I одной стихии в сумке."
+
+
+async def build_repair_message_html(session: AsyncSession, character: Character) -> str:
+    """Экран починки: баланс, сумма «всё», список слотов с прочностью и ценой."""
+    city = floor_data.get_city_for_floor(character.floor_number)
+    cname = html.escape(city.name if city else "Город")
+    cemoji = city.emoji if city else "🏙️"
+    gold = int(character.gold)
+    total_all = await durability_mod.total_repair_cost_equipped(session, character.id)
+    lines: list[str] = [
+        f"{cemoji} <b>Кузница</b> — {cname}",
+        "",
+        "🔨 <b>ПОЧИНКА</b>",
+        "",
+        f"💰 Ваш баланс: <b>{gold:,}</b> 🟡",
+        f"💰 Стоимость починки всех предметов: <b>{total_all}</b> 💰",
+        LINE_SEP,
+        "",
+        "<b>Экипированные предметы:</b>",
+    ]
+    equipped = await inventory_repo.list_equipped_items(session, character.id)
+    by_slot = {str(it.equip_slot): it for it in equipped if it.equip_slot}
+    for slot in equip_meta.EQUIP_ORDER:
+        it = by_slot.get(slot)
+        lab = equip_meta.SLOT_LABEL_RU.get(slot, slot)
+        if it is None:
+            lines.append("")
+            lines.append(f"{html.escape(lab)}: <i>пусто</i>")
+            continue
+        data = dict(it.item_data or {})
+        if not durability_mod.payload_supports_durability(data):
+            continue
+        durability_mod.ensure_gear_durability_defaults(data)
+        r = str(data.get("rarity") or "common").lower()
+        em = equip_meta.RARITY_EMOJI.get(r, "⚪")
+        nm = html.escape(str(data.get("name", "?")))
+        lines.append("")
+        lines.append(f"⚙️ {em} <b>{html.escape(lab)}:</b> {nm}")
+        lines.append(durability_mod.format_durability_line_html(data))
+        cost = durability_mod.repair_gold_cost(data)
+        lines.append(f"🔧 Починка: <b>{cost}</b> 💰")
+    lines.append("")
+    lines.append(
+        "<i>Тариф: за каждые 2% недостающей прочности — "
+        "5 / 10 / 20 / 40 / 100 💰 (обычная … легендарная).</i>",
+    )
+    return "\n".join(lines)
+
+
+async def list_repair_slot_button_rows(
+    session: AsyncSession,
+    character_id: int,
+) -> list[tuple[str, str]]:
+    """Кнопки «починить слот»: только если есть износ и cost &gt; 0."""
+    equipped = await inventory_repo.list_equipped_items(session, character_id)
+    by_slot = {str(it.equip_slot): it for it in equipped if it.equip_slot}
+    out: list[tuple[str, str]] = []
+    for slot in equip_meta.EQUIP_ORDER:
+        it = by_slot.get(slot)
+        if it is None:
+            continue
+        data = dict(it.item_data or {})
+        if not durability_mod.payload_supports_durability(data):
+            continue
+        durability_mod.ensure_gear_durability_defaults(data)
+        c = durability_mod.repair_gold_cost(data)
+        if c <= 0:
+            continue
+        short = str(data.get("name", "?"))
+        if len(short) > 14:
+            short = short[:11] + "…"
+        sl = equip_meta.SLOT_LABEL_RU.get(slot, slot)
+        if " " in sl:
+            sl = sl.split(maxsplit=1)[1]
+        lab = f"🔧 {sl[:10]} · {short} · {c}💰"
+        out.append((slot, lab[:58]))
+    return out
+
+
+async def try_repair_equipped_slot(
+    session: AsyncSession,
+    character: Character,
+    equip_slot: str,
+) -> tuple[bool, list[str]]:
+    if not forge_loc.forge_available_on_floor(character.floor_number):
+        return False, ["Кузница только в городах-хабах башни."]
+    if equip_slot not in equip_meta.EQUIP_ORDER:
+        return False, ["Неизвестный слот экипировки."]
+    item = await inventory_repo.get_equipped_in_slot(session, character.id, equip_slot)
+    if item is None:
+        lab = equip_meta.SLOT_LABEL_RU.get(equip_slot, equip_slot)
+        return False, [f"Слот пуст: {html.escape(lab)}."]
+    data = dict(item.item_data or {})
+    if not durability_mod.payload_supports_durability(data):
+        return False, ["Этот предмет не использует прочность."]
+    durability_mod.ensure_gear_durability_defaults(data)
+    cost = durability_mod.repair_gold_cost(data)
+    if cost <= 0:
+        return False, ["Прочность уже полная."]
+    if int(character.gold) < cost:
+        return False, [f"Нужно {cost} золота, у тебя {int(character.gold):,}."]
+
+    slot_lab = html.escape(equip_meta.SLOT_LABEL_RU.get(equip_slot, equip_slot))
+    character_service.add_gold(
+        character,
+        -cost,
+        spend_for=f"Кузница: починка ({slot_lab})",
+        spend_kind="forge",
+    )
+    dmax = int(data["durability_max"])
+    data["durability"] = dmax
+    item.item_data = data
+    await session.flush()
+    return True, [f"✅ Починено ({slot_lab}) за <b>{cost}</b> 💰."]
+
+
+async def try_repair_all_equipped(session: AsyncSession, character: Character) -> tuple[bool, list[str]]:
+    if not forge_loc.forge_available_on_floor(character.floor_number):
+        return False, ["Кузница только в городах-хабах башни."]
+    total = await durability_mod.total_repair_cost_equipped(session, character.id)
+    if total <= 0:
+        return False, ["Вся экипировка в полном порядке."]
+    if int(character.gold) < total:
+        return False, [f"Нужно {total} золота, у тебя {int(character.gold):,}."]
+
+    character_service.add_gold(
+        character,
+        -total,
+        spend_for="Кузница: починка всей экипировки",
+        spend_kind="forge",
+    )
+    items = await inventory_repo.list_equipped_items(session, character.id)
+    for it in items:
+        data = dict(it.item_data or {})
+        if not durability_mod.payload_supports_durability(data):
+            continue
+        durability_mod.ensure_gear_durability_defaults(data)
+        dcur, dmax = durability_mod.durability_pair(data)
+        if dcur < dmax:
+            data["durability"] = int(data["durability_max"])
+            it.item_data = data
+    await session.flush()
+    return True, [f"✅ Всё отремонтировано за <b>{total}</b> 💰."]

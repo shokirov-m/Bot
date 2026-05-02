@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.inventory import InventoryItem
 from game.balance import BAG_MAX_SLOT_INDEX
+from game.items import durability as durability_mod
 from game.items.equipment.defaults import apply_item_payload_defaults
 from game.items.equipment.slots import (
     item_is_two_handed,
@@ -162,6 +163,7 @@ async def equip_item_from_bag(session: AsyncSession, item: InventoryItem) -> str
     """
     data = dict(item.item_data or {})
     apply_item_payload_defaults(data)
+    durability_mod.ensure_gear_durability_defaults(data)
     item.item_data = data
     slot = resolve_equip_slot_for_item_data(data)
     if not slot:
@@ -227,6 +229,7 @@ async def add_starter_equipped_weapon(
     """Стартовое оружие сразу в слоте weapon."""
     data = copy.deepcopy(item_data)
     apply_item_payload_defaults(data)
+    durability_mod.ensure_gear_durability_defaults(data)
     row = InventoryItem(
         character_id=character_id,
         is_equipped=True,
@@ -298,6 +301,7 @@ async def add_bag_item(
     """
     data = copy.deepcopy(item_data)
     apply_item_payload_defaults(data)
+    durability_mod.ensure_gear_durability_defaults(data)
     if _is_stackable_kind(data):
         existing = await find_stack(session, character_id, data)
         if existing is not None:

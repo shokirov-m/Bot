@@ -16,6 +16,13 @@ from game.characters.titles import TITLE_BY_KEY
 from game.items import enchant as enchant_rules
 from game.items.rarity_scaling import scaled_armor_defense_value
 from game.archetypes import manager as arch_manager
+from game.items.chance_fields import (
+    chance_map_from_item_data,
+    empty_chance_map,
+    format_chance_map_html,
+    merge_chance_maps,
+)
+from game.items import durability as durability_mod
 from game.items.stat_bonuses import STAT_KEYS, empty_stat_bonus_map, stat_bonuses_from_item_data
 from services import title_service
 
@@ -25,6 +32,8 @@ def _messenger_set_bonus_from_equipped(items: list[InventoryItem]) -> dict[str, 
     n = 0
     for it in items:
         d = dict(it.item_data or {})
+        if durability_mod.item_is_broken(d):
+            continue
         if str(d.get("set_key") or "").lower() == "messenger":
             n += 1
     if n >= 2:
@@ -38,6 +47,8 @@ def _messenger_set_bonus_from_equipped(items: list[InventoryItem]) -> dict[str, 
 def armor_hp_bonus_from_item_data(data: dict[str, Any] | None) -> int:
     """Плоский бонус к макс. HP с экипировки (поле hp_bonus; не расходники/руны)."""
     if not data:
+        return 0
+    if durability_mod.item_is_broken(data):
         return 0
     k = str(data.get("kind") or "").lower()
     if k in ("consumable", "rune"):
@@ -63,6 +74,8 @@ async def equipped_gear_stat_bonuses(session: AsyncSession, character_id: int) -
     total = empty_stat_bonus_map()
     items = await inventory_repo.list_equipped_items(session, character_id)
     for it in items:
+        if durability_mod.item_is_broken(dict(it.item_data or {})):
+            continue
         part = stat_bonuses_from_item_data(dict(it.item_data or {}))
         for k in STAT_KEYS:
             total[k] += part[k]
@@ -127,6 +140,8 @@ async def equipped_gear_defense_total(session: AsyncSession, character_id: int) 
     total = 0
     for it in items:
         data = it.item_data or {}
+        if durability_mod.item_is_broken(dict(data)):
+            continue
         base_def = int(data.get("defense", data.get("armor", 0)) or 0)
         def_val = scaled_armor_defense_value(base_def, data)
         ench = enchant_rules.current_enchant_level(data)
@@ -135,49 +150,16 @@ async def equipped_gear_defense_total(session: AsyncSession, character_id: int) 
     return total
 
 
-# Поля item_data, дающие "шансы" в боевых формулах (доли в [0..1] либо в %).
-# Значения нормализуем в долях единицы.
-_CHANCE_FIELDS: tuple[str, ...] = (
-    "crit_bonus",
-    "dodge_bonus",
-    "stun_chance",
-    "bleed_chance",
-    "poison_chance",
-    "burn_chance",
-    "freeze_chance",
-    "lifesteal_chance",
-    "block_chance",
-    "miss_reduction",
-)
-
-
-def _coerce_chance(v: Any) -> float:
-    try:
-        x = float(v)
-    except (TypeError, ValueError):
-        return 0.0
-    # Эвристика: если кто-то записал число > 1.0 — считаем, что это проценты.
-    return x / 100.0 if x > 1.0 else x
-
-
 async def aggregate_chance_bonuses(
     session: AsyncSession, character_id: int
 ) -> dict[str, float]:
     """Сумма «шансовых» бонусов с надетой экипировки (в долях, 0.05 = 5%)."""
-    out: dict[str, float] = {k: 0.0 for k in _CHANCE_FIELDS}
     items = await inventory_repo.list_equipped_items(session, character_id)
+    out = empty_chance_map()
     for it in items:
-        data = dict(it.item_data or {})
-        for k in _CHANCE_FIELDS:
-            if k in data:
-                out[k] += _coerce_chance(data.get(k))
-    # Поля, что могли лежать в "stat_bonus" подсловаре.
-    for it in items:
-        sub = (it.item_data or {}).get("stat_bonus") or {}
-        if isinstance(sub, dict):
-            for k in _CHANCE_FIELDS:
-                if k in sub:
-                    out[k] += _coerce_chance(sub.get(k))
+        if durability_mod.item_is_broken(dict(it.item_data or {})):
+            continue
+        out = merge_chance_maps(out, chance_map_from_item_data(it.item_data))
     return out
 
 
@@ -220,26 +202,7 @@ def merge_equipment_chances_into_passive_mods(
 
 def format_chance_bonuses_html(bonuses: dict[str, float]) -> str:
     """HTML-блок «Бонусы экипировки» с шансами. Возвращает '' если ничего нет."""
-    labels = {
-        "crit_bonus":      "💥 Крит",
-        "dodge_bonus":     "💨 Уклонение",
-        "stun_chance":     "⭐ Оглушение",
-        "bleed_chance":    "🩸 Кровотечение",
-        "poison_chance":   "☠️ Яд",
-        "burn_chance":     "🔥 Поджог",
-        "freeze_chance":   "❄️ Заморозка",
-        "lifesteal_chance":"🩻 Вампиризм",
-        "block_chance":    "🛡️ Блок",
-        "miss_reduction":  "🎯 –Промах",
-    }
-    parts: list[str] = []
-    for k in _CHANCE_FIELDS:
-        v = float(bonuses.get(k, 0.0) or 0.0)
-        if v > 0.0:
-            parts.append(f"{labels[k]}: +{v*100:.1f}%")
-    if not parts:
-        return ""
-    return " · ".join(parts)
+    return format_chance_map_html(bonuses)
 
 
 async def effective_primary_stats(session: AsyncSession, character: Character) -> dict[str, int]:
