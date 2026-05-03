@@ -127,6 +127,19 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         replace_existing=True,
     )
 
+    async def job_clan_wars() -> None:
+        try:
+            await task_clan_war_expired_tick()
+        except Exception:
+            logger.exception("[CLAN_WAR] Ошибка задачи")
+
+    scheduler.add_job(
+        job_clan_wars,
+        IntervalTrigger(minutes=15),
+        id="tower_clan_war_resolve",
+        replace_existing=True,
+    )
+
     async def job_survival_decay() -> None:
         try:
             await task_survival_floor_hp_decay(bot)
@@ -374,6 +387,24 @@ async def task_bank_interest_tick() -> None:
                 logger.exception("[BANK] tick char=%s", getattr(ch, "id", "?"))
         await session.commit()
     logger.info("[BANK] Накоплено: {} · Закрыто срочных: {}", accrued, matured)
+
+
+async def task_clan_war_expired_tick() -> None:
+    """Периодически: завершить гильдийные войны с истёкшим сроком."""
+    from db.database import get_session_factory
+    from services import clan_service
+
+    factory = get_session_factory()
+    n = 0
+    async with factory() as session:
+        try:
+            n = await clan_service.tick_expired_clan_wars(session)
+            await session.commit()
+        except Exception:
+            logger.exception("[CLAN_WAR] Ошибка при завершении войн")
+            await session.rollback()
+    if n:
+        logger.info("[CLAN_WAR] Завершено войн: {}", n)
 
 
 async def task_leaderboard_update() -> None:

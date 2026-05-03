@@ -63,6 +63,18 @@ def combat_main_keyboard(character: Character) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def combat_flee_confirm_keyboard() -> InlineKeyboardMarkup:
+    """Подтверждение побега (не тратит ход до нажатия «Да»)."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, сбежать", callback_data="cb:run:yes"),
+                InlineKeyboardButton(text="⬅ Отмена", callback_data="cb:ret"),
+            ],
+        ],
+    )
+
+
 def combat_item_picker_keyboard(bag_items: list[InventoryItem]) -> InlineKeyboardMarkup:
     """Список расходников для боя + отмена."""
     rows: list[list[InlineKeyboardButton]] = []

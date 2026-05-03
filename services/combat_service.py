@@ -19,7 +19,11 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale, t
-from bot.keyboards.combat_kb import combat_item_picker_keyboard, combat_main_keyboard
+from bot.keyboards.combat_kb import (
+    combat_flee_confirm_keyboard,
+    combat_item_picker_keyboard,
+    combat_main_keyboard,
+)
 from bot.keyboards.menu_kb import menu_nav_button_row
 from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import GAME_UI_CHAT_ID, GAME_UI_MESSAGE_ID, push_game_ui
@@ -1544,6 +1548,10 @@ async def _victory_sequence(
         except Exception:
             pass
     await clan_service.on_monster_win_add_clan_xp(session, character, delta=_clan_delta)
+    try:
+        await clan_service.add_war_points(session, character, _clan_delta)
+    except Exception:
+        logger.exception("clan war points after win")
 
     # Дроп клановых материалов: 🪵 с лесных/растительных, 🪨 с каменных/голем, 🌿 с болотных
     # Шансы повышены на ~35% относительно исходных
@@ -2192,6 +2200,20 @@ async def handle_combat_callback(
                 telegram_user_id=int(query.from_user.id),
             )
         await query.answer("Выбери предмет")
+        return
+
+    if action == "run_ask":
+        if combat_state.get("is_tutorial"):
+            await query.answer("В учебном бою побег недоступен.", show_alert=True)
+            if query.from_user is not None:
+                await combat_idle_service.arm_combat_idle_after_player_turn(
+                    bot=query.bot,
+                    state=state,
+                    telegram_user_id=int(query.from_user.id),
+                )
+            return
+        await query.message.edit_reply_markup(reply_markup=combat_flee_confirm_keyboard())
+        await query.answer("Подтверди побег или отмени.")
         return
 
     lines: list[str] = []

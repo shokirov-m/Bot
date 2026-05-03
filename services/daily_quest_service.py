@@ -150,15 +150,19 @@ def _extend_quests_to_count(
 def _ensure_today(character: Character) -> dict:
     """
     Гарантирует, что у персонажа есть актуальные (сегодняшние) ежедневные задания.
-    Если дата изменилась — пересоздаёт. Возвращает state.
+    Если дата изменилась — пересоздаёт. Смена тира за тот же день не сбрасывает прогресс
+    (можно выполнять «высокие» квесты, сражаясь на любых этажах).
     """
     today = _utc_today_iso()
     meta, state = _load(character)
     tier = tier_for_floor(int(character.highest_floor_reached))
     need = daily_quest_slots_count(character)
 
-    if state.get("date") == today and state.get("tier") == tier:
+    if state.get("date") == today:
         qlist: list[dict] = list(state.get("quests") or [])
+        if int(state.get("tier") or 0) != tier:
+            state["tier"] = tier
+            _save(character, meta, state)
         if len(qlist) < need:
             _extend_quests_to_count(character, meta, state, qlist, need, today, tier)
         return state

@@ -26,10 +26,10 @@ META_BANK_INTEREST_PENDING = "bank_interest_pending"  # накопленные, 
 META_BANK_SEAL = "bank_seal_unlocked"  # апгрейд «Банковская печать»
 META_BANK_TERM = "bank_term"  # {amount, started_at_iso, term_h, rate}
 
-BANK_RATE_PER_HOUR_BASE = 0.0005  # 0.05%/ч
-BANK_RATE_PER_HOUR_SEAL = 0.0010  # 0.10%/ч с апгрейдом
-BANK_INTEREST_CAP_PCT_BASE = 0.05  # до 5% от тела за неделю
-BANK_INTEREST_CAP_PCT_SEAL = 0.06  # +1% к шапке с апгрейдом
+BANK_RATE_PER_HOUR_BASE = 0.02  # 2%/ч
+BANK_RATE_PER_HOUR_SEAL = 0.04  # 4%/ч с апгрейдом
+BANK_INTEREST_CAP_PCT_BASE = 0.20  # до 20% от тела в накопленных процентах
+BANK_INTEREST_CAP_PCT_SEAL = 0.24
 BANK_SEAL_UPGRADE_COST = 5000
 
 BANK_TERM_OPTIONS: tuple[tuple[int, float], ...] = (

@@ -94,16 +94,13 @@ def format_equipped_slot_block_html(equip_slot: str, item: InventoryItem | None)
             f"<b>{mat_cost}</b> {html.escape(mat_name)}"
         )
     card = format_inventory_item_html(data, compact=True)
-    dur_line = ""
-    if durability_mod.payload_supports_durability(data):
-        dur_line = "\n" + durability_mod.format_durability_line_html(data)
     extra_runes = (
         "".join(_rune_lines_for_weapon_data(data))
         if str(data.get("kind")) == "weapon"
         else ""
     )
     return (
-        f"<b>{label}</b>\n{card}{dur_line}{stat_s}\n"
+        f"<b>{label}</b>\n{card}{stat_s}\n"
         f"✨ Сейчас: {html.escape(render_enchant_stars(lv))}{next_hint}"
         f"{extra_runes}"
     )
@@ -717,8 +714,8 @@ async def build_repair_message_html(session: AsyncSession, character: Character)
         lines.append("<i>Нет надетых вещей с прочностью.</i>")
     lines.append("")
     lines.append(
-        "<i>Тариф: за каждые 2% недостающей прочности — "
-        "5 / 10 / 20 / 40 / 100 💰 (обычная … легендарная).</i>",
+        "<i>Тариф починки снижен: за каждые 2% износа — примерно "
+        "2 / 5 / 10 / 20 / 50 / 100 💰 по ряду редкостей.</i>",
     )
     return "\n".join(lines)
 

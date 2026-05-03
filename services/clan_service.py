@@ -249,6 +249,8 @@ WAR_DECLARE_COST = 5_000
 WAR_DURATION_DAYS = 7
 WAR_AUTO_REJECT_HOURS = 24          # авто-проигрыш если не приняли
 WAR_AUTO_REJECT_PENALTY_PCT = 5     # -5% казны у декларанта при авто-отказе
+WAR_END_SPOIL_FRAC = 0.08           # доля казны проигравшего → победителю
+WAR_END_SPOIL_CAP = 100_000
 
 # ─────────────────────────── Вспомогательные функции ────────────────────────
 
@@ -1025,7 +1027,7 @@ async def try_reject_war(
 async def add_war_points(
     session: AsyncSession, character: Character, points: int
 ) -> None:
-    """Начислить очки войны клану персонажа."""
+    """Начислить очки войны клану персонажа и зеркально противнику."""
     m = await clan_repo.get_membership(session, int(character.id))
     if m is None:
         return
@@ -1036,12 +1038,135 @@ async def add_war_points(
     war = _war(payload)
     if war is None or war.get("status") != "active":
         return
-    war["our_points"] = int(war.get("our_points") or 0) + int(points)
+    pts = max(0, int(points))
+    if pts <= 0:
+        return
+    war_id = str(war.get("war_id") or "")
+    war["our_points"] = int(war.get("our_points") or 0) + pts
     payload["war"] = war
     await clan_repo.update_payload(session, clan, payload)
 
+    opp_id = int(war.get("opponent_clan_id") or 0)
+    if not opp_id:
+        return
+    opponent = await clan_repo.get_clan(session, opp_id)
+    if opponent is None:
+        return
+    opp_payload = _payload(opponent)
+    ow = _war(opp_payload)
+    if ow is None or str(ow.get("war_id") or "") != war_id:
+        return
+    ow["their_points"] = int(ow.get("their_points") or 0) + pts
+    opp_payload["war"] = ow
+    await clan_repo.update_payload(session, opponent, opp_payload)
 
-# ─────────────────────────── Реликвии ───────────────────────────────────────
+
+async def tick_expired_clan_wars(session: AsyncSession) -> int:
+    """Завершить активные войны с истёкшим ends_at; трофей — доля казны проигравшего."""
+    from sqlalchemy import select as _select
+
+    now = datetime.now(UTC)
+    res = await session.execute(_select(Clan))
+    all_clans: list[Clan] = list(res.scalars().all())
+    finished = 0
+    seen_war: set[str] = set()
+
+    for clan in all_clans:
+        payload = _payload(clan)
+        war = _war(payload)
+        if war is None or war.get("status") != "active":
+            continue
+        wid = str(war.get("war_id") or "")
+        if not wid or wid in seen_war:
+            continue
+        ends_raw = war.get("ends_at")
+        if not ends_raw:
+            continue
+        try:
+            ends_dt = datetime.fromisoformat(str(ends_raw).replace("Z", "+00:00"))
+            if ends_dt.tzinfo is None:
+                ends_dt = ends_dt.replace(tzinfo=UTC)
+        except (TypeError, ValueError):
+            continue
+        if ends_dt > now:
+            continue
+
+        seen_war.add(wid)
+        opp_id = int(war.get("opponent_clan_id") or 0)
+        opponent = await clan_repo.get_clan(session, opp_id) if opp_id else None
+
+        if opponent is None:
+            payload["war"] = None
+            _add_event(payload, "Война аннулирована: клан противника не найден.")
+            await clan_repo.update_payload(session, clan, payload)
+            finished += 1
+            continue
+
+        opp_payload = _payload(opponent)
+        opp_war = _war(opp_payload) or {}
+        if str(opp_war.get("war_id") or "") != wid:
+            payload["war"] = None
+            _add_event(payload, "Война аннулирована: рассинхрон данных.")
+            await clan_repo.update_payload(session, clan, payload)
+            finished += 1
+            continue
+
+        our = int(war.get("our_points") or 0)
+        their = int(war.get("their_points") or 0)
+        spoil = 0
+
+        if our == their:
+            payload["war"] = None
+            opp_payload["war"] = None
+            _add_event(
+                payload,
+                f"🤝 Война с «{html.escape(opponent.name)}» завершилась ничьёй ({our}:{their}).",
+            )
+            _add_event(
+                opp_payload,
+                f"🤝 Война с «{html.escape(clan.name)}» завершилась ничьёй ({their}:{our}).",
+            )
+            await clan_repo.update_payload(session, clan, payload)
+            await clan_repo.update_payload(session, opponent, opp_payload)
+            finished += 1
+            continue
+
+        if our > their:
+            win_pl, lose_pl = payload, opp_payload
+            win_clan, lose_clan = clan, opponent
+            sw, sl = our, their
+        else:
+            win_pl, lose_pl = opp_payload, payload
+            win_clan, lose_clan = opponent, clan
+            sw, sl = their, our
+
+        lt = _treasury_gold(lose_pl)
+        spoil = min(int(lt * WAR_END_SPOIL_FRAC), WAR_END_SPOIL_CAP, max(0, lt))
+        if spoil > 0:
+            lose_pl["treasury_gold"] = max(0, lt - spoil)
+            wlim = _treasury_limit(win_pl)
+            wg = _treasury_gold(win_pl)
+            win_pl["treasury_gold"] = min(wlim, wg + spoil)
+
+        payload["war"] = None
+        opp_payload["war"] = None
+
+        wn, ln = html.escape(win_clan.name), html.escape(lose_clan.name)
+        _add_event(
+            win_pl,
+            f"🏆 Победа в войне над «{ln}»! Счёт {sw}:{sl}."
+            + (f" Трофей <b>+{spoil:,}</b> 💰 из казны врага." if spoil else ""),
+        )
+        _add_event(
+            lose_pl,
+            f"💀 Поражение в войне от «{wn}». Счёт {sl}:{sw}."
+            + (f" Потери казны <b>−{spoil:,}</b> 💰." if spoil else ""),
+        )
+        await clan_repo.update_payload(session, clan, payload)
+        await clan_repo.update_payload(session, opponent, opp_payload)
+        finished += 1
+
+    return finished
 
 async def try_craft_relic(
     session: AsyncSession, character: Character, relic_key: str

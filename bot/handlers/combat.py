@@ -121,6 +121,11 @@ async def on_combat_callback(
             except ValueError:
                 await query.answer()
                 return
+        elif code == "run":
+            if len(parts) >= 3 and parts[2] == "yes":
+                action = "run"
+            else:
+                action = "run_ask"
 
         await combat_service.handle_combat_callback(
             query=query,
