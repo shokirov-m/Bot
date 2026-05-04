@@ -59,7 +59,7 @@ class ColiseumFighter:
 
 
 # Множитель ATK всех бойцов колизея в бою (баланс).
-COLOSSEUM_ENEMY_ATK_MULT = 2.5
+COLISEUM_ENEMY_ATK_MULT = 2.5
 
 COLISEUM_TEMPLATE_KEY = "coliseum_gladiator"
 
@@ -215,8 +215,8 @@ def coliseum_slot_code(fighter_id: int) -> str:
 
 
 def scaled_coliseum_atk(fighter: ColiseumFighter) -> int:
-    """ATK в бою и в карточке бойца — база × COLOSSEUM_ENEMY_ATK_MULT."""
-    return max(1, int(round(int(fighter.atk) * COLOSSEUM_ENEMY_ATK_MULT)))
+    """ATK в бою и в карточке бойца — база × COLISEUM_ENEMY_ATK_MULT."""
+    return max(1, int(round(int(fighter.atk) * COLISEUM_ENEMY_ATK_MULT)))
 
 
 def build_coliseum_spawn(fighter_id: int) -> FloorMonsterSpawn:
