@@ -207,6 +207,24 @@ def format_inventory_item_html(
     st_line = format_item_stat_bonus_line(data)
     if st_line:
         lines.append(st_line)
+    fdb = max(0, int(data.get("fire_damage_bonus_pct", 0) or 0))
+    if fdb > 0:
+        lines.append(f"✴️ К стихийному урону (оружие): <b>+{fdb}%</b>")
+    frs = max(0, int(data.get("fire_resist_pct", 0) or 0))
+    if frs > 0:
+        lines.append(f"🔥 Сопротивление огню: <b>{frs}%</b>")
+    irs = max(0, int(data.get("ice_resist_pct", 0) or 0))
+    if irs > 0:
+        lines.append(f"❄️ Сопротивление льду: <b>{irs}%</b>")
+    lrs = max(0, int(data.get("lightning_resist_pct", 0) or 0))
+    if lrs > 0:
+        lines.append(f"⚡ Сопротивление молнии: <b>{lrs}%</b>")
+    prs = max(0, int(data.get("poison_resist_pct", 0) or 0))
+    if prs > 0:
+        lines.append(f"☠️ Сопротивление яду: <b>{prs}%</b>")
+    drs = max(0, int(data.get("dark_resist_pct", 0) or 0))
+    if drs > 0:
+        lines.append(f"🌑 Сопротивление тьме: <b>{drs}%</b>")
     if not compact:
         proc_line = format_chance_map_html(chance_map_from_item_data(data))
         if proc_line:

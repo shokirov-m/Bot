@@ -158,6 +158,7 @@ def item_detail_keyboard(
     inv_section: str,
     show_ration_eat: bool = False,
     show_bread_eat: bool = False,
+    show_alchemy_enchant: bool = False,
     source: str = "b",
 ) -> InlineKeyboardMarkup:
     """
@@ -203,6 +204,15 @@ def item_detail_keyboard(
                 InlineKeyboardButton(
                     text="🍞 Съесть (+HP)",
                     callback_data=f"inv:bread:{item_id}:{bag_page}:{sec}",
+                ),
+            ],
+        )
+    if show_alchemy_enchant:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🧪 Наложить на предмет",
+                    callback_data=f"inv:enchmenu:{item_id}:{bag_page}:{sec}:0",
                 ),
             ],
         )

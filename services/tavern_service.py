@@ -275,6 +275,9 @@ async def try_buy_daily_blueprint(
     mp[_TAVERN_DAILY_META] = state
     character.meta_progress = mp
     is_new = _add_known_recipe(character, rid)
+    from game.crafting.workshop_meta import add_known_blueprint
+
+    add_known_blueprint(character, rid)
     await session.flush()
     if is_new:
         return True, f"📜 Куплен чертёж: <b>{html.escape(name)}</b>. Теперь доступен в кузнице."

@@ -9,12 +9,12 @@ import html
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale
-from bot.keyboards.menu_kb import main_menu_keyboard
+from bot.keyboards.menu_kb import main_menu_keyboard, menu_nav_button_row
 from bot.keyboards.inventory_kb import (
     BAG_PAGE_SIZE,
     bag_tab_keyboard,
@@ -30,6 +30,11 @@ from game.items import equipment as equip_meta
 from game.items import item_categories
 from game.items.equipment.defaults import apply_item_payload_defaults
 from services import character_service, shop_service, stat_bonus_service
+from services.workshop_enchant_service import (
+    USE_TAG_ALCHEMY_ENCHANT,
+    list_compatible_targets as list_alchemy_enchant_targets,
+    try_apply_alchemy_enchant,
+)
 from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
 from utils.game_images_prefs import game_images_enabled
 from utils.ui import format_inventory_item_html
@@ -411,6 +416,11 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             and item.bag_slot is not None
             and utag == "heal_hp_flat"
         )
+        show_alchemy_enchant = (
+            not item.is_equipped
+            and item.bag_slot is not None
+            and utag == USE_TAG_ALCHEMY_ENCHANT
+        )
         if item.is_equipped:
             status = "✓ Надето"
         else:
@@ -429,6 +439,7 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             inv_section=inv_section if from_bag else item_categories.INV_SEC_WEAPON,
             show_ration_eat=show_ration,
             show_bread_eat=show_bread,
+            show_alchemy_enchant=show_alchemy_enchant,
             source=source,
         )
         raw_img = str(data.get("image_url") or "").strip()
@@ -567,6 +578,153 @@ async def inv_eat_bread(callback: CallbackQuery, session: AsyncSession, state: F
         await callback.answer("Ошибка.", show_alert=True)
 
 
+_ENCH_PER_PAGE = 8
+
+
+@router.callback_query(F.data.startswith("inv:enchmenu:"))
+async def inv_alchemy_enchant_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Выбор предмета в сумке для наложения алхимического зачарования."""
+    try:
+        if callback.data is None or callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer("Снаружи боя.", show_alert=True)
+            return
+        parts = callback.data.split(":")
+        if len(parts) < 6:
+            await callback.answer()
+            return
+        scroll_id = int(parts[2])
+        bag_page = int(parts[3])
+        sec = _normalize_inv_section(parts[4])
+        page = max(0, int(parts[5]))
+
+        _, char = await _load_character(session, callback.from_user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+
+        scroll_it = await inventory_repo.get_item_for_character(session, char.id, scroll_id)
+        if scroll_it is None:
+            await callback.answer("Предмет не найден.", show_alert=True)
+            return
+        sd = dict(scroll_it.item_data or {})
+        if str(sd.get("use_tag") or "") != USE_TAG_ALCHEMY_ENCHANT:
+            await callback.answer("Это не зачарование.", show_alert=True)
+            return
+
+        targets = await list_alchemy_enchant_targets(session, char.id, sd)
+        if not targets:
+            await callback.answer("Нет подходящих предметов в сумке.", show_alert=True)
+            return
+
+        total_pages = max(0, (len(targets) - 1) // _ENCH_PER_PAGE)
+        page = min(page, total_pages)
+        start = page * _ENCH_PER_PAGE
+        chunk = targets[start : start + _ENCH_PER_PAGE]
+
+        rows: list[list[InlineKeyboardButton]] = []
+        for t in chunk:
+            nm = str((t.item_data or {}).get("name", f"#{t.id}"))[:44]
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"➡ {nm}",
+                        callback_data=f"inv:enchdo:{scroll_id}:{t.id}:{bag_page}:{sec}",
+                    ),
+                ],
+            )
+        nav: list[InlineKeyboardButton] = []
+        if page > 0:
+            nav.append(
+                InlineKeyboardButton(
+                    text="◀",
+                    callback_data=f"inv:enchmenu:{scroll_id}:{bag_page}:{sec}:{page - 1}",
+                ),
+            )
+        if page < total_pages:
+            nav.append(
+                InlineKeyboardButton(
+                    text="▶",
+                    callback_data=f"inv:enchmenu:{scroll_id}:{bag_page}:{sec}:{page + 1}",
+                ),
+            )
+        if nav:
+            rows.append(nav)
+        rows.append(
+            [InlineKeyboardButton(text="⬅ К свитку", callback_data=f"inv:it:{scroll_id}:b:{bag_page}:{sec}")],
+        )
+        rows.append(menu_nav_button_row())
+
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=(
+                "🧪 <b>Выбери предмет в сумке</b>\n\n"
+                "<i>Совместимые слоты показаны ниже. Свиток расходуется при наложении.</i>"
+            ),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            target_message=callback.message,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("inv:enchmenu")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("inv:enchdo:"))
+async def inv_alchemy_enchant_apply(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer("Снаружи боя.", show_alert=True)
+            return
+        parts = callback.data.split(":")
+        if len(parts) < 6:
+            await callback.answer()
+            return
+        scroll_id = int(parts[2])
+        target_id = int(parts[3])
+        bag_page = int(parts[4])
+        sec = _normalize_inv_section(parts[5])
+
+        _, char = await _load_character(session, callback.from_user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+
+        ok, msg = await try_apply_alchemy_enchant(session, char, scroll_id, target_id)
+        await session.commit()
+        if not ok:
+            await callback.answer(msg[:180], show_alert=True)
+            return
+
+        bag = await inventory_repo.list_bag_items(session, char.id)
+        filtered = [it for it in bag if item_categories.item_data_matches_inv_section(it.item_data, sec)]
+        max_page = max(0, (len(filtered) - 1) // BAG_PAGE_SIZE)
+        safe_page = min(bag_page, max_page)
+        text = (
+            f"{_section_bag_intro(len(bag), section=sec, n_in_section=len(filtered), floor_number=int(char.floor_number))}"
+            f"\n\n{msg}"
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=bag_tab_keyboard(bag, safe_page, section=sec),
+            target_message=callback.message,
+        )
+        await callback.answer("Готово.")
+    except Exception:
+        logger.exception("inv:enchdo")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("inv:eq:"))
 async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -616,6 +774,7 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             inv_section=sec,
             show_ration_eat=False,
             show_bread_eat=False,
+            show_alchemy_enchant=False,
             source=source,
         )
         await push_game_ui(
@@ -683,6 +842,7 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
             inv_section=sec,
             show_ration_eat=item.bag_slot is not None and utag == "stamina_flat",
             show_bread_eat=item.bag_slot is not None and utag == "heal_hp_flat",
+            show_alchemy_enchant=item.bag_slot is not None and utag == USE_TAG_ALCHEMY_ENCHANT,
             source=source,
         )
         await push_game_ui(

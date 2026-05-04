@@ -66,6 +66,12 @@ from game.balance import (
     PLAYER_DEFENSE_BONUS_PER_LEVEL,
 )
 from game.characters import pets as pets_mod
+from game.coliseum import coliseum_combat_hooks as coliseum_hooks
+from game.coliseum.coliseum_data import (
+    build_coliseum_monster_bundle,
+    build_coliseum_spawn,
+    fighter_by_id,
+)
 from game.floors import floor_data
 from game.floors import floor_entry_mods
 from game.floors import long_floor as long_floor_mod
@@ -96,6 +102,7 @@ from services import (
     character_service,
     city_quest_service,
     clan_service,
+    coliseum_service,
     combat_idle_service,
     daily_service,
     floor10_pioneer_service,
@@ -437,6 +444,34 @@ async def _equipped_gear_defense_total(session: AsyncSession, character_id: int)
     return total
 
 
+async def _equipped_gear_fire_damage_bonus_pct(session: AsyncSession, character_id: int) -> int:
+    """Бонус % к элементальному компоненту физ. урона (кольца алхимика и т.п.)."""
+    items = await inventory_repo.list_equipped_items(session, character_id)
+    total = 0
+    for it in items:
+        data = dict(it.item_data or {})
+        if durability_mod.item_is_broken(data):
+            continue
+        total += max(0, int(data.get("fire_damage_bonus_pct", 0) or 0))
+    return min(120, total)
+
+
+async def _equipped_gear_resist_pct_sum(session: AsyncSession, character_id: int, field: str, cap: int = 75) -> int:
+    """Сумма процента сопротивления стихии по полю item_data (алхимия и др.)."""
+    items = await inventory_repo.list_equipped_items(session, character_id)
+    total = 0
+    for it in items:
+        data = dict(it.item_data or {})
+        if durability_mod.item_is_broken(data):
+            continue
+        total += max(0, int(data.get(field, 0) or 0))
+    return min(cap, total)
+
+
+async def _equipped_gear_fire_resist_pct(session: AsyncSession, character_id: int) -> int:
+    return await _equipped_gear_resist_pct_sum(session, character_id, "fire_resist_pct", 75)
+
+
 async def _merge_equipment_chance_mods_into_combat(
     session: AsyncSession,
     character: Character,
@@ -493,6 +528,11 @@ def _build_combat_dict(
         "mastery_strike_pending": False,
         "tutorial_phase": 0,
         "weapon_rune_bonus_pct": 0,
+        "player_fire_resist_pct": 0,
+        "player_ice_resist_pct": 0,
+        "player_lightning_resist_pct": 0,
+        "player_poison_resist_pct": 0,
+        "player_dark_resist_pct": 0,
         "weapon_rune_flat_elemental": 0,
         "rune_crit_damage_bonus_percent": 0,
         "rune_armor_mult": 1.0,
@@ -662,6 +702,249 @@ def _append_logs(state: dict[str, Any], lines: list[str]) -> None:
     state["ui_logs"] = buf
 
 
+async def start_coliseum_combat(
+    *,
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    character: Character,
+    fighter_id: int,
+) -> bool:
+    """Начать бой Колизея. Стамина: как обычный бой (1)."""
+    ok_access, err_msg = coliseum_service.can_start_fight(character, fighter_id)
+    if not ok_access:
+        await query.answer(err_msg or "Нельзя начать бой.", show_alert=True)
+        return False
+
+    from config import is_admin as _is_admin
+
+    _admin_bypass = _is_admin(query.from_user.id if query.from_user else None)
+    if not _admin_bypass:
+        if not can_start_combat(character, settings.MAX_STAMINA):
+            await query.answer("Недостаточно стамины (нужна 1).", show_alert=True)
+            return False
+
+    if rest_service.apply_completed_rest_if_needed(character):
+        await session.flush()
+    if rest_service.is_rest_in_progress(character):
+        left = rest_service.rest_seconds_left(character)
+        await query.answer(
+            f"Передышка: подожди ещё ~{left} с (полные HP/MP после отдыха).",
+            show_alert=True,
+        )
+        return False
+
+    if await state.get_state() == CombatStates.in_battle.state:
+        await query.answer("Ты уже в бою.", show_alert=True)
+        return False
+
+    if not _admin_bypass:
+        spent = await spend_stamina(session, int(character.id))
+        if not spent:
+            await query.answer("Не удалось списать стамину. Попробуй ещё раз.", show_alert=True)
+            return False
+    await session.refresh(character)
+    if pets_mod.repair_pet_meta_if_needed(character):
+        await session.flush()
+
+    if query.from_user is not None:
+        await anticheat_service.record_fight_start(
+            session,
+            character,
+            telegram_id=query.from_user.id,
+            username=query.from_user.username,
+            bot=query.bot,
+        )
+
+    fdef = fighter_by_id(int(fighter_id))
+    if fdef is None:
+        await query.answer("Боец не найден.", show_alert=True)
+        return False
+
+    monster = build_coliseum_monster_bundle(fdef)
+    spawn = build_coliseum_spawn(int(fighter_id))
+
+    await character_service.refresh_hp_mp_from_effective(session, character)
+    await session.flush()
+
+    eff_stats = await stat_bonus_service.effective_primary_stats(session, character)
+    combat_state = _build_combat_dict(character, spawn, monster, primary_stats=eff_stats)
+    combat_state["is_coliseum"] = True
+    combat_state["night_battle"] = False
+    _append_logs(combat_state, coliseum_hooks.init_coliseum_fight(combat_state, character, int(fighter_id)))
+
+    wa, wtype, wmult, w_item = await _weapon_profile(session, character)
+    combat_state["weapon_attack"] = wa
+    combat_state["player_weapon_type"] = wtype
+    combat_state["weapon_mastery_mult"] = wmult
+    _apply_mastery_combat_bonuses(character, combat_state)
+    combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
+    _eqs = await inventory_repo.list_equipped_items(session, character.id)
+    _gear_passive = [
+        e.item_data for e in _eqs
+        if not durability_mod.item_is_broken(dict(e.item_data or {}))
+    ]
+    _glogs = passive_gear.apply_to_combat_state(
+        combat_state,
+        _gear_passive,
+    )
+    if _glogs:
+        _append_logs(combat_state, _glogs)
+    await _merge_equipment_chance_mods_into_combat(session, character, combat_state)
+    _tree_ls = float(combat_state.get("passive_mods", {}).get("lifesteal_percent", 0) or 0)
+    if _tree_ls > 0:
+        combat_state["gear_lifesteal_percent"] = float(combat_state.get("gear_lifesteal_percent", 0.0)) + _tree_ls
+    _apply_weapon_runes_to_state(combat_state, character, w_item)
+    _fb = await _equipped_gear_fire_damage_bonus_pct(session, character.id)
+    if _fb:
+        combat_state["weapon_rune_bonus_pct"] = int(combat_state.get("weapon_rune_bonus_pct", 0)) + int(_fb)
+    combat_state["player_fire_resist_pct"] = int(
+        await _equipped_gear_fire_resist_pct(session, character.id),
+    )
+    combat_state["player_ice_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "ice_resist_pct", 75),
+    )
+    combat_state["player_lightning_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "lightning_resist_pct", 75),
+    )
+    combat_state["player_poison_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "poison_resist_pct", 75),
+    )
+    combat_state["player_dark_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "dark_resist_pct", 75),
+    )
+
+    taunt = engine.opening_taunt(combat_state)
+    combat_state["battle_taunt_html"] = _taunt_banner_html(taunt)
+
+    await game_metrics_service.record_event(
+        session,
+        event_type="coliseum_combat_start",
+        floor=int(character.floor_number),
+        class_key=str(character.class_key or ""),
+    )
+
+    await state.set_state(CombatStates.in_battle)
+    await state.update_data(combat=combat_state)
+    persist_combat_backup(character, combat_state)
+    await session.flush()
+
+    cls = get_class_or_none(character.class_key)
+    class_ru = cls.name_ru if cls else character.class_key
+    text = format_battle_view(combat_state, class_ru)
+    kb = combat_main_keyboard(character)
+
+    if query.message is None:
+        clear_combat_backup(character)
+        await state.clear()
+        await session.execute(
+            update(Character)
+            .where(Character.id == int(character.id))
+            .values(stamina=Character.stamina + 1),
+        )
+        await session.refresh(character)
+        if query.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
+        await query.answer()
+        return False
+
+    tpl_key = str(monster.get("template_key") or "")
+    battle_photo = (
+        combat_monster_portrait_path(tpl_key)
+        if game_images_enabled(character)
+        else None
+    )
+
+    try:
+        opened_with_portrait = False
+        if battle_photo is not None:
+            try:
+                cap = _clamp_battle_caption(text)
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=cap,
+                    reply_markup=kb,
+                    target_message=query.message,
+                    photo_path=battle_photo,
+                )
+                data = await state.get_data()
+                mid = data.get(GAME_UI_MESSAGE_ID)
+                cid = data.get(GAME_UI_CHAT_ID)
+                if mid is not None and cid is not None:
+                    await state.update_data(
+                        combat_message_id=int(mid),
+                        combat_chat_id=int(cid),
+                        combat_ui_is_photo=True,
+                    )
+                    opened_with_portrait = True
+            except Exception:
+                logger.exception("start_coliseum_combat: портрет — откат на текст")
+        if not opened_with_portrait:
+            try:
+                ok = await _safe_edit_combat_message_text(state, query.message, text, reply_markup=kb)
+            except TelegramBadRequest:
+                ok = False
+            if ok:
+                await state.update_data(
+                    combat_message_id=query.message.message_id,
+                    combat_chat_id=query.message.chat.id,
+                    combat_ui_is_photo=False,
+                )
+            else:
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=text,
+                    reply_markup=kb,
+                    target_message=query.message,
+                    photo_path=None,
+                )
+                data = await state.get_data()
+                mid = data.get(GAME_UI_MESSAGE_ID)
+                cid = data.get(GAME_UI_CHAT_ID)
+                if mid is not None and cid is not None:
+                    await state.update_data(
+                        combat_message_id=int(mid),
+                        combat_chat_id=int(cid),
+                        combat_ui_is_photo=False,
+                    )
+        if query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
+        await query.answer("Бой!")
+        return True
+    except Exception:
+        logger.exception("start_coliseum_combat: UI после входа в бой")
+        clear_combat_backup(character)
+        try:
+            await session.flush()
+        except Exception:
+            pass
+        await state.clear()
+        await session.execute(
+            update(Character)
+            .where(Character.id == int(character.id))
+            .values(stamina=Character.stamina + 1),
+        )
+        await session.refresh(character)
+        if query.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
+        try:
+            await query.answer(
+                "Не удалось открыть экран боя. Стамина возвращена.",
+                show_alert=True,
+            )
+        except Exception:
+            pass
+        return False
+
+
 async def start_combat(
     *,
     query: CallbackQuery,
@@ -773,6 +1056,24 @@ async def start_combat(
     if _tree_ls > 0:
         combat_state["gear_lifesteal_percent"] = float(combat_state.get("gear_lifesteal_percent", 0.0)) + _tree_ls
     _apply_weapon_runes_to_state(combat_state, character, w_item)
+    _fb = await _equipped_gear_fire_damage_bonus_pct(session, character.id)
+    if _fb:
+        combat_state["weapon_rune_bonus_pct"] = int(combat_state.get("weapon_rune_bonus_pct", 0)) + int(_fb)
+    combat_state["player_fire_resist_pct"] = int(
+        await _equipped_gear_fire_resist_pct(session, character.id),
+    )
+    combat_state["player_ice_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "ice_resist_pct", 75),
+    )
+    combat_state["player_lightning_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "lightning_resist_pct", 75),
+    )
+    combat_state["player_poison_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "poison_resist_pct", 75),
+    )
+    combat_state["player_dark_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "dark_resist_pct", 75),
+    )
 
     if swamp_prefight_logs:
         _append_logs(combat_state, swamp_prefight_logs)
@@ -967,6 +1268,24 @@ async def start_tutorial_combat(
     combat_state["weapon_mastery_mult"] = wmult
     _apply_mastery_combat_bonuses(character, combat_state)
     _apply_weapon_runes_to_state(combat_state, character, w_item)
+    _fbt = await _equipped_gear_fire_damage_bonus_pct(session, character.id)
+    if _fbt:
+        combat_state["weapon_rune_bonus_pct"] = int(combat_state.get("weapon_rune_bonus_pct", 0)) + int(_fbt)
+    combat_state["player_fire_resist_pct"] = int(
+        await _equipped_gear_fire_resist_pct(session, character.id),
+    )
+    combat_state["player_ice_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "ice_resist_pct", 75),
+    )
+    combat_state["player_lightning_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "lightning_resist_pct", 75),
+    )
+    combat_state["player_poison_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "poison_resist_pct", 75),
+    )
+    combat_state["player_dark_resist_pct"] = int(
+        await _equipped_gear_resist_pct_sum(session, character.id, "dark_resist_pct", 75),
+    )
     combat_state["player_equipment_defense"] = await _equipped_gear_defense_total(session, character.id)
     _teq = await inventory_repo.list_equipped_items(session, character.id)
     _tgear_passive = [
@@ -1275,6 +1594,92 @@ async def _after_monster_killed_player_action(
     return False
 
 
+async def _victory_sequence_coliseum(
+    *,
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    character: Character,
+    combat_state: dict[str, Any],
+) -> None:
+    await character_repo.lock_character_row(session, character.id)
+    fid = int(combat_state.get("coliseum_fighter_id") or 0)
+    xp_raw, gold_raw = coliseum_service.reward_multipliers(fid)
+    gm, xm = title_service.reward_bonus_multipliers(character)
+    gross_gold = int(gold_raw * gm)
+    xp = int(xp_raw * xm)
+    try:
+        from services.home_service import home_gold_bonus_pct, home_xp_bonus_pct
+
+        _hg = home_gold_bonus_pct(character)
+        _hx = home_xp_bonus_pct(character)
+        if _hg > 0:
+            gross_gold = int(round(gross_gold * (1.0 + _hg)))
+        if _hx > 0:
+            xp = int(round(xp * (1.0 + _hx)))
+    except Exception:
+        pass
+
+    net_gold, _debt_note = sink_rules.garnish_victory_gold_for_debt(character, gross_gold)
+
+    await character_service.add_gold_async(
+        session,
+        character,
+        net_gold,
+        source="coliseum_win",
+        bot=message.bot,
+        telegram_id=message.from_user.id if message.from_user else None,
+        username=message.from_user.username if message.from_user else None,
+    )
+    levels_battle = await character_service.add_experience_async(session, character, xp, bot=message.bot)
+    level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
+    character.total_kills = int(character.total_kills) + 1
+
+    await coliseum_service.record_victory(session, character, fid)
+    loot_ent = coliseum_service.loot_entry_for_fighter(fid)
+    loot_lines = await coliseum_service.grant_loot(session, character, loot_ent)
+
+    daily_service.record_kill(character)
+    try:
+        pets_mod.record_pet_xp_on_battle_win(character, is_boss=False)
+    except Exception:
+        pass
+    refresh_global_passives(character)
+    character.hp_current = min(int(character.hp_max), int(combat_state["player_hp"]))
+    character.mp_current = min(int(character.mp_max), int(combat_state["player_mp"]))
+
+    title_service.refresh_unlocks(character)
+    extra_loot = "\n".join(loot_lines) if loot_lines else ""
+    body = (
+        f"🏛️ <b>Победа в Колизее!</b>\n"
+        f"{LINE_SEP}\n"
+        f"💰 +{net_gold} золота · 📈 +{xp} опыта\n"
+        f"{level_battle_suffix}"
+        + (f"\n{extra_loot}" if extra_loot else "")
+    )
+    fl = int(character.floor_number)
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🏛️ Колизей", callback_data="col:menu")],
+            [
+                InlineKeyboardButton(text="🗺️ На этаж", callback_data=f"fl:{fl}:return"),
+            ],
+            menu_nav_button_row(),
+        ],
+    )
+    try:
+        await _safe_edit_combat_message_text(state, message, body, reply_markup=kb)
+    finally:
+        if message.from_user is not None:
+            combat_idle_service.cancel_combat_idle_timer(int(message.from_user.id))
+        clear_combat_backup(character)
+        try:
+            await session.flush()
+        except Exception:
+            pass
+        await state.clear()
+
+
 async def _victory_sequence(
     *,
     message: Message,
@@ -1348,6 +1753,16 @@ async def _victory_sequence(
             except Exception:
                 pass
             await state.clear()
+        return
+
+    if combat_state.get("is_coliseum") and combat_state.get("coliseum_fighter_id"):
+        await _victory_sequence_coliseum(
+            message=message,
+            state=state,
+            session=session,
+            character=character,
+            combat_state=combat_state,
+        )
         return
 
     await character_repo.lock_character_row(session, character.id)
@@ -1702,6 +2117,18 @@ async def _victory_sequence(
                     bag_slot=slot_t,
                 )
                 extra_drop += f"\n🏆 <b>Трофей босса</b> ({trophy_count} шт.) — в сумку"
+            try:
+                from services import workshop_blueprint_hooks
+
+                bp_line = await workshop_blueprint_hooks.roll_blueprint_after_boss(
+                    session,
+                    character,
+                    spawn,
+                )
+                if bp_line:
+                    extra_drop += f"\n{bp_line}"
+            except Exception:
+                pass
 
     mname = html.escape(str(combat_state.get("monster", {}).get("name", "Враг")))
     floor_before = int(character.floor_number)
@@ -1915,6 +2342,14 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
     slot = str(combat_state.get("spawn_slot"))
     if slot == "tutorial":
         return TUTORIAL_SPAWN
+    if slot.startswith("col:f"):
+        tail = slot.split(":")[-1].removeprefix("f")
+        try:
+            n = int(tail)
+        except ValueError:
+            n = 0
+        if 1 <= n <= 50:
+            return build_coliseum_spawn(n)
     if slot == golden_goblin_service.SLOT_CODE:
         return golden_goblin_service.build_spawn()
     if slot in long_floor_mod.LONG_FLOOR_SLOTS:
@@ -2014,6 +2449,42 @@ async def _defeat_sequence(
                 message,
                 tut_body,
                 reply_markup=revive_kb,
+            )
+        finally:
+            clear_combat_backup(character)
+            await session.flush()
+            await state.clear()
+        return
+
+    if combat_state and combat_state.get("is_coliseum"):
+        await character_service.refresh_hp_mp_from_effective(session, character)
+        character.hp_current = max(1, int(character.hp_max) // 2)
+        character.mp_current = max(0, int(character.mp_max) // 2)
+        loc = get_locale(character, None)
+        defeat_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🏛️ Колизей", callback_data="col:menu")],
+                [
+                    InlineKeyboardButton(
+                        text=t(loc, "combat_revive_btn"),
+                        callback_data=f"fl:{int(character.floor_number)}:return",
+                    ),
+                ],
+                menu_nav_button_row(),
+            ],
+        )
+        cbody = (
+            (banner_html + "\n") if banner_html else ""
+        ) + (
+            "⚔️ <b>Поражение в Колизее.</b>\n"
+            "Без штрафов к золоту и заточке — можно сразиться снова."
+        )
+        try:
+            await _safe_edit_combat_message_text(
+                state,
+                message,
+                cbody,
+                reply_markup=defeat_kb,
             )
         finally:
             clear_combat_backup(character)
@@ -2203,8 +2674,8 @@ async def handle_combat_callback(
         return
 
     if action == "run_ask":
-        if combat_state.get("is_tutorial"):
-            await query.answer("В учебном бою побег недоступен.", show_alert=True)
+        if combat_state.get("is_tutorial") or combat_state.get("is_coliseum"):
+            await query.answer("Побег здесь недоступен.", show_alert=True)
             if query.from_user is not None:
                 await combat_idle_service.arm_combat_idle_after_player_turn(
                     bot=query.bot,
@@ -2236,6 +2707,7 @@ async def handle_combat_callback(
     lines.extend(engine.apply_dot_damage_player(combat_state))
     lines.extend(floor_entry_mods.floor_curse_on_player_phase_start(combat_state))
     lines.extend(passive_gear.turn_start_regen_from_gear(combat_state))
+    lines.extend(coliseum_hooks.on_player_phase_start(combat_state, character))
     if int(combat_state["player_hp"]) <= 0:
         _append_logs(combat_state, lines)
         await _defeat_sequence(
@@ -2310,8 +2782,8 @@ async def handle_combat_callback(
         lines.extend(item_logs)
         outcome = "continue"
     elif action == "run":
-        if combat_state.get("is_tutorial"):
-            await query.answer("В учебном бою побег недоступен.", show_alert=True)
+        if combat_state.get("is_tutorial") or combat_state.get("is_coliseum"):
+            await query.answer("Побег здесь недоступен.", show_alert=True)
             if query.from_user is not None:
                 await combat_idle_service.arm_combat_idle_after_player_turn(
                     bot=query.bot,
@@ -2419,6 +2891,7 @@ async def handle_combat_callback(
 
     tick_logs = engine.end_round_tick(combat_state)
     _append_logs(combat_state, tick_logs)
+    _append_logs(combat_state, coliseum_hooks.end_round_coliseum(combat_state, character))
     engine.tick_cooldowns(combat_state)
 
     if outcome_m == "lose":

@@ -15,6 +15,30 @@ def _meta(c: Character) -> dict:
     return dict(c.meta_progress or {})
 
 
+def _coliseum_defeated_ids(c: Character) -> set[int]:
+    raw = _meta(c).get("coliseum_v1")
+    if not isinstance(raw, dict):
+        return set()
+    d = raw.get("defeated")
+    if not isinstance(d, list):
+        return set()
+    out: set[int] = set()
+    for x in d:
+        try:
+            out.add(int(x))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _workshop_tal(c: Character, key: str) -> bool:
+    ws = _meta(c).get("workshop_v1")
+    if not isinstance(ws, dict):
+        return False
+    t = ws.get("talismans") or {}
+    return bool(t.get(key))
+
+
 @dataclass(frozen=True, slots=True)
 class TitleDef:
     key: str
@@ -297,6 +321,88 @@ ALL_TITLES: tuple[TitleDef, ...] = (
         lambda c: int(c.stat_luck) >= 50,
         "базовая удача 50+",
         stat_luck=10,
+    ),
+    TitleDef(
+        "workshop_forge_legend",
+        "Король наковальни",
+        252,
+        lambda c: _workshop_tal(c, "top_blacksmith"),
+        "топ-10 кузнецов (мастерская)",
+        stat_str=2,
+    ),
+    TitleDef(
+        "workshop_alchemy_legend",
+        "Владыка эликсиров",
+        253,
+        lambda c: _workshop_tal(c, "top_alchemist"),
+        "топ-10 алхимиков (мастерская)",
+        stat_int=2,
+    ),
+    TitleDef(
+        "workshop_jewel_legend",
+        "Светильник оправ",
+        254,
+        lambda c: _workshop_tal(c, "top_jeweler"),
+        "топ-10 ювелиров (мастерская)",
+        stat_luck=2,
+    ),
+    TitleDef(
+        "coliseum_champion_10",
+        "Десятник Колизея",
+        255,
+        lambda c: 10 in _coliseum_defeated_ids(c),
+        "победа над чемпионом Колизея (10-й боец)",
+        xp_bonus_pct=3,
+        stat_str=1,
+    ),
+    TitleDef(
+        "coliseum_champion_20",
+        "Властитель двадцатки",
+        256,
+        lambda c: 20 in _coliseum_defeated_ids(c),
+        "победа над чемпионом Колизея (20-й боец)",
+        xp_bonus_pct=3,
+        gold_bonus_pct=2,
+        stat_dex=1,
+    ),
+    TitleDef(
+        "coliseum_champion_30",
+        "Триумфатор тридцати",
+        257,
+        lambda c: 30 in _coliseum_defeated_ids(c),
+        "победа над чемпионом Колизея (30-й боец)",
+        xp_bonus_pct=4,
+        stat_vit=2,
+    ),
+    TitleDef(
+        "coliseum_champion_40",
+        "Сокрушитель сорока",
+        258,
+        lambda c: 40 in _coliseum_defeated_ids(c),
+        "победа над чемпионом Колизея (40-й боец)",
+        xp_bonus_pct=4,
+        gold_bonus_pct=3,
+        stat_int=2,
+    ),
+    TitleDef(
+        "coliseum_godslayer",
+        "Богоубийца",
+        259,
+        lambda c: 50 in _coliseum_defeated_ids(c),
+        "победа над финальным бойцом Колизея",
+        gold_bonus_pct=5,
+        xp_bonus_pct=5,
+        stat_str=3,
+    ),
+    TitleDef(
+        "coliseum_overlord",
+        "Властелин Колизея",
+        260,
+        lambda c: len(_coliseum_defeated_ids(c)) >= 50,
+        "победить всех 50 бойцов Колизея",
+        gold_bonus_pct=8,
+        xp_bonus_pct=8,
+        stat_luck=5,
     ),
 )
 

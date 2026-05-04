@@ -8,6 +8,26 @@ from typing import Any, Callable
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.character import Character
 
+
+def _workshop_cnt(character: Character, key: str) -> int:
+    ws = (character.meta_progress or {}).get("workshop_v1")
+    if not isinstance(ws, dict):
+        return 0
+    return int((ws.get("counters") or {}).get(key, 0))
+
+
+def _workshop_max_prof(character: Character) -> int:
+    ws = (character.meta_progress or {}).get("workshop_v1")
+    if not isinstance(ws, dict):
+        return 0
+    pl = ws.get("prof_levels") or {}
+    return max(
+        int(pl.get("blacksmith", 0)),
+        int(pl.get("alchemist", 0)),
+        int(pl.get("jeweler", 0)),
+    )
+
+
 ACHIEVEMENTS: dict[str, dict[str, Any]] = {
     "icy_conqueror": {
         "name": "Покоритель льдов",
@@ -113,7 +133,37 @@ ACHIEVEMENTS: dict[str, dict[str, Any]] = {
         "desc": "Накопить 1 000 000 золота",
         "condition": lambda c: int(c.gold) >= 1000000,
         "reward_gold_bonus": 0.10,
-    }
+    },
+    "workshop_first_smith": {
+        "name": "Первая проба",
+        "desc": "Завершить первый крафт в мастерской",
+        "condition": lambda c: _workshop_cnt(c, "crafts_done") >= 1,
+        "reward_stats": {"luck": 1},
+    },
+    "workshop_professional": {
+        "name": "Ремесленник",
+        "desc": "Достичь 10 уровня любой профессии мастерской",
+        "condition": lambda c: _workshop_max_prof(c) >= 10,
+        "reward_gold": 500,
+    },
+    "workshop_grandmaster": {
+        "name": "Гроссмейстер",
+        "desc": "Достичь 20 уровня любой профессии мастерской",
+        "condition": lambda c: _workshop_max_prof(c) >= 20,
+        "reward_stats": {"vit": 3},
+    },
+    "workshop_merchant_orders": {
+        "name": "Торговец заказами",
+        "desc": "Заработать 10 000 золота через заказы города",
+        "condition": lambda c: _workshop_cnt(c, "gold_via_orders") >= 10000,
+        "reward_gold": 2000,
+    },
+    "workshop_many_orders": {
+        "name": "Договорной мастер",
+        "desc": "Закрыть 50 заказов в городской кузнице",
+        "condition": lambda c: _workshop_cnt(c, "orders_completed") >= 50,
+        "reward_stats": {"dex": 2},
+    },
 }
 
 def get_claimed_keys(character: Character) -> list[str]:

@@ -122,3 +122,23 @@ def reward_bonus_multipliers(character: Character) -> tuple[float, float]:
         gm *= 1.0 + tt.gold_bonus_pct / 100.0
         xm *= 1.0 + tt.xp_bonus_pct / 100.0
     return gm, xm
+
+
+def grant_title_key(character: Character, key: str, *, silent: bool = False) -> bool:
+    """
+    Выдать титул по ключу (для наград квестов/Колизея): дописать в meta_progress.titles_unlocked.
+    Возвращает True, если ключ был новым. silent — без лишних побочек (тосты зовут refresh сами).
+    """
+    if key not in TITLE_BY_KEY:
+        return False
+    mp = dict(character.meta_progress or {})
+    raw = mp.get(_META_UNLOCKED)
+    have: set[str] = set(str(x) for x in raw) if isinstance(raw, list) else set()
+    if key in have:
+        return False
+    have.add(key)
+    mp[_META_UNLOCKED] = sorted(have)
+    character.meta_progress = mp
+    if not silent:
+        refresh_unlocks(character)
+    return True

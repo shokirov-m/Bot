@@ -192,7 +192,7 @@ def format_city_hub_message(character: Character) -> str:
         )
         pet_hint = (
             "🐾 <b>Питомцы:</b> на этом ярусе первый дар — в <b>храме призыва</b> на рынке "
-            "(один ритуал и до трёх перебросов); дальше — как обычно в городах башни."
+            "(один ритуал и до трёх перебросов)."
         )
         return f"{rich}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
     hub = (

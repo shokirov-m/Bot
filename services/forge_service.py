@@ -29,6 +29,7 @@ from utils.ui import LINE_SEP, format_inventory_item_html, render_enchant_stars
 def format_forge_intro_html(city_name: str, city_emoji: str) -> str:
     return (
         f"{city_emoji} <b>Кузница</b> — {html.escape(city_name)}\n"
+        "<i>Долгие рецепты и профессии — в главном меню «Мастерская»; здесь — быстрый крафт и заточка.</i>\n"
         "Здесь кузнец усиливает <b>надетую экипировку</b> (оружие, броня, шлем и др.).\n"
         "После боёв снаряжение <b>теряет прочность</b>; при 0 предмет ломается — "
         "чините в разделе «Починка экипировки» за золото.\n"

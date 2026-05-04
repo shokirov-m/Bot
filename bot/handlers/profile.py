@@ -20,7 +20,7 @@ from bot.i18n import get_locale, set_locale, t
 from config import settings
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
-from bot.keyboards.menu_kb import main_menu_keyboard
+from bot.keyboards.menu_kb import main_menu_keyboard, menu_nav_button_row
 from bot.keyboards.city_market_kb import (
     profile_skills_main_keyboard,
     profile_skills_pick_keyboard,
@@ -35,6 +35,7 @@ from bot.keyboards.profile_kb import (
 from bot.keyboards.tree_kb import skill_tree_keyboard, node_action_keyboard
 from bot.utils.game_ui import push_game_ui
 from services import character_service, fame_service, leaderboard_service, stat_bonus_service, title_service
+from services.workshop_profile_ui import workshop_compact_line, workshop_full_stats_block
 from services.rest_service import apply_completed_rest_if_needed
 from game.characters import pets as pets_mod
 from game.characters.classes import get_class_or_none
@@ -56,6 +57,8 @@ from game.characters.player_skills import (
 )
 from game.characters.skills import passive_combat_modifiers_merged
 from game.characters.titles import TITLE_BY_KEY, format_title_bonus_brief
+from game.crafting.recipes_data import PROF_ALCHEMIST, PROF_BLACKSMITH, PROF_JEWELER
+from game.crafting.workshop_meta import get_workshop_state, save_workshop_state
 from game.characters.weapon_mastery import (
     mastery_all_types_line,
     mastery_profile_lines,
@@ -304,6 +307,8 @@ def _build_profile_text(
                 ),
                 "",
                 render_exp_bar(int(char.experience), xp_need, wrap_bar_in_code=False),
+                "",
+                workshop_compact_line(char),
                 LINE_SEP,
                 "📊 <b>Характеристики</b>",
                 f"⚔️ СИЛ: {_fmt_stat_plain(char.stat_strength, str_e)}    🏃 ЛОВ: {_fmt_stat_plain(char.stat_dexterity, dex_e)}",
@@ -402,6 +407,8 @@ def _build_profile_text(
     all_m = mastery_all_types_line(char)
     if all_m:
         lines.append(f"📚 Все типы: <i>{all_m}</i>")
+    lines.append(LINE_SEP)
+    lines.append(workshop_full_stats_block(char).rstrip())
     lines.append(LINE_SEP)
     elem_ln = (
         "🔮 Элемент: нейтральный"
@@ -669,6 +676,182 @@ async def on_profile_spec_submenu(callback: CallbackQuery, session: AsyncSession
         await callback.answer()
     except Exception:
         logger.exception("prf:spec")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:wsspec_menu")
+async def prf_wsspec_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        ws = get_workshop_state(char)
+        if ws.get("spec_locked"):
+            await callback.answer("Специализация уже выбрана навсегда.", show_alert=True)
+            return
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="⚒️ Кузнец", callback_data="prf:wsspec_do:blacksmith"),
+                    InlineKeyboardButton(text="⚗️ Алхимик", callback_data="prf:wsspec_do:alchemist"),
+                ],
+                [InlineKeyboardButton(text="💎 Ювелир", callback_data="prf:wsspec_do:jeweler")],
+                [InlineKeyboardButton(text=t(loc, "profile_back_compact"), callback_data="prf:spec")],
+                menu_nav_button_row(),
+            ],
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text="🔧 <b>Специализация ремесла</b>\n\nОдин раз навсегда: +10% к опыту выбранной профессии.",
+            reply_markup=kb,
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:wsspec_menu")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("prf:wsspec_do:"))
+async def prf_wsspec_do(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        pk = str(callback.data.split(":")[2]).lower().strip()
+        if pk not in (PROF_BLACKSMITH, PROF_ALCHEMIST, PROF_JEWELER):
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        ws = get_workshop_state(char)
+        if ws.get("spec_locked"):
+            await callback.answer("Уже выбрано.", show_alert=True)
+            return
+        ws["spec_profession"] = pk
+        ws["spec_locked"] = True
+        save_workshop_state(char, ws)
+        await session.commit()
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        pr_ru = {
+            PROF_BLACKSMITH: "Кузнец",
+            PROF_ALCHEMIST: "Алхимик",
+            PROF_JEWELER: "Ювелир",
+        }.get(pk, pk)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"✅ Специализация: <b>{html.escape(pr_ru)}</b> (+10% опыта этой профессии).",
+            reply_markup=profile_spec_submenu_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer("Сохранено.")
+    except Exception:
+        logger.exception("prf:wsspec_do")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:wsshow_menu")
+async def prf_wsshow_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="⚒️ Кузнец", callback_data="prf:wsshow_do:blacksmith"),
+                    InlineKeyboardButton(text="⚗️ Алхимик", callback_data="prf:wsshow_do:alchemist"),
+                ],
+                [InlineKeyboardButton(text="💎 Ювелир", callback_data="prf:wsshow_do:jeweler")],
+                [InlineKeyboardButton(text=t(loc, "profile_back_compact"), callback_data="prf:spec")],
+                menu_nav_button_row(),
+            ],
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text="📌 <b>Профессия на карточке статуса</b>\n\nЧто показывать в строке ремесла (можно менять когда угодно).",
+            reply_markup=kb,
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("prf:wsshow_menu")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("prf:wsshow_do:"))
+async def prf_wsshow_do(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        pk = str(callback.data.split(":")[2]).lower().strip()
+        if pk not in (PROF_BLACKSMITH, PROF_ALCHEMIST, PROF_JEWELER):
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        ws = get_workshop_state(char)
+        ws["status_profession"] = pk
+        save_workshop_state(char, ws)
+        await session.commit()
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        sh_ru = {
+            PROF_BLACKSMITH: "Кузнец",
+            PROF_ALCHEMIST: "Алхимик",
+            PROF_JEWELER: "Ювелир",
+        }.get(pk, pk)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"✅ На карточке будет показываться: <b>{html.escape(sh_ru)}</b>.",
+            reply_markup=profile_spec_submenu_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer("Ок.")
+    except Exception:
+        logger.exception("prf:wsshow_do")
         await callback.answer("Ошибка.", show_alert=True)
 
 

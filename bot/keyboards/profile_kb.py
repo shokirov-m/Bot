@@ -9,6 +9,7 @@ from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
 from game.archetypes import manager as arch_manager
 from game.characters import pets as pets_mod
+from game.crafting.workshop_meta import get_workshop_state
 
 
 def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -> InlineKeyboardMarkup:
@@ -24,6 +25,20 @@ def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -
         rows.append([InlineKeyboardButton(text="🌟 Выбрать путь", callback_data="prf:arch_pick")])
     elif arch.tier == 1 and character.level >= 50:
         rows.append([InlineKeyboardButton(text="🌟 Выбрать специализацию", callback_data="prf:arch_pick")])
+
+    ws = get_workshop_state(character)
+    if not ws.get("spec_locked"):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🔧 Спец. ремесла (+10% опыта, 1×)",
+                    callback_data="prf:wsspec_menu",
+                ),
+            ],
+        )
+    rows.append(
+        [InlineKeyboardButton(text="📌 Профессия в статусе", callback_data="prf:wsshow_menu")],
+    )
 
     rows.extend([
         [InlineKeyboardButton(text="🌳 Древо навыков", callback_data="prf:skills")],

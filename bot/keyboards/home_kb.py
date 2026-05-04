@@ -51,13 +51,11 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
             [InlineKeyboardButton(text="⛏ Шахта и Ферма", callback_data="hom:mine_menu")],
         )
 
-    # Верстак (ур.2+)
+    # Постройки, гача и мастерская (дом ур.2+)
     if home_service.can_access_workbench(character):
-        rows.append([InlineKeyboardButton(text="🛠 Верстак", callback_data="hom:bench")])
-
-    # Алхимия (ур.3+)
-    if home_service.can_access_alchemy(character):
-        rows.append([InlineKeyboardButton(text="⚗️ Алхимия", callback_data="hom:alch")])
+        rows.append([InlineKeyboardButton(text="🏗 Постройки", callback_data="hom:build")])
+        rows.append([InlineKeyboardButton(text="🎰 Гача ресурсов", callback_data="hom:gacha")])
+        rows.append([InlineKeyboardButton(text="🔧 Мастерская", callback_data="hom:wsp")])
 
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -106,13 +104,38 @@ def wardrobe_keyboard(portrait_keys: list[str], *, current_key: str) -> InlineKe
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def workbench_keyboard(*, can_upgrade: bool) -> InlineKeyboardMarkup:
+def buildings_keyboard(character: Character) -> InlineKeyboardMarkup:
+    """Вкладка построек: верстак и др. (алхимический стол убран — алхимик в мастерской)."""
+    from services import home_service
+
+    rows: list[list[InlineKeyboardButton]] = []
+    if home_service.can_access_workbench(character):
+        rows.append([InlineKeyboardButton(text="🛠 Верстак", callback_data="hom:bench")])
+    rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def craft_gacha_keyboard() -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text="⚒ Кузнец", callback_data="hom:gacha:pull:blacksmith"),
+            InlineKeyboardButton(text="⚗ Алхимик", callback_data="hom:gacha:pull:alchemist"),
+        ],
+        [InlineKeyboardButton(text="💎 Ювелир", callback_data="hom:gacha:pull:jeweler")],
+        [InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")],
+        menu_nav_button_row(),
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def workbench_keyboard(*, can_upgrade: bool, back_cb: str = "hom:build") -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if can_upgrade:
         rows.append(
             [InlineKeyboardButton(text="⬆ Улучшить верстак", callback_data="hom:wb:up")],
         )
-    rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
+    rows.append([InlineKeyboardButton(text="⬅ Постройки", callback_data=back_cb)])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

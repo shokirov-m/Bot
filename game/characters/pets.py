@@ -1,10 +1,8 @@
 """
-Питомцы: призыв за золото (лавка городского хаба; редкий пул после открытия 48 этажа).
-Активный питомец: пассивы попадают в `pet_passive_delta` → `passive_combat_modifiers_merged` → бой
-(`combat_service` / `pet_line_html`).
+Питомцы: бесплатный ритуал в храме (этаж 3, рынок), промокоды. Платного призыва в городе нет.
+Активный питомец: пассивы в `pet_passive_delta` → `passive_combat_modifiers_merged` → бой.
 
-Прогрессия: `pets_v1.pet_xp[pet_key]` копится за победы; уровни 1–10 (≈200 XP/ур.); пассив
-масштабируется. Корм: `treats` (ферма с ур.4 дома), `add_pet_treats`.
+Прогрессия: `pets_v1.pet_xp[pet_key]` за победы; уровни 1–10; корм: `treats` (ферма ур.4 дома).
 """
 
 from __future__ import annotations
@@ -13,39 +11,26 @@ import html
 import json
 import random
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 from bot.i18n import t
 from db.models.character import Character
 META_KEY = "pets_v1"
 
-# Стоимость и шансы (золото). Призыв с этажа отключён — только город (см. try_city_pet_summon).
-GACHA_FLOOR_BASIC = 8
-GACHA_FLOOR_RARE = 48
-GACHA_COST_BASIC = 300  # было 100, +200
-GACHA_COST_RARE = 550  # было 350, +200
-# ×3: три одиночных + небольшая надбавка к сумме (как раньше +40 / +175 к тройному базовому).
-CITY_SUMMON_COST_X3_BASIC = 940  # 3×300 + 40
-CITY_SUMMON_COST_X3_RARE = 1825  # 3×550 + 175
-DUPLICATE_REFUND_RATIO = 0.25  # доля от стоимости броска при дубликате
+DUPLICATE_REFUND_RATIO = 0.25  # доля от стоимости броска при дубликате (при cost_for_refund > 0)
 
-# Лимит бросков призыва из города за календарный день UTC (×3 = три броска).
-CITY_PET_PULLS_LIMIT_PER_UTC_DAY = 3
-
-# Оставлено для смены активного питомца на этажах с «алтарём» (8 и 48).
-_PET_GACHA_FLOORS: dict[int, tuple[int, bool]] = {
-    GACHA_FLOOR_BASIC: (GACHA_COST_BASIC, False),
-    GACHA_FLOOR_RARE: (GACHA_COST_RARE, True),
-}
+# Этажи, где на карте показывается смена активного питомца (если в коллекции больше одного).
+PET_SWITCH_FLOOR_BASIC = 8
+PET_SWITCH_FLOOR_RARE = 48
+_PET_SWITCH_FLOORS: frozenset[int] = frozenset((PET_SWITCH_FLOOR_BASIC, PET_SWITCH_FLOOR_RARE))
 
 
 def is_pet_gacha_floor(floor_number: int) -> bool:
-    return int(floor_number) in _PET_GACHA_FLOORS
+    return int(floor_number) in _PET_SWITCH_FLOORS
 
 
 def pet_gacha_floors_for_pet_switch() -> frozenset[int]:
-    return frozenset(_PET_GACHA_FLOORS.keys())
+    return _PET_SWITCH_FLOORS
 
 
 @dataclass(frozen=True, slots=True)
@@ -374,14 +359,13 @@ def format_pet_profile_block_html(character: Character, *, locale: str, compact_
     if not own:
         if loc == "en":
             return (
-                "🐾 <b>Pets</b> — <i>summon in <b>City</b> (shop). "
-                "Each has a <b>passive</b> bonus in combat; only <b>one</b> pet is active per fight. "
-                "Pick the active pet in <b>Status</b> (button) or on <b>floors 8 and 48</b> once unlocked.</i>"
+                "🐾 <b>Pets</b> — <i>first from the <b>Summoning Temple</b> (floor 3 market) or promos. "
+                "Each has a <b>passive</b> in combat; only <b>one</b> is active. "
+                "Pick in <b>Status</b> (Pet) or on <b>floors 8 and 48</b> when you have more than one.</i>"
             )
         return (
-            "🐾 <b>Питомцы</b> — <i>призыв в <b>Городе</b> (лавка). "
-            "У каждого свой <b>пассивный</b> бонус в бою; в каждом бою действует только <b>один</b> активный питомец. "
-            "Выбрать его — кнопка <b>«Питомец»</b> в статусе или этажи <b>8 и 48</b> (когда открыты).</i>"
+            "🐾 <b>Питомцы</b> — <i>первого даёт <b>храм призыва</b> на рынке 3-го этажа или промо. "
+            "Пассив в бою — один активный. Смена: <b>«Питомец»</b> в статусе или этажи <b>8 и 48</b> (при нескольких питомцах).</i>"
         )
     disp = active_pet_display(character) or "—"
     if compact_status_line:
@@ -533,18 +517,17 @@ def build_pet_picker_html(character: Character, *, locale: str) -> str:
 
 
 def format_city_hub_pets_hint_html(*, locale: str) -> str:
-    """Абзац для экрана города про призыв и выбор питомца."""
+    """Абзац для экрана города про питомцев (без платного призыва)."""
     loc = "en" if str(locale).lower().startswith("en") else "ru"
     if loc == "en":
         return (
-            "🐾 <b>Pets:</b> summon below for gold (max <b>3 pulls</b> per UTC day; ×3 uses three). "
+            "🐾 <b>Pets:</b> your first comes from the <b>Summoning Temple</b> on the <b>market</b> (floor 3, one free ritual). "
             "Each pet adds a <b>passive</b> in combat — <b>only one</b> is active; "
-            "pick the active one from <b>Status</b> (Pet button → list) or on <b>floors 8 / 48</b>."
+            "pick in <b>Status</b> (Pet) or on <b>floors 8 / 48</b> when you have more than one."
         )
     return (
-        "🐾 <b>Питомцы:</b> призыв ниже за золото (не больше <b>3 бросков</b> за сутки UTC; ×3 = три броска). "
-        "Каждый даёт <b>пассивный</b> бонус в бою — в бою действует только <b>один</b>; "
-        "выбрать активного: <b>статус</b> (кнопка «Питомец» → список) или этажи <b>8 и 48</b>."
+        "🐾 <b>Питомцы:</b> первого даёт <b>храм призыва</b> на <b>рынке</b> 3-го этажа (один бесплатный ритуал). "
+        "Пассив в бою — у каждого свой, активен <b>один</b>; смена: <b>статус</b> («Питомец») или этажи <b>8 и 48</b>."
     )
 
 
@@ -582,7 +565,7 @@ def set_active_pet(character: Character, key: str) -> tuple[bool, str]:
         return False, "Неизвестный питомец."
     owned = set(owned_keys(character))
     if key not in owned:
-        return False, "Сначала получи питомца в призыве (город)."
+        return False, "Сначала получи питомца (храм на 3 этаже, промо и т.п.)."
     mp, st = _pets_meta(character)
     st["active"] = key
     _save_meta(character, mp, st)
@@ -653,71 +636,3 @@ def _apply_pet_pull_after_payment(
     return f"Новый питомец: <b>{chosen.emoji} {chosen.name_ru}</b>\n<i>{chosen.blurb}</i>"
 
 
-def _utc_today_iso() -> str:
-    return datetime.now(UTC).date().isoformat()
-
-
-def city_pet_pulls_used_today(character: Character) -> int:
-    _, st = _pets_meta(character)
-    if str(st.get("city_pull_date") or "") != _utc_today_iso():
-        return 0
-    return int(st.get("city_pulls", 0) or 0)
-
-
-def city_pet_pulls_remaining_today(character: Character) -> int:
-    return max(0, CITY_PET_PULLS_LIMIT_PER_UTC_DAY - city_pet_pulls_used_today(character))
-
-
-def _increment_city_pet_pulls(character: Character, n: int) -> None:
-    mp, st = _pets_meta(character)
-    today = _utc_today_iso()
-    if str(st.get("city_pull_date") or "") != today:
-        st["city_pull_date"] = today
-        st["city_pulls"] = 0
-    st["city_pulls"] = int(st.get("city_pulls", 0) or 0) + int(n)
-    _save_meta(character, mp, st)
-
-
-def city_summon_price_band(character: Character) -> tuple[int, int, bool]:
-    """
-    (цена ×1, цена ×3, редкий_пул).
-    Редкий пул — если когда-либо открыт 48-й этаж (highest_floor_reached).
-    """
-    hi = int(character.highest_floor_reached)
-    if hi >= GACHA_FLOOR_RARE:
-        return GACHA_COST_RARE, CITY_SUMMON_COST_X3_RARE, True
-    return GACHA_COST_BASIC, CITY_SUMMON_COST_X3_BASIC, False
-
-
-def try_city_pet_summon(character: Character, *, pulls: int, locale: str = "ru") -> tuple[bool, str]:
-    """Призыв из городского хаба: 1 или 3 броска одной оплатой."""
-    if pulls not in (1, 3):
-        return False, "Неверный запрос."
-    loc = locale if locale in ("ru", "en") else "ru"
-    left = city_pet_pulls_remaining_today(character)
-    if pulls > left:
-        return False, t(loc, "pet_city_summon_limit", left=left, limit=CITY_PET_PULLS_LIMIT_PER_UTC_DAY)
-    c1, c3, rare = city_summon_price_band(character)
-    total = c1 if pulls == 1 else c3
-    if int(character.gold) < total:
-        return False, f"Нужно {total} золота."
-    character.gold = int(character.gold) - total
-    per_refund = max(1, total // pulls)
-    parts = [_apply_pet_pull_after_payment(character, _roll_pet_choice(rare_exclusive=rare), cost_for_refund=per_refund) for _ in range(pulls)]
-    _increment_city_pet_pulls(character, pulls)
-    return True, "\n\n".join(parts)
-
-
-def try_gacha_pull(character: Character, *, floor_number: int) -> tuple[bool, str]:
-    """
-    Совместимость: призыв с этажа (если остались старые кнопки) — перенаправляет логику на этажные цены.
-    """
-    spec = _PET_GACHA_FLOORS.get(int(floor_number))
-    if spec is None:
-        return False, "Призыв питомцев — в городе (лавка хаба)."
-    cost, rare_exclusive = spec
-    if int(character.gold) < cost:
-        return False, f"Нужно {cost} золота."
-    chosen = _roll_pet_choice(rare_exclusive=rare_exclusive)
-    character.gold = int(character.gold) - cost
-    return True, _apply_pet_pull_after_payment(character, chosen, cost_for_refund=cost)

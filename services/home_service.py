@@ -536,14 +536,13 @@ def format_home_main_html(character: Character) -> str:
         wt = workbench_tier(character)
         bonus = workbench_enchant_bonus(character) * 100
         lines.append(f"🛠 Верстак: <b>ур. {wt}/{MAX_WORKBENCH_TIER}</b> (≈<b>+{bonus:.1f}%</b> к заточке)")
+        lines.append("🎰 Ремесленные материалы — <b>гача</b> в постройках дома.")
     else:
-        lines.append("🛠 Верстак: <i>откроется на ур. 2</i>")
+        lines.append("🛠 Верстак и гача: <i>откроются на ур. 2</i>")
 
-    if can_access_alchemy(character):
-        at = alchemy_tier(character)
-        lines.append(f"⚗️ Алхимия: стол <b>ур. {at}/{ALCHEMY_TIER_MAX}</b> (зелья и трансмутация)")
-    else:
-        lines.append("⚗️ Алхимия: <i>откроется на ур. 3</i>")
+    lines.append(
+        "🔧 Крафт профессий — раздел <b>Мастерская</b> (меню или дом); домашний алхимический стол убран.",
+    )
 
     extras = len(unlocked_portrait_keys(character))
     lines.append("")

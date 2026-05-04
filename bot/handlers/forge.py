@@ -27,7 +27,7 @@ from db.repository import character_repo, inventory_repo, user_repo
 from game.items.runes import RuneData, ensure_rune_socket_list, extract_rune_from_item
 from game.floors import floor_data
 from game.locations import forge as forge_loc
-from game.crafting.recipes import RECIPES
+from game.crafting.recipes_data import forge_recipes_only
 from services import crafting_service, forge_service
 from services.floor_service import format_city_hub_message
 
@@ -262,7 +262,7 @@ async def forge_craft_menu(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Здесь нет кузницы.", show_alert=True)
             return
         rows: list[tuple[str, str]] = []
-        for r in RECIPES:
+        for r in forge_recipes_only():
             rid = str(r.get("id", ""))
             if not rid:
                 continue

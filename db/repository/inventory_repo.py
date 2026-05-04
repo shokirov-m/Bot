@@ -55,6 +55,7 @@ def _stack_signature(data: dict) -> tuple:
         str(data.get("use_tag") or ""),
         int(data.get("use_value") or 0),
         str(data.get("item_id") or data.get("key") or ""),
+        str(data.get("resource_id") or ""),
     )
 
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR as _WSP_HUB_FLOOR
 from game.data import floors as tower_data
 
 
@@ -51,6 +52,14 @@ ZONE_FINAL: ZoneInfo = _zone_info_from_raw(tower_data.ZONE_FINAL_RAW)
 CITIES: dict[int, CityInfo] = {
     floor: CityInfo(**row) for floor, row in tower_data.CITIES_RAW.items()
 }
+# Город игроков (хаб ремесленных заказов) — этаж из мастерской, пока нет в CITIES_RAW
+if _WSP_HUB_FLOOR not in CITIES:
+    CITIES[_WSP_HUB_FLOOR] = CityInfo(
+        floor=_WSP_HUB_FLOOR,
+        name="Свод союза",
+        emoji="🏙",
+        theme_ru="Город игроков: общий хаб, ремесло и заказы мастерских.",
+    )
 
 # Быстрый переход через меню «Портал»
 # Города-хабы (1/31/61/91/121), сюжетные этажи (8/10) и кратные 5 (5..135).

@@ -257,3 +257,5 @@ async def try_use_first_bag_ration(session: AsyncSession, character: Character) 
         if combat_consumables.normalize_combat_use_tag(d) == "stamina_flat":
             return await try_use_bag_ration_by_id(session, character, it.id)
     return False, "В сумке нет походного пайка."
+
+

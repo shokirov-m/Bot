@@ -14,6 +14,7 @@ from game.balance import (
     MONSTER_DAMAGE_DEALT_MULT,
 )
 from game.characters.skills import SkillDef, passive_combat_modifiers, skills_for_class
+from game.coliseum import coliseum_combat_hooks as coliseum_hooks
 from game.combat import effects, formulas, monster_ai
 from game.combat.monster_abilities import (
     apply_pre_turn_abilities,
@@ -541,6 +542,11 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     if is_elite_target and edm > 1.0001:
         dmg = max(1, int(round(dmg * edm)))
 
+    dmg, _cx = coliseum_hooks.after_player_damage_to_monster(state, dmg)
+    logs.extend(_cx)
+    if dmg <= 0:
+        return logs, "continue", 0
+
     dmg = apply_rune_golem_absorb(state, dmg, logs)
 
     if crit:
@@ -808,6 +814,11 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     if pdm < 0.999:
         dmg = max(1, int(dmg * pdm))
 
+    dmg, _cxs = coliseum_hooks.after_player_damage_to_monster(state, dmg)
+    logs.extend(_cxs)
+    if dmg <= 0:
+        return logs, "continue", 0
+
     # Щит монстра (valkyrie) блокирует удар навыком
     if check_and_consume_monster_shield(state, logs):
         # MP потрачено, кулдаун поставлен, но урон поглощён
@@ -864,6 +875,42 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     return logs, "continue", dmg
 
 
+_ELEMENT_INCOMING_RESIST: dict[str, tuple[str, str, str]] = {
+    "fire": ("player_fire_resist_pct", "🔥", "огню"),
+    "ice": ("player_ice_resist_pct", "❄️", "льду"),
+    "lightning": ("player_lightning_resist_pct", "⚡", "молнии"),
+    "poison": ("player_poison_resist_pct", "☠️", "яду"),
+    "dark": ("player_dark_resist_pct", "🌑", "тьме"),
+}
+
+
+def _coliseum_bump_monster_turn(state: dict[str, Any], logs: list[str]) -> None:
+    state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
+    logs.extend(coliseum_hooks.after_monster_turn_increment(state))
+
+
+def _apply_elemental_resist_to_incoming_damage(
+    state: dict[str, Any],
+    monster: dict[str, Any],
+    dmg: int,
+    logs: list[str],
+) -> int:
+    """Снижает входящий урон, если у игрока сопротивление стихии атакующего монстра."""
+    el = str(monster.get("element") or "").strip().lower()
+    meta = _ELEMENT_INCOMING_RESIST.get(el)
+    if meta is None:
+        return dmg
+    sk, icon, label_ru = meta
+    rp = int(state.get(sk, 0) or 0)
+    if rp <= 0:
+        return dmg
+    factor = 1.0 - min(0.75, rp / 100.0)
+    new_d = max(1, int(round(dmg * factor)))
+    if new_d < dmg:
+        logs.append(f"{icon} Сопротивление {label_ru}: урон {dmg} → {new_d}.")
+    return new_d
+
+
 def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     logs: list[str] = []
     m = _m(state)
@@ -883,7 +930,7 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     if state.get("monster_skip_next"):
         state["monster_skip_next"] = False
         logs.append("Враг пропускает ход.")
-        state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
+        _coliseum_bump_monster_turn(state, logs)
         return logs, "continue"
 
     php = int(state["player_hp"]) / max(1, int(state["player_hp_max"]))
@@ -893,21 +940,21 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     dodge_flat = float(_mods(state).get("dodge_bonus", 0.0)) + float(state.get("player_temp_dodge", 0.0))
     if formulas.roll_dodge(int(_stats(state)["dex"]), dodge_bonus_flat=dodge_flat):
         logs.append("🏃 Ты увернулся от атаки!")
-        state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
+        _coliseum_bump_monster_turn(state, logs)
         return logs, "continue"
 
     action = monster_ai.decide_action(state)
 
     if action == "taunt_only":
         logs.append(f"💬 «{monster_ai.pick_taunt(m['name'], tk)}»")
-        state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
+        _coliseum_bump_monster_turn(state, logs)
         return logs, "continue"
 
     if action == "fortify":
         state["monster_fortify_flat"] = 8
         state["monster_fortify_turns"] = 3
         logs.append(f"🛡️ {m.get('emoji', '👹')} Укрепление! Броня +8 на 3 хода.")
-        state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
+        _coliseum_bump_monster_turn(state, logs)
         return logs, "continue"
 
     mult = monster_ai.monster_damage_multiplier(state)
@@ -964,7 +1011,7 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
         record_player_last_damage_to_monster(state, counter)
         logs.append(f"🛡️ Блок! Контрудар: −{counter} HP врагу.")
         if int(m["hp"]) <= 0:
-            state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
+            _coliseum_bump_monster_turn(state, logs)
             return logs, "win"
 
     dmg = max(1, base - eff_defense)
@@ -982,12 +1029,14 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             em = str(m.get("strike_ailment_emoji") or "✨")
             lab = str(m.get("strike_ailment_label_ru") or "особым ударом")
             logs.append(f"{em} Доп. урон {lab}: −{extra} HP")
+    dmg = _apply_elemental_resist_to_incoming_damage(state, m, dmg, logs)
     blk_p = float(_mods(state).get("block_chance", 0.0))
     if blk_p > 0.0 and dmg > 0 and random.random() < min(0.85, blk_p):
         new_d = max(1, int(round(dmg * 0.38)))
         if new_d < dmg:
             logs.append("🛡️ Блок экипировки — входящий урон снижен.")
         dmg = new_d
+    dmg = coliseum_hooks.mulan_reduce_incoming_damage(state, dmg, logs)
     pre_php = int(state["player_hp"])
     shield = int(state.get("player_shield_hp", 0))
     if shield > 0:
@@ -1018,7 +1067,7 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             apply_post_hit_abilities(state, dmg, post_logs)
             logs.extend(post_logs)
 
-    state["monster_turn"] = int(state.get("monster_turn", 0)) + 1
+    _coliseum_bump_monster_turn(state, logs)
 
     # Двойная атака (time_phantom)
     if int(state["player_hp"]) > 0 and roll_monster_double_turn(state):
@@ -1030,12 +1079,14 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             dmg2 = max(1, int(round(dmg2 * ftkm)))
         if dtm < 0.999:
             dmg2 = max(1, int(round(dmg2 * dtm)))
+        dmg2 = _apply_elemental_resist_to_incoming_damage(state, m, dmg2, logs)
         blk_p2 = float(_mods(state).get("block_chance", 0.0))
         if blk_p2 > 0.0 and dmg2 > 0 and random.random() < min(0.85, blk_p2):
             nd2 = max(1, int(round(dmg2 * 0.38)))
             if nd2 < dmg2:
                 logs.append("🛡️ Блок экипировки — второй удар ослаблен.")
             dmg2 = nd2
+        dmg2 = coliseum_hooks.mulan_reduce_incoming_damage(state, dmg2, logs)
         shield2 = int(state.get("player_shield_hp", 0))
         if shield2 > 0:
             absorbed2 = min(shield2, dmg2)

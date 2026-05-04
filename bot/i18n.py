@@ -33,6 +33,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "Открой /profile, если карточка ещё не обновилась."
         ),
         "menu_home": "🏠 Дом",
+        "menu_workshop": "🔧 Мастерская",
         "menu_lavka": "🏪 Лавка",
         "menu_floor": "🗺️ Этаж",
         "menu_inv": "🎒 Инвентарь",
@@ -53,14 +54,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "portal_locked_alert": "Этаж {n} ещё не открыт — поднимись выше в башне.",
         "portal_same_floor": "Ты уже на этом этаже.",
         "portal_back_menu": "📋 В меню",
-        "city_pet_summon_1": "🐾 ×1 {cost}💰 · сегодня {left}/3",
-        "city_pet_summon_3": "🐾 ×3 {cost}💰 · сегодня {left}/3",
-        "pet_city_summon_limit": (
-            "Лимит призывов за сегодня (UTC): <b>{limit}</b> броска. "
-            "Свободно сейчас: <b>{left}</b> (×3 забирает три за раз)."
-        ),
         "menu_daily": "📅 Ежедневка",
         "menu_arena": "⚔️ Арена",
+        "menu_coliseum": "🏛️ Колизей",
         "menu_quests": "📋 Задания",
         "menu_settings": "⚙️ Настройки",
         "menu_auction": "🛒 Магазин",
@@ -347,6 +343,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "Open /profile if your status card still looks stale."
         ),
         "menu_home": "🏠 Home",
+        "menu_workshop": "🔧 Workshop",
         "menu_lavka": "🏪 Supplies",
         "menu_floor": "🗺️ Floor",
         "menu_inv": "🎒 Inventory",
@@ -367,14 +364,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "portal_locked_alert": "Floor {n} is not unlocked yet — climb higher in the tower.",
         "portal_same_floor": "You are already on this floor.",
         "portal_back_menu": "📋 Menu",
-        "city_pet_summon_1": "🐾 ×1 {cost}💰 · today {left}/3",
-        "city_pet_summon_3": "🐾 ×3 {cost}💰 · today {left}/3",
-        "pet_city_summon_limit": (
-            "Daily summon limit (UTC): <b>{limit}</b> pulls. "
-            "Available now: <b>{left}</b> (×3 uses three at once)."
-        ),
         "menu_daily": "📅 Daily",
         "menu_arena": "⚔️ Arena",
+        "menu_coliseum": "🏛️ Colosseum",
         "menu_quests": "📋 Quests",
         "menu_settings": "⚙️ Settings",
         "menu_auction": "🛒 Shop",

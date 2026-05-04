@@ -40,6 +40,8 @@ from bot.handlers.menu import router as menu_router
 from bot.handlers.settings import router as settings_router
 from bot.handlers.combat import router as combat_router
 from bot.handlers.forge import router as forge_router
+from bot.handlers.workshop import router as workshop_router
+from bot.handlers.coliseum import router as coliseum_router
 from bot.handlers.city import router as city_router
 from bot.handlers.floor import router as floor_router
 from bot.handlers.forest_beginnings import router as forest_beginnings_router
@@ -143,7 +145,9 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(inventory_router)
     dp.include_router(combat_router)
     dp.include_router(arena_router)
+    dp.include_router(coliseum_router)
     dp.include_router(forge_router)
+    dp.include_router(workshop_router)
     dp.include_router(economy_sinks_router)
     dp.include_router(tavern_router)
     dp.include_router(shop_router)

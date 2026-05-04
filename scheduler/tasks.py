@@ -153,6 +153,38 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         replace_existing=True,
     )
 
+    async def job_workshop_leaderboard() -> None:
+        try:
+            from db.database import get_session_factory
+            from services.workshop_leaderboard_service import refresh_leaderboards
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await refresh_leaderboards(session)
+                await session.commit()
+        except Exception:
+            logger.exception("[WORKSHOP] leaderboard refresh")
+
+    scheduler.add_job(
+        job_workshop_leaderboard,
+        IntervalTrigger(hours=6),
+        id="tower_workshop_leaderboard",
+        replace_existing=True,
+    )
+
+    async def job_workshop_craft_tick() -> None:
+        try:
+            logger.debug("[WORKSHOP] craft queue tick (уведомления — позже)")
+        except Exception:
+            logger.exception("[WORKSHOP] craft tick")
+
+    scheduler.add_job(
+        job_workshop_craft_tick,
+        IntervalTrigger(minutes=1),
+        id="tower_workshop_craft_tick",
+        replace_existing=True,
+    )
+
 
 def schedule_rest_completion_notification(
     bot: Bot,

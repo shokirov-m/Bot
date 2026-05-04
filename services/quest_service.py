@@ -245,6 +245,11 @@ async def claim_quest_reward(
         rune_gain = 1 + (tpl.floor // 40)
         character.rune_stones = int(character.rune_stones) + rune_gain
 
+    if random.random() < 0.02:
+        from game.crafting.workshop_meta import add_known_blueprint
+
+        add_known_blueprint(character, "bp_tower_flame_blade")
+
     await session.flush()
     return {
         "ok": True,

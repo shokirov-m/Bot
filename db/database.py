@@ -661,6 +661,55 @@ def patch_sqlite_unequip_boots_cloak() -> None:
         logger.exception("Патч SQLite (unequip boots/cloak) не удался: {}", p)
 
 
+def patch_sqlite_workshop_orders_table() -> None:
+    """Таблица заказов городской кузницы (эскроу, мастер-плательщик)."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            row = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='workshop_orders'",
+            ).fetchone()
+            if row is not None:
+                return
+            con.execute(
+                """
+                CREATE TABLE workshop_orders (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    order_type VARCHAR(16) NOT NULL DEFAULT 'open',
+                    customer_char_id INTEGER NOT NULL,
+                    crafter_char_id INTEGER,
+                    recipe_id VARCHAR(64) NOT NULL,
+                    qty INTEGER NOT NULL DEFAULT 1,
+                    escrow_gold INTEGER NOT NULL,
+                    status VARCHAR(16) NOT NULL DEFAULT 'posted',
+                    deadline_at VARCHAR(40),
+                    created_at VARCHAR(40) NOT NULL,
+                    updated_at VARCHAR(40) NOT NULL
+                )
+                """,
+            )
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS ix_workshop_orders_status ON workshop_orders (status)",
+            )
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS ix_workshop_orders_customer "
+                "ON workshop_orders (customer_char_id)",
+            )
+            con.commit()
+            logger.info("Патч SQLite: создана таблица workshop_orders")
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (workshop_orders) не удался: {}", p)
+
+
 def resolve_db_path() -> Path:
     """
     Абсолютный путь к файлу SQLite.
@@ -715,6 +764,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_clans_extended_columns()
     patch_sqlite_stored_gear_boost_v3()
     patch_sqlite_unequip_boots_cloak()
+    patch_sqlite_workshop_orders_table()
     had_users = False
     if p.exists():
         try:
