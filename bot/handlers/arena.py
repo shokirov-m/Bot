@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale, t
 from bot.states.arena_states import ArenaChallengeStates, ArenaTurnStates
 from bot.states.combat_states import CombatStates
+from bot.utils.game_art import menu_arena_photo_path
 from bot.utils.game_ui import push_game_ui
 from db.models.character import Character
 from db.repository import character_repo, user_repo
@@ -304,7 +305,8 @@ async def menu_arena(callback: CallbackQuery, session: AsyncSession, state: FSMC
             text=f"{intro}\n\n{id_hint}\n\n{limits}{spirit_line}{mmr_line}\n\n{duel_hint}",
             reply_markup=kb,
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_arena_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -456,7 +458,8 @@ async def arena_phantoms_list(callback: CallbackQuery, session: AsyncSession, st
             text="\n".join(lines),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_arena_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:

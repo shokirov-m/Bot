@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
@@ -15,19 +13,13 @@ from bot.keyboards.coliseum_kb import (
     coliseum_fight_confirm_keyboard,
     coliseum_main_keyboard,
 )
+from bot.utils.game_art import coliseum_fighter_photo_path, coliseum_hub_photo_path
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
-from game.coliseum.coliseum_data import fighter_by_id
+from game.coliseum.coliseum_data import fighter_by_id, scaled_coliseum_atk
 from services import coliseum_service, combat_service
 
 router = Router(name="coliseum")
-
-_COLO_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "ui" / "coliseum_menu.png"
-
-
-def coliseum_menu_photo_path() -> str | None:
-    """Иллюстрация главного экрана колизея (`assets/ui/coliseum_menu.png`)."""
-    return str(_COLO_PATH) if _COLO_PATH.is_file() else None
 
 
 def _menu_html(char) -> str:
@@ -72,7 +64,8 @@ async def coliseum_menu(callback: CallbackQuery, session: AsyncSession, state: F
             text=body,
             reply_markup=kb,
             target_message=callback.message,
-            photo_path=coliseum_menu_photo_path(),
+            photo_path=coliseum_hub_photo_path(),
+            character=char,
         )
     except Exception:
         logger.exception("coliseum_menu")
@@ -109,7 +102,7 @@ async def coliseum_info(callback: CallbackQuery, session: AsyncSession, state: F
     lines = [
         f"#{fdef.id} <b>{fdef.name}</b>",
         f"💬 <i>{fdef.phrase}</i>",
-        f"❤️ HP {fdef.hp} · ⚔️ ATK {fdef.atk} · 🛡️ DEF {fdef.defense}",
+        f"❤️ HP {fdef.hp} · ⚔️ ATK {scaled_coliseum_atk(fdef)} · 🛡️ DEF {fdef.defense}",
         f"📈 Награда (база): {fdef.exp_reward} XP, {fdef.gold_reward} золота"
         + (" · 🏆 чемпион ×2" if fdef.is_champion else ""),
         f"Требуется ур. {fdef.required_level}",
@@ -135,7 +128,8 @@ async def coliseum_info(callback: CallbackQuery, session: AsyncSession, state: F
             text=body,
             reply_markup=kb,
             target_message=callback.message,
-            photo_path=None,
+            photo_path=coliseum_fighter_photo_path(fid) or coliseum_hub_photo_path(),
+            character=char,
         )
     except Exception:
         logger.exception("coliseum_info")
@@ -144,7 +138,7 @@ async def coliseum_info(callback: CallbackQuery, session: AsyncSession, state: F
 
 @router.callback_query(F.data.regexp(r"^col:fight:\d+$"))
 async def coliseum_fight_ask(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    if callback.message is None or callback.bot is None:
+    if callback.message is None or callback.bot is None or callback.from_user is None:
         await callback.answer()
         return
     fid = int(str(callback.data).split(":")[-1])
@@ -152,6 +146,8 @@ async def coliseum_fight_ask(callback: CallbackQuery, session: AsyncSession, sta
     if fdef is None:
         await callback.answer()
         return
+    user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+    char = await character_repo.get_by_user_id(session, user.id) if user else None
     body = (
         f"Начать бой с <b>{fdef.name}</b>?\n"
         f"Будет потрачена <b>1</b> стамина."
@@ -164,7 +160,8 @@ async def coliseum_fight_ask(callback: CallbackQuery, session: AsyncSession, sta
             text=body,
             reply_markup=coliseum_fight_confirm_keyboard(fid),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=coliseum_fighter_photo_path(fid) or coliseum_hub_photo_path(),
+            character=char,
         )
     except Exception:
         logger.exception("coliseum_fight_ask")

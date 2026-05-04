@@ -362,6 +362,7 @@ async def auc_vip_portrait_preview(callback: CallbackQuery, session: AsyncSessio
             ),
             target_message=callback.message,
             photo_path=str(img) if img is not None else None,
+            character=char,
         )
         await callback.answer()
     except Exception:

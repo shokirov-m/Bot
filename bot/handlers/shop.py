@@ -7,6 +7,7 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
     LabeledPrice,
@@ -18,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.auction_kb import auction_portraits_keyboard, auction_portraits_screen_html
 from bot.keyboards.shop_kb import shop_main_keyboard, shop_vip_keyboard
+from bot.utils.game_art import menu_auction_photo_path, menu_shop_photo_path, menu_shop_vip_photo_path
+from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.economy import shop as shop_data
 from services import shop_service
@@ -37,14 +40,44 @@ def _origin_ok(s: str) -> str:
     return s if s in ("c", "f", "m", "h", "u", "a") else "f"
 
 
+async def _shop_push_ui(
+    state: FSMContext,
+    query: CallbackQuery,
+    char,
+    text: str,
+    reply_markup,
+    *,
+    vip: bool = False,
+    auction_branch: bool = False,
+) -> None:
+    if query.message is None or query.bot is None:
+        return
+    if auction_branch:
+        pp = menu_auction_photo_path()
+    elif vip:
+        pp = menu_shop_vip_photo_path()
+    else:
+        pp = menu_shop_photo_path()
+    await push_game_ui(
+        state,
+        query.bot,
+        chat_id=query.message.chat.id,
+        text=text,
+        reply_markup=reply_markup,
+        target_message=query.message,
+        photo_path=pp,
+        character=char,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Обычный магазин
 # ---------------------------------------------------------------------------
 
 @router.callback_query(F.data.startswith("shp:main:"))
-async def shop_open(query: CallbackQuery, session: AsyncSession) -> None:
+async def shop_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
+        if query.data is None or query.from_user is None or query.message is None or query.bot is None:
             await query.answer()
             return
         parts = query.data.split(":")
@@ -61,10 +94,13 @@ async def shop_open(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Здесь нет торговца.", show_alert=True)
             return
         if origin == "a":
-            await query.message.edit_text(
+            await _shop_push_ui(
+                state,
+                query,
+                char,
                 auction_portraits_screen_html(char),
-                reply_markup=auction_portraits_keyboard(int(char.floor_number)),
-                parse_mode=ParseMode.HTML,
+                auction_portraits_keyboard(int(char.floor_number)),
+                auction_branch=True,
             )
             await query.answer()
             return
@@ -73,10 +109,12 @@ async def shop_open(query: CallbackQuery, session: AsyncSession) -> None:
             text = "🏠 <i>Заказ из дома</i> — те же цены по этажу героя.\n\n" + text
         elif origin == "u":
             text = "🏪 <i>Лавка главного меню</i> — цены как на твоём текущем этаже.\n\n" + text
-        await query.message.edit_text(
+        await _shop_push_ui(
+            state,
+            query,
+            char,
             text,
-            reply_markup=shop_main_keyboard(char.floor_number, origin),
-            parse_mode=ParseMode.HTML,
+            shop_main_keyboard(char.floor_number, origin),
         )
         await query.answer()
     except Exception:
@@ -85,9 +123,9 @@ async def shop_open(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("shp:buy:"))
-async def shop_buy(query: CallbackQuery, session: AsyncSession) -> None:
+async def shop_buy(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
+        if query.data is None or query.from_user is None or query.message is None or query.bot is None:
             await query.answer()
             return
         parts = query.data.split(":")
@@ -119,10 +157,13 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession) -> None:
 
         if origin == "a":
             await session.refresh(char)
-            await query.message.edit_text(
+            await _shop_push_ui(
+                state,
+                query,
+                char,
                 auction_portraits_screen_html(char) + "\n\n" + LINE_SEP + "\n" + payload,
-                reply_markup=auction_portraits_keyboard(int(char.floor_number)),
-                parse_mode=ParseMode.HTML,
+                auction_portraits_keyboard(int(char.floor_number)),
+                auction_branch=True,
             )
             await query.answer("Куплено!")
             return
@@ -132,10 +173,12 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession) -> None:
             header = "🏠 <i>Заказ из дома</i>\n\n" + header
         elif origin == "u":
             header = "🏪 <i>Лавка главного меню</i>\n\n" + header
-        await query.message.edit_text(
+        await _shop_push_ui(
+            state,
+            query,
+            char,
             f"{header}\n\n{LINE_SEP}\n{payload}",
-            reply_markup=shop_main_keyboard(char.floor_number, origin),
-            parse_mode=ParseMode.HTML,
+            shop_main_keyboard(char.floor_number, origin),
         )
         await query.answer("Куплено!")
     except Exception:
@@ -144,9 +187,9 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("shp:eat:"))
-async def shop_eat_ration(query: CallbackQuery, session: AsyncSession) -> None:
+async def shop_eat_ration(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
+        if query.data is None or query.from_user is None or query.message is None or query.bot is None:
             await query.answer()
             return
         parts = query.data.split(":")
@@ -170,10 +213,12 @@ async def shop_eat_ration(query: CallbackQuery, session: AsyncSession) -> None:
             header = "🏠 <i>Заказ из дома</i>\n\n" + header
         elif origin == "u":
             header = "🏪 <i>Лавка главного меню</i>\n\n" + header
-        await query.message.edit_text(
+        await _shop_push_ui(
+            state,
+            query,
+            char,
             f"{header}\n\n{LINE_SEP}\n{msg}",
-            reply_markup=shop_main_keyboard(char.floor_number, origin),
-            parse_mode=ParseMode.HTML,
+            shop_main_keyboard(char.floor_number, origin),
         )
         await query.answer("Вкусно!")
     except Exception:
@@ -186,10 +231,10 @@ async def shop_eat_ration(query: CallbackQuery, session: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 @router.callback_query(F.data.startswith("shp:vip:"))
-async def shop_vip_open(query: CallbackQuery, session: AsyncSession) -> None:
+async def shop_vip_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     """Открыть VIP-раздел магазина."""
     try:
-        if query.data is None or query.from_user is None or query.message is None:
+        if query.data is None or query.from_user is None or query.message is None or query.bot is None:
             await query.answer()
             return
         parts = query.data.split(":")
@@ -199,10 +244,13 @@ async def shop_vip_open(query: CallbackQuery, session: AsyncSession) -> None:
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        await query.message.edit_text(
+        await _shop_push_ui(
+            state,
+            query,
+            char,
             shop_service.format_vip_shop_html(char),
-            reply_markup=shop_vip_keyboard(floor_key, origin),
-            parse_mode=ParseMode.HTML,
+            shop_vip_keyboard(floor_key, origin),
+            vip=True,
         )
         await query.answer()
     except Exception:

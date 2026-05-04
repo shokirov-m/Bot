@@ -5,6 +5,7 @@ Replacing legacy class_arc.
 from __future__ import annotations
 import html
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from bot.i18n import get_locale, t
 from bot.keyboards.archetype_kb import archetype_confirm_keyboard, archetype_selection_keyboard
 from bot.keyboards.profile_kb import profile_spec_submenu_keyboard
 from bot.utils.game_ui import push_game_ui
+from bot.utils.ui_photos import specialization_menu_photo_path
 from db.repository import character_repo, user_repo
 from game.archetypes import manager as arch_manager
 from services import character_service
@@ -83,9 +85,9 @@ def _archetype_preview_html(char, arch, *, can_ok: bool, reason: str) -> str:
 
 
 @router.callback_query(F.data == "prf:arch_pick")
-async def on_archetype_list(callback: CallbackQuery, session: AsyncSession) -> None:
+async def on_archetype_list(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.from_user is None or callback.message is None:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
             await callback.answer()
             return
         user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
@@ -111,13 +113,18 @@ async def on_archetype_list(callback: CallbackQuery, session: AsyncSession) -> N
             "Он определит новые навыки и пассивные бонусы.\n\n"
             "Сначала откройте описание пути, затем подтвердите выбор:"
         )
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
             reply_markup=archetype_selection_keyboard(
                 tier=target_tier,
                 allowed_keys=arch_manager.tier2_children(current.key) if target_tier == 2 else None,
-            )
+            ),
+            target_message=callback.message,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -125,9 +132,9 @@ async def on_archetype_list(callback: CallbackQuery, session: AsyncSession) -> N
         await callback.answer("Ошибка.", show_alert=True)
 
 @router.callback_query(F.data.startswith("arch:view:"))
-async def on_archetype_view(callback: CallbackQuery, session: AsyncSession) -> None:
+async def on_archetype_view(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.from_user is None or callback.message is None or callback.data is None:
+        if callback.from_user is None or callback.message is None or callback.bot is None or callback.data is None:
             await callback.answer()
             return
         arch_key = callback.data.split(":")[-1]
@@ -146,26 +153,40 @@ async def on_archetype_view(callback: CallbackQuery, session: AsyncSession) -> N
         
         if not can_ok:
             current = arch_manager.get_character_archetype(char)
-            await callback.message.edit_text(
-                text,
-                parse_mode="HTML",
+            await push_game_ui(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
                 reply_markup=archetype_selection_keyboard(
                     tier=target_tier,
                     allowed_keys=arch_manager.tier2_children(current.key) if target_tier == 2 else None,
                 ),
+                target_message=callback.message,
+                photo_path=specialization_menu_photo_path(),
+                character=char,
             )
         else:
-            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=archetype_confirm_keyboard(arch_key))
-            
+            await push_game_ui(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=archetype_confirm_keyboard(arch_key),
+                target_message=callback.message,
+                photo_path=specialization_menu_photo_path(),
+                character=char,
+            )
+
         await callback.answer()
     except Exception:
         logger.exception("arch:view")
         await callback.answer("Ошибка.", show_alert=True)
 
 @router.callback_query(F.data.startswith("arch:confirm:"))
-async def on_archetype_confirm(callback: CallbackQuery, session: AsyncSession) -> None:
+async def on_archetype_confirm(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.from_user is None or callback.message is None or callback.data is None:
+        if callback.from_user is None or callback.message is None or callback.bot is None or callback.data is None:
             await callback.answer()
             return
         arch_key = callback.data.split(":")[-1]
@@ -195,11 +216,18 @@ async def on_archetype_confirm(callback: CallbackQuery, session: AsyncSession) -
         await session.flush()
         
         loc = get_locale(char, callback.from_user.language_code)
-        await callback.message.edit_text(
-            f"🎉 Поздравляем! Вы теперь <b>{arch.name_ru}</b>!\n\n"
-            "Характеристики обновлены, дерево навыков сброшено под новый путь, новые навыки доступны в бою.",
-            parse_mode="HTML",
-            reply_markup=profile_spec_submenu_keyboard(char, locale=loc)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=(
+                f"🎉 Поздравляем! Вы теперь <b>{arch.name_ru}</b>!\n\n"
+                "Характеристики обновлены, дерево навыков сброшено под новый путь, новые навыки доступны в бою."
+            ),
+            reply_markup=profile_spec_submenu_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer("Путь выбран!", show_alert=True)
     except Exception:

@@ -724,6 +724,7 @@ async def push_floor_screen_ui(
                 target_message=target_message,
                 fallback_message=fallback_message,
                 photo_path=None,
+                character=character,
             )
             return
         if fallback_message is not None and fallback_message.chat.id == chat_id:
@@ -753,6 +754,7 @@ async def push_floor_screen_ui(
         target_message=target_message,
         fallback_message=fallback_message,
         photo_path=photo,
+        character=character,
     )
 
 

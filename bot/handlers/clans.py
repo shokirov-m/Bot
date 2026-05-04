@@ -43,6 +43,7 @@ from bot.states.clan_states import (
     ClanSettingsStates,
     ClanWarDeclareStates,
 )
+from bot.utils.game_art import menu_clan_photo_path
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, clan_repo, user_repo
 from services import clan_service
@@ -92,11 +93,13 @@ async def _get_char(session: AsyncSession, query: CallbackQuery):
 async def _edit(
     callback: CallbackQuery,
     state: FSMContext,
+    session: AsyncSession,
     text: str,
     kb,
 ) -> None:
     if callback.message is None or callback.bot is None:
         return
+    _, char = await _get_char(session, callback)
     await push_game_ui(
         state,
         callback.bot,
@@ -104,6 +107,8 @@ async def _edit(
         text=text,
         reply_markup=kb,
         target_message=callback.message,
+        photo_path=menu_clan_photo_path(),
+        character=char,
     )
 
 
@@ -116,7 +121,7 @@ async def _clan_hub_screen(
     m = await clan_repo.get_membership(session, int(char.id))
     if m is None:
         await _edit(
-            callback, state,
+            callback, state, session,
             "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.\n"
             "<i>Создай клан или найди существующий в списке.</i>",
             clan_no_hub_keyboard(),
@@ -126,7 +131,7 @@ async def _clan_hub_screen(
     clan = await clan_repo.get_clan(session, int(m.clan_id))
     if clan is None:
         await _edit(
-            callback, state,
+            callback, state, session,
             "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.",
             clan_no_hub_keyboard(),
         )
@@ -145,7 +150,7 @@ async def _clan_hub_screen(
         f"Уровень: <b>{clan.clan_level}/10</b> · Участников: <b>{n}/{max_m}</b>\n"
         f"<i>Твоя роль: {role_label(m.role)}</i>"
     )
-    await _edit(callback, state, text, clan_hub_keyboard(m.role, war_status))
+    await _edit(callback, state, session, text, clan_hub_keyboard(m.role, war_status))
     await callback.answer()
 
 
@@ -243,7 +248,7 @@ async def cb_clan_info(callback: CallbackQuery, session: AsyncSession, state: FS
         if char is None:
             return
         text = await format_clan_card_html(session, char)
-        await _edit(callback, state, text, clan_info_keyboard())
+        await _edit(callback, state, session, text, clan_info_keyboard())
         await callback.answer()
     except Exception:
         logger.exception("cln:info")
@@ -268,7 +273,7 @@ async def cb_clan_members(callback: CallbackQuery, session: AsyncSession, state:
             return
         rows = await clan_repo.get_members_with_characters(session, int(clan.id))
         text = format_members_list_html(rows, clan.name, m.role == "leader")
-        await _edit(callback, state, text, clan_members_keyboard(m.role))
+        await _edit(callback, state, session, text, clan_members_keyboard(m.role))
         await callback.answer()
     except Exception:
         logger.exception("cln:members")
@@ -328,6 +333,7 @@ async def cb_clan_treasury(callback: CallbackQuery, session: AsyncSession, state
         await _edit(
             callback,
             state,
+            session,
             text,
             clan_treasury_keyboard(m.role, has_pending_salary=pending_self > 0),
         )
@@ -358,6 +364,7 @@ async def cb_clan_donate(callback: CallbackQuery, session: AsyncSession, state: 
                 await _edit(
                     callback,
                     state,
+                    session,
                     text,
                     clan_treasury_keyboard(m.role, has_pending_salary=pending_self > 0),
                 )
@@ -460,6 +467,7 @@ async def cb_salary_claim(callback: CallbackQuery, session: AsyncSession, state:
                 await _edit(
                     callback,
                     state,
+                    session,
                     text,
                     clan_treasury_keyboard(m.role, has_pending_salary=pending_self > 0),
                 )
@@ -512,7 +520,7 @@ async def cb_salary_menu(callback: CallbackQuery, session: AsyncSession, state: 
             f"Выберите участника, чтобы выделить ему ЗП.\n"
             f"<i>Сумма списывается из казны сразу; участник заберёт её сам кнопкой «Забрать ЗП».</i>"
         )
-        await _edit(callback, state, text, clan_salary_menu_keyboard(rows))
+        await _edit(callback, state, session, text, clan_salary_menu_keyboard(rows))
         await callback.answer()
     except Exception:
         logger.exception("cln:salary:menu")
@@ -549,7 +557,7 @@ async def cb_salary_pick(callback: CallbackQuery, session: AsyncSession, state: 
             f"Уже ждёт: <b>{pending:,}</b> 💰\n\n"
             f"Выберите сумму."
         )
-        await _edit(callback, state, text, clan_salary_amount_keyboard(target_id))
+        await _edit(callback, state, session, text, clan_salary_amount_keyboard(target_id))
         await callback.answer()
     except Exception:
         logger.exception("cln:salary:pick")
@@ -585,7 +593,7 @@ async def cb_salary_add(callback: CallbackQuery, session: AsyncSession, state: F
                     f"В казне: <b>{tg:,}</b> 💰\n"
                     f"Уже ждёт: <b>{pending:,}</b> 💰"
                 )
-                await _edit(callback, state, text, clan_salary_amount_keyboard(target_id))
+                await _edit(callback, state, session, text, clan_salary_amount_keyboard(target_id))
     except Exception:
         logger.exception("cln:salary:add")
         await callback.answer("Ошибка.", show_alert=True)
@@ -687,7 +695,7 @@ async def cb_clan_levelup_confirm(
             f"🌿 {req['cost_herbs']} (в казне: {mats['herbs']})\n\n"
             f"Новый лимит участников: <b>{req['max_members']}</b>"
         )
-        await _edit(callback, state, text, confirm_levelup_keyboard(nxt))
+        await _edit(callback, state, session, text, confirm_levelup_keyboard(nxt))
         await callback.answer()
     except Exception:
         logger.exception("cln:lvlup")
@@ -731,7 +739,7 @@ async def cb_clan_buildings(callback: CallbackQuery, session: AsyncSession, stat
         check_and_complete_buildings(payload)
         await clan_repo.update_payload(session, clan, payload)
         text = format_buildings_html(payload, int(clan.clan_level))
-        await _edit(callback, state, text, clan_buildings_keyboard(payload, int(clan.clan_level), m.role))
+        await _edit(callback, state, session, text, clan_buildings_keyboard(payload, int(clan.clan_level), m.role))
         await callback.answer()
     except Exception:
         logger.exception("cln:blds")
@@ -799,7 +807,7 @@ async def cb_clan_building_detail(
                 f"В казне: {tg:,}💰 / {mats['wood']}🪵 / {mats['stone']}🪨 / {mats['herbs']}🌿\n"
                 + ("✅ Ресурсов достаточно." if can_build else "❌ Не хватает ресурсов.")
             )
-        await _edit(callback, state, text, clan_building_detail_keyboard(key, can_build, m.role))
+        await _edit(callback, state, session, text, clan_building_detail_keyboard(key, can_build, m.role))
         await callback.answer()
     except Exception:
         logger.exception("cln:bld:key")
@@ -828,7 +836,7 @@ async def cb_clan_building_build(
                 payload = _payload(clan)
                 check_and_complete_buildings(payload)
                 text = format_buildings_html(payload, int(clan.clan_level))
-                await _edit(callback, state, text, clan_buildings_keyboard(payload, int(clan.clan_level), m.role))
+                await _edit(callback, state, session, text, clan_buildings_keyboard(payload, int(clan.clan_level), m.role))
     except Exception:
         logger.exception("cln:bld:build")
         await callback.answer("Ошибка.", show_alert=True)
@@ -853,7 +861,7 @@ async def cb_clan_relics(callback: CallbackQuery, session: AsyncSession, state: 
         payload = _payload(clan)
         has_lab = _has_building(payload, "alchemy_lab")
         text = format_relics_html(payload, has_lab)
-        await _edit(callback, state, text, clan_relics_keyboard(payload, m.role, has_lab))
+        await _edit(callback, state, session, text, clan_relics_keyboard(payload, m.role, has_lab))
         await callback.answer()
     except Exception:
         logger.exception("cln:relics")
@@ -879,7 +887,7 @@ async def cb_clan_relic_craft(
                 payload = _payload(clan)
                 has_lab = _has_building(payload, "alchemy_lab")
                 text = format_relics_html(payload, has_lab)
-                await _edit(callback, state, text, clan_relics_keyboard(payload, m.role, has_lab))
+                await _edit(callback, state, session, text, clan_relics_keyboard(payload, m.role, has_lab))
     except Exception:
         logger.exception("cln:relic:craft")
         await callback.answer("Ошибка.", show_alert=True)
@@ -945,7 +953,7 @@ async def _show_capture_screen(
         f"Нажми кнопку этажа, чтобы инициировать захват.</i>"
     )
     await _edit(
-        callback, state, "\n".join(lines),
+        callback, state, session, "\n".join(lines),
         clan_capture_keyboard(
             m.role, active_caps=caps, cap_limit=cap_limit,
             page=page, page_size=_CAPTURE_PAGE_SIZE,
@@ -1009,7 +1017,7 @@ async def cb_clan_war(callback: CallbackQuery, session: AsyncSession, state: FSM
         war = _war(payload)
         war_status = war.get("status") if war else None
         text = format_war_html(payload)
-        await _edit(callback, state, text, clan_war_keyboard(m.role, war_status))
+        await _edit(callback, state, session, text, clan_war_keyboard(m.role, war_status))
         await callback.answer()
     except Exception:
         logger.exception("cln:war")
@@ -1114,7 +1122,7 @@ async def cb_clan_leave_confirm(
         if char is None:
             return
         await _edit(
-            callback, state,
+            callback, state, session,
             "🚪 <b>Покинуть клан?</b>\n\n<i>Если ты лидер и единственный участник — клан будет распущен.</i>",
             confirm_leave_keyboard(),
         )
@@ -1136,7 +1144,7 @@ async def cb_clan_leave_do(
         await callback.answer(msg, show_alert=True)
         if ok:
             await _edit(
-                callback, state,
+                callback, state, session,
                 "⚔️ <b>Кланы</b>\n\nТы покинул клан.",
                 clan_no_hub_keyboard(),
             )
@@ -1244,7 +1252,7 @@ async def cb_clan_join_legacy(
         if char is None:
             return
         await _edit(
-            callback, state,
+            callback, state, session,
             "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.\n"
             "<i>Создай клан или найди существующий в списке.</i>",
             clan_no_hub_keyboard(),
@@ -1336,7 +1344,7 @@ async def cb_clan_panel(callback: CallbackQuery, session: AsyncSession, state: F
             f"👑 <b>Панель лидера — «{html.escape(clan.name)}»</b>\n\n"
             f"Последние события:\n{log_str}"
         )
-        await _edit(callback, state, text, clan_panel_keyboard())
+        await _edit(callback, state, session, text, clan_panel_keyboard())
         await callback.answer()
     except Exception:
         logger.exception("cln:panel")
@@ -1366,7 +1374,7 @@ async def cb_clan_panel_log(callback: CallbackQuery, session: AsyncSession, stat
         if not log:
             lines.append("<i>Нет событий.</i>")
         await _edit(
-            callback, state, "\n".join(lines),
+            callback, state, session, "\n".join(lines),
             clan_panel_keyboard(),
         )
         await callback.answer()
@@ -1393,7 +1401,7 @@ async def cb_clan_panel_members(
             return
         rows = await clan_repo.get_members_with_characters(session, int(clan.id))
         text = format_members_list_html(rows, clan.name, True)
-        await _edit(callback, state, text, clan_panel_members_keyboard(rows, int(char.id)))
+        await _edit(callback, state, session, text, clan_panel_members_keyboard(rows, int(char.id)))
         await callback.answer()
     except Exception:
         logger.exception("cln:panel:members")
@@ -1433,7 +1441,7 @@ async def cb_clan_pm_detail(callback: CallbackQuery, session: AsyncSession, stat
             f"В клане с: {_fmt_ts(m_target.joined_at.isoformat() if m_target.joined_at else None)}\n"
             f"Последняя активность: {_fmt_ts(m_target.last_active_at.isoformat() if m_target.last_active_at else None)}"
         )
-        await _edit(callback, state, text, clan_member_actions_keyboard(target_id, m_target.role))
+        await _edit(callback, state, session, text, clan_member_actions_keyboard(target_id, m_target.role))
         await callback.answer()
     except Exception:
         logger.exception("cln:pm")
@@ -1503,7 +1511,7 @@ async def cb_clan_nohub(callback: CallbackQuery, session: AsyncSession, state: F
         if char is None:
             return
         await _edit(
-            callback, state,
+            callback, state, session,
             "⚔️ <b>Кланы</b>\n\nТы не состоишь в клане.\n"
             "<i>Создай клан или найди существующий в списке.</i>",
             clan_no_hub_keyboard(),
@@ -1526,7 +1534,7 @@ async def cb_clan_browse(callback: CallbackQuery, session: AsyncSession, state: 
         clans, total = await clan_service.browse_clans_page(session, page, _BROWSE_PAGE_SIZE)
         text = format_clan_browse_html(clans, page, total, _BROWSE_PAGE_SIZE)
         kb = clan_browse_keyboard(clans, page, total, _BROWSE_PAGE_SIZE, in_clan)
-        await _edit(callback, state, text, kb)
+        await _edit(callback, state, session, text, kb)
         await callback.answer()
     except Exception:
         logger.exception("cln:browse")
@@ -1569,7 +1577,7 @@ async def cb_clan_browse_view(callback: CallbackQuery, session: AsyncSession, st
             f"{desc_str}"
             f"{chat_str}"
         )
-        await _edit(callback, state, text, InlineKeyboardMarkup(inline_keyboard=btns))
+        await _edit(callback, state, session, text, InlineKeyboardMarkup(inline_keyboard=btns))
         await callback.answer()
     except Exception:
         logger.exception("cln:browse:view")
@@ -1615,7 +1623,7 @@ async def cb_clan_settings(callback: CallbackQuery, session: AsyncSession, state
             await callback.answer("Клан не найден.", show_alert=True)
             return
         text = format_clan_settings_html(clan)
-        await _edit(callback, state, text, clan_settings_keyboard(m.role))
+        await _edit(callback, state, session, text, clan_settings_keyboard(m.role))
         await callback.answer()
     except Exception:
         logger.exception("cln:settings")

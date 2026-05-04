@@ -89,8 +89,6 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
             [
 
-                InlineKeyboardButton(text=t(loc, "menu_top"), callback_data="mnu:top"),
-
                 InlineKeyboardButton(text=t(loc, "menu_quests"), callback_data="mnu:qst"),
 
             ],
@@ -103,17 +101,15 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
             [
 
-                InlineKeyboardButton(text=t(loc, "menu_auction"), callback_data="mnu:auc"),
-
-                InlineKeyboardButton(text=t(loc, "menu_settings"), callback_data="mnu:stg"),
+                InlineKeyboardButton(text=t(loc, "menu_home"), callback_data="hom:hub"),
 
             ],
 
             [
 
-                InlineKeyboardButton(text="🏰 Клан", callback_data="mnu:clan"),
+                InlineKeyboardButton(text=t(loc, "menu_top"), callback_data="mnu:top"),
 
-                InlineKeyboardButton(text=t(loc, "menu_home"), callback_data="hom:hub"),
+                InlineKeyboardButton(text=t(loc, "menu_settings"), callback_data="mnu:stg"),
 
             ],
 

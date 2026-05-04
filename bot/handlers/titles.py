@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale
 from bot.keyboards.menu_kb import main_menu_keyboard
 from bot.keyboards.title_kb import TITLE_KEYS_PAGE_SIZE, titles_pick_keyboard
+from bot.utils.game_art import menu_titles_photo_path
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.characters.titles import TITLE_BY_KEY, format_title_bonus_line
@@ -96,6 +97,8 @@ async def _push_titles_screen(
         text=text,
         reply_markup=kb,
         target_message=query.message,
+        photo_path=menu_titles_photo_path(),
+        character=char,
     )
 
 

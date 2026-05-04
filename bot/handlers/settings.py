@@ -23,6 +23,7 @@ from bot.keyboards.settings_kb import (
 )
 from bot.states.combat_states import CombatStates
 from bot.states.settings_states import SettingsStates
+from bot.utils.game_art import menu_settings_photo_path
 from bot.utils.game_ui import push_game_ui
 from config import settings
 from db.repository import character_repo, user_repo
@@ -117,7 +118,8 @@ async def menu_open_settings(callback: CallbackQuery, session: AsyncSession, sta
             text=_settings_body_html(loc),
             reply_markup=_settings_reply_kb(loc, char, user),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:

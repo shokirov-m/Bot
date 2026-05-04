@@ -20,6 +20,7 @@ from bot.keyboards.home_kb import (
     workbench_keyboard,
 )
 from bot.i18n import get_locale
+from bot.utils.game_art import menu_home_library_photo_path, menu_home_photo_path, menu_home_wardrobe_photo_path
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from services import craft_gacha_service
@@ -61,7 +62,8 @@ async def home_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
             text=home_service.format_home_main_html(char),
             reply_markup=home_main_keyboard(char, locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -90,10 +92,15 @@ async def home_mine_collect(callback: CallbackQuery, session: AsyncSession, stat
         
         await session.flush()
         text = home_service.format_mine_farm_menu_html(char) + f"\n\n✅ {msg}"
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=mine_farm_keyboard(char)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=mine_farm_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer("Собрано!")
     except Exception:
@@ -115,10 +122,15 @@ async def home_mine_menu(callback: CallbackQuery, session: AsyncSession, state: 
             await callback.answer("Шахта откроется на ур. 4 дома.", show_alert=True)
             return
 
-        await callback.message.edit_text(
-            home_service.format_mine_farm_menu_html(char),
-            parse_mode="HTML",
-            reply_markup=mine_farm_keyboard(char)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=home_service.format_mine_farm_menu_html(char),
+            reply_markup=mine_farm_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -129,6 +141,9 @@ async def home_mine_menu(callback: CallbackQuery, session: AsyncSession, state: 
 @router.callback_query(F.data == "hom:mine_buy")
 async def home_mine_buy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
         char = await _char(callback, session)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
@@ -138,10 +153,15 @@ async def home_mine_buy(callback: CallbackQuery, session: AsyncSession, state: F
             await callback.answer(msg, show_alert=True)
             return
         await session.flush()
-        await callback.message.edit_text(
-            home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
-            parse_mode="HTML",
-            reply_markup=mine_farm_keyboard(char)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
+            reply_markup=mine_farm_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer("Поздравляем!")
     except Exception:
@@ -152,6 +172,9 @@ async def home_mine_buy(callback: CallbackQuery, session: AsyncSession, state: F
 @router.callback_query(F.data == "hom:npc_hire")
 async def home_npc_hire(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
         char = await _char(callback, session)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
@@ -161,10 +184,15 @@ async def home_npc_hire(callback: CallbackQuery, session: AsyncSession, state: F
             await callback.answer(msg, show_alert=True)
             return
         await session.flush()
-        await callback.message.edit_text(
-            home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
-            parse_mode="HTML",
-            reply_markup=mine_farm_keyboard(char)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
+            reply_markup=mine_farm_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer("Рабочий нанят!")
     except Exception:
@@ -175,6 +203,9 @@ async def home_npc_hire(callback: CallbackQuery, session: AsyncSession, state: F
 @router.callback_query(F.data == "hom:mine_up")
 async def home_mine_upgrade(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
         char = await _char(callback, session)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
@@ -184,10 +215,15 @@ async def home_mine_upgrade(callback: CallbackQuery, session: AsyncSession, stat
             await callback.answer(msg, show_alert=True)
             return
         await session.flush()
-        await callback.message.edit_text(
-            home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
-            parse_mode="HTML",
-            reply_markup=mine_farm_keyboard(char)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=home_service.format_mine_farm_menu_html(char) + f"\n\n{msg}",
+            reply_markup=mine_farm_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer("Улучшено!")
     except Exception:
@@ -198,6 +234,9 @@ async def home_mine_upgrade(callback: CallbackQuery, session: AsyncSession, stat
 @router.callback_query(F.data == "hom:pet_train")
 async def home_pet_train(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
         char = await _char(callback, session)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
@@ -215,10 +254,15 @@ async def home_pet_train(callback: CallbackQuery, session: AsyncSession, state: 
             "Корм добывается на ферме (ур. 4 дома).\n\n"
             "Выбери питомца для кормления:"
         )
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=pet_training_keyboard(char)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=pet_training_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -229,7 +273,7 @@ async def home_pet_train(callback: CallbackQuery, session: AsyncSession, state: 
 @router.callback_query(F.data.startswith("hom:pet_xp:"))
 async def home_pet_xp(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.data is None:
+        if callback.data is None or callback.message is None or callback.bot is None:
             await callback.answer()
             return
         char = await _char(callback, session)
@@ -252,10 +296,15 @@ async def home_pet_xp(callback: CallbackQuery, session: AsyncSession, state: FSM
             f"<i>{msg}</i>\n\n"
             "Выбери питомца для кормления:"
         )
-        await callback.message.edit_text(
-            text,
-            parse_mode="HTML",
-            reply_markup=pet_training_keyboard(char)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=pet_training_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer("Приятного аппетита!" if ok else msg[:180], show_alert=not ok)
     except Exception:
@@ -285,7 +334,8 @@ async def home_wardrobe(callback: CallbackQuery, session: AsyncSession, state: F
             text=home_service.format_wardrobe_html(char),
             reply_markup=wardrobe_keyboard(keys, current_key=cur),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_home_wardrobe_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -324,7 +374,8 @@ async def home_rest(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             text=home_service.format_home_main_html(char),
             reply_markup=home_main_keyboard(char, locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer(payload[:200], show_alert=not ok)
     except Exception:
@@ -387,7 +438,8 @@ async def home_level_upgrade(callback: CallbackQuery, session: AsyncSession, sta
             text=body,
             reply_markup=home_main_keyboard(char, locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer("Готово!" if ok else msg[:180], show_alert=not ok)
     except Exception:
@@ -420,7 +472,8 @@ async def home_library(callback: CallbackQuery, session: AsyncSession, state: FS
             text=home_service.format_library_html(char),
             reply_markup=library_keyboard(ready=ready),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_home_library_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -452,7 +505,8 @@ async def home_library_apply(callback: CallbackQuery, session: AsyncSession, sta
             text=body,
             reply_markup=library_keyboard(ready=ready),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_home_library_photo_path(),
+            character=char,
         )
         await callback.answer("Готово!" if ok else msg[:180], show_alert=not ok)
     except Exception:
@@ -498,6 +552,7 @@ async def home_portrait_preview(callback: CallbackQuery, session: AsyncSession, 
             reply_markup=wardrobe_preview_keyboard(pk, is_current=(pk == cur)),
             target_message=callback.message,
             photo_path=str(img) if img is not None else None,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -534,7 +589,8 @@ async def home_set_portrait(callback: CallbackQuery, session: AsyncSession, stat
             text=body,
             reply_markup=wardrobe_keyboard(keys, current_key=cur),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_home_wardrobe_photo_path(),
+            character=char,
         )
         await callback.answer("Готово.")
     except Exception:
@@ -559,14 +615,19 @@ async def home_buildings(callback: CallbackQuery, session: AsyncSession, state: 
         if not home_service.can_access_workbench(char):
             await callback.answer("Постройки откроются на ур. 2 дома.", show_alert=True)
             return
-        from aiogram.enums import ParseMode
-
-        await callback.message.edit_text(
-            "🏗 <b>Постройки</b>\n\n"
-            "🛠 <b>Верстак</b> — бонус к заточке в кузнице.\n"
-            "<i>Ремесло — раздел «Локации» → «Мастерская».</i>",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=(
+                "🏗 <b>Постройки</b>\n\n"
+                "🛠 <b>Верстак</b> — бонус к заточке в кузнице.\n"
+                "<i>Ремесло — раздел «Локации» → «Мастерская».</i>"
+            ),
             reply_markup=buildings_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -577,20 +638,23 @@ async def home_buildings(callback: CallbackQuery, session: AsyncSession, state: 
 @router.callback_query(F.data == "hom:gacha")
 async def home_gacha_open(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.message is None:
+        if callback.message is None or callback.bot is None:
             await callback.answer()
             return
         char = await _char(callback, session)
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
-        from aiogram.enums import ParseMode
-
         text = craft_gacha_service.format_gacha_intro_html(char)
-        await callback.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
             reply_markup=craft_gacha_keyboard(),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -601,7 +665,7 @@ async def home_gacha_open(callback: CallbackQuery, session: AsyncSession, state:
 @router.callback_query(F.data.regexp(r"^hom:gacha:pull(10)?:(blacksmith|alchemist|jeweler)$"))
 async def home_gacha_pull(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.data is None or callback.message is None:
+        if callback.data is None or callback.message is None or callback.bot is None:
             await callback.answer()
             return
         char = await _char(callback, session)
@@ -614,17 +678,20 @@ async def home_gacha_pull(callback: CallbackQuery, session: AsyncSession, state:
         await character_repo.lock_character_row(session, char.id)
         ok, lines = await craft_gacha_service.try_gacha_pull(session, char, prof, times=times)
         await session.flush()
-        from aiogram.enums import ParseMode
-
         base = craft_gacha_service.format_gacha_intro_html(char)
         if ok:
             body = base + "\n\n" + "\n".join(lines)
         else:
             body = base + "\n\n<i>" + "\n".join(lines) + "</i>"
-        await callback.message.edit_text(
-            body,
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=body,
             reply_markup=craft_gacha_keyboard(),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer("Приз!" if ok else lines[0][:180] if lines else "Нет")
     except Exception:
@@ -657,22 +724,16 @@ async def home_workbench(callback: CallbackQuery, session: AsyncSession, state: 
         can = cost is not None and int(char.gold) >= cost
         text = home_service.format_workbench_html(char)
         kb = workbench_keyboard(can_upgrade=can)
-        from aiogram.enums import ParseMode
-        from aiogram.exceptions import TelegramBadRequest
-        try:
-            if callback.message.photo:
-                await callback.message.delete()
-                await callback.bot.send_message(
-                    callback.message.chat.id, text,
-                    parse_mode=ParseMode.HTML, reply_markup=kb,
-                )
-            else:
-                await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
-        except TelegramBadRequest:
-            await callback.bot.send_message(
-                callback.message.chat.id, text,
-                parse_mode=ParseMode.HTML, reply_markup=kb,
-            )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=kb,
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
         await callback.answer()
     except Exception:
         logger.exception("hom:bench")
@@ -696,14 +757,16 @@ async def home_workbench_upgrade(callback: CallbackQuery, session: AsyncSession,
         can_up = cost is not None and int(char.gold) >= int(cost)
         text = home_service.format_workbench_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
         kb = workbench_keyboard(can_upgrade=can_up)
-        from aiogram.enums import ParseMode
-        from aiogram.exceptions import TelegramBadRequest
-        try:
-            await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
-        except TelegramBadRequest:
-            await callback.bot.send_message(
-                callback.message.chat.id, text,
-                parse_mode=ParseMode.HTML, reply_markup=kb,
+        if callback.bot is not None:
+            await push_game_ui(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=callback.message,
+                photo_path=menu_home_photo_path(),
+                character=char,
             )
         if ok:
             await callback.answer("Улучшено!")
@@ -741,7 +804,8 @@ async def home_alchemy(callback: CallbackQuery, session: AsyncSession, state: FS
             text=home_service.format_alchemy_menu_html(char),
             reply_markup=alchemy_keyboard(char),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_home_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -752,7 +816,7 @@ async def home_alchemy(callback: CallbackQuery, session: AsyncSession, state: FS
 @router.callback_query(F.data == "hom:alch:up")
 async def home_alchemy_upgrade(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.message is None:
+        if callback.message is None or callback.bot is None:
             await callback.answer()
             return
         char = await _char(callback, session)
@@ -763,7 +827,16 @@ async def home_alchemy_upgrade(callback: CallbackQuery, session: AsyncSession, s
         ok, msg = home_service.try_upgrade_alchemy(char)
         await session.flush()
         text = home_service.format_alchemy_menu_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=alchemy_keyboard(char))
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=alchemy_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
         await callback.answer("Улучшено!" if ok else msg[:180], show_alert=not ok)
     except Exception:
         logger.exception("hom:alch:up")
@@ -773,7 +846,7 @@ async def home_alchemy_upgrade(callback: CallbackQuery, session: AsyncSession, s
 @router.callback_query(F.data.startswith("hom:alch:brew:"))
 async def home_alchemy_brew(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.data is None or callback.message is None:
+        if callback.data is None or callback.message is None or callback.bot is None:
             await callback.answer()
             return
         char = await _char(callback, session)
@@ -788,7 +861,16 @@ async def home_alchemy_brew(callback: CallbackQuery, session: AsyncSession, stat
         ok, msg = await home_service.try_brew_elixir(session, char, elixir_key)
         await session.flush()
         text = home_service.format_alchemy_menu_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=alchemy_keyboard(char))
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=alchemy_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
         await callback.answer("Сварено!" if ok else msg[:180], show_alert=not ok)
     except Exception:
         logger.exception("hom:alch:brew")
@@ -798,7 +880,7 @@ async def home_alchemy_brew(callback: CallbackQuery, session: AsyncSession, stat
 @router.callback_query(F.data.startswith("hom:alch:trans:"))
 async def home_alchemy_transmute(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        if callback.data is None or callback.message is None:
+        if callback.data is None or callback.message is None or callback.bot is None:
             await callback.answer()
             return
         char = await _char(callback, session)
@@ -813,7 +895,16 @@ async def home_alchemy_transmute(callback: CallbackQuery, session: AsyncSession,
         ok, msg = await home_service.try_transmute_materials(session, char, from_rarity)
         await session.flush()
         text = home_service.format_alchemy_menu_html(char) + (f"\n\n{msg}" if ok else f"\n\n<i>{msg}</i>")
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=alchemy_keyboard(char))
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=alchemy_keyboard(char),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
         await callback.answer("Готово!" if ok else msg[:180], show_alert=not ok)
     except Exception:
         logger.exception("hom:alch:trans")

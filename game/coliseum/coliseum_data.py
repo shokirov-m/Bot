@@ -58,6 +58,9 @@ class ColiseumFighter:
     loot_id: str  # ключ в coliseum_rewards
 
 
+# Множитель ATK всех бойцов колизея в бою (баланс).
+COLOSSEUM_ENEMY_ATK_MULT = 2.5
+
 COLISEUM_TEMPLATE_KEY = "coliseum_gladiator"
 
 COLISEUM_TEMPLATE = MonsterTemplate(
@@ -211,6 +214,11 @@ def coliseum_slot_code(fighter_id: int) -> str:
     return f"col:f{int(fighter_id):02d}"
 
 
+def scaled_coliseum_atk(fighter: ColiseumFighter) -> int:
+    """ATK в бою и в карточке бойца — база × COLOSSEUM_ENEMY_ATK_MULT."""
+    return max(1, int(round(int(fighter.atk) * COLOSSEUM_ENEMY_ATK_MULT)))
+
+
 def build_coliseum_spawn(fighter_id: int) -> FloorMonsterSpawn:
     return FloorMonsterSpawn(
         slot_code=coliseum_slot_code(fighter_id),
@@ -229,7 +237,7 @@ def build_coliseum_monster_bundle(fighter: ColiseumFighter) -> dict[str, Any]:
         "template_key": COLISEUM_TEMPLATE_KEY,
         "hp": fighter.hp,
         "max_hp": fighter.hp,
-        "atk": fighter.atk,
+        "atk": scaled_coliseum_atk(fighter),
         "defense": fighter.defense,
         "element": elem,
         "is_elite": False,

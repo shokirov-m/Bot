@@ -24,6 +24,7 @@ from bot.keyboards.inventory_kb import (
 )
 from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import push_game_ui
+from bot.utils.ui_photos import inventory_menu_photo_path
 from bot.utils.safe_media import normalize_photo_media
 from db.repository import character_repo, inventory_repo, user_repo
 from game.items import equipment as equip_meta
@@ -156,6 +157,7 @@ async def _show_bag_section(
         text=text,
         reply_markup=bag_tab_keyboard(bag, pg, section=sec),
         target_message=message,
+        character=char,
     )
 
 
@@ -188,6 +190,8 @@ async def cmd_inventory(message: Message, session: AsyncSession, state: FSMConte
             text=text,
             reply_markup=inventory_hub_keyboard(),
             fallback_message=message,
+            photo_path=inventory_menu_photo_path(),
+            character=char,
         )
     except Exception:
         logger.exception("Ошибка /inv")
@@ -211,6 +215,8 @@ async def inv_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCont
             text=_inventory_hub_text(int(char.floor_number)),
             reply_markup=inventory_hub_keyboard(),
             target_message=callback.message,
+            photo_path=inventory_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -289,6 +295,7 @@ async def inv_close(
             reply_markup=main_menu_keyboard(locale=loc),
             target_message=callback.message,
             photo_path=photo_p,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -353,6 +360,8 @@ async def inv_tab(callback: CallbackQuery, session: AsyncSession, state: FSMCont
                 text=_inventory_hub_text(int(char.floor_number)),
                 reply_markup=inventory_hub_keyboard(),
                 target_message=callback.message,
+                photo_path=inventory_menu_photo_path(),
+                character=char,
             )
         elif len(parts) >= 3 and parts[2] == "eq":
             eq = await inventory_repo.list_equipped_items(session, char.id)
@@ -363,6 +372,7 @@ async def inv_tab(callback: CallbackQuery, session: AsyncSession, state: FSMCont
                 text=_eq_intro(),
                 reply_markup=equipment_tab_keyboard(eq),
                 target_message=callback.message,
+                character=char,
             )
         else:
             await callback.answer()
@@ -456,6 +466,7 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             reply_markup=kb,
             target_message=callback.message,
             photo_path=photo_arg,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -522,6 +533,7 @@ async def inv_eat_ration(callback: CallbackQuery, session: AsyncSession, state: 
             text=text,
             reply_markup=bag_tab_keyboard(bag, safe_page, section=sec),
             target_message=callback.message,
+            character=char,
         )
         await callback.answer("Приятного!")
     except Exception:
@@ -571,6 +583,7 @@ async def inv_eat_bread(callback: CallbackQuery, session: AsyncSession, state: F
             text=text,
             reply_markup=bag_tab_keyboard(bag, safe_page, section=sec),
             target_message=callback.message,
+            character=char,
         )
         await callback.answer("Передышка!")
     except Exception:
@@ -667,6 +680,7 @@ async def inv_alchemy_enchant_menu(callback: CallbackQuery, session: AsyncSessio
             ),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
             target_message=callback.message,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -718,6 +732,7 @@ async def inv_alchemy_enchant_apply(callback: CallbackQuery, session: AsyncSessi
             text=text,
             reply_markup=bag_tab_keyboard(bag, safe_page, section=sec),
             target_message=callback.message,
+            character=char,
         )
         await callback.answer("Готово.")
     except Exception:
@@ -784,6 +799,7 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             text=text,
             reply_markup=kb,
             target_message=callback.message,
+            character=char,
         )
         await callback.answer("Надето!")
     except Exception:
@@ -852,6 +868,7 @@ async def inv_unequip(callback: CallbackQuery, session: AsyncSession, state: FSM
             text=text,
             reply_markup=kb,
             target_message=callback.message,
+            character=char,
         )
         await callback.answer("Снято в сумку.")
     except Exception:

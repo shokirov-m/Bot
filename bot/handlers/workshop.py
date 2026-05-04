@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +39,34 @@ from services import workshop_order_service, workshop_service
 from services.workshop_leaderboard_service import cached_leaderboard_html
 from db.models.app_global import AppGlobal
 
+from bot.utils.game_art import menu_workshop_orders_photo_path, menu_workshop_photo_path
+from bot.utils.game_ui import push_game_ui
+
 router = Router(name="workshop")
+
+
+async def _workshop_ui(
+    state: FSMContext,
+    query: CallbackQuery,
+    character: Character,
+    text: str,
+    reply_markup,
+    *,
+    city_orders: bool = False,
+) -> None:
+    if query.message is None or query.bot is None:
+        return
+    pp = menu_workshop_orders_photo_path() if city_orders else menu_workshop_photo_path()
+    await push_game_ui(
+        state,
+        query.bot,
+        chat_id=query.message.chat.id,
+        text=text,
+        reply_markup=reply_markup,
+        target_message=query.message,
+        photo_path=pp,
+        character=character,
+    )
 
 PROF_TITLE_RU = {
     "blacksmith": "⚒️ Кузница",
@@ -80,7 +108,7 @@ def _paginate(lst: list, page: int, per_page: int = 8) -> tuple[list, int]:
     return lst[start : start + per_page], p
 
 
-async def render_workshop_hub(query: CallbackQuery, session: AsyncSession) -> None:
+async def render_workshop_hub(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     """Текст и клавиатура хаба мастерской (меню и дом)."""
     char = await _char(session, query)
     if char is None or query.message is None:
@@ -94,30 +122,26 @@ async def render_workshop_hub(query: CallbackQuery, session: AsyncSession) -> No
         "",
         "Выбери профессию или очередь.",
     ]
-    await query.message.edit_text(
-        "\n".join(lines),
-        reply_markup=workshop_main_keyboard(loc),
-        parse_mode=ParseMode.HTML,
-    )
+    await _workshop_ui(state, query, char, "\n".join(lines), workshop_main_keyboard(loc))
     await query.answer()
 
 
 @router.callback_query(F.data == "mnu:wsp")
-async def menu_workshop_open(query: CallbackQuery, session: AsyncSession) -> None:
+async def menu_workshop_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        await render_workshop_hub(query, session)
+        await render_workshop_hub(query, session, state)
     except Exception:
         logger.exception("mnu:wsp")
         await query.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data == "wsp:hub")
-async def workshop_hub(query: CallbackQuery, session: AsyncSession) -> None:
-    await menu_workshop_open(query, session)
+async def workshop_hub(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    await menu_workshop_open(query, session, state)
 
 
 @router.callback_query(F.data.startswith("wsp:prof:"))
-async def workshop_prof(query: CallbackQuery, session: AsyncSession) -> None:
+async def workshop_prof(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -126,15 +150,17 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession) -> None:
         title = PROF_TITLE_RU.get(prof, prof)
         recipes = _recipes_unlocked_for_player(char, prof)
         if not recipes:
-            await query.message.edit_text(
+            await _workshop_ui(
+                state,
+                query,
+                char,
                 f"{title}\n\n<i>Нет изученных рецептов: открой чертежи в гаче или с наград.</i>",
-                reply_markup=InlineKeyboardMarkup(
+                InlineKeyboardMarkup(
                     inline_keyboard=[
                         [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
                         menu_nav_button_row(),
                     ],
                 ),
-                parse_mode=ParseMode.HTML,
             )
             await query.answer()
             return
@@ -145,10 +171,12 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession) -> None:
             "<i>Только рецепты с открытым чертежом (где требуется). Крафт с таймером — здесь.</i>",
             "",
         ]
-        await query.message.edit_text(
+        await _workshop_ui(
+            state,
+            query,
+            char,
             "\n".join(lines),
-            reply_markup=workshop_prof_keyboard(prof, page=page, recipe_rows=chunk, total_count=len(recipe_rows)),
-            parse_mode=ParseMode.HTML,
+            workshop_prof_keyboard(prof, page=page, recipe_rows=chunk, total_count=len(recipe_rows)),
         )
         await query.answer()
     except Exception:
@@ -157,7 +185,7 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("wsp:profpage:"))
-async def workshop_prof_page(query: CallbackQuery, session: AsyncSession) -> None:
+async def workshop_prof_page(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -167,30 +195,34 @@ async def workshop_prof_page(query: CallbackQuery, session: AsyncSession) -> Non
         title = PROF_TITLE_RU.get(prof, prof)
         recipes = _recipes_unlocked_for_player(char, prof)
         if not recipes:
-            await query.message.edit_text(
+            await _workshop_ui(
+                state,
+                query,
+                char,
                 f"{title}\n\n<i>Нет изученных рецептов.</i>",
-                reply_markup=InlineKeyboardMarkup(
+                InlineKeyboardMarkup(
                     inline_keyboard=[
                         [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
                         menu_nav_button_row(),
                     ],
                 ),
-                parse_mode=ParseMode.HTML,
             )
             await query.answer()
             return
         recipe_rows = [(str(r.get("id")), str(r.get("name_ru", r.get("id", "")))) for r in recipes]
         chunk, page = _paginate(recipe_rows, page)
         lines = [f"{title}", ""]
-        await query.message.edit_text(
+        await _workshop_ui(
+            state,
+            query,
+            char,
             "\n".join(lines),
-            reply_markup=workshop_prof_keyboard(
+            workshop_prof_keyboard(
                 prof,
                 page=page,
                 recipe_rows=chunk,
                 total_count=len(recipe_rows),
             ),
-            parse_mode=ParseMode.HTML,
         )
         await query.answer()
     except Exception:
@@ -199,7 +231,7 @@ async def workshop_prof_page(query: CallbackQuery, session: AsyncSession) -> Non
 
 
 @router.callback_query(F.data.startswith("wsp:start:"))
-async def workshop_start(query: CallbackQuery, session: AsyncSession) -> None:
+async def workshop_start(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -211,10 +243,12 @@ async def workshop_start(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer((lines[0] if lines else "Нельзя.")[:200], show_alert=True)
             return
         body = "\n".join(lines)
-        await query.message.edit_text(
+        await _workshop_ui(
+            state,
+            query,
+            char,
             f"🔧 <b>Мастерская</b>\n\n{body}",
-            reply_markup=workshop_main_keyboard(),
-            parse_mode=ParseMode.HTML,
+            workshop_main_keyboard(),
         )
         await query.answer("Запущено.")
     except Exception:
@@ -223,7 +257,7 @@ async def workshop_start(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data == "wsp:queue")
-async def workshop_queue(query: CallbackQuery, session: AsyncSession) -> None:
+async def workshop_queue(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.message is None:
@@ -251,7 +285,7 @@ async def workshop_queue(query: CallbackQuery, session: AsyncSession) -> None:
         else:
             text = "📜 <b>Активные работы</b>\n\n<i>Готово — «Забрать». Не готово — ускорение рунным камнем.</i>"
             kb = workshop_queue_keyboard(entries)
-        await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+        await _workshop_ui(state, query, char, text, kb)
         await query.answer()
     except Exception:
         logger.exception("wsp:queue")
@@ -259,7 +293,7 @@ async def workshop_queue(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("wsp:claim:"))
-async def workshop_claim(query: CallbackQuery, session: AsyncSession) -> None:
+async def workshop_claim(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -270,10 +304,12 @@ async def workshop_claim(query: CallbackQuery, session: AsyncSession) -> None:
         if not ok:
             await query.answer((lines[0] if lines else "Нельзя.")[:200], show_alert=True)
             return
-        await query.message.edit_text(
+        await _workshop_ui(
+            state,
+            query,
+            char,
             "\n".join(lines),
-            reply_markup=workshop_main_keyboard(),
-            parse_mode=ParseMode.HTML,
+            workshop_main_keyboard(),
         )
         await query.answer("Забрано.")
     except Exception:
@@ -282,7 +318,7 @@ async def workshop_claim(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("wsp:acc:"))
-async def workshop_acc(query: CallbackQuery, session: AsyncSession) -> None:
+async def workshop_acc(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -292,7 +328,7 @@ async def workshop_acc(query: CallbackQuery, session: AsyncSession) -> None:
         await session.commit()
         await query.answer((lines[0] if lines else "Ок.")[:200], show_alert=not ok)
         if ok:
-            await workshop_queue(query, session)
+            await workshop_queue(query, session, state)
     except Exception:
         logger.exception("wsp:acc")
         await query.answer("Ошибка.", show_alert=True)
@@ -324,7 +360,7 @@ async def workshop_noop(query: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data == "wsp:lb")
-async def workshop_lb(query: CallbackQuery, session: AsyncSession) -> None:
+async def workshop_lb(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.message is None:
@@ -332,10 +368,12 @@ async def workshop_lb(query: CallbackQuery, session: AsyncSession) -> None:
         row = await session.get(AppGlobal, 1)
         payload = dict(row.payload or {}) if row is not None else {}
         text = cached_leaderboard_html(payload)
-        await query.message.edit_text(
+        await _workshop_ui(
+            state,
+            query,
+            char,
             f"🏆 <b>Рейтинг</b>\n\n{text}",
-            reply_markup=workshop_main_keyboard(),
-            parse_mode=ParseMode.HTML,
+            workshop_main_keyboard(),
         )
         await query.answer()
     except Exception:
@@ -347,7 +385,7 @@ async def workshop_lb(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("wsp:cat:"))
-async def workshop_catalog(query: CallbackQuery, session: AsyncSession) -> None:
+async def workshop_catalog(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -365,10 +403,12 @@ async def workshop_catalog(query: CallbackQuery, session: AsyncSession) -> None:
                     menu_nav_button_row(),
                 ],
             )
-            await query.message.edit_text(
+            await _workshop_ui(
+                state,
+                query,
+                char,
                 "📖 <b>Справочник крафта</b>\n\n<i>По профессиям: что выходит и из каких материалов.</i>",
-                reply_markup=kb,
-                parse_mode=ParseMode.HTML,
+                kb,
             )
             await query.answer()
             return
@@ -379,16 +419,18 @@ async def workshop_catalog(query: CallbackQuery, session: AsyncSession) -> None:
                 if cut < 500:
                     cut = 3600
                 body = body[:cut] + "\n\n<i>… список обрезан (слишком длинный).</i>"
-            await query.message.edit_text(
+            await _workshop_ui(
+                state,
+                query,
+                char,
                 body,
-                reply_markup=InlineKeyboardMarkup(
+                InlineKeyboardMarkup(
                     inline_keyboard=[
                         [InlineKeyboardButton(text="⬅ К профессиям", callback_data="wsp:cat:menu")],
                         [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
                         menu_nav_button_row(),
                     ],
                 ),
-                parse_mode=ParseMode.HTML,
             )
             await query.answer()
             return
@@ -399,7 +441,7 @@ async def workshop_catalog(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("wso:open:"))
-async def wso_open(query: CallbackQuery, session: AsyncSession) -> None:
+async def wso_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -414,10 +456,13 @@ async def wso_open(query: CallbackQuery, session: AsyncSession) -> None:
             if crafter
             else "Кузнец ≥10 на этом этаже может брать заказы."
         )
-        await query.message.edit_text(
+        await _workshop_ui(
+            state,
+            query,
+            char,
             f"📋 <b>Городская кузница — заказы</b>\n\n{html.escape(hint)}",
-            reply_markup=city_workshop_orders_keyboard(floor_number=fl),
-            parse_mode=ParseMode.HTML,
+            city_workshop_orders_keyboard(floor_number=fl),
+            city_orders=True,
         )
         await query.answer()
     except Exception:
@@ -426,7 +471,7 @@ async def wso_open(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("wso:list:"))
-async def wso_list(query: CallbackQuery, session: AsyncSession) -> None:
+async def wso_list(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -479,10 +524,13 @@ async def wso_list(query: CallbackQuery, session: AsyncSession) -> None:
             )
         kb_rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data=f"wso:open:{fl}")])
         kb_rows.append(menu_nav_button_row())
-        await query.message.edit_text(
+        await _workshop_ui(
+            state,
+            query,
+            char,
             "\n".join(lines),
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_rows),
-            parse_mode=ParseMode.HTML,
+            InlineKeyboardMarkup(inline_keyboard=kb_rows),
+            city_orders=True,
         )
         await query.answer()
     except Exception:
@@ -508,7 +556,7 @@ async def wso_take(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("wso:new:"))
-async def wso_new(query: CallbackQuery, session: AsyncSession) -> None:
+async def wso_new(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -526,10 +574,13 @@ async def wso_new(query: CallbackQuery, session: AsyncSession) -> None:
         await session.commit()
         await query.answer(("Размещено." if ok else msg)[:200], show_alert=True)
         if ok:
-            await query.message.edit_text(
+            await _workshop_ui(
+                state,
+                query,
+                char,
                 msg,
-                reply_markup=city_workshop_orders_keyboard(floor_number=fl),
-                parse_mode=ParseMode.HTML,
+                city_workshop_orders_keyboard(floor_number=fl),
+                city_orders=True,
             )
     except Exception:
         logger.exception("wso:new")
@@ -537,7 +588,7 @@ async def wso_new(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("wso:done:"))
-async def wso_done(query: CallbackQuery, session: AsyncSession) -> None:
+async def wso_done(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -551,10 +602,13 @@ async def wso_done(query: CallbackQuery, session: AsyncSession) -> None:
         ok, msg = await workshop_order_service.try_complete_order(session, char, oid)
         await session.commit()
         if ok:
-            await query.message.edit_text(
+            await _workshop_ui(
+                state,
+                query,
+                char,
                 msg,
-                reply_markup=city_workshop_orders_keyboard(floor_number=fl),
-                parse_mode=ParseMode.HTML,
+                city_workshop_orders_keyboard(floor_number=fl),
+                city_orders=True,
             )
         await query.answer(("Готово." if ok else msg)[:200], show_alert=not ok)
     except Exception:

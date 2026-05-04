@@ -34,6 +34,7 @@ from bot.keyboards.profile_kb import (
 )
 from bot.keyboards.tree_kb import skill_tree_keyboard, node_action_keyboard
 from bot.utils.game_ui import push_game_ui
+from bot.utils.ui_photos import specialization_menu_photo_path
 from services import character_service, fame_service, leaderboard_service, stat_bonus_service, title_service
 from services.workshop_profile_ui import workshop_compact_line, workshop_full_stats_block
 from services.rest_service import apply_completed_rest_if_needed
@@ -564,6 +565,7 @@ async def cmd_profile(message: Message, session: AsyncSession, state: FSMContext
             reply_markup=profile_view_keyboard(char, locale=loc),
             fallback_message=message,
             photo_path=p,
+            character=char,
         )
     except Exception:
         logger.exception("Ошибка в /status")
@@ -607,6 +609,7 @@ async def on_profile_achievements(
             reply_markup=profile_full_stats_keyboard(locale=loc),
             target_message=query.message,
             photo_path=None,
+            character=char,
         )
         await query.answer()
     except Exception:
@@ -641,6 +644,7 @@ async def on_profile_full_stats(callback: CallbackQuery, session: AsyncSession, 
             reply_markup=profile_full_stats_keyboard(locale=loc),
             target_message=callback.message,
             photo_path=None,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -671,7 +675,8 @@ async def on_profile_spec_submenu(callback: CallbackQuery, session: AsyncSession
             text=text,
             reply_markup=profile_spec_submenu_keyboard(char, locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -716,7 +721,8 @@ async def prf_wsspec_menu(callback: CallbackQuery, session: AsyncSession, state:
             text="🔧 <b>Специализация ремесла</b>\n\nОдин раз навсегда: +10% к опыту выбранной профессии.",
             reply_markup=kb,
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -763,7 +769,8 @@ async def prf_wsspec_do(callback: CallbackQuery, session: AsyncSession, state: F
             text=f"✅ Специализация: <b>{html.escape(pr_ru)}</b> (+10% опыта этой профессии).",
             reply_markup=profile_spec_submenu_keyboard(char, locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer("Сохранено.")
     except Exception:
@@ -804,7 +811,8 @@ async def prf_wsshow_menu(callback: CallbackQuery, session: AsyncSession, state:
             text="📌 <b>Профессия на карточке статуса</b>\n\nЧто показывать в строке ремесла (можно менять когда угодно).",
             reply_markup=kb,
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -847,7 +855,8 @@ async def prf_wsshow_do(callback: CallbackQuery, session: AsyncSession, state: F
             text=f"✅ На карточке будет показываться: <b>{html.escape(sh_ru)}</b>.",
             reply_markup=profile_spec_submenu_keyboard(char, locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer("Ок.")
     except Exception:
@@ -884,6 +893,7 @@ async def on_profile_back_compact(callback: CallbackQuery, session: AsyncSession
             reply_markup=profile_view_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=p,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -924,7 +934,8 @@ async def on_profile_skills(callback: CallbackQuery, session: AsyncSession, stat
             text=text,
             reply_markup=skill_tree_keyboard(char, locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -995,7 +1006,8 @@ async def on_tree_node_view(callback: CallbackQuery, session: AsyncSession, stat
             text=text,
             reply_markup=node_action_keyboard(node_key, can_buy, cost_sp=node.cost_sp),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -1041,7 +1053,8 @@ async def on_tree_node_buy(callback: CallbackQuery, session: AsyncSession, state
             text=text,
             reply_markup=skill_tree_keyboard(char, locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
     except Exception:
         logger.exception("tree:buy")
@@ -1073,7 +1086,8 @@ async def on_profile_skills_equip_menu(
             text=build_skills_screen_html(char, locale=loc),
             reply_markup=profile_skills_main_keyboard(locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -1118,6 +1132,7 @@ async def on_profile_stat_help(
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
             target_message=callback.message,
             photo_path=None,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -1173,6 +1188,7 @@ async def on_profile_elements_info(
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
             target_message=callback.message,
             photo_path=None,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -1217,7 +1233,8 @@ async def on_profile_skills_slot(callback: CallbackQuery, session: AsyncSession,
                 text=build_skills_screen_html(char, locale=loc),
                 reply_markup=profile_passive_pick_keyboard(passives),
                 target_message=callback.message,
-                photo_path=None,
+                photo_path=specialization_menu_photo_path(),
+                character=char,
             )
             await callback.answer()
             return
@@ -1233,7 +1250,8 @@ async def on_profile_skills_slot(callback: CallbackQuery, session: AsyncSession,
             text=build_skills_screen_html(char, locale=loc),
             reply_markup=profile_skills_pick_keyboard(slot=slot, learned_keys=learned),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -1279,7 +1297,8 @@ async def on_profile_skills_equip(callback: CallbackQuery, session: AsyncSession
                 text=build_skills_screen_html(char, locale=loc),
                 reply_markup=profile_skills_main_keyboard(locale=loc),
                 target_message=callback.message,
-                photo_path=None,
+                photo_path=specialization_menu_photo_path(),
+                character=char,
             )
             await callback.answer("🛡️ Пассивка выбрана!")
             return
@@ -1297,7 +1316,8 @@ async def on_profile_skills_equip(callback: CallbackQuery, session: AsyncSession
             text=text,
             reply_markup=profile_skills_main_keyboard(locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
         )
         await callback.answer("✅ Навык экипирован!")
     except Exception:
@@ -1352,6 +1372,7 @@ async def on_profile_pet_pick(callback: CallbackQuery, session: AsyncSession, st
             reply_markup=profile_view_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=p,
+            character=char,
         )
         await callback.answer(t(loc, "profile_pet_set_ok", name=msg)[:200], show_alert=False)
     except Exception:
@@ -1388,6 +1409,7 @@ async def on_profile_pet_back(callback: CallbackQuery, session: AsyncSession, st
             reply_markup=profile_view_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=p,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -1460,6 +1482,7 @@ async def on_profile_pet_menu(callback: CallbackQuery, session: AsyncSession, st
             reply_markup=kb,
             target_message=callback.message,
             photo_path=None,
+            character=char,
         )
         await callback.answer()
     except Exception:

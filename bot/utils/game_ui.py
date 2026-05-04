@@ -19,6 +19,7 @@ from bot.utils.safe_media import (
     safe_edit_message_photo,
     safe_send_photo,
 )
+from utils.game_images_prefs import game_images_enabled
 
 GAME_UI_CHAT_ID = "game_ui_chat_id"
 GAME_UI_MESSAGE_ID = "game_ui_message_id"
@@ -40,6 +41,7 @@ async def push_game_ui(
     target_message: Message | None = None,
     fallback_message: Message | None = None,
     photo_path: str | Path | None = None,
+    character: object | None = None,
 ) -> None:
     """
     Показать игровой экран: сначала правим target_message (колбэк), иначе якорь из FSM,
@@ -48,7 +50,12 @@ async def push_game_ui(
     Если задан ``photo_path`` и файл есть — сообщение с фото и подписью (HTML).
     При смене типа (текст ↔ фото) старое сообщение удаляется и отправляется новое.
     Отправка фото идёт через ``safe_send_photo`` / ``safe_edit_message_photo`` с откатом на текст при ошибке.
+
+    Если передан ``character`` и в настройках выключены игровые картинки, ``photo_path`` игнорируется
+    (как фон этажа и портрет в профиле).
     """
+    if character is not None and photo_path is not None and not game_images_enabled(character):
+        photo_path = None
     p = normalize_photo_media(photo_path)
     text_kw: dict = {
         "text": text,

@@ -23,6 +23,7 @@ from bot.keyboards.city_market_kb import (
     temple_skills_shop_keyboard,
 )
 from bot.states.combat_states import CombatStates
+from bot.utils.game_art import menu_city_photo_path
 from bot.utils.game_ui import push_game_ui
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
@@ -88,6 +89,8 @@ async def on_city_hub_open(
             text=format_city_hub_message(char),
             reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
             target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer()
     except Exception:

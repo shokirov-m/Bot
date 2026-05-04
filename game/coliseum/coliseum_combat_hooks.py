@@ -37,6 +37,9 @@ def init_coliseum_fight(
     st = _csub(state)
     st.clear()
     st["fighter_id"] = fd
+    # Чистый множитель исходящего урона монстра: иначе ауры/эффекты
+    # могли оставить значение >1, и «ярость» Сунь Укуна улетала в потолок 2.5.
+    state["monster_outgoing_mult"] = 1.0
     sp = fighter_by_id(fd)
     spec: SpecialId = sp.special if sp else "none"
     st["special"] = spec
@@ -60,8 +63,8 @@ def init_coliseum_fight(
         logs.append("💀 <b>Аид:</b> перед боссом стоят призраки — сначала сносится <b>10 000</b> «щита».")
     if spec == "wukong_rage":
         st["wukong_turns"] = 3
-        om = float(state.get("monster_outgoing_mult", 1.0))
-        state["monster_outgoing_mult"] = min(om * 1.30, 2.5)
+        # +30% к урону, без «наслоения» на чужой множитель; потолок 1.3 (не 2.5).
+        state["monster_outgoing_mult"] = 1.3
         logs.append("🐒 <b>Сунь Укун:</b> ярость +30% к урону врага (3 его хода).")
     if spec == "fenrir_pet":
         st["pet_ban_turns"] = 2

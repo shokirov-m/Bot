@@ -12,6 +12,16 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.handlers.inventory import _inventory_hub_text
+from bot.utils.game_art import (
+    menu_auction_photo_path,
+    menu_daily_photo_path,
+    menu_leaderboard_photo_path,
+    menu_locations_photo_path,
+    menu_portal_photo_path,
+    menu_quests_photo_path,
+    menu_titles_photo_path,
+)
+from bot.utils.ui_photos import inventory_menu_photo_path
 from bot.handlers.auction import _clear_auction_fsm_only, _shop_intro_html
 from bot.handlers.leaderboard import INTRO_HTML as TOP_INTRO_HTML
 from bot.handlers.profile import build_profile_html_async, clamp_profile_caption_for_photo
@@ -45,6 +55,9 @@ async def _edit_same_message(
     state: FSMContext,
     text: str,
     reply_markup: InlineKeyboardMarkup,
+    *,
+    photo_path: str | None = None,
+    character: object | None = None,
 ) -> None:
     """Одно якорное сообщение: с этажа (фото) и с текста — через push_game_ui."""
     if callback.message is None or callback.bot is None:
@@ -56,7 +69,8 @@ async def _edit_same_message(
         text=text,
         reply_markup=reply_markup,
         target_message=callback.message,
-        photo_path=None,
+        photo_path=photo_path,
+        character=character,
     )
 
 
@@ -111,6 +125,7 @@ async def menu_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
             reply_markup=main_menu_keyboard(locale=loc),
             target_message=callback.message,
             photo_path=photo_p,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -135,7 +150,8 @@ async def menu_locations(callback: CallbackQuery, session: AsyncSession, state: 
             text=t(loc, "menu_locations_intro"),
             reply_markup=locations_hub_keyboard(locale=loc),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_locations_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -156,7 +172,14 @@ async def menu_quests(callback: CallbackQuery, session: AsyncSession, state: FSM
         if char is None:
             return
         text, kb = await render_quests_hub(session, char)
-        await _edit_same_message(callback, state, text, kb)
+        await _edit_same_message(
+            callback,
+            state,
+            text,
+            kb,
+            photo_path=menu_quests_photo_path(),
+            character=char,
+        )
         await callback.answer()
     except Exception:
         logger.exception("mnu:qst")
@@ -191,7 +214,8 @@ async def menu_daily(callback: CallbackQuery, session: AsyncSession, state: FSMC
                 locale=loc,
             ),
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_daily_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -223,6 +247,7 @@ async def menu_profile(callback: CallbackQuery, session: AsyncSession, state: FS
             reply_markup=profile_view_keyboard(char, locale=loc),
             target_message=callback.message,
             photo_path=p,
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -291,7 +316,8 @@ async def menu_portal_open(callback: CallbackQuery, session: AsyncSession, state
             text=body,
             reply_markup=kb,
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_portal_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -332,7 +358,8 @@ async def menu_portal_page(callback: CallbackQuery, session: AsyncSession, state
             text=body,
             reply_markup=kb,
             target_message=callback.message,
-            photo_path=None,
+            photo_path=menu_portal_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -411,6 +438,8 @@ async def menu_inventory(callback: CallbackQuery, session: AsyncSession, state: 
             text=text,
             reply_markup=inventory_hub_keyboard(),
             target_message=callback.message,
+            photo_path=inventory_menu_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -424,7 +453,17 @@ async def menu_top(callback: CallbackQuery, session: AsyncSession, state: FSMCon
         if callback.message is None:
             await callback.answer()
             return
-        await _edit_same_message(callback, state, TOP_INTRO_HTML, leaderboard_categories_keyboard())
+        _, char = await _char_or_alert(session, callback)
+        if char is None:
+            return
+        await _edit_same_message(
+            callback,
+            state,
+            TOP_INTRO_HTML,
+            leaderboard_categories_keyboard(),
+            photo_path=menu_leaderboard_photo_path(),
+            character=char,
+        )
         await callback.answer()
     except Exception:
         logger.exception("mnu:top")
@@ -447,6 +486,8 @@ async def menu_auction(callback: CallbackQuery, session: AsyncSession, state: FS
             state,
             _shop_intro_html(),
             auction_hub_keyboard(fl),
+            photo_path=menu_auction_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -467,7 +508,14 @@ async def menu_titles(callback: CallbackQuery, session: AsyncSession, state: FSM
         keys = title_service.unlocked_sorted(char)
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
         kb = titles_pick_keyboard(keys) if keys else main_menu_keyboard(locale=loc)
-        await _edit_same_message(callback, state, text, kb)
+        await _edit_same_message(
+            callback,
+            state,
+            text,
+            kb,
+            photo_path=menu_titles_photo_path(),
+            character=char,
+        )
         await callback.answer()
     except Exception:
         logger.exception("mnu:ttl")

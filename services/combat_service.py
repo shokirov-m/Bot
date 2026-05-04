@@ -868,6 +868,7 @@ async def start_coliseum_combat(
                     reply_markup=kb,
                     target_message=query.message,
                     photo_path=battle_photo,
+                    character=character,
                 )
                 data = await state.get_data()
                 mid = data.get(GAME_UI_MESSAGE_ID)
@@ -901,6 +902,7 @@ async def start_coliseum_combat(
                     reply_markup=kb,
                     target_message=query.message,
                     photo_path=None,
+                    character=character,
                 )
                 data = await state.get_data()
                 mid = data.get(GAME_UI_MESSAGE_ID)
@@ -1149,6 +1151,7 @@ async def start_combat(
                     reply_markup=kb,
                     target_message=query.message,
                     photo_path=battle_photo,
+                    character=character,
                 )
                 data = await state.get_data()
                 mid = data.get(GAME_UI_MESSAGE_ID)
@@ -1183,6 +1186,7 @@ async def start_combat(
                     reply_markup=kb,
                     target_message=query.message,
                     photo_path=None,
+                    character=character,
                 )
                 data = await state.get_data()
                 mid = data.get(GAME_UI_MESSAGE_ID)
@@ -1354,6 +1358,7 @@ async def start_tutorial_combat(
                 reply_markup=kb,
                 target_message=query.message,
                 photo_path=None,
+                character=character,
             )
             data = await state.get_data()
             mid = data.get(GAME_UI_MESSAGE_ID)
