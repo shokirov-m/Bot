@@ -12,11 +12,11 @@ def workshop_main_keyboard(locale: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="⚒️ Кузнец", callback_data="wsp:prof:blacksmith"),
-                InlineKeyboardButton(text="⚗️ Алхимик", callback_data="wsp:prof:alchemist"),
+                InlineKeyboardButton(text="⚒️ Кузница", callback_data="wsp:prof:blacksmith"),
+                InlineKeyboardButton(text="⚗️ Лаборатория", callback_data="wsp:prof:alchemist"),
             ],
             [
-                InlineKeyboardButton(text="💎 Ювелир", callback_data="wsp:prof:jeweler"),
+                InlineKeyboardButton(text="💎 Ювелирная", callback_data="wsp:prof:jeweler"),
             ],
             [
                 InlineKeyboardButton(text="📜 Очередь / забрать", callback_data="wsp:queue"),
@@ -32,21 +32,32 @@ def workshop_main_keyboard(locale: str = "ru") -> InlineKeyboardMarkup:
     )
 
 
-def workshop_prof_keyboard(profession: str, *, page: int, recipe_rows: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+def workshop_prof_keyboard(
+    profession: str,
+    *,
+    page: int,
+    recipe_rows: list[tuple[str, str]],
+    total_count: int,
+    per_page: int = 8,
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    for rid, label in recipe_rows[:8]:
+    for rid, label in recipe_rows[:per_page]:
         short = label if len(label) <= 40 else label[:37] + "…"
         rows.append([InlineKeyboardButton(text=short, callback_data=f"wsp:start:{rid}")])
+    max_page = max(0, (max(0, total_count) - 1) // per_page)
+    p = max(0, min(int(page), max_page))
     nav: list[InlineKeyboardButton] = []
-    if page > 0:
-        nav.append(
-            InlineKeyboardButton(text="◀", callback_data=f"wsp:profpage:{profession}:{page - 1}"),
-        )
-    nav.append(InlineKeyboardButton(text=f"{page + 1}", callback_data="wsp:noop"))
-    nav.append(
-        InlineKeyboardButton(text="▶", callback_data=f"wsp:profpage:{profession}:{page + 1}"),
-    )
-    rows.append(nav)
+    if max_page > 0:
+        if p > 0:
+            nav.append(
+                InlineKeyboardButton(text="◀", callback_data=f"wsp:profpage:{profession}:{p - 1}"),
+            )
+        nav.append(InlineKeyboardButton(text=f"{p + 1}/{max_page + 1}", callback_data="wsp:noop"))
+        if p < max_page:
+            nav.append(
+                InlineKeyboardButton(text="▶", callback_data=f"wsp:profpage:{profession}:{p + 1}"),
+            )
+        rows.append(nav)
     rows.append([InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)

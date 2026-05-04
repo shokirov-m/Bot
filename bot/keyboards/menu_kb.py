@@ -91,21 +91,13 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
                 InlineKeyboardButton(text=t(loc, "menu_top"), callback_data="mnu:top"),
 
-                InlineKeyboardButton(text=t(loc, "menu_daily"), callback_data="mnu:dly"),
-
-            ],
-
-            [
-
                 InlineKeyboardButton(text=t(loc, "menu_quests"), callback_data="mnu:qst"),
 
-                InlineKeyboardButton(text=t(loc, "menu_arena"), callback_data="mnu:arn"),
-
             ],
 
             [
 
-                InlineKeyboardButton(text=t(loc, "menu_coliseum"), callback_data="mnu:col"),
+                InlineKeyboardButton(text=t(loc, "menu_locations"), callback_data="mnu:loc"),
 
             ],
 
@@ -125,14 +117,31 @@ def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
             ],
 
-            [
-
-                InlineKeyboardButton(text=t(loc, "menu_workshop"), callback_data="mnu:wsp"),
-
-            ],
-
         ],
 
+    )
+
+
+def locations_hub_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
+    """Арена, Колизей, Мастерская, Магазин, Клан."""
+    loc = locale if locale in ("ru", "en") else "ru"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=t(loc, "menu_arena"), callback_data="mnu:arn"),
+                InlineKeyboardButton(text=t(loc, "menu_coliseum"), callback_data="mnu:col"),
+            ],
+            [
+                InlineKeyboardButton(text=t(loc, "menu_workshop"), callback_data="mnu:wsp"),
+                InlineKeyboardButton(text=t(loc, "menu_auction"), callback_data="mnu:auc"),
+            ],
+            [
+                InlineKeyboardButton(text="🏰 Клан", callback_data="mnu:clan"),
+            ],
+            [
+                InlineKeyboardButton(text=t(loc, "portal_back_menu"), callback_data="mnu:hub"),
+            ],
+        ],
     )
 
 

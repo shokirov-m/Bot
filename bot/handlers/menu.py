@@ -20,7 +20,7 @@ from bot.keyboards.leaderboard_kb import leaderboard_categories_keyboard
 from bot.keyboards.inventory_kb import inventory_hub_keyboard
 from bot.keyboards.auction_kb import auction_hub_keyboard
 from bot.keyboards.daily_kb import daily_screen_keyboard
-from bot.keyboards.menu_kb import main_menu_keyboard, portal_screen_keyboard
+from bot.keyboards.menu_kb import locations_hub_keyboard, main_menu_keyboard, portal_screen_keyboard
 from bot.keyboards.profile_kb import profile_view_keyboard
 from bot.keyboards.title_kb import titles_pick_keyboard
 from bot.states.combat_states import CombatStates
@@ -115,6 +115,31 @@ async def menu_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
         await callback.answer()
     except Exception:
         logger.exception("mnu:hub")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "mnu:loc")
+async def menu_locations(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        _, char = await _char_or_alert(session, callback)
+        if char is None:
+            return
+        loc = get_locale(char, callback.from_user.language_code)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=t(loc, "menu_locations_intro"),
+            reply_markup=locations_hub_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=None,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("mnu:loc")
         await callback.answer("Ошибка.", show_alert=True)
 
 

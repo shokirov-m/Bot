@@ -8,7 +8,6 @@ from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.handlers.workshop import render_workshop_hub
 from bot.keyboards.home_kb import (
     alchemy_keyboard,
     buildings_keyboard,
@@ -565,7 +564,7 @@ async def home_buildings(callback: CallbackQuery, session: AsyncSession, state: 
         await callback.message.edit_text(
             "🏗 <b>Постройки</b>\n\n"
             "🛠 <b>Верстак</b> — бонус к заточке в кузнице.\n"
-            "<i>Ремесленные профессии и алхимия — в «Мастерской», не в отдельной комнате дома.</i>",
+            "<i>Ремесло — раздел «Локации» → «Мастерская».</i>",
             parse_mode=ParseMode.HTML,
             reply_markup=buildings_keyboard(char),
         )
@@ -599,7 +598,7 @@ async def home_gacha_open(callback: CallbackQuery, session: AsyncSession, state:
         await callback.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("hom:gacha:pull:"))
+@router.callback_query(F.data.regexp(r"^hom:gacha:pull(10)?:(blacksmith|alchemist|jeweler)$"))
 async def home_gacha_pull(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if callback.data is None or callback.message is None:
@@ -609,9 +608,11 @@ async def home_gacha_pull(callback: CallbackQuery, session: AsyncSession, state:
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
-        prof = callback.data.rsplit(":", 1)[-1].strip().lower()
+        parts = callback.data.split(":")
+        times = 10 if parts[2] == "pull10" else 1
+        prof = parts[-1].strip().lower()
         await character_repo.lock_character_row(session, char.id)
-        ok, lines = await craft_gacha_service.try_gacha_pull(session, char, prof)
+        ok, lines = await craft_gacha_service.try_gacha_pull(session, char, prof, times=times)
         await session.flush()
         from aiogram.enums import ParseMode
 
@@ -628,25 +629,6 @@ async def home_gacha_pull(callback: CallbackQuery, session: AsyncSession, state:
         await callback.answer("Приз!" if ok else lines[0][:180] if lines else "Нет")
     except Exception:
         logger.exception("hom:gacha:pull")
-        await callback.answer("Ошибка.", show_alert=True)
-
-
-@router.callback_query(F.data == "hom:wsp")
-async def home_workshop_shortcut(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.message is None:
-            await callback.answer()
-            return
-        char = await _char(callback, session)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-        if not home_service.can_access_workbench(char):
-            await callback.answer("Мастерская из дома откроется на ур. 2.", show_alert=True)
-            return
-        await render_workshop_hub(callback, session)
-    except Exception:
-        logger.exception("hom:wsp")
         await callback.answer("Ошибка.", show_alert=True)
 
 

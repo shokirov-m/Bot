@@ -466,9 +466,9 @@ async def consume_craft_resources(
 
 
 def gacha_weights_for_profession(profession: str) -> dict[str, float]:
-    """Веса по звёздам: чем выше ⭐, тем реже."""
+    """Веса по звёздам: чем выше ⭐, тем реже (чуть снижен шанс редкого к ×6)."""
     out: dict[str, float] = {}
     for rid in resource_ids_for_profession(profession):
         st = int(RESOURCE_DEFS[rid].get("stars") or 1)
-        out[rid] = max(0.2, 160.0 / (2.0 ** (st - 1)))
+        out[rid] = max(0.2, 140.0 / (2.15 ** (st - 1)))
     return out

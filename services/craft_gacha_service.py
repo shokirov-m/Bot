@@ -25,8 +25,9 @@ from game.items.craft_resources import (
 )
 from services import character_service
 
-GACHA_PULL_COST_GOLD = 500
+GACHA_PULL_COST_GOLD = 200
 BLUEPRINT_ROLL_CHANCE = 0.065
+GACHA_MAX_BATCH = 10
 
 
 def _weighted_pick(profession: str) -> str | None:
@@ -58,14 +59,16 @@ def format_gacha_intro_html(character: Character) -> str:
             "🎰 <b>Гача ресурсов</b>\n"
             "<i>Откроется вместе с постройками дома (ур. 2).</i>"
         )
+    t1 = GACHA_PULL_COST_GOLD
+    t10 = GACHA_PULL_COST_GOLD * 10
     lines = [
         "🎰 <b>Гача ремесленных ресурсов</b>",
-        f"<i>Один призыв:</i> <b>{GACHA_PULL_COST_GOLD:,} 💰</b>",
+        f"<i>Призыв ×1:</i> <b>{t1:,} 💰</b> · <i>×10:</i> <b>{t10:,} 💰</b>",
         "",
         "Выпадет <b>случайный материал</b> выбранной профессии (⭐ — редкость).",
-        f"Шанс <b>чертёжа</b> (ещё не изученного): ≈{int(BLUEPRINT_ROLL_CHANCE * 100)}%.",
+        f"Шанс <b>чертёжа</b> (ещё не изученного) на <b>каждом</b> броске: ≈{int(BLUEPRINT_ROLL_CHANCE * 100)}%.",
         "",
-        "<b>Кузнец</b> — металлы (мифрил ⭐4, адамантит ⭐6 очень редко).",
+        "<b>Кузнец</b> — металлы (высокие ⭐ реже).",
         "<b>Алхимик</b> — травы и реагенты.",
         "<b>Ювелир</b> — камни и кристаллы.",
     ]
@@ -76,8 +79,10 @@ async def try_gacha_pull(
     session: AsyncSession,
     character: Character,
     profession: str,
+    *,
+    times: int = 1,
 ) -> tuple[bool, list[str]]:
-    """Списать золото, выдать материал и с шансом — чертёж."""
+    """Списать золото, выдать материал(ы) и с шансом — чертёж на каждом броске."""
     from services import home_service
 
     if not home_service.can_access_workbench(character):
@@ -87,48 +92,70 @@ async def try_gacha_pull(
     if prof not in (PROF_BLACKSMITH, PROF_ALCHEMIST, PROF_JEWELER):
         return False, ["Неизвестная профессия."]
 
-    if int(character.gold) < GACHA_PULL_COST_GOLD:
-        return False, [f"Нужно {GACHA_PULL_COST_GOLD:,} 💰."]
-
-    rid_pick = _weighted_pick(prof)
-    if rid_pick is None:
-        return False, ["Внутренняя ошибка таблицы гачи."]
-
-    d = RESOURCE_DEFS.get(rid_pick) or {}
-    stars = int(d.get("stars") or 1)
-    count = roll_stack_count_for_stars(stars)
-    payload = craft_resource_payload(rid_pick, count)
+    n = max(1, min(GACHA_MAX_BATCH, int(times)))
+    total_cost = GACHA_PULL_COST_GOLD * n
+    if int(character.gold) < total_cost:
+        return False, [f"Нужно {total_cost:,} 💰 (×{n})."]
 
     character_service.add_gold(
         character,
-        -GACHA_PULL_COST_GOLD,
+        -total_cost,
         spend_for="Гача ремесленных ресурсов",
         spend_kind="home",
     )
 
-    row = await inventory_repo.add_bag_item(session, character.id, payload)
-    if row is None:
-        character_service.add_gold(character, GACHA_PULL_COST_GOLD, spend_for="Откат гачи (нет места)", spend_kind="home")
-        return False, ["Нет места в сумке для материала."]
-
     lines_out: list[str] = [
-        f"−{GACHA_PULL_COST_GOLD:,} 💰",
+        f"−{total_cost:,} 💰",
+        f"<i>Призывов: ×{n}</i>",
         "",
-        f"📦 <b>{html.escape(str(payload.get('name') or rid_pick))}</b> ×{count}",
     ]
+    any_item = False
+    for i in range(n):
+        rid_pick = _weighted_pick(prof)
+        if rid_pick is None:
+            refund = (n - i) * GACHA_PULL_COST_GOLD
+            if refund:
+                character_service.add_gold(
+                    character,
+                    refund,
+                    spend_for="Откат гачи (таблица)",
+                    spend_kind="home",
+                )
+            return False, lines_out + [f"Ошибка таблицы. Возврат: {refund} 💰."]
 
-    bp_lines: list[str] = []
-    pool = _blueprint_pool(prof, character)
-    if pool and random.random() < BLUEPRINT_ROLL_CHANCE:
-        bp_id = random.choice(pool)
-        add_known_blueprint(character, bp_id)
-        # локализованное имя рецепта
-        from game.crafting.recipes_data import get_recipe_by_id
+        d = RESOURCE_DEFS.get(rid_pick) or {}
+        stars = int(d.get("stars") or 1)
+        count = roll_stack_count_for_stars(stars)
+        payload = craft_resource_payload(rid_pick, count)
+        row = await inventory_repo.add_bag_item(session, character.id, payload)
+        if row is None:
+            refund = (n - i) * GACHA_PULL_COST_GOLD
+            if refund:
+                character_service.add_gold(
+                    character,
+                    refund,
+                    spend_for="Откат гачи (нет места)",
+                    spend_kind="home",
+                )
+            if not any_item:
+                return False, lines_out + [f"Нет места в сумке. Возврат: {refund} 💰."]
+            return True, lines_out + [
+                "",
+                f"⚠️ <b>Сумка полна</b> — дальше {n - i} призыв(ов) не сделано, возврат <b>{refund:,}</b> 💰.",
+            ]
 
-        rr = get_recipe_by_id(bp_id)
-        nm = html.escape(str((rr or {}).get("name_ru") or bp_id))
-        bp_lines.append(f"\n📜 <b>Чертёж:</b> {nm}")
+        any_item = True
+        lines_out.append(f"📦 <b>{html.escape(str(payload.get('name') or rid_pick))}</b> ×{count}")
+
+        pool = _blueprint_pool(prof, character)
+        if pool and random.random() < BLUEPRINT_ROLL_CHANCE:
+            bp_id = random.choice(pool)
+            add_known_blueprint(character, bp_id)
+            from game.crafting.recipes_data import get_recipe_by_id
+
+            rr = get_recipe_by_id(bp_id)
+            nm = html.escape(str((rr or {}).get("name_ru") or bp_id))
+            lines_out.append(f"📜 <b>Чертёж:</b> {nm}")
 
     await session.flush()
-
-    return True, lines_out + bp_lines
+    return True, lines_out

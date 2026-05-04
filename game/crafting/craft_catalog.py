@@ -47,9 +47,9 @@ def catalog_text_for_profession(profession: str) -> str:
     """HTML: список рецептов для одной профессии (очередь мастерской + мгновенные в кузне)."""
     pk = str(profession).lower().strip()
     title = {
-        PROF_BLACKSMITH: "⚒️ <b>Кузнец</b>",
-        PROF_ALCHEMIST: "⚗️ <b>Алхимик</b>",
-        PROF_JEWELER: "💎 <b>Ювелир</b>",
+        PROF_BLACKSMITH: "⚒️ <b>Кузница</b>",
+        PROF_ALCHEMIST: "⚗️ <b>Лаборатория</b>",
+        PROF_JEWELER: "💎 <b>Ювелирная</b>",
     }.get(pk, f"⚙️ <b>{html.escape(pk)}</b>")
     timed: list[str] = []
     instant: list[str] = []

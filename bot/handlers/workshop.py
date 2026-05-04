@@ -21,6 +21,7 @@ from bot.keyboards.workshop_kb import (
     workshop_prof_keyboard,
     workshop_queue_keyboard,
 )
+from db.models.character import Character
 from db.repository import character_repo, user_repo
 from db.repository import workshop_order_repo
 from game.crafting.craft_catalog import catalog_text_for_profession
@@ -39,6 +40,25 @@ from db.models.app_global import AppGlobal
 
 router = Router(name="workshop")
 
+PROF_TITLE_RU = {
+    "blacksmith": "⚒️ Кузница",
+    "alchemist": "⚗️ Лаборатория",
+    "jeweler": "💎 Ювелирная",
+}
+
+
+def _recipes_unlocked_for_player(character: Character, prof: str) -> list[dict]:
+    """Только рецепты с изученным чертежом (если требуется) или без требования чертежа."""
+    known = known_blueprint_ids(character)
+    out: list[dict] = []
+    for r in recipes_for_profession(prof):
+        if bool(r.get("requires_blueprint")):
+            rid = str(r.get("id") or "")
+            if rid not in known:
+                continue
+        out.append(r)
+    return out
+
 
 async def _char(session: AsyncSession, query: CallbackQuery):
     if query.from_user is None:
@@ -52,14 +72,6 @@ async def _char(session: AsyncSession, query: CallbackQuery):
         await query.answer("Нет персонажа.", show_alert=True)
         return None
     return char
-
-
-def _recipe_label(r: dict, known: set[str]) -> str:
-    rid = str(r.get("id", ""))
-    name = str(r.get("name_ru", rid))
-    bp = bool(r.get("requires_blueprint"))
-    lock = "🔒 " if bp and rid not in known else ""
-    return f"{lock}{name}"
 
 
 def _paginate(lst: list, page: int, per_page: int = 8) -> tuple[list, int]:
@@ -111,23 +123,31 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession) -> None:
         if char is None or query.data is None or query.message is None:
             return
         prof = str(query.data.split(":")[2])
-        loc = get_locale(char, query.from_user.language_code if query.from_user else None)
-        known = known_blueprint_ids(char)
-        recipes = recipes_for_profession(prof)
-        recipe_rows = [(str(r.get("id")), _recipe_label(r, known)) for r in recipes]
+        title = PROF_TITLE_RU.get(prof, prof)
+        recipes = _recipes_unlocked_for_player(char, prof)
+        if not recipes:
+            await query.message.edit_text(
+                f"{title}\n\n<i>Нет изученных рецептов: открой чертежи в гаче или с наград.</i>",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
+                        menu_nav_button_row(),
+                    ],
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+            await query.answer()
+            return
+        recipe_rows = [(str(r.get("id")), str(r.get("name_ru", r.get("id", "")))) for r in recipes]
         chunk, page = _paginate(recipe_rows, 0)
-        title = {"blacksmith": "⚒️ Кузнец", "alchemist": "⚗️ Алхимик", "jeweler": "💎 Ювелир"}.get(
-            prof,
-            prof,
-        )
         lines = [
             f"{title}",
-            "<i>🔒 — нужен чертёж. Рецепты с таймером — только здесь (не в городской кузне).</i>",
+            "<i>Только рецепты с открытым чертежом (где требуется). Крафт с таймером — здесь.</i>",
             "",
         ]
         await query.message.edit_text(
             "\n".join(lines),
-            reply_markup=workshop_prof_keyboard(prof, page=page, recipe_rows=chunk),
+            reply_markup=workshop_prof_keyboard(prof, page=page, recipe_rows=chunk, total_count=len(recipe_rows)),
             parse_mode=ParseMode.HTML,
         )
         await query.answer()
@@ -144,18 +164,32 @@ async def workshop_prof_page(query: CallbackQuery, session: AsyncSession) -> Non
             return
         _, _, prof, p_s = query.data.split(":", 3)
         page = int(p_s)
-        known = known_blueprint_ids(char)
-        recipes = recipes_for_profession(prof)
-        recipe_rows = [(str(r.get("id")), _recipe_label(r, known)) for r in recipes]
+        title = PROF_TITLE_RU.get(prof, prof)
+        recipes = _recipes_unlocked_for_player(char, prof)
+        if not recipes:
+            await query.message.edit_text(
+                f"{title}\n\n<i>Нет изученных рецептов.</i>",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
+                        menu_nav_button_row(),
+                    ],
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+            await query.answer()
+            return
+        recipe_rows = [(str(r.get("id")), str(r.get("name_ru", r.get("id", "")))) for r in recipes]
         chunk, page = _paginate(recipe_rows, page)
-        title = {"blacksmith": "⚒️ Кузнец", "alchemist": "⚗️ Алхимик", "jeweler": "💎 Ювелир"}.get(
-            prof,
-            prof,
-        )
         lines = [f"{title}", ""]
         await query.message.edit_text(
             "\n".join(lines),
-            reply_markup=workshop_prof_keyboard(prof, page=page, recipe_rows=chunk),
+            reply_markup=workshop_prof_keyboard(
+                prof,
+                page=page,
+                recipe_rows=chunk,
+                total_count=len(recipe_rows),
+            ),
             parse_mode=ParseMode.HTML,
         )
         await query.answer()
@@ -323,10 +357,10 @@ async def workshop_catalog(query: CallbackQuery, session: AsyncSession) -> None:
             kb = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
-                        InlineKeyboardButton(text="⚒️ Кузнец", callback_data="wsp:cat:blacksmith"),
-                        InlineKeyboardButton(text="⚗️ Алхимик", callback_data="wsp:cat:alchemist"),
+                        InlineKeyboardButton(text="⚒️ Кузница", callback_data="wsp:cat:blacksmith"),
+                        InlineKeyboardButton(text="⚗️ Лаборатория", callback_data="wsp:cat:alchemist"),
                     ],
-                    [InlineKeyboardButton(text="💎 Ювелир", callback_data="wsp:cat:jeweler")],
+                    [InlineKeyboardButton(text="💎 Ювелирная", callback_data="wsp:cat:jeweler")],
                     [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
                     menu_nav_button_row(),
                 ],
@@ -340,8 +374,13 @@ async def workshop_catalog(query: CallbackQuery, session: AsyncSession) -> None:
             return
         if tail in (PROF_BLACKSMITH, PROF_ALCHEMIST, PROF_JEWELER):
             body = catalog_text_for_profession(tail)
+            if len(body) > 3800:
+                cut = body.rfind("\n", 0, 3600)
+                if cut < 500:
+                    cut = 3600
+                body = body[:cut] + "\n\n<i>… список обрезан (слишком длинный).</i>"
             await query.message.edit_text(
-                body[:3900],
+                body,
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
                         [InlineKeyboardButton(text="⬅ К профессиям", callback_data="wsp:cat:menu")],

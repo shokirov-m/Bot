@@ -57,6 +57,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_daily": "📅 Ежедневка",
         "menu_arena": "⚔️ Арена",
         "menu_coliseum": "🏛️ Колизей",
+        "menu_locations": "🗺 Локации",
+        "menu_locations_intro": (
+            "🗺 <b>Локации</b>\n\n"
+            "<i>Арена PvP, Колизей PvE, ремесло, торговля и клан.</i>"
+        ),
         "menu_quests": "📋 Задания",
         "menu_settings": "⚙️ Настройки",
         "menu_auction": "🛒 Магазин",
@@ -367,6 +372,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_daily": "📅 Daily",
         "menu_arena": "⚔️ Arena",
         "menu_coliseum": "🏛️ Colosseum",
+        "menu_locations": "🗺 Locations",
+        "menu_locations_intro": (
+            "🗺 <b>Locations</b>\n\n"
+            "<i>Arena, Colosseum, crafting, shop, clan.</i>"
+        ),
         "menu_quests": "📋 Quests",
         "menu_settings": "⚙️ Settings",
         "menu_auction": "🛒 Shop",

@@ -4,49 +4,54 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from db.models.character import Character
 from game.coliseum.coliseum_data import COLISEUM_FIGHTERS
+from services import coliseum_service
+
+
+def _batch_range(*, next_id: int | None) -> tuple[int, int]:
+    """Показываем ровно 5 бойцов: группа по индексу следующего боя (или последняя пятёрка)."""
+    if next_id is None:
+        return 46, 50
+    b = ((int(next_id) - 1) // 5) * 5 + 1
+    return b, min(b + 4, 50)
 
 
 def coliseum_main_keyboard(
     *,
+    character: Character,
     next_id: int | None,
-    page: int,
     can_fight: bool,
 ) -> InlineKeyboardMarkup:
-    """Меню: правила, список по странице, бой."""
+    """Правила, 5 бойцов текущей «пятёрки», быстрый бой с доступным."""
     rows: list[list[InlineKeyboardButton]] = []
     rows.append(
         [InlineKeyboardButton(text="📜 Правила", callback_data="col:rules")],
     )
-    # 10 бойцов на страницу, 5 страниц
-    per_page = 10
-    pages = 5
-    p = max(0, min(int(page), pages - 1))
-    start = p * per_page + 1
-    for i in range(start, min(start + per_page, 51)):
+    defeated_set = set(coliseum_service.defeated_ids(character))
+    start, end = _batch_range(next_id=next_id)
+    for i in range(start, end + 1):
         f = COLISEUM_FIGHTERS[i - 1]
-        label = f"{i:02d}. {f.name[:18]}"
+        short = f.name[:22] if len(f.name) <= 22 else f.name[:19] + "…"
+        if i in defeated_set:
+            prefix = "✅ "
+        else:
+            ok, _ = coliseum_service.can_start_fight(character, i)
+            prefix = "" if ok else "🔒 "
+        label = f"{prefix}{i:02d}. {short}"[:64]
         rows.append(
             [InlineKeyboardButton(text=label, callback_data=f"col:info:{i}")],
         )
-    nav: list[InlineKeyboardButton] = []
-    if p > 0:
-        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"col:pg:{p - 1}"))
-    nav.append(InlineKeyboardButton(text=f"{p + 1}/{pages}", callback_data="col:noop"))
-    if p < pages - 1:
-        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"col:pg:{p + 1}"))
-    if nav:
-        rows.append(nav)
     if can_fight and next_id is not None:
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"⚔️ Следующий: #{next_id}",
+                    text=f"⚔️ Бой: #{next_id}",
                     callback_data=f"col:fight:{next_id}",
                 ),
             ],
         )
-    rows.append([InlineKeyboardButton(text="⬅️ В меню", callback_data="mnu:hub")])
+    rows.append([InlineKeyboardButton(text="⬅️ Локации", callback_data="mnu:loc")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

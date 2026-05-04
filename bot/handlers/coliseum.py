@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards.coliseum_kb import coliseum_fight_confirm_keyboard, coliseum_main_keyboard
+from bot.keyboards.coliseum_kb import (
+    _batch_range,
+    coliseum_fight_confirm_keyboard,
+    coliseum_main_keyboard,
+)
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.coliseum.coliseum_data import fighter_by_id
@@ -16,11 +22,19 @@ from services import coliseum_service, combat_service
 
 router = Router(name="coliseum")
 
+_COLO_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "ui" / "coliseum_menu.png"
 
-def _menu_html(char, *, page: int = 0) -> str:
+
+def coliseum_menu_photo_path() -> str | None:
+    """Иллюстрация главного экрана колизея (`assets/ui/coliseum_menu.png`)."""
+    return str(_COLO_PATH) if _COLO_PATH.is_file() else None
+
+
+def _menu_html(char) -> str:
     defeated = coliseum_service.defeated_ids(char)
     nxt = coliseum_service.next_fighter_id(char)
     prog = len(defeated)
+    a, b = _batch_range(next_id=nxt)
     return (
         "🏛️ <b>Колизей</b>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
@@ -28,7 +42,7 @@ def _menu_html(char, *, page: int = 0) -> str:
         f"{'Следующий по очереди: <b>#' + str(nxt) + '</b>' if nxt else '<b>Все повержены!</b>'}\n\n"
         "Бои идут по порядку: требуется уровень героя и победа над предыдущим бойцом.\n"
         "Чемпионы (каждый 10-й) дают ×2 золота и опыта.\n"
-        f"<i>Страница списка: {int(page) + 1} / 5</i>"
+        f"<i>Сейчас в списке: боецы <b>#{a}–#{b}</b> (после побед над пятёркой — следующие 5).</i>"
     )
 
 
@@ -46,11 +60,10 @@ async def coliseum_menu(callback: CallbackQuery, session: AsyncSession, state: F
     if char is None:
         await callback.answer("Сначала /start.", show_alert=True)
         return
-    page = 0
-    body = _menu_html(char, page=page)
+    body = _menu_html(char)
     nxt = coliseum_service.next_fighter_id(char)
     ok, _ = coliseum_service.can_start_fight(char, nxt) if nxt else (False, "")
-    kb = coliseum_main_keyboard(next_id=nxt, page=page, can_fight=ok)
+    kb = coliseum_main_keyboard(character=char, next_id=nxt, can_fight=ok)
     try:
         await push_game_ui(
             state,
@@ -59,46 +72,10 @@ async def coliseum_menu(callback: CallbackQuery, session: AsyncSession, state: F
             text=body,
             reply_markup=kb,
             target_message=callback.message,
-            photo_path=None,
+            photo_path=coliseum_menu_photo_path(),
         )
     except Exception:
         logger.exception("coliseum_menu")
-    await callback.answer()
-
-
-@router.callback_query(F.data.regexp(r"^col:pg:\d+$"))
-async def coliseum_page(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    if callback.from_user is None or callback.message is None or callback.bot is None:
-        await callback.answer()
-        return
-    try:
-        page = int(str(callback.data).split(":")[-1])
-    except ValueError:
-        page = 0
-    user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
-    if user is None:
-        await callback.answer()
-        return
-    char = await character_repo.get_by_user_id(session, user.id)
-    if char is None:
-        await callback.answer()
-        return
-    nxt = coliseum_service.next_fighter_id(char)
-    ok, _ = coliseum_service.can_start_fight(char, nxt) if nxt else (False, "")
-    body = _menu_html(char, page=page)
-    kb = coliseum_main_keyboard(next_id=nxt, page=page, can_fight=ok)
-    try:
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=body,
-            reply_markup=kb,
-            target_message=callback.message,
-            photo_path=None,
-        )
-    except Exception:
-        logger.exception("coliseum_page")
     await callback.answer()
 
 

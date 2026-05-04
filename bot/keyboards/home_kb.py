@@ -51,11 +51,10 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
             [InlineKeyboardButton(text="⛏ Шахта и Ферма", callback_data="hom:mine_menu")],
         )
 
-    # Постройки, гача и мастерская (дом ур.2+)
+    # Постройки и гача (дом ур.2+); мастерская — в «Локации»
     if home_service.can_access_workbench(character):
         rows.append([InlineKeyboardButton(text="🏗 Постройки", callback_data="hom:build")])
         rows.append([InlineKeyboardButton(text="🎰 Гача ресурсов", callback_data="hom:gacha")])
-        rows.append([InlineKeyboardButton(text="🔧 Мастерская", callback_data="hom:wsp")])
 
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -119,10 +118,17 @@ def buildings_keyboard(character: Character) -> InlineKeyboardMarkup:
 def craft_gacha_keyboard() -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [
-            InlineKeyboardButton(text="⚒ Кузнец", callback_data="hom:gacha:pull:blacksmith"),
-            InlineKeyboardButton(text="⚗ Алхимик", callback_data="hom:gacha:pull:alchemist"),
+            InlineKeyboardButton(text="⚒ ×1", callback_data="hom:gacha:pull:blacksmith"),
+            InlineKeyboardButton(text="⚒ ×10", callback_data="hom:gacha:pull10:blacksmith"),
         ],
-        [InlineKeyboardButton(text="💎 Ювелир", callback_data="hom:gacha:pull:jeweler")],
+        [
+            InlineKeyboardButton(text="⚗ ×1", callback_data="hom:gacha:pull:alchemist"),
+            InlineKeyboardButton(text="⚗ ×10", callback_data="hom:gacha:pull10:alchemist"),
+        ],
+        [
+            InlineKeyboardButton(text="💎 ×1", callback_data="hom:gacha:pull:jeweler"),
+            InlineKeyboardButton(text="💎 ×10", callback_data="hom:gacha:pull10:jeweler"),
+        ],
         [InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")],
         menu_nav_button_row(),
     ]
