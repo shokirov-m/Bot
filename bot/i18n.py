@@ -371,11 +371,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "portal_back_menu": "📋 Menu",
         "menu_daily": "📅 Daily",
         "menu_arena": "⚔️ Arena",
-        "menu_coliseum": "🏛️ Colosseum",
+        "menu_coliseum": "🏛️ Coliseum",
         "menu_locations": "🗺 Locations",
         "menu_locations_intro": (
             "🗺 <b>Locations</b>\n\n"
-            "<i>Arena, Colosseum, crafting, shop, clan.</i>"
+            "<i>Arena, Coliseum, crafting, shop, clan.</i>"
         ),
         "menu_quests": "📋 Quests",
         "menu_settings": "⚙️ Settings",
