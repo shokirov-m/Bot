@@ -16,6 +16,7 @@ def game_images_enabled(character: Character) -> bool:
 
 
 def set_game_images_hidden(character: Character, hide: bool) -> None:
+    """Включить или выключить скрытие игровых картинок (флаг в meta_progress)."""
     mp = dict(character.meta_progress or {})
     if hide:
         mp[META_HIDE_GAME_IMAGES] = True
