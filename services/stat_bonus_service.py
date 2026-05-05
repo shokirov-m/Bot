@@ -27,6 +27,23 @@ from game.items.stat_bonuses import STAT_KEYS, empty_stat_bonus_map, stat_bonuse
 from services import title_service
 
 
+def coliseum_skills_stat_bonuses(character: Character) -> dict[str, int]:
+    """Плоские статы из meta_progress.coliseum_skills (*_flat в payload каждого приёма)."""
+    mp = dict(character.meta_progress or {})
+    raw = mp.get("coliseum_skills")
+    if not isinstance(raw, dict):
+        return empty_stat_bonus_map()
+    out = empty_stat_bonus_map()
+    for pl in raw.values():
+        if not isinstance(pl, dict):
+            continue
+        for sk in STAT_KEYS:
+            v = int(pl.get(f"{sk}_flat") or 0)
+            if v:
+                out[sk] += v
+    return out
+
+
 def _messenger_set_bonus_from_equipped(items: list[InventoryItem]) -> dict[str, int]:
     """Набор «Посланник башни»: два предмета с set_key messenger на персонаже."""
     n = 0
@@ -127,6 +144,7 @@ async def extra_stat_bonuses(session: AsyncSession, character: Character) -> tup
     tree_b = {k: int(v) for k, v in tree_b_raw.items() if k in STAT_KEYS}
 
     title_b = merge_stat_maps(title_b, tree_b)
+    title_b = merge_stat_maps(title_b, coliseum_skills_stat_bonuses(character))
     return gear, title_b
 
 

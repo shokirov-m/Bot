@@ -161,18 +161,38 @@ async def list_enchant_slot_button_rows(
     return rows
 
 
+def workshop_blacksmith_sharpen_bonus(character: Character) -> float:
+    """До +20% к базовому шансу успеха заточки от уровня профессии кузнеца (мастерская)."""
+    from game.crafting.recipes_data import PROF_BLACKSMITH
+    from game.crafting.workshop_constants import max_profession_level
+    from game.crafting.workshop_meta import prof_level
+
+    plv = prof_level(character, PROF_BLACKSMITH)
+    cap = max_profession_level(PROF_BLACKSMITH)
+    if cap <= 1:
+        return 0.20
+    ratio = (plv - 1) / max(1, cap - 1)
+    return min(0.20, max(0.0, ratio * 0.20))
+
+
 async def try_enchant_equipped_in_slot(
     session: AsyncSession,
     character: Character,
     equip_slot: str,
     *,
     rune_ward: bool = False,
+    skip_forge_location_check: bool = False,
+    extra_success_bonus: float = 0.0,
+    spend_label: str = "Кузница: заточка",
+    spend_kind_tag: str = "forge",
 ) -> tuple[bool, list[str]]:
     """
     Одна попытка заточки надетого предмета в слоте.
     rune_ward: списать 1 рунный камень; исход downgrade заменяется на fail.
+    skip_forge_location_check: для мастерской (вне города).
+    extra_success_bonus: добавка к шансу (0..0.2), напр. бонус кузнеца в мастерской.
     """
-    if not forge_loc.forge_available_on_floor(character.floor_number):
+    if not skip_forge_location_check and not forge_loc.forge_available_on_floor(character.floor_number):
         return False, ["Кузница только в городах-хабах башни."]
 
     if equip_slot not in equip_meta.EQUIP_ORDER:
@@ -213,8 +233,8 @@ async def try_enchant_equipped_in_slot(
     character_service.add_gold(
         character,
         -gold_cost,
-        spend_for=f"Кузница: заточка ({slot_lab})",
-        spend_kind="forge",
+        spend_for=f"{spend_label} ({slot_lab})",
+        spend_kind=spend_kind_tag,
     )
     character.enchant_attempts = int(character.enchant_attempts) + 1
     # списываем материалы
@@ -225,7 +245,7 @@ async def try_enchant_equipped_in_slot(
 
     rolled = enchant_rules.roll_enchant_outcome(
         cur,
-        success_chance_bonus=home_service.workbench_enchant_bonus(character),
+        success_chance_bonus=home_service.workbench_enchant_bonus(character) + float(extra_success_bonus),
     )
     outcome = rolled
     ward_absorbed = False
@@ -653,6 +673,70 @@ async def craft_rune_merge(
     return True, (
         f"⚗️ Получено: <b>{html.escape(new_rune.display_name)}</b> (ячея {free}).\n"
         f"−{cost} 💰, −2 руны ранга {prev}."
+    )
+
+
+# Мастерская ювелира: 3×I→II, 4×II→III, 5×III→IV, 5×IV→V (та же стихия).
+_WORKSHOP_RUNE_MERGE: dict[int, tuple[int, int, int]] = {
+    2: (1, 3, 600),
+    3: (2, 4, 900),
+    4: (3, 5, 1400),
+    5: (4, 5, 2200),
+}
+
+
+async def try_workshop_rune_merge(
+    session: AsyncSession,
+    character: Character,
+    *,
+    element: str,
+    target_rank: int,
+) -> tuple[bool, str]:
+    """Слияние рун в мастерской (без проверки этажа города)."""
+    el = str(element).lower().strip()
+    if el not in rune_sys.ELEMENTS:
+        return False, "Неизвестная стихия."
+    tr = int(target_rank)
+    if tr not in _WORKSHOP_RUNE_MERGE:
+        return False, "Целевой ранг 2–5."
+    prev_rank, need_n, gold_cost = _WORKSHOP_RUNE_MERGE[tr]
+    if int(character.gold) < gold_cost:
+        return False, f"Нужно {gold_cost} золота."
+
+    bag = await inventory_repo.list_bag_items(session, character.id)
+    found: list[Any] = []
+    for it in bag:
+        rd = rune_sys.extract_rune_from_item(dict(it.item_data or {}))
+        if rd is None:
+            continue
+        if rd.element == el and rd.rank == prev_rank:
+            found.append(it)
+        if len(found) >= need_n:
+            break
+
+    if len(found) < need_n:
+        return False, f"Нужно {need_n} рун «{el}» ранга {prev_rank} в сумке."
+
+    free = await inventory_repo.first_free_bag_slot(session, character.id)
+    if free is None:
+        return False, "Нет места в сумке."
+
+    character_service.add_gold(
+        character,
+        -gold_cost,
+        spend_for=f"Мастерская: слияние руны {el} → ранг {tr}",
+        spend_kind="workshop",
+    )
+    for it in found[:need_n]:
+        await inventory_repo.delete_inventory_item(session, it)
+
+    new_rune = rune_sys.RuneData(element=el, rank=tr)
+    payload = rune_sys.rune_item_payload(new_rune)
+    await inventory_repo.add_bag_item(session, character.id, copy.deepcopy(payload), bag_slot=free)
+    await session.flush()
+    return True, (
+        f"⚗️ Получено: <b>{html.escape(new_rune.display_name)}</b> (ячейка {free}).\n"
+        f"−{gold_cost} 💰, −{need_n} рун ранга {prev_rank}."
     )
 
 

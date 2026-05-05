@@ -19,8 +19,12 @@ from bot.keyboards.menu_kb import menu_nav_button_row
 from bot.keyboards.workshop_kb import (
     city_workshop_orders_keyboard,
     workshop_main_keyboard,
+    workshop_prof_hub_keyboard,
     workshop_prof_keyboard,
     workshop_queue_keyboard,
+    workshop_rune_elements_keyboard,
+    workshop_rune_tiers_keyboard,
+    workshop_sharpen_slots_keyboard,
 )
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
@@ -35,8 +39,15 @@ from game.crafting.recipes_data import (
 )
 from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR
 from game.crafting.workshop_meta import get_workshop_state, known_blueprint_ids
+from game.items import item_categories as inv_cat
 from game.items.craft_resources import RESOURCE_DEFS, total_craft_resource_in_bag
-from services import workshop_order_service, workshop_service
+from services import forge_service, workshop_order_service, workshop_service
+from services.workshop_enchant_service import (
+    USE_TAG_ALCHEMY_ENCHANT,
+    list_compatible_targets,
+    summarize_scroll,
+    try_apply_alchemy_enchant,
+)
 from services.workshop_leaderboard_service import cached_leaderboard_html
 from db.models.app_global import AppGlobal
 
@@ -151,6 +162,73 @@ async def _char(session: AsyncSession, query: CallbackQuery):
     return char
 
 
+def _recipe_locked(character: Character, prof: str, recipe: dict) -> bool:
+    ws = get_workshop_state(character)
+    plv = int(ws["prof_levels"].get(prof, 1))
+    st_lv = int(ws["stations"].get(prof, 1))
+    if plv < int(recipe.get("min_profession_level", 1)):
+        return True
+    if st_lv < int(recipe.get("min_station_level", 1)):
+        return True
+    if int(character.level) < int(recipe.get("min_character_level", 1)):
+        return True
+    return False
+
+
+def _recipe_button_label(character: Character, prof: str, recipe: dict) -> str:
+    nm = str(recipe.get("name_ru", recipe.get("id", "")))
+    if _recipe_locked(character, prof, recipe):
+        return f"🔒 {nm}"
+    return nm
+
+
+def _sort_bag_inventory_order(items: list) -> list:
+    """Тот же порядок секций, что у вкладок сумки (см. inventory._SECTION_INFER_ORDER)."""
+    order = (
+        inv_cat.INV_SEC_WEAPON,
+        inv_cat.INV_SEC_ARMOR_BODY,
+        inv_cat.INV_SEC_ACCESSORY,
+        inv_cat.INV_SEC_HELMET,
+        inv_cat.INV_SEC_PANTS,
+        inv_cat.INV_SEC_OTHER_GEAR,
+        inv_cat.INV_SEC_CONSUMABLE,
+        inv_cat.INV_SEC_RESOURCE,
+    )
+    buckets: dict[str, list] = {s: [] for s in order}
+    rest: list = []
+    for it in items:
+        d = dict(it.item_data or {})
+        placed = False
+        for sec in order:
+            if inv_cat.item_data_matches_inv_section(d, sec):
+                buckets[sec].append(it)
+                placed = True
+                break
+        if not placed:
+            rest.append(it)
+    out: list = []
+    for sec in order:
+        buckets[sec].sort(key=lambda x: str((x.item_data or {}).get("name", "")))
+        out.extend(buckets[sec])
+    rest.sort(key=lambda x: str((x.item_data or {}).get("name", "")))
+    out.extend(rest)
+    return out
+
+
+_ENCH_SCROLL_PER_PAGE = 8
+_ENCH_TARGET_PER_PAGE = 8
+
+
+def _alchemy_scroll_items(bag_items: list) -> list:
+    out: list = []
+    for it in bag_items:
+        d = dict(it.item_data or {})
+        if str(d.get("use_tag") or "") == USE_TAG_ALCHEMY_ENCHANT:
+            out.append(it)
+    out.sort(key=lambda x: str((x.item_data or {}).get("name", "")))
+    return out
+
+
 def _paginate(lst: list, page: int, per_page: int = 8) -> tuple[list, int]:
     p = max(0, int(page))
     start = p * per_page
@@ -197,6 +275,32 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession, state: FSMC
             return
         prof = str(query.data.split(":")[2])
         title = PROF_TITLE_RU.get(prof, prof)
+        lines = [
+            f"{title}",
+            "",
+            "<i>Выбери раздел: крафт по изученным чертежам, заточка / зачарование / руны — под профессию.</i>",
+        ]
+        await _workshop_ui(
+            state,
+            query,
+            char,
+            "\n".join(lines),
+            workshop_prof_hub_keyboard(prof),
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:prof")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:craft:"))
+async def workshop_craft(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.data is None or query.message is None:
+            return
+        prof = str(query.data.split(":")[2])
+        title = PROF_TITLE_RU.get(prof, prof)
         recipes = _recipes_unlocked_for_player(char, prof)
         if not recipes:
             await _workshop_ui(
@@ -206,19 +310,19 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession, state: FSMC
                 f"{title}\n\n<i>Нет изученных рецептов: открой чертежи в гаче или с наград.</i>",
                 InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
+                        [InlineKeyboardButton(text="⬅ Назад", callback_data=f"wsp:prof:{prof}")],
                         menu_nav_button_row(),
                     ],
                 ),
             )
             await query.answer()
             return
-        recipe_rows = [(str(r.get("id")), str(r.get("name_ru", r.get("id", "")))) for r in recipes]
+        recipe_rows = [(str(r.get("id")), _recipe_button_label(char, prof, r)) for r in recipes]
         chunk, page = _paginate(recipe_rows, 0)
         lines = [
-            f"{title}",
-            "<i>Нажми рецепт — откроется карточка: ресурсы, время, требования. «Создать» — в очередь.</i>",
-            "<i>Только рецепты с открытым чертежом (где требуется). Сортировка: по требуемому уровню профессии.</i>",
+            f"{title} — <b>крафт</b>",
+            "<i>Нажми рецепт — карточка: ресурсы, время. 🔒 — чертеж есть, но не хватает уровня / станции / героя.</i>",
+            "<i>Сортировка: по требуемому уровню профессии.</i>",
             "",
         ]
         await _workshop_ui(
@@ -230,12 +334,12 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession, state: FSMC
         )
         await query.answer()
     except Exception:
-        logger.exception("wsp:prof")
+        logger.exception("wsp:craft")
         await query.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data.startswith("wsp:profpage:"))
-async def workshop_prof_page(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+@router.callback_query(F.data.startswith("wsp:craftpage:"))
+async def workshop_craft_page(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         char = await _char(session, query)
         if char is None or query.data is None or query.message is None:
@@ -252,16 +356,16 @@ async def workshop_prof_page(query: CallbackQuery, session: AsyncSession, state:
                 f"{title}\n\n<i>Нет изученных рецептов.</i>",
                 InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
+                        [InlineKeyboardButton(text="⬅ Назад", callback_data=f"wsp:prof:{prof}")],
                         menu_nav_button_row(),
                     ],
                 ),
             )
             await query.answer()
             return
-        recipe_rows = [(str(r.get("id")), str(r.get("name_ru", r.get("id", "")))) for r in recipes]
+        recipe_rows = [(str(r.get("id")), _recipe_button_label(char, prof, r)) for r in recipes]
         chunk, page = _paginate(recipe_rows, page)
-        lines = [f"{title}", ""]
+        lines = [f"{title} — <b>крафт</b>", ""]
         await _workshop_ui(
             state,
             query,
@@ -276,7 +380,7 @@ async def workshop_prof_page(query: CallbackQuery, session: AsyncSession, state:
         )
         await query.answer()
     except Exception:
-        logger.exception("wsp:profpage")
+        logger.exception("wsp:craftpage")
         await query.answer("Ошибка.", show_alert=True)
 
 
@@ -295,11 +399,20 @@ async def workshop_recipe_card(query: CallbackQuery, session: AsyncSession, stat
         if body is None:
             await query.answer("Рецепт недоступен.", show_alert=True)
             return
+        r_def = get_recipe_by_id(rid)
+        locked = bool(r_def and _recipe_locked(char, prof, r_def))
+        if locked:
+            body = "🔒 <i>Недостаточно уровня профессии, станции или героя для крафта.</i>\n\n" + body
         title = PROF_TITLE_RU.get(prof, prof)
+        row_create = (
+            [InlineKeyboardButton(text="🔨 Создать", callback_data=f"wsp:start:{rid}")]
+            if not locked
+            else [InlineKeyboardButton(text="🔒 Создать (заблокировано)", callback_data="wsp:craftlocked")]
+        )
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="🔨 Создать", callback_data=f"wsp:start:{rid}")],
-                [InlineKeyboardButton(text="⬅ К списку рецептов", callback_data=f"wsp:prof:{prof}")],
+                row_create,
+                [InlineKeyboardButton(text="⬅ К крафту", callback_data=f"wsp:craft:{prof}")],
                 menu_nav_button_row(),
             ],
         )
@@ -425,6 +538,357 @@ async def workshop_wait(query: CallbackQuery) -> None:
 @router.callback_query(F.data == "wsp:noop")
 async def workshop_noop(query: CallbackQuery) -> None:
     await query.answer()
+
+
+@router.callback_query(F.data == "wsp:craftlocked")
+async def workshop_craft_locked(query: CallbackQuery) -> None:
+    await query.answer("Чертёж изучен, но не хватает уровня профессии, станции или героя.", show_alert=True)
+
+
+@router.callback_query(F.data == "wsp:sharp:menu")
+async def workshop_sharpen_menu(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None:
+            return
+        bonus = forge_service.workshop_blacksmith_sharpen_bonus(char)
+        pct = int(round(bonus * 100))
+        slots = await forge_service.list_enchant_slot_button_rows(session, char.id)
+        lines = [
+            "✨ <b>Заточка в мастерской</b>",
+            "",
+            f"Уровень кузнеца даёт до <b>+20%</b> к шансу успеха заточки; сейчас ≈ <b>+{pct}%</b> "
+            "(дополнительно к бонусу верстака дома, если есть).",
+            "<i>Выбери надетый предмет по слоту. Стоимость и материалы — как в городской кузнице.</i>",
+        ]
+        if not slots:
+            lines.append("")
+            lines.append("<i>Нет экипировки для заточки — надень предметы в /inv.</i>")
+        kb = (
+            workshop_sharpen_slots_keyboard(slots)
+            if slots
+            else InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="⬅ К кузнице", callback_data="wsp:prof:blacksmith")],
+                    menu_nav_button_row(),
+                ],
+            )
+        )
+        await _workshop_ui(state, query, char, "\n".join(lines), kb)
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:sharp:menu")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:sharp:do:"))
+async def workshop_sharpen_do(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.data is None or query.message is None:
+            return
+        slot = str(query.data.split(":")[3])
+        extra = forge_service.workshop_blacksmith_sharpen_bonus(char)
+        ok, lines = await forge_service.try_enchant_equipped_in_slot(
+            session,
+            char,
+            slot,
+            skip_forge_location_check=True,
+            extra_success_bonus=extra,
+            spend_label="Мастерская: заточка",
+            spend_kind_tag="workshop",
+        )
+        await session.commit()
+        if not ok:
+            await query.answer((lines[0] if lines else "Нельзя.")[:200], show_alert=True)
+            return
+        body = "\n".join(lines)
+        slots = await forge_service.list_enchant_slot_button_rows(session, char.id)
+        kb = (
+            workshop_sharpen_slots_keyboard(slots)
+            if slots
+            else InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="⬅ К кузнице", callback_data="wsp:prof:blacksmith")],
+                    menu_nav_button_row(),
+                ],
+            )
+        )
+        pct = int(round(extra * 100))
+        hdr = f"✨ Заточка (бонус кузнеца ≈ +{pct}%)\n\n"
+        await _workshop_ui(state, query, char, hdr + body, kb)
+        await query.answer("Готово.")
+    except Exception:
+        logger.exception("wsp:sharp:do")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+def _workshop_enchant_scroll_kb(page: int, scrolls: list, total: int) -> InlineKeyboardMarkup:
+    max_page = max(0, (max(0, total) - 1) // _ENCH_SCROLL_PER_PAGE)
+    p = max(0, min(int(page), max_page))
+    start = p * _ENCH_SCROLL_PER_PAGE
+    chunk = scrolls[start : start + _ENCH_SCROLL_PER_PAGE]
+    rows: list[list[InlineKeyboardButton]] = []
+    for it in chunk:
+        nm = str((it.item_data or {}).get("name", f"#{it.id}"))[:40]
+        sid = int(it.id)
+        rows.append([InlineKeyboardButton(text=nm, callback_data=f"wsp:ench:pick:{sid}")])
+    nav: list[InlineKeyboardButton] = []
+    if max_page > 0:
+        if p > 0:
+            nav.append(InlineKeyboardButton(text="◀", callback_data=f"wsp:ench:scrpage:{p - 1}"))
+        nav.append(InlineKeyboardButton(text=f"{p + 1}/{max_page + 1}", callback_data="wsp:noop"))
+        if p < max_page:
+            nav.append(InlineKeyboardButton(text="▶", callback_data=f"wsp:ench:scrpage:{p + 1}"))
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(text="⬅ Лаборатория", callback_data="wsp:prof:alchemist")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _workshop_enchant_targets_kb(scroll_id: int, page: int, targets: list) -> InlineKeyboardMarkup:
+    total = len(targets)
+    max_page = max(0, (max(0, total) - 1) // _ENCH_TARGET_PER_PAGE)
+    p = max(0, min(int(page), max_page))
+    start = p * _ENCH_TARGET_PER_PAGE
+    chunk = targets[start : start + _ENCH_TARGET_PER_PAGE]
+    rows: list[list[InlineKeyboardButton]] = []
+    for t in chunk:
+        nm = str((t.item_data or {}).get("name", f"#{t.id}"))[:44]
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"➡ {nm}",
+                    callback_data=f"wsp:ench:do:{scroll_id}:{int(t.id)}",
+                ),
+            ],
+        )
+    nav: list[InlineKeyboardButton] = []
+    if max_page > 0:
+        if p > 0:
+            nav.append(
+                InlineKeyboardButton(text="◀", callback_data=f"wsp:ench:tgtpage:{scroll_id}:{p - 1}"),
+            )
+        if p < max_page:
+            nav.append(
+                InlineKeyboardButton(text="▶", callback_data=f"wsp:ench:tgtpage:{scroll_id}:{p + 1}"),
+            )
+        if nav:
+            rows.append(nav)
+    rows.append([InlineKeyboardButton(text="⬅ К свиткам", callback_data="wsp:ench:menu")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query((F.data == "wsp:ench:menu") | F.data.startswith("wsp:ench:scrpage:"))
+async def workshop_enchant_scroll_menu(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        page = 0
+        if query.data.startswith("wsp:ench:scrpage:"):
+            page = int(query.data.split(":")[3])
+        bag = await inventory_repo.list_bag_items(session, char.id)
+        scrolls = _alchemy_scroll_items(bag)
+        lines = [
+            "📜 <b>Зачарование (лаборатория)</b>",
+            "",
+            "<i>Выбери свиток зачарования из сумки. Предметы для наложения — в порядке как в инвентаре.</i>",
+        ]
+        if not scrolls:
+            lines.append("")
+            lines.append("<i>Нет подходящих свитков в сумке.</i>")
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="⬅ Лаборатория", callback_data="wsp:prof:alchemist")],
+                    menu_nav_button_row(),
+                ],
+            )
+        else:
+            kb = _workshop_enchant_scroll_kb(page, scrolls, len(scrolls))
+        await _workshop_ui(state, query, char, "\n".join(lines), kb)
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:ench:menu")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:ench:pick:"))
+async def workshop_enchant_pick_scroll(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        scroll_id = int(query.data.split(":")[3])
+        scroll_it = await inventory_repo.get_item_for_character(session, char.id, scroll_id)
+        if scroll_it is None:
+            await query.answer("Свиток не найден.", show_alert=True)
+            return
+        sd = dict(scroll_it.item_data or {})
+        if str(sd.get("use_tag") or "") != USE_TAG_ALCHEMY_ENCHANT:
+            await query.answer("Это не зачарование.", show_alert=True)
+            return
+        raw_targets = await list_compatible_targets(session, char.id, sd)
+        targets = _sort_bag_inventory_order(raw_targets)
+        if not targets:
+            await query.answer("Нет совместимых предметов в сумке.", show_alert=True)
+            return
+        summ = summarize_scroll(sd)
+        lines = [
+            "🧪 <b>Свиток</b>",
+            f"<i>{html.escape(summ)}</i>",
+            "",
+            "<i>Выбери предмет (порядок как в инвентаре).</i>",
+        ]
+        kb = _workshop_enchant_targets_kb(scroll_id, 0, targets)
+        await _workshop_ui(state, query, char, "\n".join(lines), kb)
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:ench:pick")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:ench:tgtpage:"))
+async def workshop_enchant_targets_page(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        _, _, _, sid_s, p_s = query.data.split(":", 4)
+        scroll_id = int(sid_s)
+        page = int(p_s)
+        scroll_it = await inventory_repo.get_item_for_character(session, char.id, scroll_id)
+        if scroll_it is None:
+            await query.answer("Свиток не найден.", show_alert=True)
+            return
+        sd = dict(scroll_it.item_data or {})
+        if str(sd.get("use_tag") or "") != USE_TAG_ALCHEMY_ENCHANT:
+            await query.answer("Это не зачарование.", show_alert=True)
+            return
+        raw_targets = await list_compatible_targets(session, char.id, sd)
+        targets = _sort_bag_inventory_order(raw_targets)
+        if not targets:
+            await query.answer("Нет целей.", show_alert=True)
+            return
+        summ = summarize_scroll(sd)
+        lines = [
+            "🧪 <b>Свиток</b>",
+            f"<i>{html.escape(summ)}</i>",
+            "",
+            "<i>Выбери предмет (порядок как в инвентаре).</i>",
+        ]
+        kb = _workshop_enchant_targets_kb(scroll_id, page, targets)
+        await _workshop_ui(state, query, char, "\n".join(lines), kb)
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:ench:tgtpage")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:ench:do:"))
+async def workshop_enchant_apply(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        parts = query.data.split(":")
+        if len(parts) < 5:
+            await query.answer()
+            return
+        scroll_id = int(parts[3])
+        target_id = int(parts[4])
+        ok, msg = await try_apply_alchemy_enchant(session, char, scroll_id, target_id)
+        await session.commit()
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        bag = await inventory_repo.list_bag_items(session, char.id)
+        scrolls = _alchemy_scroll_items(bag)
+        lines = [
+            msg,
+            "",
+            "📜 <b>Зачарование</b>",
+            "<i>Можно выбрать другой свиток.</i>",
+        ]
+        kb = (
+            _workshop_enchant_scroll_kb(0, scrolls, len(scrolls))
+            if scrolls
+            else InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="⬅ Лаборатория", callback_data="wsp:prof:alchemist")],
+                    menu_nav_button_row(),
+                ],
+            )
+        )
+        await _workshop_ui(state, query, char, "\n".join(lines), kb)
+        await query.answer("Готово.")
+    except Exception:
+        logger.exception("wsp:ench:do")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "wsp:rune:menu")
+async def workshop_rune_menu(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None:
+            return
+        text = (
+            "💎 <b>Слияние рун</b>\n\n"
+            "<i>3× ранг I → II, 4× II → III, 5× III → IV, 5× IV → V (одна стихия). "
+            "Выбери целевой ранг, затем стихию.</i>"
+        )
+        await _workshop_ui(state, query, char, text, workshop_rune_tiers_keyboard())
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:rune:menu")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:rune:tier:"))
+async def workshop_rune_tier(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        tr = int(query.data.split(":")[3])
+        text = f"💎 <b>Стихия</b> (цель — ранг {tr})\n\n<i>Нажми на элемент.</i>"
+        await _workshop_ui(state, query, char, text, workshop_rune_elements_keyboard(tr))
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:rune:tier")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:rune:do:"))
+async def workshop_rune_do(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        parts = query.data.split(":")
+        if len(parts) < 5:
+            await query.answer()
+            return
+        target_rank = int(parts[3])
+        element = str(parts[4])
+        ok, msg = await forge_service.try_workshop_rune_merge(
+            session,
+            char,
+            element=element,
+            target_rank=target_rank,
+        )
+        await session.commit()
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        text = f"{msg}\n\n💎 <b>Слияние рун</b>\n\n<i>Можно повторить.</i>"
+        await _workshop_ui(state, query, char, text, workshop_rune_tiers_keyboard())
+        await query.answer("Готово.")
+    except Exception:
+        logger.exception("wsp:rune:do")
+        await query.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data == "wsp:lb")

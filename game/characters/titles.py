@@ -352,8 +352,8 @@ ALL_TITLES: tuple[TitleDef, ...] = (
         255,
         lambda c: 10 in _coliseum_defeated_ids(c),
         "победа над чемпионом Колизея (10-й боец)",
-        xp_bonus_pct=3,
-        stat_str=1,
+        stat_str=2,
+        stat_vit=1,
     ),
     TitleDef(
         "coliseum_champion_20",
@@ -361,9 +361,9 @@ ALL_TITLES: tuple[TitleDef, ...] = (
         256,
         lambda c: 20 in _coliseum_defeated_ids(c),
         "победа над чемпионом Колизея (20-й боец)",
-        xp_bonus_pct=3,
         gold_bonus_pct=2,
-        stat_dex=1,
+        stat_dex=2,
+        stat_luck=1,
     ),
     TitleDef(
         "coliseum_champion_30",
@@ -371,8 +371,8 @@ ALL_TITLES: tuple[TitleDef, ...] = (
         257,
         lambda c: 30 in _coliseum_defeated_ids(c),
         "победа над чемпионом Колизея (30-й боец)",
-        xp_bonus_pct=4,
-        stat_vit=2,
+        stat_vit=3,
+        stat_str=1,
     ),
     TitleDef(
         "coliseum_champion_40",
@@ -380,9 +380,9 @@ ALL_TITLES: tuple[TitleDef, ...] = (
         258,
         lambda c: 40 in _coliseum_defeated_ids(c),
         "победа над чемпионом Колизея (40-й боец)",
-        xp_bonus_pct=4,
         gold_bonus_pct=3,
-        stat_int=2,
+        stat_int=3,
+        stat_dex=1,
     ),
     TitleDef(
         "coliseum_godslayer",
@@ -391,8 +391,8 @@ ALL_TITLES: tuple[TitleDef, ...] = (
         lambda c: 50 in _coliseum_defeated_ids(c),
         "победа над финальным бойцом Колизея",
         gold_bonus_pct=5,
-        xp_bonus_pct=5,
-        stat_str=3,
+        stat_str=4,
+        stat_vit=2,
     ),
     TitleDef(
         "coliseum_overlord",
@@ -401,8 +401,8 @@ ALL_TITLES: tuple[TitleDef, ...] = (
         lambda c: len(_coliseum_defeated_ids(c)) >= 50,
         "победить всех 50 бойцов Колизея",
         gold_bonus_pct=8,
-        xp_bonus_pct=8,
-        stat_luck=5,
+        stat_luck=7,
+        stat_str=2,
     ),
 )
 

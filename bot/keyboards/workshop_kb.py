@@ -7,6 +7,24 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 
 
+def workshop_prof_hub_keyboard(profession: str) -> InlineKeyboardMarkup:
+    """Хаб профессии: крафт + специализация (заточка / зачарование / руны)."""
+    pk = str(profession).strip().lower()
+    rows: list[list[InlineKeyboardButton]] = []
+    if pk == "blacksmith":
+        rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
+        rows.append([InlineKeyboardButton(text="✨ Заточка экипировки", callback_data="wsp:sharp:menu")])
+    elif pk == "alchemist":
+        rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
+        rows.append([InlineKeyboardButton(text="📜 Зачарование", callback_data="wsp:ench:menu")])
+    elif pk == "jeweler":
+        rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
+        rows.append([InlineKeyboardButton(text="💎 Слияние рун", callback_data="wsp:rune:menu")])
+    rows.append([InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def workshop_main_keyboard(locale: str = "ru") -> InlineKeyboardMarkup:
     _ = locale
     return InlineKeyboardMarkup(
@@ -50,15 +68,63 @@ def workshop_prof_keyboard(
     if max_page > 0:
         if p > 0:
             nav.append(
-                InlineKeyboardButton(text="◀", callback_data=f"wsp:profpage:{profession}:{p - 1}"),
+                InlineKeyboardButton(text="◀", callback_data=f"wsp:craftpage:{profession}:{p - 1}"),
             )
         nav.append(InlineKeyboardButton(text=f"{p + 1}/{max_page + 1}", callback_data="wsp:noop"))
         if p < max_page:
             nav.append(
-                InlineKeyboardButton(text="▶", callback_data=f"wsp:profpage:{profession}:{p + 1}"),
+                InlineKeyboardButton(text="▶", callback_data=f"wsp:craftpage:{profession}:{p + 1}"),
             )
         rows.append(nav)
-    rows.append([InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")])
+    rows.append([InlineKeyboardButton(text="⬅ К профессии", callback_data=f"wsp:prof:{profession}")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def workshop_sharpen_slots_keyboard(rows_slots: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    """rows_slots: (equip_slot, label)."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for slot, lab in rows_slots[:12]:
+        rows.append(
+            [InlineKeyboardButton(text=lab[:58], callback_data=f"wsp:sharp:do:{slot}")],
+        )
+    rows.append([InlineKeyboardButton(text="⬅ К кузнице", callback_data="wsp:prof:blacksmith")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def workshop_rune_tiers_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="↑ II (3× ранг I)", callback_data="wsp:rune:tier:2")],
+            [InlineKeyboardButton(text="↑ III (4× ранг II)", callback_data="wsp:rune:tier:3")],
+            [InlineKeyboardButton(text="↑ IV (5× ранг III)", callback_data="wsp:rune:tier:4")],
+            [InlineKeyboardButton(text="↑ V (5× ранг IV)", callback_data="wsp:rune:tier:5")],
+            [InlineKeyboardButton(text="⬅ К ювелиру", callback_data="wsp:prof:jeweler")],
+            menu_nav_button_row(),
+        ],
+    )
+
+
+def workshop_rune_elements_keyboard(target_rank: int) -> InlineKeyboardMarkup:
+    from game.items.runes import ELEMENTS
+
+    rows: list[list[InlineKeyboardButton]] = []
+    line: list[InlineKeyboardButton] = []
+    for el, meta in ELEMENTS.items():
+        em = str(meta.get("emoji") or "💎")
+        line.append(
+            InlineKeyboardButton(
+                text=f"{em}",
+                callback_data=f"wsp:rune:do:{target_rank}:{el}",
+            ),
+        )
+        if len(line) >= 4:
+            rows.append(line)
+            line = []
+    if line:
+        rows.append(line)
+    rows.append([InlineKeyboardButton(text="⬅ К рангам", callback_data="wsp:rune:menu")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

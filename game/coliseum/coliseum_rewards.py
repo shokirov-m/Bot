@@ -14,7 +14,8 @@ class LootEntry(TypedDict, total=False):
     item_data: dict[str, Any]
     # title — ключ TitleDef
     title_key: str
-    # skill_meta — ключ навыка колизея для meta_progress["coliseum_skills"]
+    # skill_meta — ключ навыка колизея для meta_progress["coliseum_skills"];
+    # в payload: label_ru и ровно одно из str_flat/dex_flat/int_flat/vit_flat/luck_flat (плоский бонус).
     skill_key: str
     skill_payload: dict[str, Any]
 
@@ -30,13 +31,33 @@ def _pot_hp_pct(name: str, pct: int) -> dict[str, Any]:
 
 
 def _ring_coliseum(tier: int) -> dict[str, Any]:
+    """Кольцо награды (fid кратен 5, не чемпион). Статы растут с глубиной колизея."""
+    t = int(tier)
+    defense = min(8 + t * 2, 72)
+    hp_bonus = min(25 + t * 8, 520)
+    luck = min(1 + t // 10, 8)
+    rarity = "epic" if t >= 35 else "rare"
     return {
-        "name": f"Печать Колизея ({tier})",
-        "slot": "ring",
-        "kind": "armor",
-        "defense": min(2 + tier // 5, 40),
-        "hp_bonus": min(15 + tier * 3, 220),
-        "rarity": "rare" if tier < 25 else "epic",
+        "name": f"Печать Колизея ({t})",
+        "kind": "ring",
+        "defense": defense,
+        "hp_bonus": hp_bonus,
+        "luck": luck,
+        "summary": f"Награда арены за победу над гладиатором №{t}.",
+        "rarity": rarity,
+    }
+
+
+def _skill_meta_for_fid(fid: int) -> LootEntry:
+    """Пассив «урок колизея»: постоянный бонус к одному стату (читается stat_bonus_service)."""
+    sk = f"col_skill_{fid}"
+    stats_cycle = ("vit", "str", "dex", "int", "luck")
+    stat = stats_cycle[(fid - 1) % len(stats_cycle)]
+    val = min(1 + (fid - 1) // 4, 14)
+    return {
+        "kind": "skill_meta",
+        "skill_key": sk,
+        "skill_payload": {"label_ru": f"Урок Колизея №{fid}", f"{stat}_flat": val},
     }
 
 
@@ -47,13 +68,10 @@ def _default_loot_for_index(fid: int) -> LootEntry:
     if fid % 5 == 0:
         return {"kind": "equipment", "item_data": _ring_coliseum(fid)}
     if fid % 3 == 0:
-        return {"kind": "consumable", "item_data": _pot_hp_pct(f"Эликсир триумфа ({fid})", min(35 + fid, 55))}
-    sk = f"col_skill_{fid}"
-    return {
-        "kind": "skill_meta",
-        "skill_key": sk,
-        "skill_payload": {"label_ru": f"Урок Колизея #{fid}", "xp_bonus_pct_floor": min(1 + fid // 10, 5)},
-    }
+        # Обычные эликсиры 28–50 % HP в зависимости от номера боя
+        pct = min(28 + (fid * fid) // 120, 50)
+        return {"kind": "consumable", "item_data": _pot_hp_pct(f"Эликсир триумфа ({fid})", pct)}
+    return _skill_meta_for_fid(fid)
 
 
 COLISEUM_LOOT: dict[str, LootEntry] = {}
@@ -68,10 +86,11 @@ COLISEUM_LOOT["loot_49"] = {
     "kind": "equipment",
     "item_data": {
         "name": "Часы Кроноса",
-        "slot": "ring",
-        "kind": "armor",
-        "defense": 35,
-        "hp_bonus": 180,
+        "kind": "ring",
+        "defense": 42,
+        "hp_bonus": 240,
+        "vit": 6,
+        "summary": "Трофей предфинального чемпиона Колизея.",
         "rarity": "epic",
     },
 }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
@@ -78,20 +78,28 @@ async def top_by_gold(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> l
 
 
 async def top_by_coliseum(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> list[Character]:
-    """Топ по числу побеждённых бойцов колизея (длина списка defeated в meta_progress.coliseum_v1)."""
-    defeated_len = func.coalesce(
-        func.json_array_length(Character.meta_progress, "$.coliseum_v1.defeated"),
-        0,
-    )
+    """Топ по числу побеждённых бойцов колизея (без JSON-функций SQL — совместимо со всеми SQLite)."""
+    from services import coliseum_service
+
     stmt = (
         select(Character)
         .join(User, Character.user_id == User.id)
         .where(User.is_banned.is_(False))
-        .order_by(desc(defeated_len), desc(Character.level), desc(Character.floor_number))
-        .limit(limit)
     )
     r = await session.execute(stmt)
-    return list(r.scalars().all())
+    chars = list(r.scalars().all())
+
+    def _defeated_n(ch: Character) -> int:
+        return len(coliseum_service.defeated_ids(ch))
+
+    chars.sort(
+        key=lambda c: (
+            -_defeated_n(c),
+            -int(c.level or 0),
+            -max(int(c.highest_floor_reached or 0), int(c.floor_number or 0)),
+        ),
+    )
+    return chars[: int(limit)]
 
 
 async def get_clan_tags_for_characters(

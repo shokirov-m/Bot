@@ -13,9 +13,30 @@ from db.models.character import Character
 from db.repository import inventory_repo
 from game.coliseum.coliseum_data import fighter_by_id
 from game.coliseum.coliseum_rewards import COLISEUM_LOOT, LootEntry, loot_for_fighter_id
+from game.items.stat_bonuses import STAT_KEYS
 from services import title_service
 
 META_KEY = "coliseum_v1"
+
+_STAT_FLAT_LABEL_RU: dict[str, str] = {
+    "str": "СИЛ",
+    "dex": "ЛОВ",
+    "int": "ИНТ",
+    "vit": "ВЫН",
+    "luck": "УДЧ",
+}
+
+
+def _coliseum_skill_reward_html(pl: dict[str, Any], sk: str) -> str:
+    parts: list[str] = []
+    for k in STAT_KEYS:
+        v = int(pl.get(f"{k}_flat") or 0)
+        if v and k in _STAT_FLAT_LABEL_RU:
+            parts.append(f"+{v} {_STAT_FLAT_LABEL_RU[k]}")
+    lab = str(pl.get("label_ru") or sk)
+    if parts:
+        return f"📜 Приём Колизея: <b>{lab}</b> <i>({', '.join(parts)} навсегда)</i>"
+    return f"📜 Приём Колизея: <b>{lab}</b>"
 
 
 def _block(character: Character) -> dict[str, Any]:
@@ -122,7 +143,7 @@ async def grant_loot(session: AsyncSession, character: Character, loot: LootEntr
                 skills[sk] = pl
                 mp["coliseum_skills"] = skills
                 character.meta_progress = mp
-                lines.append(f"📜 Освоен приём Колизея: <b>{pl.get('label_ru', sk)}</b>")
+                lines.append(_coliseum_skill_reward_html(pl, sk))
     except Exception:
         logger.exception("coliseum grant_loot")
     return lines
