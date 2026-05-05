@@ -190,11 +190,17 @@ async def on_scrap_merchant_callback(
             else:
                 from bot.keyboards.city_market_kb import city_floor3_market_keyboard
 
-                await query.message.edit_text(
-                    "🏛️ <b>Рынок «Тихий Ручей»</b>\n"
-                    "<i>Лавка, скупщик, сейф банка и храм призыва — выбери ниже.</i>",
-                    parse_mode=ParseMode.HTML,
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=(
+                        "🏛️ <b>Рынок «Тихий Ручей»</b>\n"
+                        "<i>Лавка, скупщик, сейф банка и храм призыва — выбери ниже.</i>"
+                    ),
                     reply_markup=city_floor3_market_keyboard(char.floor_number),
+                    target_message=query.message,
+                    photo_path=None,
                 )
             await query.answer()
             return
@@ -207,10 +213,14 @@ async def on_scrap_merchant_callback(
         if pg is not None:
             items = await inventory_repo.list_bag_items(session, char.id)
             text = scrap_merchant_service.format_scrap_menu_html(char, items)
-            await query.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
                 reply_markup=scrap_merchant_keyboard(items, back=scrap_ui_back(char), page=int(pg)),
+                target_message=query.message,
+                photo_path=None,
             )
             await query.answer()
             return
@@ -234,10 +244,14 @@ async def on_scrap_merchant_callback(
         await session.refresh(char)
         items = await inventory_repo.list_bag_items(session, char.id)
         text = scrap_merchant_service.format_scrap_menu_html(char, items)
-        await query.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=scrap_merchant_keyboard(items, back=scrap_ui_back(char), page=page_n),
+            target_message=query.message,
+            photo_path=None,
         )
         await query.answer("Продано.", show_alert=False)
     except Exception:
@@ -362,7 +376,15 @@ async def on_floor_callback(
             )])
             kb = InlineKeyboardMarkup(inline_keyboard=rows)
             if query.message is not None:
-                await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=text,
+                    reply_markup=kb,
+                    target_message=query.message,
+                    photo_path=None,
+                )
             await query.answer()
             return
 
@@ -453,10 +475,14 @@ async def on_floor_callback(
             set_scrap_ui_back(char, "floor")
             items = await inventory_repo.list_bag_items(session, char.id)
             text = scrap_merchant_service.format_scrap_menu_html(char, items)
-            await query.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
                 reply_markup=scrap_merchant_keyboard(items, back="floor", page=1),
+                target_message=query.message,
+                photo_path=None,
             )
             await query.answer()
             return
@@ -1301,7 +1327,7 @@ async def on_floor_callback(
 # ── Обработчики заданий путников (wnpc:*) ─────────────────────────────────────
 
 @router.callback_query(F.data.regexp(r"^wnpc:take:\d+$"))
-async def wnpc_take_quest(query: CallbackQuery, session: AsyncSession) -> None:
+async def wnpc_take_quest(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     """Взять задание от путника."""
     try:
         if query.data is None or query.from_user is None or query.message is None:
@@ -1329,7 +1355,15 @@ async def wnpc_take_quest(query: CallbackQuery, session: AsyncSession) -> None:
         text = wnpc_qs.format_npc_quest_screen(char, floor)
         rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"fl:{floor}:back")]]
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
-        await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=kb,
+            target_message=query.message,
+            photo_path=None,
+        )
         await query.answer("✅ Задание принято!")
     except Exception:
         logger.exception("wnpc:take")
@@ -1337,7 +1371,7 @@ async def wnpc_take_quest(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.regexp(r"^wnpc:claim:\d+$"))
-async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession) -> None:
+async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     """Получить награду за выполненное задание путника."""
     try:
         if query.data is None or query.from_user is None or query.message is None:
@@ -1364,7 +1398,15 @@ async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession) -> None:
         await session.commit()
         rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"fl:{floor}:back")]]
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
-        await query.message.edit_text(msg, reply_markup=kb, parse_mode=ParseMode.HTML)
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=msg,
+            reply_markup=kb,
+            target_message=query.message,
+            photo_path=None,
+        )
         await query.answer("🎁 Награда получена!")
     except Exception:
         logger.exception("wnpc:claim")

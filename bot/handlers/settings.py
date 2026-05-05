@@ -112,7 +112,7 @@ async def menu_open_settings(callback: CallbackQuery, session: AsyncSession, sta
             return
         user, char = pair
         if not unlock_service.is_unlocked(char, "menu_settings"):
-            await callback.answer("Откроется с 10 ур.", show_alert=True)
+            await callback.answer("Раздел недоступен.", show_alert=True)
             return
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
@@ -153,11 +153,15 @@ async def stg_rename_start(callback: CallbackQuery, session: AsyncSession, state
         loc = get_locale(char, callback.from_user.language_code)
         cost = int(settings.DISPLAY_NAME_CHANGE_GOLD)
         await state.set_state(SettingsStates.waiting_new_name)
-        await callback.message.edit_text(
-            f"{t(loc, 'settings_title')}\n{LINE_SEP}\n"
-            f"{t(loc, 'settings_rename_intro', gold=cost)}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"{t(loc, 'settings_title')}\n{LINE_SEP}\n{t(loc, 'settings_rename_intro', gold=cost)}",
             reply_markup=settings_cancel_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -181,10 +185,15 @@ async def stg_promo_start(callback: CallbackQuery, session: AsyncSession, state:
         user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.set_state(SettingsStates.waiting_promo)
-        await callback.message.edit_text(
-            f"{t(loc, 'settings_title')}\n{LINE_SEP}\n{t(loc, 'settings_promo_prompt')}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"{t(loc, 'settings_title')}\n{LINE_SEP}\n{t(loc, 'settings_promo_prompt')}",
             reply_markup=settings_cancel_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -219,11 +228,15 @@ async def stg_stat_reset_prompt(callback: CallbackQuery, session: AsyncSession, 
             await callback.answer(t(loc, "settings_stat_reset_no_gold", gold=cost), show_alert=True)
             return
         await state.clear()
-        await callback.message.edit_text(
-            f"{t(loc, 'settings_title')}\n{LINE_SEP}\n"
-            f"{t(loc, 'settings_stat_reset_warn', gold=cost, points=pts)}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"{t(loc, 'settings_title')}\n{LINE_SEP}\n{t(loc, 'settings_stat_reset_warn', gold=cost, points=pts)}",
             reply_markup=settings_stat_reset_confirm_keyboard(locale=loc, gold=cost),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -245,10 +258,15 @@ async def stg_stat_reset_back(callback: CallbackQuery, session: AsyncSession, st
         user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
-        await callback.message.edit_text(
-            _settings_body_html(loc),
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_body_html(loc),
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -277,20 +295,29 @@ async def stg_stat_reset_execute(callback: CallbackQuery, session: AsyncSession,
         ok, err_key = character_service.try_paid_reset_stat_allocations(char)
         if not ok:
             await callback.answer(t(loc, err_key, gold=cost), show_alert=True)
-            await callback.message.edit_text(
-                _settings_body_html(loc),
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=_settings_body_html(loc),
                 reply_markup=_settings_reply_kb(loc, char, user),
+                target_message=callback.message,
+                photo_path=menu_settings_photo_path(),
+                character=char,
             )
             return
         await character_service.refresh_hp_mp_from_effective(session, char, prior_effective_stats=prior_eff)
         await session.flush()
         await state.clear()
-        await callback.message.edit_text(
-            f"{t(loc, 'settings_title')}\n{LINE_SEP}\n"
-            f"{t(loc, 'settings_stat_reset_done', points=pts, gold=cost)}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"{t(loc, 'settings_title')}\n{LINE_SEP}\n{t(loc, 'settings_stat_reset_done', points=pts, gold=cost)}",
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -319,11 +346,15 @@ async def stg_referral(callback: CallbackQuery, session: AsyncSession, state: FS
             return
         link = referral_bot_link(bot_username=un, telegram_id=int(callback.from_user.id))
         safe_link = html.escape(link)
-        await callback.message.edit_text(
-            f"{t(loc, 'settings_referral_title')}\n{LINE_SEP}\n"
-            f"{t(loc, 'settings_referral_body', link=safe_link)}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"{t(loc, 'settings_referral_title')}\n{LINE_SEP}\n{t(loc, 'settings_referral_body', link=safe_link)}",
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -346,10 +377,15 @@ async def stg_lang_toggle(callback: CallbackQuery, session: AsyncSession, state:
         nxt = "en" if cur == "ru" else "ru"
         set_locale(char, nxt)
         await session.commit()
-        await callback.message.edit_text(
-            _settings_body_html(nxt),
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_body_html(nxt),
             reply_markup=_settings_reply_kb(nxt, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer(t(nxt, "settings_lang_switched", lang=nxt.upper()), show_alert=False)
     except Exception:
@@ -374,10 +410,15 @@ async def stg_game_images_toggle(callback: CallbackQuery, session: AsyncSession,
         loc = get_locale(char, callback.from_user.language_code)
         set_game_images_hidden(char, game_images_enabled(char))
         await session.commit()
-        await callback.message.edit_text(
-            _settings_body_html(loc),
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_body_html(loc),
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -402,10 +443,15 @@ async def stg_golden_goblin_notify_toggle(callback: CallbackQuery, session: Asyn
         user.notify_golden_goblin = not bool(user.notify_golden_goblin)
         await session.commit()
         loc = get_locale(char, callback.from_user.language_code)
-        await callback.message.edit_text(
-            _settings_body_html(loc),
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_body_html(loc),
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -414,7 +460,7 @@ async def stg_golden_goblin_notify_toggle(callback: CallbackQuery, session: Asyn
 
 
 @router.callback_query(F.data == "stg:tid")
-async def stg_my_id(callback: CallbackQuery, session: AsyncSession) -> None:
+async def stg_my_id(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if callback.from_user is None or callback.message is None:
             await callback.answer()
@@ -426,10 +472,15 @@ async def stg_my_id(callback: CallbackQuery, session: AsyncSession) -> None:
         user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         tid = callback.from_user.id
-        await callback.message.edit_text(
-            t(loc, "settings_my_id", tid=tid),
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=t(loc, "settings_my_id", tid=tid),
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -453,10 +504,15 @@ async def stg_reset_prompt(callback: CallbackQuery, session: AsyncSession, state
         user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
-        await callback.message.edit_text(
-            f"{t(loc, 'settings_title')}\n{LINE_SEP}\n{t(loc, 'settings_reset_warn')}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"{t(loc, 'settings_title')}\n{LINE_SEP}\n{t(loc, 'settings_reset_warn')}",
             reply_markup=settings_reset_confirm_keyboard(locale=loc),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -478,10 +534,15 @@ async def stg_reset_back(callback: CallbackQuery, session: AsyncSession, state: 
         user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
-        await callback.message.edit_text(
-            _settings_body_html(loc),
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_body_html(loc),
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -513,10 +574,14 @@ async def stg_reset_execute(callback: CallbackQuery, session: AsyncSession, stat
         await state.set_state(RegistrationStates.waiting_gender)
         from bot.handlers.start import TOWER_WAKE_LORE, GENDER_PROMPT, _gender_pick_keyboard
 
-        await callback.message.edit_text(
-            f"{TOWER_WAKE_LORE}{GENDER_PROMPT}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=f"{TOWER_WAKE_LORE}{GENDER_PROMPT}",
             reply_markup=_gender_pick_keyboard(),
+            target_message=callback.message,
+            photo_path=None,
         )
         await callback.answer()
     except Exception:
@@ -525,7 +590,7 @@ async def stg_reset_execute(callback: CallbackQuery, session: AsyncSession, stat
 
 
 @router.callback_query(F.data == "stg:tips")
-async def stg_tips(callback: CallbackQuery, session: AsyncSession) -> None:
+async def stg_tips(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if callback.message is None or callback.from_user is None:
             await callback.answer()
@@ -536,10 +601,15 @@ async def stg_tips(callback: CallbackQuery, session: AsyncSession) -> None:
             return
         user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
-        await callback.message.edit_text(
-            t(loc, "settings_tips_body"),
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=t(loc, "settings_tips_body"),
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer()
     except Exception:
@@ -561,10 +631,15 @@ async def stg_cancel(callback: CallbackQuery, session: AsyncSession, state: FSMC
         user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
-        await callback.message.edit_text(
-            _settings_body_html(loc),
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_body_html(loc),
             reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
         )
         await callback.answer(t(loc, "settings_fsm_cancelled"))
     except Exception:

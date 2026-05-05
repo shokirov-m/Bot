@@ -9,7 +9,6 @@ import html as html_mod
 import re
 
 from aiogram import F, Router
-from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger
@@ -133,20 +132,32 @@ async def on_city_floor3_market(
         economy_sink_service.clear_bank_ui_back(char)
 
         if act == "open":
-            await query.message.edit_text(
-                "🏛️ <b>Рынок «Тихий Ручей»</b>\n"
-                "<i>Лавка, скупщик, сейф банка и храм призыва — выбери ниже.</i>",
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=(
+                    "🏛️ <b>Рынок «Тихий Ручей»</b>\n"
+                    "<i>Лавка, скупщик, сейф банка и храм призыва — выбери ниже.</i>"
+                ),
                 reply_markup=city_floor3_market_keyboard(floor_key),
+                target_message=query.message,
+                photo_path=menu_city_photo_path(),
+                character=char,
             )
             await query.answer()
             return
 
         if act == "hub":
-            await query.message.edit_text(
-                format_city_hub_message(char),
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=format_city_hub_message(char),
                 reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+                target_message=query.message,
+                photo_path=menu_city_photo_path(),
+                character=char,
             )
             await query.answer()
             return
@@ -212,10 +223,14 @@ async def on_city_floor3_market(
                     menu_nav_button_row(),
                 ],
             )
-            await query.message.edit_text(
-                "\n".join(lines),
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text="\n".join(lines),
                 reply_markup=kb,
+                target_message=query.message,
+                photo_path=None,
             )
             await query.answer()
             return
@@ -228,10 +243,14 @@ async def on_city_floor3_market(
             set_scrap_ui_back(char, "mkt")
             items = await inventory_repo.list_bag_items(session, char.id)
             text = scrap_merchant_service.format_scrap_menu_html(char, items)
-            await query.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
                 reply_markup=scrap_merchant_keyboard(items, back="mkt"),
+                target_message=query.message,
+                photo_path=None,
             )
             await query.answer()
             return
@@ -239,11 +258,18 @@ async def on_city_floor3_market(
         if act == "temple":
             temple_floor3.temple_normalize_legacy(char)
             if temple_floor3.temple_ritual_done(char):
-                await query.message.edit_text(
-                    "⛪ <b>Храм призыва</b>\n"
-                    "<i>Дар духов уже с тобой — алтарь молчит. Дальнейшие питомцы — в других городах башни.</i>",
-                    parse_mode=ParseMode.HTML,
+                await push_game_ui(
+                    state,
+                    query.bot,
+                    chat_id=query.message.chat.id,
+                    text=(
+                        "⛪ <b>Храм призыва</b>\n"
+                        "<i>Дар духов уже с тобой — алтарь молчит. Дальнейшие питомцы — в других городах башни.</i>"
+                    ),
                     reply_markup=city_floor3_market_keyboard(floor_key),
+                    target_message=query.message,
+                    photo_path=menu_city_photo_path(),
+                    character=char,
                 )
                 await query.answer()
                 return
@@ -261,10 +287,15 @@ async def on_city_floor3_market(
                 f"Сейчас: {em} <b>{nm}</b>\n"
                 f"Осталось перебросов: <b>{left}</b>"
             )
-            await query.message.edit_text(
-                body,
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=body,
                 reply_markup=temple_floor3_keyboard(floor_key, can_reroll=left > 0),
+                target_message=query.message,
+                photo_path=menu_city_photo_path(),
+                character=char,
             )
             await query.answer()
             return
@@ -290,10 +321,15 @@ async def on_city_floor3_market(
                 f"Сейчас: {em} <b>{nm}</b>\n"
                 f"Осталось перебросов: <b>{left}</b>"
             )
-            await query.message.edit_text(
-                body,
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=body,
                 reply_markup=temple_floor3_keyboard(floor_key, can_reroll=left > 0),
+                target_message=query.message,
+                photo_path=menu_city_photo_path(),
+                character=char,
             )
             return
 
@@ -303,10 +339,14 @@ async def on_city_floor3_market(
             await session.flush()
             plain = re.sub(r"<[^>]+>", "", msg)
             await query.answer(plain[:180] if ok else plain[:200], show_alert=not ok)
-            await query.message.edit_text(
-                format_city_hub_message(char) + (f"\n\n{msg}" if msg else ""),
-                parse_mode=ParseMode.HTML,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=format_city_hub_message(char) + (f"\n\n{msg}" if msg else ""),
                 reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+                target_message=query.message,
+                photo_path=None,
             )
             return
 
@@ -358,10 +398,14 @@ async def on_city_skill_buy(
             return
         await query.answer(plain[:180] if plain else "Ок.", show_alert=False)
         body = _temple_skills_shop_html(char, loc)
-        await query.message.edit_text(
-            body,
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=body,
             reply_markup=temple_skills_shop_keyboard(floor_key, char),
+            target_message=query.message,
+            photo_path=None,
         )
     except Exception:
         logger.exception("cty:skillbuy")
@@ -446,10 +490,14 @@ async def on_city_floor3_simple_npc(
             await query.answer(msg[:200], show_alert=True)
             return
         await query.answer("Готово.", show_alert=False)
-        await query.message.edit_text(
-            format_city_hub_message(char) + f"\n\n{msg}",
-            parse_mode=ParseMode.HTML,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=format_city_hub_message(char) + f"\n\n{msg}",
             reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+            target_message=query.message,
+            photo_path=None,
         )
     except Exception:
         logger.exception("cty:f3npc")
