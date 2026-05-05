@@ -9,6 +9,7 @@ import html
 from typing import Any
 
 from aiogram import Bot
+from aiogram.enums import ParseMode
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -76,15 +77,11 @@ async def notify_high_star_material(
     material_name: str,
     quantity: int = 1,
 ) -> None:
-    """Рассылка в группы при ⭐6+ (гача ремесленных ресурсов)."""
+    """Рассылка при ⭐6+ (гача): в подписанные группы; если туда не удалось — в ЛС игроку."""
     if stars < 6:
         return
-    row = await session.get(AppGlobal, 1)
-    if row is None:
-        return
+    row = await _ensure_app_row(session)
     chat_ids = _chat_ids_from_payload(dict(row.payload or {}))
-    if not chat_ids:
-        return
 
     user = await user_repo.get_by_id(session, int(character.user_id))
     uname = (user.username or "").strip() if user is not None else ""
@@ -102,9 +99,34 @@ async def notify_high_star_material(
     tail += f" ({star_label}★)."
     text = f"🎰 {who} {tail}"
 
+    sent_group = False
     for ch in chat_ids:
         try:
-            await bot.send_message(int(ch), text)
+            await bot.send_message(int(ch), text, parse_mode=ParseMode.HTML)
+            sent_group = True
         except Exception:
             logger.warning("gacha_broadcast: не удалось отправить в chat_id={}", ch)
+
+    if sent_group:
+        return
+
+    # Нет подписанных чатов или все отправки в группы не удались — дублируем в личку игроку
+    if not chat_ids:
+        logger.info("gacha_broadcast: нет групп в рассылке — отправка 6★ в ЛС игроку")
+    else:
+        logger.warning(
+            "gacha_broadcast: ни одна группа не приняла сообщение — пробуем ЛС игроку",
+        )
+    if user is None:
+        logger.warning(
+            "gacha_broadcast: 6★ без доставки — нет чатов в payload и нет user для ЛС (character_id={})",
+            character.id,
+        )
+        return
+    tg = int(user.telegram_id)
+    try:
+        await bot.send_message(tg, text, parse_mode=ParseMode.HTML)
+        logger.info("gacha_broadcast: 6★ отправлено в ЛС telegram_id={}", tg)
+    except Exception:
+        logger.warning("gacha_broadcast: не удалось отправить в ЛС telegram_id={}", tg)
 

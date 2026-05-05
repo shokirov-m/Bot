@@ -180,6 +180,13 @@ async def _polling_main() -> None:
     from services.tier2_migration_service import run_tier2_reset
     asyncio.create_task(run_tier2_reset(bot))
 
+    async def _purge_stamina_rations_startup() -> None:
+        from services.inventory_purge_service import purge_stamina_rations_if_needed
+
+        await purge_stamina_rations_if_needed()
+
+    asyncio.create_task(_purge_stamina_rations_startup())
+
     try:
         await dp.start_polling(bot)
     finally:
@@ -222,6 +229,9 @@ def _webhook_main() -> None:
 
         asyncio.create_task(bootstrap_golden_goblin_if_needed(b))
         asyncio.create_task(run_tier2_reset(b))
+        from services.inventory_purge_service import purge_stamina_rations_if_needed
+
+        asyncio.create_task(purge_stamina_rations_if_needed())
 
     async def _stop_jobs(b: Bot) -> None:
         scheduler.shutdown(wait=False)

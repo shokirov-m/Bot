@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy.orm.attributes import flag_modified
 
 from db.models.character import Character
-from game.crafting.recipes_data import PROF_BLACKSMITH, PROFESSION_KEYS
+from game.crafting.recipes_data import PROF_BLACKSMITH, PROFESSION_KEYS, RECIPES
 # Совпадает с services.tavern_service.META_KNOWN_RECIPES (не импортируем — циклы).
 KNOWN_RECIPES_LEGACY_KEY = "known_recipes"
 
@@ -37,6 +37,7 @@ def default_workshop_state() -> dict[str, Any]:
             "top_jeweler": False,
         },
         "migrated_known_recipes_v1": False,
+        "free_blueprints_seeded_v1": False,
         "queue_bonus": 0,
         "status_profession": PROF_BLACKSMITH,
         "spec_profession": None,
@@ -79,6 +80,7 @@ def get_workshop_state(character: Character) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raw = {}
     ws = _fix_defaults(raw)
+    changed = False
     if not ws.get("migrated_known_recipes_v1"):
         known_old = mp.get(KNOWN_RECIPES_LEGACY_KEY)
         if isinstance(known_old, list):
@@ -87,6 +89,19 @@ def get_workshop_state(character: Character) -> dict[str, Any]:
                 kb.add(str(rid))
             ws["known_blueprints"] = sorted(kb)
         ws["migrated_known_recipes_v1"] = True
+        changed = True
+    if not ws.get("free_blueprints_seeded_v1"):
+        kb = set(str(x) for x in (ws.get("known_blueprints") or []))
+        for r in RECIPES:
+            if bool(r.get("requires_blueprint")):
+                continue
+            rid = str(r.get("id") or "").strip()
+            if rid:
+                kb.add(rid)
+        ws["known_blueprints"] = sorted(kb)
+        ws["free_blueprints_seeded_v1"] = True
+        changed = True
+    if changed:
         mp[WORKSHOP_META_KEY] = ws
         character.meta_progress = mp
         flag_modified(character, "meta_progress")

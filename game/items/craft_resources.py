@@ -416,15 +416,15 @@ def total_craft_resource_in_bag(bag_items: list[Any], resource_id: str) -> int:
 
 
 def roll_stack_count_for_stars(stars: int) -> int:
-    """Сколько единиц выдать за один приз гачи (дешёвое — пачкой)."""
+    """Сколько единиц выдать за один приз гачи (дешёвое — пачкой, объёмы ниже старых ×3–7)."""
     s = int(stars)
     if s >= 6:
         return 1
     if s >= 4:
         return random.randint(1, 2)
     if s >= 3:
-        return random.randint(2, 4)
-    return random.randint(3, 7)
+        return random.randint(1, 2)
+    return random.randint(1, 3)
 
 
 async def consume_craft_resources(

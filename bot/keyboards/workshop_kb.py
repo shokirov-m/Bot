@@ -19,12 +19,23 @@ def workshop_prof_hub_keyboard(profession: str) -> InlineKeyboardMarkup:
     if pk == "blacksmith":
         rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
         rows.append([InlineKeyboardButton(text="✨ Заточка экипировки", callback_data="wsp:sharp:menu")])
+        rows.append([InlineKeyboardButton(text="🔨 Разбор предметов", callback_data="wsp:brk:menu")])
     elif pk == "alchemist":
         rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
         rows.append([InlineKeyboardButton(text="📜 Свитки зачарования", callback_data="wsp:ench:menu")])
     elif pk == "jeweler":
         rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
         rows.append([InlineKeyboardButton(text="💎 Слияние рун", callback_data="wsp:rune:menu")])
+        rows.append(
+            [
+                InlineKeyboardButton(text="⚔ Вставить руну (500💰)", callback_data="wsp:rsk"),
+            ],
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(text="🔓 Извлечь руну (500💰)", callback_data="wsp:rrx"),
+            ],
+        )
     rows.append([InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -136,6 +147,96 @@ def workshop_rune_tiers_keyboard() -> InlineKeyboardMarkup:
             menu_nav_button_row(),
         ],
     )
+
+
+def workshop_rune_bag_pick_keyboard(items: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for item_id, label in items[:14]:
+        short = label if len(label) <= 36 else label[:33] + "…"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=short,
+                    callback_data=f"wsp:rsk:{item_id}",
+                ),
+            ],
+        )
+    rows.append([InlineKeyboardButton(text="⬅ К ювелиру", callback_data="wsp:prof:jeweler")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def workshop_rune_socket_pick_keyboard(labels: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for idx, label in labels[:8]:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=label[:40],
+                    callback_data=f"wsp:rrx:{idx}",
+                ),
+            ],
+        )
+    rows.append([InlineKeyboardButton(text="⬅ К ювелиру", callback_data="wsp:prof:jeweler")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def workshop_dis_bag_keyboard(
+    items: list[tuple[int, str]],
+    *,
+    rarity_filter: str | None = None,
+    kind_filter: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Разбор в мастерской: те же фильтры, что у кузницы города."""
+    rows: list[list[InlineKeyboardButton]] = []
+    rar_btns: list[InlineKeyboardButton] = []
+    for code, lab in (
+        ("all", "Все"),
+        ("common", "common"),
+        ("uncommon", "uncommon"),
+        ("rare", "rare"),
+        ("epic", "epic"),
+    ):
+        sel = "✅ " if (rarity_filter or "all") == code else ""
+        rar_btns.append(
+            InlineKeyboardButton(
+                text=f"{sel}{lab}",
+                callback_data=f"wsp:brk:f:{code}:{kind_filter or 'all'}",
+            ),
+        )
+    rows.append(rar_btns[:3])
+    rows.append(rar_btns[3:])
+    knd_btns: list[InlineKeyboardButton] = []
+    for code, lab in (
+        ("all", "Все типы"),
+        ("weapon", "🗡 weapon"),
+        ("armor", "🧥 armor"),
+        ("shield", "🛡 shield"),
+        ("ring", "💍 ring"),
+        ("amulet", "📿 amulet"),
+    ):
+        sel = "✅ " if (kind_filter or "all") == code else ""
+        knd_btns.append(
+            InlineKeyboardButton(
+                text=f"{sel}{lab}",
+                callback_data=f"wsp:brk:f:{rarity_filter or 'all'}:{code}",
+            ),
+        )
+    rows.append(knd_btns[:3])
+    rows.append(knd_btns[3:])
+    for item_id, label in items[:12]:
+        short = label if len(label) <= 38 else label[:35] + "…"
+        rows.append([InlineKeyboardButton(text=short, callback_data=f"wsp:brk:x:{item_id}")])
+    rows.append(
+        [
+            InlineKeyboardButton(text="🧹 Свип common", callback_data="wsp:brk:sw:common"),
+            InlineKeyboardButton(text="🧹 Свип ≤uncommon", callback_data="wsp:brk:sw:uncommon"),
+        ],
+    )
+    rows.append([InlineKeyboardButton(text="⬅ К кузнице", callback_data="wsp:prof:blacksmith")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def workshop_rune_elements_keyboard(target_rank: int) -> InlineKeyboardMarkup:

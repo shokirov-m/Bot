@@ -18,12 +18,15 @@ from bot.i18n import get_locale
 from bot.keyboards.menu_kb import menu_nav_button_row
 from bot.keyboards.workshop_kb import (
     city_workshop_orders_keyboard,
+    workshop_dis_bag_keyboard,
     workshop_gacha_keyboard,
     workshop_main_keyboard,
     workshop_prof_hub_keyboard,
     workshop_prof_keyboard,
     workshop_queue_keyboard,
+    workshop_rune_bag_pick_keyboard,
     workshop_rune_elements_keyboard,
+    workshop_rune_socket_pick_keyboard,
     workshop_rune_tiers_keyboard,
     workshop_sharpen_slots_keyboard,
 )
@@ -42,6 +45,7 @@ from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR
 from game.crafting.workshop_meta import get_workshop_state, known_blueprint_ids
 from game.items import item_categories as inv_cat
 from game.items.craft_resources import RESOURCE_DEFS, total_craft_resource_in_bag
+from game.items.runes import RuneData, ensure_rune_socket_list, extract_rune_from_item
 from services import craft_gacha_service, forge_service, workshop_order_service, workshop_service
 from services.workshop_enchant_service import (
     USE_TAG_ALCHEMY_ENCHANT,
@@ -57,6 +61,12 @@ from bot.utils.game_ui import push_game_ui
 from utils.ui import format_craft_result_effects_block_html
 
 router = Router(name="workshop")
+
+
+def _workshop_dis_norm_filter(v: str) -> str | None:
+    if not v or v == "all":
+        return None
+    return str(v).lower()
 
 
 async def _workshop_ui(
@@ -90,14 +100,13 @@ PROF_TITLE_RU = {
 
 
 def _recipes_unlocked_for_player(character: Character, prof: str) -> list[dict]:
-    """Только рецепты с изученным чертежом (если требуется) или без требования чертежа."""
+    """Только рецепты из списка изученных чертежей игрока (known_blueprints)."""
     known = known_blueprint_ids(character)
     out: list[dict] = []
     for r in recipes_for_profession(prof):
-        if bool(r.get("requires_blueprint")):
-            rid = str(r.get("id") or "")
-            if rid not in known:
-                continue
+        rid = str(r.get("id") or "")
+        if not rid or rid not in known:
+            continue
         out.append(r)
     out.sort(
         key=lambda r: (int(r.get("min_profession_level", 1)), str(r.get("name_ru", r.get("id", "")))),
@@ -122,8 +131,8 @@ async def _recipe_preview_html(session: AsyncSession, char: Character, prof: str
     r = get_recipe_by_id(str(recipe_id))
     if r is None or str(r.get("profession")) != prof:
         return None
-    known = known_blueprint_ids(char)
-    if bool(r.get("requires_blueprint")) and str(r.get("id") or "") not in known:
+    rid_key = str(r.get("id") or "")
+    if not rid_key or rid_key not in known_blueprint_ids(char):
         return None
     bag = await inventory_repo.list_bag_items(session, char.id)
     craft_cost = {str(k): int(v) for k, v in (r.get("craft_cost") or {}).items()}
@@ -139,7 +148,6 @@ async def _recipe_preview_html(session: AsyncSession, char: Character, prof: str
     name = html.escape(str(r.get("name_ru", recipe_id)))
     res_item = r.get("result") or {}
     res_name = html.escape(str(res_item.get("name", "—")))
-    bp_note = "\n<i>Нужен изученный чертёж.</i>" if r.get("requires_blueprint") else ""
     effects = ""
     if isinstance(res_item, dict):
         eff_block = format_craft_result_effects_block_html(res_item)
@@ -147,7 +155,7 @@ async def _recipe_preview_html(session: AsyncSession, char: Character, prof: str
             effects = f"\n\n<b>Что даёт предмет:</b>\n{eff_block}"
     return (
         f"📋 <b>{name}</b>\n"
-        f"<i>Результат:</i> {res_name}{bp_note}{effects}\n\n"
+        f"<i>Результат:</i> {res_name}{effects}\n\n"
         f"⏱ <b>Время создания:</b> {mins} мин ({secs} сек)\n"
         f"📊 <b>Требования:</b> проф. {need_prof}+ (у тебя {plv}), "
         f"станок {need_st}+ (у тебя {st_lv}), герой ур. {need_ch}+\n\n"
@@ -902,6 +910,7 @@ async def workshop_rune_menu(query: CallbackQuery, session: AsyncSession, state:
         text = (
             "💎 <b>Слияние рун</b>\n\n"
             "<i>3× ранг I → II, 4× II → III, 5× III → IV, 5× IV → V (одна стихия). "
+            "Для ранга IV нужен <b>10 ур. ювелира</b>, для V — <b>18 ур.</b> "
             "Выбери целевой ранг, затем стихию.</i>"
         )
         await _workshop_ui(state, query, char, text, workshop_rune_tiers_keyboard())
@@ -938,13 +947,14 @@ async def workshop_rune_do(query: CallbackQuery, session: AsyncSession, state: F
             return
         target_rank = int(parts[3])
         element = str(parts[4])
+        await character_repo.lock_character_row(session, char.id)
         ok, msg = await forge_service.try_workshop_rune_merge(
             session,
             char,
             element=element,
             target_rank=target_rank,
         )
-        await session.commit()
+        await session.flush()
         if not ok:
             await query.answer(msg[:200], show_alert=True)
             return
@@ -953,6 +963,250 @@ async def workshop_rune_do(query: CallbackQuery, session: AsyncSession, state: F
         await query.answer("Готово.")
     except Exception:
         logger.exception("wsp:rune:do")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "wsp:rsk")
+async def workshop_rune_socket_menu(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None:
+            return
+        bag = await inventory_repo.list_bag_items(session, char.id)
+        pairs: list[tuple[int, str]] = []
+        for it in bag:
+            rd = extract_rune_from_item(dict(it.item_data or {}))
+            if rd is not None:
+                pairs.append((int(it.id), rd.display_name))
+        if not pairs:
+            await query.answer("В сумке нет рун.", show_alert=True)
+            return
+        text = (
+            "⚔ <b>Вставка руны в оружие</b>\n\n"
+            "<i>Стоимость попытки <b>500 💰</b>. Шанс успеха <b>70–80%</b> "
+            "(при провале золото списано, руна остаётся в сумке). Нужно надетое оружие со свободным гнездом.</i>"
+        )
+        await _workshop_ui(state, query, char, text, workshop_rune_bag_pick_keyboard(pairs))
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:rsk")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^wsp:rsk:\d+$"))
+async def workshop_rune_socket_apply(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        rid = int(query.data.split(":")[2])
+        await character_repo.lock_character_row(session, char.id)
+        ok, msg = await forge_service.try_workshop_socket_rune_paid(session, char, rune_bag_item_id=rid)
+        await session.flush()
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        text = f"{msg}\n\n⚔ <b>Вставка руны</b>\n\n<i>Можно выбрать другую руну.</i>"
+        bag = await inventory_repo.list_bag_items(session, char.id)
+        pairs: list[tuple[int, str]] = []
+        for it in bag:
+            rd = extract_rune_from_item(dict(it.item_data or {}))
+            if rd is not None:
+                pairs.append((int(it.id), rd.display_name))
+        kb = (
+            workshop_rune_bag_pick_keyboard(pairs)
+            if pairs
+            else workshop_prof_hub_keyboard("jeweler")
+        )
+        await _workshop_ui(state, query, char, text, kb)
+        await query.answer("Готово.")
+    except Exception:
+        logger.exception("wsp:rsk:apply")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "wsp:rrx")
+async def workshop_rune_remove_menu(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None:
+            return
+        weapon = await inventory_repo.get_equipped_weapon(session, char.id)
+        if weapon is None:
+            await query.answer("Нет надетого оружия.", show_alert=True)
+            return
+        wdata = dict(weapon.item_data or {})
+        ensure_rune_socket_list(wdata)
+        sockets = wdata.get("rune_sockets") or []
+        labels: list[tuple[int, str]] = []
+        for i, cell in enumerate(sockets):
+            if isinstance(cell, dict) and cell.get("element"):
+                try:
+                    rd = RuneData.from_dict(cell)
+                    labels.append((i, f"Гнездо {i + 1}: {rd.display_name}"))
+                except (ValueError, TypeError, KeyError):
+                    labels.append((i, f"Гнездо {i + 1}: ?"))
+        if not labels:
+            await query.answer("Нет вставленных рун.", show_alert=True)
+            return
+        text = (
+            "🔓 <b>Извлечение руны</b>\n\n"
+            "<i><b>500 💰</b> за попытку. Шанс вернуть руну в сумку <b>70–80%</b> "
+            "(иначе руна уничтожается).</i>"
+        )
+        await _workshop_ui(state, query, char, text, workshop_rune_socket_pick_keyboard(labels))
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:rrx")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^wsp:rrx:\d+$"))
+async def workshop_rune_remove_apply(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        idx = int(query.data.split(":")[2])
+        await character_repo.lock_character_row(session, char.id)
+        ok, msg = await forge_service.try_workshop_remove_rune_paid(session, char, socket_index=idx)
+        await session.flush()
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        text = f"{msg}\n\n🔓 <b>Извлечение руны</b>\n\n<i>Можно выбрать другое гнездо.</i>"
+        weapon = await inventory_repo.get_equipped_weapon(session, char.id)
+        labels: list[tuple[int, str]] = []
+        if weapon is not None:
+            wdata = dict(weapon.item_data or {})
+            ensure_rune_socket_list(wdata)
+            sockets = wdata.get("rune_sockets") or []
+            for i, cell in enumerate(sockets):
+                if isinstance(cell, dict) and cell.get("element"):
+                    try:
+                        rd = RuneData.from_dict(cell)
+                        labels.append((i, f"Гнездо {i + 1}: {rd.display_name}"))
+                    except (ValueError, TypeError, KeyError):
+                        labels.append((i, f"Гнездо {i + 1}: ?"))
+        kb = (
+            workshop_rune_socket_pick_keyboard(labels)
+            if labels
+            else workshop_prof_hub_keyboard("jeweler")
+        )
+        await _workshop_ui(state, query, char, text, kb)
+        await query.answer("Готово.")
+    except Exception:
+        logger.exception("wsp:rrx:apply")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "wsp:brk:menu")
+async def workshop_disassemble_menu(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None:
+            return
+        pairs = await forge_service.list_disassemblable_items(session, char)
+        if not pairs:
+            await query.answer("В сумке нет предметов для разбора.", show_alert=True)
+            return
+        text = (
+            "🔨 <b>Разбор предметов</b>\n\n"
+            "<i>Как в кузнице города: экипировка из сумки → материалы заточки. Фильтры и свип ниже.</i>"
+        )
+        await _workshop_ui(state, query, char, text, workshop_dis_bag_keyboard(pairs))
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:brk:menu")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:brk:f:"))
+async def workshop_disassemble_filter(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        parts = query.data.split(":")
+        if len(parts) < 5:
+            await query.answer()
+            return
+        rar_code = parts[3]
+        knd_code = parts[4]
+        rar = _workshop_dis_norm_filter(rar_code)
+        knd = _workshop_dis_norm_filter(knd_code)
+        pairs = await forge_service.list_disassemblable_items(
+            session, char, rarity_filter=rar, kind_filter=knd,
+        )
+        title = "🔨 <b>Разбор предметов</b>"
+        if rar or knd:
+            title += f"\n<i>Фильтр:</i> {rar or 'все'} / {knd or 'все типы'}"
+        if not pairs:
+            title += "\n<i>Под фильтр ничего не попало.</i>"
+        await _workshop_ui(
+            state,
+            query,
+            char,
+            title,
+            workshop_dis_bag_keyboard(pairs, rarity_filter=rar_code, kind_filter=knd_code),
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:brk:f")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:brk:x:"))
+async def workshop_disassemble_apply(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        item_id = int(query.data.split(":")[3])
+        await character_repo.lock_character_row(session, char.id)
+        ok, msg = await forge_service.try_workshop_disassemble_bag_item(session, char, item_id)
+        await session.flush()
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        pairs = await forge_service.list_disassemblable_items(session, char)
+        text = f"{msg}\n\n🔨 <b>Разбор предметов</b>"
+        kb = (
+            workshop_dis_bag_keyboard(pairs)
+            if pairs
+            else workshop_prof_hub_keyboard("blacksmith")
+        )
+        await _workshop_ui(state, query, char, text, kb)
+        await query.answer("Разобрано.")
+    except Exception:
+        logger.exception("wsp:brk:x")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("wsp:brk:sw:"))
+async def workshop_disassemble_sweep(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None or query.data is None:
+            return
+        max_rar = str(query.data.split(":")[3])
+        await character_repo.lock_character_row(session, char.id)
+        ok, msg = await forge_service.try_workshop_sweep_disassemble(session, char, max_rarity=max_rar)
+        await session.flush()
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        pairs = await forge_service.list_disassemblable_items(session, char)
+        text = f"{msg}\n\n🔨 <b>Разбор предметов</b>"
+        kb = (
+            workshop_dis_bag_keyboard(pairs)
+            if pairs
+            else workshop_prof_hub_keyboard("blacksmith")
+        )
+        await _workshop_ui(state, query, char, text, kb)
+        await query.answer("Свип готов.")
+    except Exception:
+        logger.exception("wsp:brk:sw")
         await query.answer("Ошибка.", show_alert=True)
 
 

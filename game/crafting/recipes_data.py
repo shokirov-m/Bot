@@ -281,9 +281,9 @@ _RECIPES_LIST: list[dict[str, Any]] = [
         {
             "id": "jeweler_rune_fire_5",
             "name_ru": "Руна пламени V (ювелир)",
-            "description": "Крафт руны 5 ранга. Только ювелир 20 уровня.",
+            "description": "Крафт руны 5 ранга. Ювелир 18+ уровня.",
             "profession": PROF_JEWELER,
-            "min_profession_level": 20,
+            "min_profession_level": 18,
             "min_station_level": 4,
             "min_character_level": 10,
             "cost": {},

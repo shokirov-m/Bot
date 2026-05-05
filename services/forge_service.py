@@ -21,6 +21,8 @@ from game.items import equipment as equip_meta
 from game.items import runes as rune_sys
 from game.items import materials as mat_sys
 from game.items.rarity_scaling import scaled_armor_defense_value, scaled_weapon_attack_value
+from game.crafting.recipes_data import PROF_JEWELER
+from game.crafting.workshop_meta import prof_level
 from game.locations import forge as forge_loc
 from services import character_service, home_service, title_service
 from utils.ui import LINE_SEP, format_inventory_item_html, render_enchant_stars
@@ -684,6 +686,13 @@ _WORKSHOP_RUNE_MERGE: dict[int, tuple[int, int, int]] = {
     5: (4, 5, 2200),
 }
 
+_WORKSHOP_RUNE_SERVICE_COST = 500
+
+
+def _workshop_rune_service_success_chance() -> float:
+    """Шанс успеха вставки / извлечения руны у ювелира (70–80%)."""
+    return random.uniform(0.70, 0.80)
+
 
 async def try_workshop_rune_merge(
     session: AsyncSession,
@@ -699,6 +708,11 @@ async def try_workshop_rune_merge(
     tr = int(target_rank)
     if tr not in _WORKSHOP_RUNE_MERGE:
         return False, "Целевой ранг 2–5."
+    jl = prof_level(character, PROF_JEWELER)
+    if tr >= 4 and jl < 10:
+        return False, "Для слияния в ранг IV нужен <b>10 уровень ювелира</b>."
+    if tr >= 5 and jl < 18:
+        return False, "Для слияния в ранг V нужен <b>18 уровень ювелира</b>."
     prev_rank, need_n, gold_cost = _WORKSHOP_RUNE_MERGE[tr]
     if int(character.gold) < gold_cost:
         return False, f"Нужно {gold_cost} золота."
@@ -738,6 +752,226 @@ async def try_workshop_rune_merge(
         f"⚗️ Получено: <b>{html.escape(new_rune.display_name)}</b> (ячейка {free}).\n"
         f"−{gold_cost} 💰, −{need_n} рун ранга {prev_rank}."
     )
+
+
+async def try_workshop_socket_rune_paid(
+    session: AsyncSession,
+    character: Character,
+    *,
+    rune_bag_item_id: int,
+) -> tuple[bool, str]:
+    """
+    Ювелирная: вставить руну из сумки в надетое оружие.
+    Стоимость 500 💰; шанс успеха 70–80% (при провале золото списано, руна остаётся в сумке).
+    """
+    cost = _WORKSHOP_RUNE_SERVICE_COST
+    if int(character.gold) < cost:
+        return False, f"Нужно {cost} 💰."
+
+    weapon = await inventory_repo.get_equipped_weapon(session, character.id)
+    if weapon is None:
+        return False, "Нет надетого оружия."
+
+    rune_row = await inventory_repo.get_item_for_character(
+        session,
+        character.id,
+        int(rune_bag_item_id),
+    )
+    if rune_row is None or rune_row.bag_slot is None:
+        return False, "Руны нет в сумке."
+
+    rd = rune_sys.extract_rune_from_item(dict(rune_row.item_data or {}))
+    if rd is None:
+        return False, "Это не руна."
+
+    wdata = dict(weapon.item_data or {})
+    if str(wdata.get("kind")) != "weapon":
+        return False, "В слоте не оружие."
+
+    rune_sys.ensure_rune_socket_list(wdata)
+    sockets: list[Any] = list(wdata["rune_sockets"])
+    try:
+        sockets.index(None)
+    except ValueError:
+        return False, "Все гнёзда заняты."
+
+    chance = _workshop_rune_service_success_chance()
+    character_service.add_gold(
+        character,
+        -cost,
+        spend_for="Мастерская: попытка вставки руны",
+        spend_kind="workshop",
+    )
+    if random.random() >= chance:
+        await session.flush()
+        return True, (
+            f"⚠️ Не удалось встроить руну (шанс успеха был ≈{int(round(chance * 100))}%).\n"
+            f"−{cost} 💰. Руна осталась в сумке."
+        )
+
+    free_i = sockets.index(None)
+    sockets[free_i] = rd.as_dict()
+    wdata["rune_sockets"] = sockets
+    weapon.item_data = wdata
+    await inventory_repo.delete_inventory_item(session, rune_row)
+    character.runes_socketed = int(character.runes_socketed) + 1
+    title_service.refresh_unlocks(character)
+    await session.flush()
+    return True, (
+        f"💎 Руна вставлена: {html.escape(rd.display_name)} (гнездо {free_i + 1}).\n"
+        f"−{cost} 💰."
+    )
+
+
+async def try_workshop_remove_rune_paid(
+    session: AsyncSession,
+    character: Character,
+    *,
+    socket_index: int,
+) -> tuple[bool, str]:
+    """
+    Ювелирная: извлечь руну из гнезда за 500 💰.
+    Шанс вернуть руну в сумку 70–80%; иначе руна уничтожается (золото списывается в любом случае).
+    """
+    cost = _WORKSHOP_RUNE_SERVICE_COST
+    if int(character.gold) < cost:
+        return False, f"Нужно {cost} 💰."
+
+    weapon = await inventory_repo.get_equipped_weapon(session, character.id)
+    if weapon is None:
+        return False, "Нет оружия."
+
+    wdata = dict(weapon.item_data or {})
+    rune_sys.ensure_rune_socket_list(wdata)
+    sockets: list[Any] = list(wdata.get("rune_sockets") or [])
+    if socket_index < 0 or socket_index >= len(sockets):
+        return False, "Нет такого гнезда."
+    cell = sockets[socket_index]
+    if not isinstance(cell, dict) or not cell.get("element"):
+        return False, "Гнездо пустое."
+
+    try:
+        rd = rune_sys.RuneData.from_dict(cell)
+    except (ValueError, TypeError, KeyError):
+        return False, "Битые данные руны."
+
+    character_service.add_gold(
+        character,
+        -cost,
+        spend_for="Мастерская: извлечение руны",
+        spend_kind="workshop",
+    )
+
+    sockets[socket_index] = None
+    wdata["rune_sockets"] = sockets
+    weapon.item_data = wdata
+    character.runes_socketed = max(0, int(character.runes_socketed) - 1)
+    title_service.refresh_unlocks(character)
+
+    chance = _workshop_rune_service_success_chance()
+    if random.random() < chance:
+        free = await inventory_repo.first_free_bag_slot(session, character.id)
+        if free is None:
+            character_service.add_gold(
+                character,
+                cost,
+                spend_for="Возврат: нет места для руны",
+                spend_kind="workshop",
+            )
+            sockets[socket_index] = rd.as_dict()
+            wdata["rune_sockets"] = sockets
+            weapon.item_data = wdata
+            character.runes_socketed = int(character.runes_socketed) + 1
+            title_service.refresh_unlocks(character)
+            await session.flush()
+            return False, "Сумка полна — золото возвращено, руна оставлена в гнезде."
+
+        payload = rune_sys.rune_item_payload(rd)
+        await inventory_repo.add_bag_item(session, character.id, copy.deepcopy(payload), bag_slot=free)
+        msg = (
+            f"✅ Руна извлечена: {html.escape(rd.display_name)} → сумка "
+            f"(шанс ≈{int(round(chance * 100))}%).\n−{cost} 💰."
+        )
+    else:
+        msg = (
+            f"💔 Руна {html.escape(rd.display_name)} рассыпалась при извлечении "
+            f"(шанс спасти был ≈{int(round(chance * 100))}%).\n−{cost} 💰."
+        )
+
+    await session.flush()
+    return True, msg
+
+
+async def try_workshop_disassemble_bag_item(
+    session: AsyncSession,
+    character: Character,
+    item_id: int,
+) -> tuple[bool, str]:
+    """Разбор предмета из сумки в мастерской (как в городской кузнице, без требования этажа)."""
+    it = await inventory_repo.get_item_for_character(session, character.id, item_id)
+    if it is None or it.is_equipped or it.bag_slot is None:
+        return False, "Предмет не в сумке."
+
+    data = dict(it.item_data or {})
+    kind = str(data.get("kind") or "").lower()
+    if kind in ("consumable", "rune", "material", "boss_trophy", "misc"):
+        return False, "Этот тип предметов нельзя разобрать."
+
+    rarity = str(data.get("rarity") or "common").lower()
+    count = mat_sys.disassemble_material_count(rarity)
+    home_bonus = home_service.home_disassemble_bonus(character)
+    count += home_bonus
+
+    name = html.escape(str(data.get("name", "Предмет")))
+    mat_name = html.escape(mat_sys.material_name(rarity))
+
+    await inventory_repo.delete_inventory_item(session, it)
+    await add_materials_to_bag(session, character.id, rarity, count)
+
+    bonus_note = " <i>(+1 бонус дома)</i>" if home_bonus else ""
+    await session.flush()
+    return True, (
+        f"🔨 <b>Разобрано:</b> {name}\n"
+        f"+{count} {mat_name} → сумка.{bonus_note}"
+    )
+
+
+async def try_workshop_sweep_disassemble(
+    session: AsyncSession,
+    character: Character,
+    *,
+    max_rarity: str = "uncommon",
+    limit: int = SWEEP_LIMIT,
+) -> tuple[bool, str]:
+    """Свип-разбор в мастерской (без требования этажа города)."""
+    bag = await inventory_repo.list_bag_items(session, character.id)
+    skip_kinds = {"consumable", "rune", "material", "boss_trophy", "misc"}
+    home_bonus = home_service.home_disassemble_bonus(character)
+    totals: dict[str, int] = {}
+    processed = 0
+    for it in sorted(bag, key=lambda x: x.bag_slot or 0):
+        if processed >= int(limit):
+            break
+        if it.is_equipped:
+            continue
+        d = dict(it.item_data or {})
+        kind = str(d.get("kind") or "").lower()
+        if kind in skip_kinds:
+            continue
+        rar = str(d.get("rarity") or "common").lower()
+        if not _rarity_le(rar, max_rarity):
+            continue
+        count = mat_sys.disassemble_material_count(rar) + home_bonus
+        await inventory_repo.delete_inventory_item(session, it)
+        totals[rar] = totals.get(rar, 0) + count
+        processed += 1
+    if processed == 0:
+        return False, f"Нет вещей до редкости «{max_rarity}» для свипа."
+    for rar, cnt in totals.items():
+        await add_materials_to_bag(session, character.id, rar, cnt)
+    await session.flush()
+    breakdown = ", ".join(f"+{cnt} {html.escape(mat_sys.material_name(r))}" for r, cnt in totals.items())
+    return True, f"🧹 Свип-разбор: <b>{processed}</b> шт. → {breakdown}"
 
 
 async def craft_rune_auto_pair_rank1(

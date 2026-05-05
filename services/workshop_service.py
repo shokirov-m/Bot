@@ -19,7 +19,6 @@ from game.crafting.recipes_data import (
     PROF_BLACKSMITH,
     PROF_JEWELER,
     get_recipe_by_id,
-    is_forge_instant,
     max_station_level_cap,
     recipes_for_profession,
     xp_to_next_profession_level,
@@ -196,8 +195,6 @@ def validate_start(
     r = get_recipe_by_id(recipe_id)
     if r is None:
         return False, "Нет такого рецепта."
-    if is_forge_instant(r):
-        return False, "Этот рецепт крафтится мгновенно в городской кузнице."
     prof = str(r.get("profession", ""))
     need_p = int(r.get("min_profession_level", 1))
     need_s = int(r.get("min_station_level", 1))
@@ -211,10 +208,9 @@ def validate_start(
         return False, "Низкий уровень профессии."
     if station_level(character, prof) < need_s:
         return False, "Нужен более высокий станок."
-    if bool(r.get("requires_blueprint")):
-        rid = str(r.get("id"))
-        if rid not in known_blueprint_ids(character):
-            return False, "Нужен чертёж (таверна, дроп, награда)."
+    rid_bp = str(r.get("id") or "")
+    if not rid_bp or rid_bp not in known_blueprint_ids(character):
+        return False, "Нет изученного чертежа на этот рецепт."
     ws = get_workshop_state(character)
     if _active_queue_len(ws) >= queue_capacity(character):
         return False, "Очередь полна. Забери готовое или расширь лимит позже."
