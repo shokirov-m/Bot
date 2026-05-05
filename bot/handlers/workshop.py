@@ -23,7 +23,7 @@ from bot.keyboards.workshop_kb import (
     workshop_queue_keyboard,
 )
 from db.models.character import Character
-from db.repository import character_repo, user_repo
+from db.repository import character_repo, inventory_repo, user_repo
 from db.repository import workshop_order_repo
 from game.crafting.craft_catalog import catalog_text_for_profession
 from game.crafting.recipes_data import (
@@ -35,6 +35,7 @@ from game.crafting.recipes_data import (
 )
 from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR
 from game.crafting.workshop_meta import get_workshop_state, known_blueprint_ids
+from game.items.craft_resources import RESOURCE_DEFS, total_craft_resource_in_bag
 from services import workshop_order_service, workshop_service
 from services.workshop_leaderboard_service import cached_leaderboard_html
 from db.models.app_global import AppGlobal
@@ -85,7 +86,55 @@ def _recipes_unlocked_for_player(character: Character, prof: str) -> list[dict]:
             if rid not in known:
                 continue
         out.append(r)
+    out.sort(
+        key=lambda r: (int(r.get("min_profession_level", 1)), str(r.get("name_ru", r.get("id", "")))),
+    )
     return out
+
+
+def _format_craft_resource_line(bag: list, craft_cost: dict[str, int]) -> str:
+    if not craft_cost:
+        return "<i>Ремесленных материалов не требуется.</i>"
+    parts: list[str] = []
+    for rid, need in sorted(craft_cost.items(), key=lambda x: str(x[0])):
+        have = total_craft_resource_in_bag(bag, str(rid))
+        ne = int(need)
+        label = str((RESOURCE_DEFS.get(str(rid)) or {}).get("name_ru") or rid)
+        ok = "✅" if have >= ne else "❌"
+        parts.append(f"{ok} {html.escape(label)}: {have}/{ne}")
+    return "\n".join(parts)
+
+
+async def _recipe_preview_html(session: AsyncSession, char: Character, prof: str, recipe_id: str) -> str | None:
+    r = get_recipe_by_id(str(recipe_id))
+    if r is None or str(r.get("profession")) != prof:
+        return None
+    known = known_blueprint_ids(char)
+    if bool(r.get("requires_blueprint")) and str(r.get("id") or "") not in known:
+        return None
+    bag = await inventory_repo.list_bag_items(session, char.id)
+    craft_cost = {str(k): int(v) for k, v in (r.get("craft_cost") or {}).items()}
+    secs = int(r.get("craft_seconds") or 300)
+    mins = max(1, (secs + 59) // 60)
+    ws = get_workshop_state(char)
+    plv = int(ws["prof_levels"].get(prof, 1))
+    st_lv = int(ws["stations"].get(prof, 1))
+    need_prof = int(r.get("min_profession_level", 1))
+    need_st = int(r.get("min_station_level", 1))
+    need_ch = int(r.get("min_character_level", 1))
+    res_block = _format_craft_resource_line(bag, craft_cost)
+    name = html.escape(str(r.get("name_ru", recipe_id)))
+    res_item = r.get("result") or {}
+    res_name = html.escape(str(res_item.get("name", "—")))
+    bp_note = "\n<i>Нужен изученный чертёж.</i>" if r.get("requires_blueprint") else ""
+    return (
+        f"📋 <b>{name}</b>\n"
+        f"<i>Результат:</i> {res_name}{bp_note}\n\n"
+        f"⏱ <b>Время создания:</b> {mins} мин ({secs} сек)\n"
+        f"📊 <b>Требования:</b> проф. {need_prof}+ (у тебя {plv}), "
+        f"станок {need_st}+ (у тебя {st_lv}), герой ур. {need_ch}+\n\n"
+        f"<b>Материалы в сумке:</b>\n{res_block}"
+    )
 
 
 async def _char(session: AsyncSession, query: CallbackQuery):
@@ -168,7 +217,8 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession, state: FSMC
         chunk, page = _paginate(recipe_rows, 0)
         lines = [
             f"{title}",
-            "<i>Только рецепты с открытым чертежом (где требуется). Крафт с таймером — здесь.</i>",
+            "<i>Нажми рецепт — откроется карточка: ресурсы, время, требования. «Создать» — в очередь.</i>",
+            "<i>Только рецепты с открытым чертежом (где требуется). Сортировка: по требуемому уровню профессии.</i>",
             "",
         ]
         await _workshop_ui(
@@ -230,6 +280,36 @@ async def workshop_prof_page(query: CallbackQuery, session: AsyncSession, state:
         await query.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data.startswith("wsp:rcp:"))
+async def workshop_recipe_card(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.data is None or query.message is None:
+            return
+        try:
+            _, _, prof, rid = query.data.split(":", 3)
+        except ValueError:
+            await query.answer()
+            return
+        body = await _recipe_preview_html(session, char, prof, rid)
+        if body is None:
+            await query.answer("Рецепт недоступен.", show_alert=True)
+            return
+        title = PROF_TITLE_RU.get(prof, prof)
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🔨 Создать", callback_data=f"wsp:start:{rid}")],
+                [InlineKeyboardButton(text="⬅ К списку рецептов", callback_data=f"wsp:prof:{prof}")],
+                menu_nav_button_row(),
+            ],
+        )
+        await _workshop_ui(state, query, char, f"{title}\n\n{body}", kb)
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:rcp")
+        await query.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("wsp:start:"))
 async def workshop_start(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -265,7 +345,7 @@ async def workshop_queue(query: CallbackQuery, session: AsyncSession, state: FSM
         ws = get_workshop_state(char)
         crafts = list(ws.get("active_crafts") or [])
         now = datetime.now(UTC)
-        entries: list[tuple[str, str, bool, bool]] = []
+        entries: list[tuple[str, str, bool]] = []
         for c in crafts:
             sid = str(c.get("slot_id"))
             rid = str(c.get("recipe_id"))
@@ -278,12 +358,12 @@ async def workshop_queue(query: CallbackQuery, session: AsyncSession, state: FSM
                 rdt = now
             ready = rdt <= now
             lab = f"✅ Забрать: {nm}" if ready else f"⏳ {nm} до {rdt.strftime('%H:%M')} UTC"
-            entries.append((sid, lab, ready, True))
+            entries.append((sid, lab, ready))
         if not entries:
             text = "📜 <b>Очередь пуста.</b>"
             kb = workshop_main_keyboard()
         else:
-            text = "📜 <b>Активные работы</b>\n\n<i>Готово — «Забрать». Не готово — ускорение рунным камнем.</i>"
+            text = "📜 <b>Активные работы</b>\n\n<i>Готово — «Забрать». Остальное ждёт таймер.</i>"
             kb = workshop_queue_keyboard(entries)
         await _workshop_ui(state, query, char, text, kb)
         await query.answer()
@@ -318,20 +398,8 @@ async def workshop_claim(query: CallbackQuery, session: AsyncSession, state: FSM
 
 
 @router.callback_query(F.data.startswith("wsp:acc:"))
-async def workshop_acc(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        char = await _char(session, query)
-        if char is None or query.data is None or query.message is None:
-            return
-        sid = str(query.data.split(":")[2])
-        ok, lines = await workshop_service.try_accelerate(session, char, sid)
-        await session.commit()
-        await query.answer((lines[0] if lines else "Ок.")[:200], show_alert=not ok)
-        if ok:
-            await workshop_queue(query, session, state)
-    except Exception:
-        logger.exception("wsp:acc")
-        await query.answer("Ошибка.", show_alert=True)
+async def workshop_acc_disabled(query: CallbackQuery) -> None:
+    await query.answer("Ускорение рунным камнем отключено.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("wsp:upg:"))

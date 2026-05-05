@@ -43,7 +43,7 @@ def workshop_prof_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     for rid, label in recipe_rows[:per_page]:
         short = label if len(label) <= 40 else label[:37] + "…"
-        rows.append([InlineKeyboardButton(text=short, callback_data=f"wsp:start:{rid}")])
+        rows.append([InlineKeyboardButton(text=short, callback_data=f"wsp:rcp:{profession}:{rid}")])
     max_page = max(0, (max(0, total_count) - 1) // per_page)
     p = max(0, min(int(page), max_page))
     nav: list[InlineKeyboardButton] = []
@@ -64,11 +64,11 @@ def workshop_prof_keyboard(
 
 
 def workshop_queue_keyboard(
-    entries: list[tuple[str, str, bool, bool]],
+    entries: list[tuple[str, str, bool]],
 ) -> InlineKeyboardMarkup:
-    """ (slot_id, label, ready, _) """
+    """ (slot_id, label, ready) """
     rows: list[list[InlineKeyboardButton]] = []
-    for sid, lab, ready, _ in entries:
+    for sid, lab, ready in entries:
         if ready:
             rows.append(
                 [
@@ -84,14 +84,6 @@ def workshop_queue_keyboard(
                     InlineKeyboardButton(
                         text=lab[:58],
                         callback_data="wsp:noop",
-                    ),
-                ],
-            )
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text="⚡ −10 мин (−1 рунный камень)",
-                        callback_data=f"wsp:acc:{sid}",
                     ),
                 ],
             )

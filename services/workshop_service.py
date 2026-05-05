@@ -1,5 +1,5 @@
 """
-Мастерская: очередь крафта, опыт профессий, ускорение рунными камнями, бонусы классов.
+Мастерская: очередь крафта, опыт профессий, бонусы классов.
 """
 
 from __future__ import annotations
@@ -369,39 +369,6 @@ def _add_profession_xp(character: Character, profession: str, xp_add: int) -> No
     save_workshop_state(character, ws)
 
 
-async def try_accelerate(
-    session: AsyncSession,
-    character: Character,
-    slot_id: str,
-) -> tuple[bool, list[str]]:
-    """−10 мин к готовности за 1 рунный камень (колонка rune_stones)."""
-    await character_repo.lock_character_row(session, character.id)
-    ws = get_workshop_state(character)
-    crafts = list(ws.get("active_crafts") or [])
-    idx = next((i for i, c in enumerate(crafts) if str(c.get("slot_id")) == str(slot_id)), None)
-    if idx is None:
-        return False, ["Слот не найден."]
-    if int(character.rune_stones or 0) < 1:
-        return False, ["Нужен рунный камень."]
-    entry = crafts[idx]
-    ready = _parse_iso(str(entry.get("ready_at") or ""))
-    if ready is None:
-        return False, ["Ошибка времени."]
-    now = datetime.now(UTC)
-    if ready <= now:
-        return False, ["Уже готово — забери предмет."]
-    new_ready = ready - timedelta(seconds=600)
-    if new_ready < now:
-        new_ready = now
-    character.rune_stones = int(character.rune_stones) - 1
-    entry["ready_at"] = new_ready.isoformat()
-    crafts[idx] = entry
-    ws["active_crafts"] = crafts
-    save_workshop_state(character, ws)
-    await session.flush()
-    return True, ["⚡ −10 минут к готовности (−1 рунный камень)."]
-
-
 async def try_upgrade_station(
     session: AsyncSession,
     character: Character,
@@ -472,7 +439,6 @@ __all__ = [
     "validate_start",
     "try_start_craft",
     "try_claim_craft",
-    "try_accelerate",
     "try_upgrade_station",
     "profession_summary_lines",
     "list_ready_slots",

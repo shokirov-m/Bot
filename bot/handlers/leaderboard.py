@@ -25,6 +25,7 @@ _FETCHERS = {
     "flr": leaderboard_repo.top_by_floor,
     "pow": leaderboard_repo.top_by_stat_sum,
     "gld": leaderboard_repo.top_by_gold,
+    "col": leaderboard_repo.top_by_coliseum,
 }
 
 

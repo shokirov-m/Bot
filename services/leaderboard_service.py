@@ -126,6 +126,7 @@ def format_leaderboard_html(
         "flr": "🗺️ <b>Топ по этажу</b> <i>(рекорд)</i>",
         "pow": "💪 <b>Топ по сумме статов</b> <i>(СИЛ+ЛОВ+ИНТ+ВЫН+УДА)</i>",
         "gld": "💰 <b>Топ по золоту</b>",
+        "col": "🏛️ <b>Топ по Колизею</b> <i>(побеждено бойцов)</i>",
         "warrior": "⚔️ <b>Топ Воинов</b>",
         "mage": "🔮 <b>Топ Магов</b>",
         "scout": "🗡️ <b>Топ Убийц</b>",
@@ -159,6 +160,11 @@ def format_leaderboard_html(
             s = leaderboard_repo.character_total_stats(c)
             best = max(int(c.highest_floor_reached or 0), int(c.floor_number or 0))
             extra = f"сумма статов {s} · Ур.{c.level} · этаж {best}"
+        elif category == "col":
+            from services import coliseum_service
+
+            n = len(coliseum_service.defeated_ids(c))
+            extra = f"повержено бойцов: <b>{n}</b>/50 · Ур.{c.level}"
         else:
             extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
         lines.append(f"{med} <b>{tag_prefix}{name}</b>{ranker_suffix}\n   <i>{extra}</i>")

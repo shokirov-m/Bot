@@ -572,6 +572,18 @@ def _build_combat_dict(
     return state
 
 
+def _low_hp_entry_warning_html(character: Character) -> str:
+    """Предупреждение при входе в бой с низким HP (<25% от максимума)."""
+    hp_max = max(1, int(character.hp_max or 1))
+    hp_cur = max(0, int(character.hp_current or 0))
+    if hp_cur * 100 > hp_max * 25:
+        return ""
+    return (
+        "⚠️ <b>Мало HP</b> — меньше <b>25%</b> от максимума.\n"
+        "<i>Сходи в город или используй расходники — бой очень рискованный.</i>\n\n"
+    )
+
+
 def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     """Экран боя: этаж, враг (полосы, баффы), игрок, лог с репликой монстра."""
     m = state["monster"]
@@ -832,6 +844,7 @@ async def start_coliseum_combat(
     cls = get_class_or_none(character.class_key)
     class_ru = cls.name_ru if cls else character.class_key
     text = format_battle_view(combat_state, class_ru)
+    text = _low_hp_entry_warning_html(character) + text
     kb = combat_main_keyboard(character)
 
     if query.message is None:
@@ -1115,6 +1128,7 @@ async def start_combat(
     cls = get_class_or_none(character.class_key)
     class_ru = cls.name_ru if cls else character.class_key
     text = format_battle_view(combat_state, class_ru)
+    text = _low_hp_entry_warning_html(character) + text
     kb = combat_main_keyboard(character)
 
     if query.message is None:
@@ -1327,6 +1341,7 @@ async def start_tutorial_combat(
     cls = get_class_or_none(character.class_key)
     class_ru = cls.name_ru if cls else character.class_key
     text = format_battle_view(combat_state, class_ru)
+    text = _low_hp_entry_warning_html(character) + text
     kb = combat_main_keyboard(character)
 
     if query.message is None:

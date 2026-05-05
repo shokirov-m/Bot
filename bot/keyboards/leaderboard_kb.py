@@ -19,8 +19,11 @@ def leaderboard_categories_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="💰 Золото", callback_data="top:cat:gld"),
             ],
             [
-                InlineKeyboardButton(text="🏰 Кланы", callback_data="top:cat:clans"),
+                InlineKeyboardButton(text="🏛️ Колизей", callback_data="top:cat:col"),
                 InlineKeyboardButton(text="🎭 Классы", callback_data="top:cat:classes"),
+            ],
+            [
+                InlineKeyboardButton(text="🏰 Кланы", callback_data="top:cat:clans"),
             ],
             menu_nav_button_row(),
         ],

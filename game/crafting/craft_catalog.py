@@ -53,9 +53,11 @@ def catalog_text_for_profession(profession: str) -> str:
     }.get(pk, f"⚙️ <b>{html.escape(pk)}</b>")
     timed: list[str] = []
     instant: list[str] = []
-    for r in RECIPES:
-        if str(r.get("profession")) != pk:
-            continue
+    prof_recipes = [r for r in RECIPES if str(r.get("profession")) == pk]
+    prof_recipes.sort(
+        key=lambda r: (int(r.get("min_profession_level", 1)), str(r.get("name_ru", r.get("id", "")))),
+    )
+    for r in prof_recipes:
         name = str(r.get("name_ru", r.get("id", "")))
         res = r.get("result") or {}
         rname = str(res.get("name", "—"))
@@ -71,10 +73,14 @@ def catalog_text_for_profession(profession: str) -> str:
         mst = int(r.get("min_station_level", 1))
         mch = int(r.get("min_character_level", 1))
         bp = " <i>(нужен чертёж)</i>" if r.get("requires_blueprint") else ""
+        craft_secs = int(r.get("craft_seconds") or 0)
+        time_part = ""
+        if not is_forge_instant(r) and craft_secs > 0:
+            time_part = f" <i>Время крафта:</i> {max(1, (craft_secs + 59) // 60)} мин."
         line = (
             f"• <b>{html.escape(name)}</b> → {html.escape(rname)}{bp}\n"
             f"  <i>Материалы:</i> {html.escape(cost)}. "
-            f"<i>Нужно:</i> проф. {mprof}+, станок {mst}+, герой {mch}+."
+            f"<i>Нужно:</i> проф. {mprof}+, станок {mst}+, герой {mch}+.{time_part}"
         )
         if is_forge_instant(r):
             instant.append(line)

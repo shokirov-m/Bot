@@ -59,7 +59,8 @@ class ColiseumFighter:
 
 
 # Множитель ATK всех бойцов колизея в бою (баланс).
-COLISEUM_ENEMY_ATK_MULT = 2.5
+# Баланс урона бойцов колизея по игроку (база атаки × множитель).
+COLISEUM_ENEMY_ATK_MULT = 5.0
 
 COLISEUM_TEMPLATE_KEY = "coliseum_gladiator"
 

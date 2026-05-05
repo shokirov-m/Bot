@@ -9,16 +9,13 @@ from db.models.inventory import InventoryItem
 from game.characters.player_skills import (
     battle_skills_tuple,
     ensure_skill_meta,
-    equipped_passive_key,
-    learned_passives,
-    passive_emoji,
     skill_emoji,
 )
 from game.items.equipment import gear_icon_for_item_data
 
 
 def combat_main_keyboard(character: Character) -> InlineKeyboardMarkup:
-    """Четыре действия + три экипированных навыка + строка пассивки."""
+    """Четыре действия + три экипированных навыка + предмет."""
     ensure_skill_meta(character)
     sk = battle_skills_tuple(character)
 
@@ -47,18 +44,6 @@ def combat_main_keyboard(character: Character) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🎒 Предмет", callback_data="cb:item"),
         ],
     ]
-
-    # Показываем экипированную пассивку как информационную строку
-    pas_key = equipped_passive_key(character)
-    if pas_key:
-        pas_map = {p.key: p for p in learned_passives(character)}
-        p = pas_map.get(pas_key)
-        if p:
-            em = passive_emoji(p.modifiers)
-            rows.append([InlineKeyboardButton(
-                text=f"{em} {p.name_ru[:20]} (пассивка)",
-                callback_data="cb:noop",
-            )])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

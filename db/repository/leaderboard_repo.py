@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
@@ -71,6 +71,23 @@ async def top_by_gold(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> l
         .join(User, Character.user_id == User.id)
         .where(User.is_banned.is_(False))
         .order_by(desc(Character.gold), desc(Character.level))
+        .limit(limit)
+    )
+    r = await session.execute(stmt)
+    return list(r.scalars().all())
+
+
+async def top_by_coliseum(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> list[Character]:
+    """Топ по числу побеждённых бойцов колизея (длина списка defeated в meta_progress.coliseum_v1)."""
+    defeated_len = func.coalesce(
+        func.json_array_length(Character.meta_progress, "$.coliseum_v1.defeated"),
+        0,
+    )
+    stmt = (
+        select(Character)
+        .join(User, Character.user_id == User.id)
+        .where(User.is_banned.is_(False))
+        .order_by(desc(defeated_len), desc(Character.level), desc(Character.floor_number))
         .limit(limit)
     )
     r = await session.execute(stmt)
