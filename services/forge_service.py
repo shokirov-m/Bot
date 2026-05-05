@@ -18,6 +18,7 @@ from game.floors import floor_data
 from game.items import durability as durability_mod
 from game.items import enchant as enchant_rules
 from game.items import equipment as equip_meta
+from game.items import item_categories as item_cat
 from game.items import runes as rune_sys
 from game.items import materials as mat_sys
 from game.items.rarity_scaling import scaled_armor_defense_value, scaled_weapon_attack_value
@@ -26,6 +27,27 @@ from game.crafting.workshop_meta import prof_level
 from game.locations import forge as forge_loc
 from services import character_service, home_service, title_service
 from utils.ui import LINE_SEP, format_inventory_item_html, render_enchant_stars
+
+_DISASSEMBLE_EXCLUDED_KINDS: frozenset[str] = frozenset(
+    {
+        "consumable",
+        "rune",
+        "material",
+        "boss_trophy",
+        "misc",
+        "craft_resource",
+    },
+)
+
+
+def _bag_item_data_is_disassemblable_equipment(data: dict[str, Any]) -> bool:
+    """Разбор только экипировки; ресурсы гачи (craft_resource) и прочее — нельзя."""
+    kind = str(data.get("kind") or "").lower()
+    if kind in _DISASSEMBLE_EXCLUDED_KINDS:
+        return False
+    if kind in item_cat.EQUIP_KINDS:
+        return True
+    return equip_meta.resolve_equip_slot_for_item_data(data) is not None
 
 
 def format_forge_intro_html(city_name: str, city_emoji: str) -> str:
@@ -346,7 +368,7 @@ async def try_disassemble_bag_item(
 ) -> tuple[bool, str]:
     """
     Разобрать предмет из сумки → материалы заточки той же редкости.
-    Расходники, руны и материалы разобрать нельзя.
+    Только экипировка; расходники, руны, ремесленные ресурсы (гача) и т.п. — нельзя.
     На ур.5 дома +1 доп. материал.
     """
     if not forge_loc.forge_available_on_floor(character.floor_number):
@@ -357,9 +379,8 @@ async def try_disassemble_bag_item(
         return False, "Предмет не в сумке."
 
     data = dict(it.item_data or {})
-    kind = str(data.get("kind") or "").lower()
-    if kind in ("consumable", "rune", "material", "boss_trophy", "misc"):
-        return False, "Этот тип предметов нельзя разобрать."
+    if not _bag_item_data_is_disassemblable_equipment(data):
+        return False, "Можно разобрать только экипировку (не ресурсы гачи и не расходники)."
 
     rarity = str(data.get("rarity") or "common").lower()
     count = mat_sys.disassemble_material_count(rarity)
@@ -400,15 +421,14 @@ async def list_disassemblable_items(
 ) -> list[tuple[int, str]]:
     """Список предметов для разбора с учётом фильтров. (item_id, label)."""
     bag = await inventory_repo.list_bag_items(session, character.id)
-    skip_kinds = {"consumable", "rune", "material", "boss_trophy", "misc"}
     rows: list[tuple[int, str]] = []
     for it in sorted(bag, key=lambda x: x.bag_slot or 0):
         if it.is_equipped:
             continue
         d = dict(it.item_data or {})
-        kind = str(d.get("kind") or "").lower()
-        if kind in skip_kinds:
+        if not _bag_item_data_is_disassemblable_equipment(d):
             continue
+        kind = str(d.get("kind") or "").lower()
         rar = str(d.get("rarity") or "common").lower()
         if rarity_filter and rar != rarity_filter:
             continue
@@ -433,7 +453,6 @@ async def try_sweep_disassemble(
     if not forge_loc.forge_available_on_floor(character.floor_number):
         return False, "Свип — только в кузнице города."
     bag = await inventory_repo.list_bag_items(session, character.id)
-    skip_kinds = {"consumable", "rune", "material", "boss_trophy", "misc"}
     home_bonus = home_service.home_disassemble_bonus(character)
     totals: dict[str, int] = {}
     processed = 0
@@ -443,8 +462,7 @@ async def try_sweep_disassemble(
         if it.is_equipped:
             continue
         d = dict(it.item_data or {})
-        kind = str(d.get("kind") or "").lower()
-        if kind in skip_kinds:
+        if not _bag_item_data_is_disassemblable_equipment(d):
             continue
         rar = str(d.get("rarity") or "common").lower()
         if not _rarity_le(rar, max_rarity):
@@ -913,9 +931,8 @@ async def try_workshop_disassemble_bag_item(
         return False, "Предмет не в сумке."
 
     data = dict(it.item_data or {})
-    kind = str(data.get("kind") or "").lower()
-    if kind in ("consumable", "rune", "material", "boss_trophy", "misc"):
-        return False, "Этот тип предметов нельзя разобрать."
+    if not _bag_item_data_is_disassemblable_equipment(data):
+        return False, "Можно разобрать только экипировку (не ресурсы гачи и не расходники)."
 
     rarity = str(data.get("rarity") or "common").lower()
     count = mat_sys.disassemble_material_count(rarity)
@@ -945,7 +962,6 @@ async def try_workshop_sweep_disassemble(
 ) -> tuple[bool, str]:
     """Свип-разбор в мастерской (без требования этажа города)."""
     bag = await inventory_repo.list_bag_items(session, character.id)
-    skip_kinds = {"consumable", "rune", "material", "boss_trophy", "misc"}
     home_bonus = home_service.home_disassemble_bonus(character)
     totals: dict[str, int] = {}
     processed = 0
@@ -955,8 +971,7 @@ async def try_workshop_sweep_disassemble(
         if it.is_equipped:
             continue
         d = dict(it.item_data or {})
-        kind = str(d.get("kind") or "").lower()
-        if kind in skip_kinds:
+        if not _bag_item_data_is_disassemblable_equipment(d):
             continue
         rar = str(d.get("rarity") or "common").lower()
         if not _rarity_le(rar, max_rarity):
