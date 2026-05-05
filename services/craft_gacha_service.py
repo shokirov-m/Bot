@@ -1,14 +1,19 @@
 """
-Гача ремесленных ресурсов в доме: случайный материал профессии + шанс чертежа.
+Гача ремесленных ресурсов в мастерской: случайный материал профессии + шанс чертежа.
 """
 
 from __future__ import annotations
 
 import html
 import random
+from typing import TYPE_CHECKING
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
+
+if TYPE_CHECKING:
+    from aiogram import Bot
 from db.repository import inventory_repo
 from game.crafting.recipes_data import (
     PROF_ALCHEMIST,
@@ -57,12 +62,12 @@ def format_gacha_intro_html(character: Character) -> str:
     if not home_service.can_access_workbench(character):
         return (
             "🎰 <b>Гача ресурсов</b>\n"
-            "<i>Откроется вместе с постройками дома (ур. 2).</i>"
+            "<i>Доступна в мастерской после дома ур. 2 и верстака.</i>"
         )
     t1 = GACHA_PULL_COST_GOLD
     t10 = GACHA_PULL_COST_GOLD * 10
     lines = [
-        "🎰 <b>Гача ремесленных ресурсов</b>",
+        "🎰 <b>Гача ремесленных ресурсов</b>\n<i>В мастерской.</i>",
         f"<i>Призыв ×1:</i> <b>{t1:,} 💰</b> · <i>×10:</i> <b>{t10:,} 💰</b>",
         "",
         "Выпадет <b>случайный материал</b> выбранной профессии (⭐ — редкость).",
@@ -81,6 +86,7 @@ async def try_gacha_pull(
     profession: str,
     *,
     times: int = 1,
+    bot: "Bot | None" = None,
 ) -> tuple[bool, list[str]]:
     """Списать золото, выдать материал(ы) и с шансом — чертёж на каждом броске."""
     from services import home_service
@@ -101,7 +107,7 @@ async def try_gacha_pull(
         character,
         -total_cost,
         spend_for="Гача ремесленных ресурсов",
-        spend_kind="home",
+        spend_kind="workshop",
     )
 
     lines_out: list[str] = [
@@ -119,7 +125,7 @@ async def try_gacha_pull(
                     character,
                     refund,
                     spend_for="Откат гачи (таблица)",
-                    spend_kind="home",
+                    spend_kind="workshop",
                 )
             return False, lines_out + [f"Ошибка таблицы. Возврат: {refund} 💰."]
 
@@ -135,7 +141,7 @@ async def try_gacha_pull(
                     character,
                     refund,
                     spend_for="Откат гачи (нет места)",
-                    spend_kind="home",
+                    spend_kind="workshop",
                 )
             if not any_item:
                 return False, lines_out + [f"Нет места в сумке. Возврат: {refund} 💰."]
@@ -146,6 +152,18 @@ async def try_gacha_pull(
 
         any_item = True
         lines_out.append(f"📦 <b>{html.escape(str(payload.get('name') or rid_pick))}</b> ×{count}")
+
+        if bot is not None and stars >= 6:
+            from services import gacha_broadcast_service
+
+            await gacha_broadcast_service.notify_high_star_material(
+                bot,
+                session,
+                character,
+                stars=stars,
+                material_name=str(payload.get("name") or rid_pick),
+                quantity=count,
+            )
 
         pool = _blueprint_pool(prof, character)
         if pool and random.random() < BLUEPRINT_ROLL_CHANCE:

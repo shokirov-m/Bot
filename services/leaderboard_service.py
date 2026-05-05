@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import t
 from db.models.character import Character
+from db.models.clan import Clan
 from db.repository import leaderboard_repo
+from services import coliseum_service
 
 RANKER_TOP_N = 5
 
@@ -161,10 +163,13 @@ def format_leaderboard_html(
             best = max(int(c.highest_floor_reached or 0), int(c.floor_number or 0))
             extra = f"сумма статов {s} · Ур.{c.level} · этаж {best}"
         elif category == "col":
-            from services import coliseum_service
-
-            n = len(coliseum_service.defeated_ids(c))
+            n = coliseum_service.defeated_count_safe(c)
             extra = f"повержено бойцов: <b>{n}</b>/50 · Ур.{c.level}"
+        elif category == "gld":
+            extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
+        elif category in ("warrior", "mage", "scout", "acolyte"):
+            best = max(int(c.highest_floor_reached or 0), int(c.floor_number or 0))
+            extra = f"Ур.{c.level} · этаж {best}"
         else:
             extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
         lines.append(f"{med} <b>{tag_prefix}{name}</b>{ranker_suffix}\n   <i>{extra}</i>")

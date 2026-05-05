@@ -60,6 +60,14 @@ def defeated_ids(character: Character) -> list[int]:
     return sorted(set(out))
 
 
+def defeated_count_safe(character: Character) -> int:
+    """Сколько бойцов колизея побеждено; при битых данных meta_progress не падаем."""
+    try:
+        return len(defeated_ids(character))
+    except Exception:
+        return 0
+
+
 def next_fighter_id(character: Character) -> int | None:
     """Первый не побеждённый боец по порядку 1..50 для UI «следующий»."""
     beat = set(defeated_ids(character))

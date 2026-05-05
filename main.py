@@ -35,6 +35,7 @@ from bot.handlers.class_arc import router as class_arc_router
 from bot.handlers.daily import router as daily_router
 from bot.handlers.economy_sinks import router as economy_sinks_router
 from bot.handlers.leaderboard import router as leaderboard_router
+from bot.handlers.gacha_broadcast_groups import router as gacha_broadcast_groups_router
 from bot.handlers.home import router as home_router
 from bot.handlers.menu import router as menu_router
 from bot.handlers.settings import router as settings_router
@@ -130,6 +131,7 @@ def _register_update_middlewares(dp: Dispatcher) -> None:
 def _register_routers(dp: Dispatcher) -> None:
     # clans_router — /clan; forest_beginnings_router — flf:*; floor_router — fl:* и scr:* (скупщик).
     dp.include_router(start_router)
+    dp.include_router(gacha_broadcast_groups_router)
     dp.include_router(floor_zero_router)
     dp.include_router(tutorial_router)
     dp.include_router(admin_router)

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
@@ -48,7 +49,11 @@ INTRO_HTML = (
 @router.message(Command("топ"))
 async def cmd_top(message: Message, session: AsyncSession) -> None:
     try:
-        await message.answer(INTRO_HTML, reply_markup=leaderboard_categories_keyboard())
+        await message.answer(
+            INTRO_HTML,
+            reply_markup=leaderboard_categories_keyboard(),
+            parse_mode=ParseMode.HTML,
+        )
     except Exception:
         logger.exception("Ошибка в /top")
 
@@ -64,7 +69,8 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
         if cat == "classes":
             await query.message.edit_text(
                 "🎭 <b>Топ по классам</b>\nВыбери класс, чтобы увидеть лучших игроков в этой ветке:",
-                reply_markup=leaderboard_classes_keyboard()
+                reply_markup=leaderboard_classes_keyboard(),
+                parse_mode=ParseMode.HTML,
             )
             await query.answer()
             return
@@ -72,7 +78,11 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
         if cat == "clans":
             clans = await leaderboard_repo.top_clans(session)
             text = leaderboard_service.format_clan_leaderboard_html(clans)
-            await query.message.edit_text(text, reply_markup=leaderboard_categories_keyboard())
+            await query.message.edit_text(
+                text,
+                reply_markup=leaderboard_categories_keyboard(),
+                parse_mode=ParseMode.HTML,
+            )
             await query.answer()
             return
 
@@ -91,7 +101,7 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
         clan_tags = await leaderboard_repo.get_clan_tags_for_characters(session, char_ids)
         text = leaderboard_service.format_leaderboard_html(cat, rows, locale=loc, clan_tags=clan_tags)
         kb = leaderboard_categories_keyboard()
-        await query.message.edit_text(text, reply_markup=kb)
+        await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
         await query.answer()
     except Exception:
         logger.exception("top:cat")
@@ -117,7 +127,11 @@ async def on_top_class(query: CallbackQuery, session: AsyncSession) -> None:
         clan_tags = await leaderboard_repo.get_clan_tags_for_characters(session, char_ids)
         text = leaderboard_service.format_leaderboard_html(class_key, rows, locale=loc, clan_tags=clan_tags)
         
-        await query.message.edit_text(text, reply_markup=leaderboard_classes_keyboard())
+        await query.message.edit_text(
+            text,
+            reply_markup=leaderboard_classes_keyboard(),
+            parse_mode=ParseMode.HTML,
+        )
         await query.answer()
     except Exception:
         logger.exception("top:class")
@@ -129,5 +143,9 @@ async def on_top_back(query: CallbackQuery) -> None:
     if query.message is None:
         await query.answer()
         return
-    await query.message.edit_text(INTRO_HTML, reply_markup=leaderboard_categories_keyboard())
+    await query.message.edit_text(
+        INTRO_HTML,
+        reply_markup=leaderboard_categories_keyboard(),
+        parse_mode=ParseMode.HTML,
+    )
     await query.answer()

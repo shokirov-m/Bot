@@ -176,6 +176,8 @@ def _build_all_fighters() -> tuple[ColiseumFighter, ...]:
         if fid == 10:
             atk = 210  # 210 × 5.0 → 1050 в карточке и в расчёте урона монстра
             el = "lightning"
+        if fid == 18:
+            atk = 460  # 460 × 5.0 → 2300
         spec = _SPECIAL_BY_ID.get(fid, "none")
         phrase = (
             f"«{_NAMES[fid].split()[0]} не отступит!»"

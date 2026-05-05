@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 
 from game.items.craft_resources import RESOURCE_DEFS
+from utils.ui import format_craft_result_effects_block_html
 from game.crafting.recipes_data import (
     PROF_ALCHEMIST,
     PROF_BLACKSMITH,
@@ -77,8 +78,13 @@ def catalog_text_for_profession(profession: str) -> str:
         time_part = ""
         if not is_forge_instant(r) and craft_secs > 0:
             time_part = f" <i>Время крафта:</i> {max(1, (craft_secs + 59) // 60)} мин."
+        eff_extra = ""
+        if isinstance(res, dict):
+            eff_txt = format_craft_result_effects_block_html(res)
+            if eff_txt.strip():
+                eff_extra = "\n  <b>Что даёт предмет:</b>\n  " + eff_txt.replace("\n", "\n  ")
         line = (
-            f"• <b>{html.escape(name)}</b> → {html.escape(rname)}{bp}\n"
+            f"• <b>{html.escape(name)}</b> → {html.escape(rname)}{bp}{eff_extra}\n"
             f"  <i>Материалы:</i> {html.escape(cost)}. "
             f"<i>Нужно:</i> проф. {mprof}+, станок {mst}+, герой {mch}+.{time_part}"
         )

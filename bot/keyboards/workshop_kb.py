@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.menu_kb import menu_nav_button_row
+
+if TYPE_CHECKING:
+    from db.models.character import Character
 
 
 def workshop_prof_hub_keyboard(profession: str) -> InlineKeyboardMarkup:
@@ -16,7 +21,7 @@ def workshop_prof_hub_keyboard(profession: str) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton(text="✨ Заточка экипировки", callback_data="wsp:sharp:menu")])
     elif pk == "alchemist":
         rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
-        rows.append([InlineKeyboardButton(text="📜 Зачарование", callback_data="wsp:ench:menu")])
+        rows.append([InlineKeyboardButton(text="📜 Свитки зачарования", callback_data="wsp:ench:menu")])
     elif pk == "jeweler":
         rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
         rows.append([InlineKeyboardButton(text="💎 Слияние рун", callback_data="wsp:rune:menu")])
@@ -25,17 +30,23 @@ def workshop_prof_hub_keyboard(profession: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def workshop_main_keyboard(locale: str = "ru") -> InlineKeyboardMarkup:
+def workshop_main_keyboard(locale: str = "ru", *, character: "Character | None" = None) -> InlineKeyboardMarkup:
     _ = locale
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="⚒️ Кузница", callback_data="wsp:prof:blacksmith"),
-                InlineKeyboardButton(text="⚗️ Лаборатория", callback_data="wsp:prof:alchemist"),
-            ],
-            [
-                InlineKeyboardButton(text="💎 Ювелирная", callback_data="wsp:prof:jeweler"),
-            ],
+    from services import home_service
+
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text="⚒️ Кузница", callback_data="wsp:prof:blacksmith"),
+            InlineKeyboardButton(text="⚗️ Лаборатория", callback_data="wsp:prof:alchemist"),
+        ],
+        [
+            InlineKeyboardButton(text="💎 Ювелирная", callback_data="wsp:prof:jeweler"),
+        ],
+    ]
+    if character is not None and home_service.can_access_workbench(character):
+        rows.append([InlineKeyboardButton(text="🎰 Гача ресурсов", callback_data="wsp:gacha")])
+    rows.extend(
+        [
             [
                 InlineKeyboardButton(text="📜 Очередь / забрать", callback_data="wsp:queue"),
             ],
@@ -48,6 +59,27 @@ def workshop_main_keyboard(locale: str = "ru") -> InlineKeyboardMarkup:
             menu_nav_button_row(),
         ],
     )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def workshop_gacha_keyboard() -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(text="⚒ ×1", callback_data="wsp:gacha:pull:blacksmith"),
+            InlineKeyboardButton(text="⚒ ×10", callback_data="wsp:gacha:pull10:blacksmith"),
+        ],
+        [
+            InlineKeyboardButton(text="⚗ ×1", callback_data="wsp:gacha:pull:alchemist"),
+            InlineKeyboardButton(text="⚗ ×10", callback_data="wsp:gacha:pull10:alchemist"),
+        ],
+        [
+            InlineKeyboardButton(text="💎 ×1", callback_data="wsp:gacha:pull:jeweler"),
+            InlineKeyboardButton(text="💎 ×10", callback_data="wsp:gacha:pull10:jeweler"),
+        ],
+        [InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")],
+        menu_nav_button_row(),
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def workshop_prof_keyboard(

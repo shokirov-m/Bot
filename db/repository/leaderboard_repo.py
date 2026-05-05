@@ -90,7 +90,7 @@ async def top_by_coliseum(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) 
     chars = list(r.scalars().all())
 
     def _defeated_n(ch: Character) -> int:
-        return len(coliseum_service.defeated_ids(ch))
+        return coliseum_service.defeated_count_safe(ch)
 
     chars.sort(
         key=lambda c: (

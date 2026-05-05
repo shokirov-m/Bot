@@ -247,6 +247,79 @@ def format_inventory_item_html(
     return "\n".join(lines)
 
 
+def _consumable_use_effect_lines_html(data: dict[str, Any]) -> list[str]:
+    """Кратко: что делает расходник при использовании (для превью крафта)."""
+    tag = str(data.get("use_tag") or "").strip().lower()
+    try:
+        v = int(data.get("use_value") or 0)
+    except (TypeError, ValueError):
+        v = 0
+    out: list[str] = []
+    if tag == "heal_hp_pct":
+        pct = max(1, min(100, v))
+        out.append(f"💚 <i>В бою:</i> восстанавливает до <b>{pct}%</b> от макс. HP.")
+    elif tag == "heal_mp_pct":
+        pct = max(1, min(100, v))
+        out.append(f"💙 <i>В бою:</i> восстанавливает до <b>{pct}%</b> от макс. MP.")
+    elif tag == "heal_hp_flat":
+        out.append(f"💚 <i>В бою:</i> восстанавливает <b>{max(1, v)}</b> HP.")
+    elif tag == "heal_mp_flat":
+        out.append(f"💙 <i>В бою:</i> восстанавливает <b>{max(1, v)}</b> MP.")
+    elif tag == "cure_poison":
+        out.append("💊 <i>В бою:</i> снимает <b>яд</b>.")
+    elif tag == "stamina_flat":
+        out.append(f"🍖 <i>Вне боя:</i> восстанавливает <b>{max(1, v)}</b> выносливости.")
+    return out
+
+
+def format_craft_result_effects_block_html(data: dict[str, Any] | None) -> str:
+    """
+    Описание эффектов результата крафта (без отдельного заголовка имени предмета).
+    Используется в мастерской и справочнике рецептов.
+    """
+    if not data:
+        return ""
+    d = dict(data)
+    prefix: list[str] = []
+
+    kind = str(d.get("kind") or "").lower()
+    ut = str(d.get("use_tag") or "").strip().lower()
+
+    if kind == "craft_resource":
+        sm = str(d.get("summary") or "").strip()
+        if sm:
+            prefix.append(f"📦 <i>{html.escape(sm)}</i>")
+        else:
+            try:
+                st = int(d.get("stars") or 1)
+            except (TypeError, ValueError):
+                st = 1
+            rid = str(d.get("resource_id") or "").strip()
+            rid_bit = f" · <code>{html.escape(rid)}</code>" if rid else ""
+            prefix.append(f"<i>Ремесленный материал для верстака</i> · ⭐{st}{rid_bit}")
+
+    if ut == "workshop_alchemy_enchant":
+        try:
+            from services.workshop_enchant_service import summarize_scroll
+
+            s = summarize_scroll(d).strip()
+            if s:
+                prefix.append(f"📜 <b>Свиток зачарования:</b> <i>{html.escape(s)}</i>")
+        except Exception:
+            pass
+
+    if kind == "consumable" and ut and ut != "workshop_alchemy_enchant":
+        prefix.extend(_consumable_use_effect_lines_html(d))
+
+    card = format_inventory_item_html(d, compact=True)
+    parts = card.split("\n")
+    body = parts[1:] if len(parts) > 1 else []
+
+    merged = [*prefix, *body]
+    merged = [x for x in merged if str(x).strip()]
+    return "\n".join(merged)
+
+
 def item_bag_button_label(data: dict[str, Any] | None, _bag_slot: int | None = None) -> str:
     """Короткая подпись для inline-кнопки сумки/аукциона (лимит Telegram; без номера ячейки)."""
     data = data or {}

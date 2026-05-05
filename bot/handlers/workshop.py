@@ -18,6 +18,7 @@ from bot.i18n import get_locale
 from bot.keyboards.menu_kb import menu_nav_button_row
 from bot.keyboards.workshop_kb import (
     city_workshop_orders_keyboard,
+    workshop_gacha_keyboard,
     workshop_main_keyboard,
     workshop_prof_hub_keyboard,
     workshop_prof_keyboard,
@@ -41,7 +42,7 @@ from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR
 from game.crafting.workshop_meta import get_workshop_state, known_blueprint_ids
 from game.items import item_categories as inv_cat
 from game.items.craft_resources import RESOURCE_DEFS, total_craft_resource_in_bag
-from services import forge_service, workshop_order_service, workshop_service
+from services import craft_gacha_service, forge_service, workshop_order_service, workshop_service
 from services.workshop_enchant_service import (
     USE_TAG_ALCHEMY_ENCHANT,
     list_compatible_targets,
@@ -53,6 +54,7 @@ from db.models.app_global import AppGlobal
 
 from bot.utils.game_art import menu_workshop_orders_photo_path, menu_workshop_photo_path
 from bot.utils.game_ui import push_game_ui
+from utils.ui import format_craft_result_effects_block_html
 
 router = Router(name="workshop")
 
@@ -138,9 +140,14 @@ async def _recipe_preview_html(session: AsyncSession, char: Character, prof: str
     res_item = r.get("result") or {}
     res_name = html.escape(str(res_item.get("name", "—")))
     bp_note = "\n<i>Нужен изученный чертёж.</i>" if r.get("requires_blueprint") else ""
+    effects = ""
+    if isinstance(res_item, dict):
+        eff_block = format_craft_result_effects_block_html(res_item)
+        if eff_block.strip():
+            effects = f"\n\n<b>Что даёт предмет:</b>\n{eff_block}"
     return (
         f"📋 <b>{name}</b>\n"
-        f"<i>Результат:</i> {res_name}{bp_note}\n\n"
+        f"<i>Результат:</i> {res_name}{bp_note}{effects}\n\n"
         f"⏱ <b>Время создания:</b> {mins} мин ({secs} сек)\n"
         f"📊 <b>Требования:</b> проф. {need_prof}+ (у тебя {plv}), "
         f"станок {need_st}+ (у тебя {st_lv}), герой ур. {need_ch}+\n\n"
@@ -219,6 +226,15 @@ _ENCH_SCROLL_PER_PAGE = 8
 _ENCH_TARGET_PER_PAGE = 8
 
 
+def _enchant_scroll_button_label(it) -> str:
+    """Подпись кнопки свитка: явный префикс 📜, если в имени ещё нет свитка."""
+    raw = str((it.item_data or {}).get("name", f"#{it.id}"))[:36]
+    s = raw.strip().lower()
+    if "📜" in raw or "свиток" in s:
+        return raw[:40]
+    return f"📜 {raw}"[:40]
+
+
 def _alchemy_scroll_items(bag_items: list) -> list:
     out: list = []
     for it in bag_items:
@@ -249,7 +265,7 @@ async def render_workshop_hub(query: CallbackQuery, session: AsyncSession, state
         "",
         "Выбери профессию или очередь.",
     ]
-    await _workshop_ui(state, query, char, "\n".join(lines), workshop_main_keyboard(loc))
+    await _workshop_ui(state, query, char, "\n".join(lines), workshop_main_keyboard(loc, character=char))
     await query.answer()
 
 
@@ -265,6 +281,54 @@ async def menu_workshop_open(query: CallbackQuery, session: AsyncSession, state:
 @router.callback_query(F.data == "wsp:hub")
 async def workshop_hub(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     await menu_workshop_open(query, session, state)
+
+
+@router.callback_query(F.data == "wsp:gacha")
+async def workshop_gacha_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None:
+            return
+        text = craft_gacha_service.format_gacha_intro_html(char)
+        await _workshop_ui(state, query, char, text, workshop_gacha_keyboard())
+        await query.answer()
+    except Exception:
+        logger.exception("wsp:gacha")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^wsp:gacha:pull(10)?:(blacksmith|alchemist|jeweler)$"))
+async def workshop_gacha_pull(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if query.data is None or query.message is None or query.bot is None:
+            await query.answer()
+            return
+        char = await _char(session, query)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        parts = query.data.split(":")
+        times = 10 if parts[2] == "pull10" else 1
+        prof = parts[-1].strip().lower()
+        await character_repo.lock_character_row(session, char.id)
+        ok, lines = await craft_gacha_service.try_gacha_pull(
+            session,
+            char,
+            prof,
+            times=times,
+            bot=query.bot,
+        )
+        await session.flush()
+        base = craft_gacha_service.format_gacha_intro_html(char)
+        if ok:
+            body = base + "\n\n" + "\n".join(lines)
+        else:
+            body = base + "\n\n<i>" + "\n".join(lines) + "</i>"
+        await _workshop_ui(state, query, char, body, workshop_gacha_keyboard())
+        await query.answer("Приз!" if ok else (lines[0][:180] if lines else "Нет"))
+    except Exception:
+        logger.exception("wsp:gacha:pull")
+        await query.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("wsp:prof:"))
@@ -441,7 +505,7 @@ async def workshop_start(query: CallbackQuery, session: AsyncSession, state: FSM
             query,
             char,
             f"🔧 <b>Мастерская</b>\n\n{body}",
-            workshop_main_keyboard(),
+            workshop_main_keyboard(character=char),
         )
         await query.answer("Запущено.")
     except Exception:
@@ -474,7 +538,8 @@ async def workshop_queue(query: CallbackQuery, session: AsyncSession, state: FSM
             entries.append((sid, lab, ready))
         if not entries:
             text = "📜 <b>Очередь пуста.</b>"
-            kb = workshop_main_keyboard()
+            loc = get_locale(char, query.from_user.language_code if query.from_user else None)
+            kb = workshop_main_keyboard(loc, character=char)
         else:
             text = "📜 <b>Активные работы</b>\n\n<i>Готово — «Забрать». Остальное ждёт таймер.</i>"
             kb = workshop_queue_keyboard(entries)
@@ -502,7 +567,7 @@ async def workshop_claim(query: CallbackQuery, session: AsyncSession, state: FSM
             query,
             char,
             "\n".join(lines),
-            workshop_main_keyboard(),
+            workshop_main_keyboard(character=char),
         )
         await query.answer("Забрано.")
     except Exception:
@@ -630,7 +695,7 @@ def _workshop_enchant_scroll_kb(page: int, scrolls: list, total: int) -> InlineK
     chunk = scrolls[start : start + _ENCH_SCROLL_PER_PAGE]
     rows: list[list[InlineKeyboardButton]] = []
     for it in chunk:
-        nm = str((it.item_data or {}).get("name", f"#{it.id}"))[:40]
+        nm = _enchant_scroll_button_label(it)
         sid = int(it.id)
         rows.append([InlineKeyboardButton(text=nm, callback_data=f"wsp:ench:pick:{sid}")])
     nav: list[InlineKeyboardButton] = []
@@ -692,9 +757,9 @@ async def workshop_enchant_scroll_menu(query: CallbackQuery, session: AsyncSessi
         bag = await inventory_repo.list_bag_items(session, char.id)
         scrolls = _alchemy_scroll_items(bag)
         lines = [
-            "📜 <b>Зачарование (лаборатория)</b>",
+            "📜 <b>Свитки зачарования</b>",
             "",
-            "<i>Выбери свиток зачарования из сумки. Предметы для наложения — в порядке как в инвентаре.</i>",
+            "<i>Выбери свиток из сумки. Предмет для наложения — в порядке как в инвентаре.</i>",
         ]
         if not scrolls:
             lines.append("")
@@ -736,7 +801,7 @@ async def workshop_enchant_pick_scroll(query: CallbackQuery, session: AsyncSessi
             return
         summ = summarize_scroll(sd)
         lines = [
-            "🧪 <b>Свиток</b>",
+            "📜 <b>Свиток зачарования</b>",
             f"<i>{html.escape(summ)}</i>",
             "",
             "<i>Выбери предмет (порядок как в инвентаре).</i>",
@@ -773,7 +838,7 @@ async def workshop_enchant_targets_page(query: CallbackQuery, session: AsyncSess
             return
         summ = summarize_scroll(sd)
         lines = [
-            "🧪 <b>Свиток</b>",
+            "📜 <b>Свиток зачарования</b>",
             f"<i>{html.escape(summ)}</i>",
             "",
             "<i>Выбери предмет (порядок как в инвентаре).</i>",
@@ -808,7 +873,7 @@ async def workshop_enchant_apply(query: CallbackQuery, session: AsyncSession, st
         lines = [
             msg,
             "",
-            "📜 <b>Зачарование</b>",
+            "📜 <b>Свитки зачарования</b>",
             "<i>Можно выбрать другой свиток.</i>",
         ]
         kb = (
@@ -905,7 +970,7 @@ async def workshop_lb(query: CallbackQuery, session: AsyncSession, state: FSMCon
             query,
             char,
             f"🏆 <b>Рейтинг</b>\n\n{text}",
-            workshop_main_keyboard(),
+            workshop_main_keyboard(character=char),
         )
         await query.answer()
     except Exception:

@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.home_kb import (
     alchemy_keyboard,
     buildings_keyboard,
-    craft_gacha_keyboard,
     home_main_keyboard,
     library_keyboard,
     mine_farm_keyboard,
@@ -23,7 +22,6 @@ from bot.i18n import get_locale
 from bot.utils.game_art import menu_home_library_photo_path, menu_home_photo_path, menu_home_wardrobe_photo_path
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
-from services import craft_gacha_service
 from scheduler.tasks import schedule_rest_completion_notification
 from services import home_service
 from services.rest_service import try_begin_or_claim_rest
@@ -635,68 +633,13 @@ async def home_buildings(callback: CallbackQuery, session: AsyncSession, state: 
         await callback.answer("Ошибка.", show_alert=True)
 
 
-@router.callback_query(F.data == "hom:gacha")
-async def home_gacha_open(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.message is None or callback.bot is None:
-            await callback.answer()
-            return
-        char = await _char(callback, session)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-        text = craft_gacha_service.format_gacha_intro_html(char)
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=craft_gacha_keyboard(),
-            target_message=callback.message,
-            photo_path=menu_home_photo_path(),
-            character=char,
-        )
-        await callback.answer()
-    except Exception:
-        logger.exception("hom:gacha")
-        await callback.answer("Ошибка.", show_alert=True)
-
-
-@router.callback_query(F.data.regexp(r"^hom:gacha:pull(10)?:(blacksmith|alchemist|jeweler)$"))
-async def home_gacha_pull(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.data is None or callback.message is None or callback.bot is None:
-            await callback.answer()
-            return
-        char = await _char(callback, session)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-        parts = callback.data.split(":")
-        times = 10 if parts[2] == "pull10" else 1
-        prof = parts[-1].strip().lower()
-        await character_repo.lock_character_row(session, char.id)
-        ok, lines = await craft_gacha_service.try_gacha_pull(session, char, prof, times=times)
-        await session.flush()
-        base = craft_gacha_service.format_gacha_intro_html(char)
-        if ok:
-            body = base + "\n\n" + "\n".join(lines)
-        else:
-            body = base + "\n\n<i>" + "\n".join(lines) + "</i>"
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=body,
-            reply_markup=craft_gacha_keyboard(),
-            target_message=callback.message,
-            photo_path=menu_home_photo_path(),
-            character=char,
-        )
-        await callback.answer("Приз!" if ok else lines[0][:180] if lines else "Нет")
-    except Exception:
-        logger.exception("hom:gacha:pull")
-        await callback.answer("Ошибка.", show_alert=True)
+@router.callback_query(F.data.startswith("hom:gacha"))
+async def home_gacha_deprecated(callback: CallbackQuery) -> None:
+    """Старые кнопки «Гача» в доме — гача перенесена в Мастерскую."""
+    await callback.answer(
+        "Гача ресурсов перенесена в Мастерскую: меню → Мастерская → 🎰 Гача ресурсов.",
+        show_alert=True,
+    )
 
 
 # ---------------------------------------------------------------------------
