@@ -107,6 +107,20 @@ class Settings(BaseSettings):
         description="True — считать всех подписанными (локальные тесты без канала)",
     )
 
+    GACHA_BROADCAST_CHAT: str = Field(
+        default="-1003960398590",
+        description=(
+            "Супергруппа/канал для объявлений 6★ из гачи: числовой chat_id или @username. "
+            "Пустая строка — только чаты из БД."
+        ),
+    )
+    GACHA_BROADCAST_MESSAGE_THREAD_ID: int | None = Field(
+        default=7,
+        description=(
+            "Ветка форума для объявлений 6★: число из ссылки на тему (t.me/tower_of_trial/7 → 7)."
+        ),
+    )
+
 
 # Единый экземпляр настроек для импорта из main и сервисов
 settings = Settings()
