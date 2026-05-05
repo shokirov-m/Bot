@@ -10,6 +10,7 @@ from bot.keyboards.menu_kb import menu_nav_button_row
 __all__ = [
     "city_hub_keyboard",
     "forge_actions_keyboard",
+    "forge_set_shop_keyboard",
     "forge_dis_bag_keyboard",
     "forge_enchant_slots_keyboard",
     "forge_repair_keyboard",
@@ -226,15 +227,33 @@ def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
                 ),
             ],
             [InlineKeyboardButton(text="🔨 Починка экипировки", callback_data=f"frg:rpr:{floor_number}")],
-            [InlineKeyboardButton(text="🔨 Разобрать предмет", callback_data=f"frg:dis:{floor_number}")],
-            [InlineKeyboardButton(text="💎 Руны на оружии", callback_data=f"frg:rnm:{floor_number}")],
-            [InlineKeyboardButton(text="🧪 Сварить настой (HP)", callback_data=f"frg:brew:{floor_number}")],
-            [InlineKeyboardButton(text="⚒️ Крафт (рецепты)", callback_data=f"frg:craft:{floor_number}")],
-            [InlineKeyboardButton(text="📜 Задание кузнеца", callback_data=f"frg:qst:{floor_number}")],
+            [InlineKeyboardButton(text="🛒 Купить базовый сет", callback_data=f"frg:set:{floor_number}")],
             [InlineKeyboardButton(text="⬅ В город", callback_data=f"frg:city:{floor_number}")],
             menu_nav_button_row(),
         ],
     )
+
+
+def forge_set_shop_keyboard(
+    floor_number: int,
+    items: list[tuple[str, str, int]],
+) -> InlineKeyboardMarkup:
+    """
+    items: (key, label, price)
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    for key, label, price in items[:12]:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{label} — {int(price)}💰"[:64],
+                    callback_data=f"frg:setbuy:{floor_number}:{key}",
+                ),
+            ],
+        )
+    rows.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def forge_quest_keyboard(floor_number: int, state: dict) -> InlineKeyboardMarkup:

@@ -41,14 +41,6 @@ def shop_main_keyboard(floor_number: int, origin: str) -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                text="🥖 Съесть паёк (+2⚡)",
-                callback_data=f"shp:eat:{floor_number}:{origin}",
-            ),
-        ],
-    )
-    rows.append(
-        [
-            InlineKeyboardButton(
                 text="⭐ VIP-магазин (Telegram Stars)",
                 callback_data=f"shp:vip:{floor_number}:{origin}",
             ),

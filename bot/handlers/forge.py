@@ -4,13 +4,18 @@
 
 from __future__ import annotations
 
+import copy
+
 from aiogram import F, Router
 from aiogram.enums import ParseMode
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale
+from bot.utils.game_art import menu_city_photo_path
+from bot.utils.game_ui import push_game_ui
 from bot.keyboards.forge_kb import (
     city_hub_keyboard,
     forge_actions_keyboard,
@@ -22,6 +27,7 @@ from bot.keyboards.forge_kb import (
     forge_rune_bag_pick_keyboard,
     forge_rune_menu_keyboard,
     forge_rune_socket_pick_keyboard,
+    forge_set_shop_keyboard,
 )
 from db.repository import character_repo, inventory_repo, user_repo
 from game.items.runes import RuneData, ensure_rune_socket_list, extract_rune_from_item
@@ -30,8 +36,144 @@ from game.locations import forge as forge_loc
 from game.crafting.recipes_data import forge_recipes_only
 from services import crafting_service, forge_service
 from services.floor_service import format_city_hub_message
+from game.items.equipment.starters import promo_starter_armor_amulet_payloads, starter_pants_payload
+from services import character_service
+from game.items.equipment.defaults import apply_item_payload_defaults
 
 router = Router(name="forge")
+
+
+def _basic_set_goods() -> list[tuple[str, dict, int]]:
+    armor, amulet = promo_starter_armor_amulet_payloads()
+    pants = starter_pants_payload()
+    helmet = {
+        "name": "Шлем новичка",
+        "kind": "helmet",
+        "rarity": "common",
+        "defense": 1,
+        "vit": 1,
+        "summary": "Тусклый шлем — защищает от мелких ударов.",
+    }
+    gloves = {
+        "name": "Перчатки новичка",
+        "kind": "gloves",
+        "rarity": "common",
+        "defense": 1,
+        "dex": 1,
+        "summary": "Не даёт соскальзывать руке с рукояти.",
+    }
+    ring = {
+        "name": "Кольцо новичка",
+        "kind": "ring",
+        "rarity": "common",
+        "defense": 1,
+        "luck": 1,
+        "summary": "Простое кольцо, найденное у входа в Башню.",
+    }
+    for d in (helmet, gloves, ring):
+        apply_item_payload_defaults(d)
+    # Prices (gold): low, intended for early game
+    return [
+        ("armor", armor, 250),
+        ("pants", pants, 150),
+        ("helmet", helmet, 150),
+        ("gloves", gloves, 120),
+        ("ring", ring, 160),
+        ("amulet", amulet, 180),
+    ]
+
+
+@router.callback_query(F.data.startswith("frg:set:"))
+async def forge_set_shop_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key:
+            await query.answer("Этаж устарел.", show_alert=True)
+            return
+        goods = _basic_set_goods()
+        items = [(k, str(p.get("name", k)), int(price)) for k, p, price in goods]
+        body = (
+            "🛒 <b>Базовый сет кузнеца</b>\n"
+            "<i>Простая экипировка для старта. Покупки кладутся в сумку.</i>\n\n"
+            "Выбери предмет:"
+        )
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=body,
+            reply_markup=forge_set_shop_keyboard(floor_key, items),
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("frg:set")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("frg:setbuy:"))
+async def forge_set_shop_buy(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        sp = query.data.split(":")
+        if len(sp) < 4:
+            await query.answer()
+            return
+        floor_key = int(sp[2])
+        key = str(sp[3])
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key:
+            await query.answer("Этаж устарел.", show_alert=True)
+            return
+        goods = {k: (payload, int(price)) for k, payload, price in _basic_set_goods()}
+        if key not in goods:
+            await query.answer("Товар недоступен.", show_alert=True)
+            return
+        payload, price = goods[key]
+        if int(char.gold or 0) < int(price):
+            await query.answer("Не хватает золота.", show_alert=True)
+            return
+        await character_repo.lock_character_row(session, char.id)
+        # spend + add item
+        character_service.add_gold(char, -int(price), spend_for="Кузница: покупка сета", spend_kind="forge")
+        added = await inventory_repo.add_bag_item(session, int(char.id), copy.deepcopy(payload))
+        await session.flush()
+        if added is None:
+            # rollback spent gold
+            character_service.add_gold(char, int(price))
+            await session.flush()
+            await query.answer("Сумка переполнена.", show_alert=True)
+            return
+        items = [(k, str(p.get("name", k)), int(pr)) for k, (p, pr) in goods.items()]
+        text = f"✅ Куплено: <b>{str(payload.get('name', key))}</b> за <b>{price}💰</b>."
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=forge_set_shop_keyboard(floor_key, items),
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
+        )
+        await query.answer("Куплено!")
+    except Exception:
+        logger.exception("frg:setbuy")
+        await query.answer("Ошибка.", show_alert=True)
 
 
 async def _load_char(session: AsyncSession, telegram_id: int):
@@ -42,7 +184,7 @@ async def _load_char(session: AsyncSession, telegram_id: int):
 
 
 @router.callback_query(F.data.startswith("frg:main:"))
-async def forge_open_main(query: CallbackQuery, session: AsyncSession) -> None:
+async def forge_open_main(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -59,10 +201,15 @@ async def forge_open_main(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Здесь нет кузницы.", show_alert=True)
             return
         text = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
-            text,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=forge_actions_keyboard(char.floor_number),
-            parse_mode=ParseMode.HTML,
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer()
     except Exception:
@@ -71,7 +218,7 @@ async def forge_open_main(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.regexp(r"^frg:rpr:\d+$"))
-async def forge_repair_menu(query: CallbackQuery, session: AsyncSession) -> None:
+async def forge_repair_menu(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -86,10 +233,15 @@ async def forge_repair_menu(query: CallbackQuery, session: AsyncSession) -> None
             return
         text = await forge_service.build_repair_message_html(session, char)
         rows = await forge_service.list_repair_slot_button_rows(session, char.id)
-        await query.message.edit_text(
-            text,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=forge_repair_keyboard(char.floor_number, rows),
-            parse_mode=ParseMode.HTML,
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer()
     except Exception:
@@ -98,7 +250,7 @@ async def forge_repair_menu(query: CallbackQuery, session: AsyncSession) -> None
 
 
 @router.callback_query(F.data.regexp(r"^frg:rpr1:\d+:\w+$"))
-async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession) -> None:
+async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -116,10 +268,15 @@ async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession) -
         if ok:
             text = await forge_service.build_repair_message_html(session, char)
             rows = await forge_service.list_repair_slot_button_rows(session, char.id)
-            await query.message.edit_text(
-                text,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
                 reply_markup=forge_repair_keyboard(char.floor_number, rows),
-                parse_mode=ParseMode.HTML,
+                target_message=query.message,
+                photo_path=menu_city_photo_path(),
+                character=char,
             )
             await query.answer("Починено.", show_alert=False)
         else:
@@ -130,7 +287,7 @@ async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession) -
 
 
 @router.callback_query(F.data.regexp(r"^frg:rpra:\d+$"))
-async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession) -> None:
+async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -147,10 +304,15 @@ async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession) ->
         if ok:
             text = await forge_service.build_repair_message_html(session, char)
             rows = await forge_service.list_repair_slot_button_rows(session, char.id)
-            await query.message.edit_text(
-                text,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
                 reply_markup=forge_repair_keyboard(char.floor_number, rows),
-                parse_mode=ParseMode.HTML,
+                target_message=query.message,
+                photo_path=menu_city_photo_path(),
+                character=char,
             )
             await query.answer("Вся экипировка починена.", show_alert=False)
         else:
@@ -163,6 +325,7 @@ async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession) ->
 async def _handle_forge_enchant_callback(
     query: CallbackQuery,
     session: AsyncSession,
+    state: FSMContext,
     *,
     rune_ward: bool,
 ) -> None:
@@ -196,10 +359,15 @@ async def _handle_forge_enchant_callback(
             if rune_ward
             else "\n\n<i>Выбери слот для заточки:</i>"
         )
-        await query.message.edit_text(
-            text + hint,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text + hint,
             reply_markup=forge_enchant_slots_keyboard(floor_key, rows, ward=rune_ward),
-            parse_mode=ParseMode.HTML,
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer("Выбери слот")
         return
@@ -218,27 +386,32 @@ async def _handle_forge_enchant_callback(
 
     body = "\n".join(result_lines)
     refreshed = await forge_service.build_forge_message_html(session, char)
-    await query.message.edit_text(
-        f"{refreshed}\n\n{body}",
+    await push_game_ui(
+        state,
+        query.bot,
+        chat_id=query.message.chat.id,
+        text=f"{refreshed}\n\n{body}",
         reply_markup=forge_actions_keyboard(char.floor_number),
-        parse_mode=ParseMode.HTML,
+        target_message=query.message,
+        photo_path=menu_city_photo_path(),
+        character=char,
     )
     await query.answer("Готово!")
 
 
 @router.callback_query(F.data.startswith("frg:ench:"))
-async def forge_enchant(query: CallbackQuery, session: AsyncSession) -> None:
+async def forge_enchant(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        await _handle_forge_enchant_callback(query, session, rune_ward=False)
+        await _handle_forge_enchant_callback(query, session, state, rune_ward=False)
     except Exception:
         logger.exception("frg:ench")
         await query.answer("Ошибка.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("frg:enchw:"))
-async def forge_enchant_rune_ward(query: CallbackQuery, session: AsyncSession) -> None:
+async def forge_enchant_rune_ward(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        await _handle_forge_enchant_callback(query, session, rune_ward=True)
+        await _handle_forge_enchant_callback(query, session, state, rune_ward=True)
     except Exception:
         logger.exception("frg:enchw")
         await query.answer("Ошибка.", show_alert=True)
@@ -354,7 +527,7 @@ async def forge_brew_elixir(query: CallbackQuery, session: AsyncSession) -> None
 
 
 @router.callback_query(F.data.startswith("frg:city:"))
-async def forge_back_city(query: CallbackQuery, session: AsyncSession) -> None:
+async def forge_back_city(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -372,10 +545,15 @@ async def forge_back_city(query: CallbackQuery, session: AsyncSession) -> None:
             return
         text = format_city_hub_message(char)
         loc = get_locale(char, query.from_user.language_code)
-        await query.message.edit_text(
-            text,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
-            parse_mode=ParseMode.HTML,
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer()
     except Exception:

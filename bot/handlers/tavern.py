@@ -5,11 +5,14 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.tavern_kb import buyer_quest_keyboard, tavern_daily_keyboard, tavern_menu_keyboard
+from bot.utils.game_art import menu_city_photo_path
+from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.locations import tavern as tavern_loc
 from services import tavern_service
@@ -26,7 +29,7 @@ async def _load_char(session: AsyncSession, telegram_id: int):
 
 
 @router.callback_query(F.data.startswith("tvr:open:"))
-async def tavern_open(query: CallbackQuery, session: AsyncSession) -> None:
+async def tavern_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -43,7 +46,16 @@ async def tavern_open(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Здесь нет таверны.", show_alert=True)
             return
         text = tavern_service.format_tavern_welcome_html(char)
-        await query.message.edit_text(text, reply_markup=tavern_menu_keyboard(char.floor_number))
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=tavern_menu_keyboard(char.floor_number),
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
+        )
         await query.answer()
     except Exception:
         logger.exception("tvr:open")
@@ -51,7 +63,7 @@ async def tavern_open(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("tvr:buy:"))
-async def tavern_buy(query: CallbackQuery, session: AsyncSession) -> None:
+async def tavern_buy(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -76,9 +88,15 @@ async def tavern_buy(query: CallbackQuery, session: AsyncSession) -> None:
             return
 
         header = tavern_service.format_tavern_welcome_html(char)
-        await query.message.edit_text(
-            f"{header}\n\n{LINE_SEP}\n{payload}",
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=f"{header}\n\n{LINE_SEP}\n{payload}",
             reply_markup=tavern_menu_keyboard(char.floor_number),
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer("Приятного!")
     except Exception:
@@ -89,7 +107,7 @@ async def tavern_buy(query: CallbackQuery, session: AsyncSession) -> None:
 # ── Скупщик Орин ─────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data.regexp(r"^tvr:buyer:\d+$"))
-async def tavern_buyer_open(query: CallbackQuery, session: AsyncSession) -> None:
+async def tavern_buyer_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     """Открыть экран Скупщика Орина."""
     try:
         if query.data is None or query.from_user is None or query.message is None:
@@ -103,10 +121,15 @@ async def tavern_buyer_open(query: CallbackQuery, session: AsyncSession) -> None
         from services import tavern_buyer_service as bqs
         text = bqs.format_buyer_quest_html(char, floor_key)
         state = bqs._get_state(char, floor_key)
-        await query.message.edit_text(
-            text,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=buyer_quest_keyboard(floor_key, state),
-            parse_mode="HTML",
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer()
     except Exception:
@@ -115,7 +138,7 @@ async def tavern_buyer_open(query: CallbackQuery, session: AsyncSession) -> None
 
 
 @router.callback_query(F.data.regexp(r"^tvr:bq:start:\d+$"))
-async def tavern_buyer_start(query: CallbackQuery, session: AsyncSession) -> None:
+async def tavern_buyer_start(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -133,10 +156,15 @@ async def tavern_buyer_start(query: CallbackQuery, session: AsyncSession) -> Non
         await session.flush()
         text = bqs.format_buyer_quest_html(char, floor_key)
         state = bqs._get_state(char, floor_key)
-        await query.message.edit_text(
-            text,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=buyer_quest_keyboard(floor_key, state),
-            parse_mode="HTML",
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer("🪙 Поручения приняты!")
     except Exception:
@@ -145,7 +173,7 @@ async def tavern_buyer_start(query: CallbackQuery, session: AsyncSession) -> Non
 
 
 @router.callback_query(F.data.regexp(r"^tvr:bq:claim:\d+:\d+$"))
-async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession) -> None:
+async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -166,10 +194,15 @@ async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession) -
         text = bqs.format_buyer_quest_html(char, floor_key)
         state = bqs._get_state(char, floor_key)
         await session.commit()
-        await query.message.edit_text(
-            f"{text}\n\n{msg}",
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=f"{text}\n\n{msg}",
             reply_markup=buyer_quest_keyboard(floor_key, state),
-            parse_mode="HTML",
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
         await query.answer("✅ Шаг выполнен!")
     except Exception:
@@ -180,7 +213,7 @@ async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession) -
 # ── Дневная ротация: чертежи и снаряжение ────────────────────────────────────
 
 
-async def _render_tavern_daily(query: CallbackQuery, char) -> None:
+async def _render_tavern_daily(state: FSMContext, query: CallbackQuery, char) -> None:
     text = tavern_service.format_tavern_daily_html(char)
     offers = tavern_service.daily_offers_for_character(char)
     state = tavern_service._tavern_daily_state(char)
@@ -188,15 +221,20 @@ async def _render_tavern_daily(query: CallbackQuery, char) -> None:
     bg = set(state.get("bought_gears") or [])
     known = set(tavern_service.known_recipes(char))
     if query.message is not None:
-        await query.message.edit_text(
-            text,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=tavern_daily_keyboard(int(char.floor_number), offers, bb, bg, known),
-            parse_mode="HTML",
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
         )
 
 
 @router.callback_query(F.data.regexp(r"^tvr:daily:\d+$"))
-async def tavern_daily_open(query: CallbackQuery, session: AsyncSession) -> None:
+async def tavern_daily_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -209,7 +247,7 @@ async def tavern_daily_open(query: CallbackQuery, session: AsyncSession) -> None
         if not tavern_loc.tavern_available_on_floor(char.floor_number):
             await query.answer("Здесь нет таверны.", show_alert=True)
             return
-        await _render_tavern_daily(query, char)
+        await _render_tavern_daily(state, query, char)
         await query.answer()
     except Exception:
         logger.exception("tvr:daily:open")

@@ -185,47 +185,6 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession, state: FSMContex
         logger.exception("shp:buy")
         await query.answer("Ошибка.", show_alert=True)
 
-
-@router.callback_query(F.data.startswith("shp:eat:"))
-async def shop_eat_ration(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if query.data is None or query.from_user is None or query.message is None or query.bot is None:
-            await query.answer()
-            return
-        parts = query.data.split(":")
-        floor_key = int(parts[2])
-        origin = _origin_ok(parts[3]) if len(parts) > 3 else "f"
-        char = await _load_char(session, query.from_user.id)
-        if char is None:
-            await query.answer("Нет персонажа.", show_alert=True)
-            return
-        if char.floor_number != floor_key:
-            await query.answer("Этаж устарел.", show_alert=True)
-            return
-
-        ok, msg = await shop_service.try_use_first_bag_ration(session, char)
-        if not ok:
-            await query.answer(msg[:180], show_alert=True)
-            return
-
-        header = shop_service.format_shop_welcome_html(char, from_city=(origin in ("c", "m")))
-        if origin == "h":
-            header = "🏠 <i>Заказ из дома</i>\n\n" + header
-        elif origin == "u":
-            header = "🏪 <i>Лавка главного меню</i>\n\n" + header
-        await _shop_push_ui(
-            state,
-            query,
-            char,
-            f"{header}\n\n{LINE_SEP}\n{msg}",
-            shop_main_keyboard(char.floor_number, origin),
-        )
-        await query.answer("Вкусно!")
-    except Exception:
-        logger.exception("shp:eat")
-        await query.answer("Ошибка.", show_alert=True)
-
-
 # ---------------------------------------------------------------------------
 # VIP-магазин (Telegram Stars)
 # ---------------------------------------------------------------------------

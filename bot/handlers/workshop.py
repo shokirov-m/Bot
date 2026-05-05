@@ -977,14 +977,17 @@ async def workshop_rune_socket_menu(query: CallbackQuery, session: AsyncSession,
         if char is None or query.message is None:
             return
         bag = await inventory_repo.list_bag_items(session, char.id)
-        pairs: list[tuple[int, str]] = []
+        rows: list[tuple[int, int, str, str]] = []
         for it in bag:
             rd = extract_rune_from_item(dict(it.item_data or {}))
             if rd is not None:
-                pairs.append((int(it.id), rd.display_name))
-        if not pairs:
+                # Sort by tier (rank) desc, then by element, then label.
+                rows.append((int(it.id), int(rd.rank), str(rd.element), rd.display_name))
+        if not rows:
             await query.answer("В сумке нет рун.", show_alert=True)
             return
+        rows.sort(key=lambda x: (-int(x[1]), str(x[2]), str(x[3])))
+        pairs: list[tuple[int, str]] = [(rid, lab) for rid, _, __, lab in rows]
         text = (
             "⚔ <b>Вставка руны в оружие</b>\n\n"
             "<i>Стоимость попытки <b>500 💰</b>. Шанс успеха <b>70–80%</b> "
@@ -1012,11 +1015,13 @@ async def workshop_rune_socket_apply(query: CallbackQuery, session: AsyncSession
             return
         text = f"{msg}\n\n⚔ <b>Вставка руны</b>\n\n<i>Можно выбрать другую руну.</i>"
         bag = await inventory_repo.list_bag_items(session, char.id)
-        pairs: list[tuple[int, str]] = []
+        rows: list[tuple[int, int, str, str]] = []
         for it in bag:
             rd = extract_rune_from_item(dict(it.item_data or {}))
             if rd is not None:
-                pairs.append((int(it.id), rd.display_name))
+                rows.append((int(it.id), int(rd.rank), str(rd.element), rd.display_name))
+        rows.sort(key=lambda x: (-int(x[1]), str(x[2]), str(x[3])))
+        pairs: list[tuple[int, str]] = [(rid, lab) for rid, _, __, lab in rows]
         kb = (
             workshop_rune_bag_pick_keyboard(pairs)
             if pairs

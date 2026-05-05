@@ -62,7 +62,7 @@ UNLOCKS: tuple[Unlock, ...] = (
     ),
     Unlock(
         key="menu_settings",
-        level=10,
+        level=1,
         title="Настройки",
         hint="Меню → Настройки.",
     ),
