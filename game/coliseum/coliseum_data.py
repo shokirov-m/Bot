@@ -172,6 +172,10 @@ def _build_all_fighters() -> tuple[ColiseumFighter, ...]:
         hp, atk, dfn, exp, gold = _scaled_stats(fid)
         ch = fid % 10 == 0
         el = _ELEMENTS_CYCLE[(fid - 1) % len(_ELEMENTS_CYCLE)]
+        # Боец №10: заданный итог ATK в бою (× COLISEUM_ENEMY_ATK_MULT) и стихия молнии.
+        if fid == 10:
+            atk = 210  # 210 × 5.0 → 1050 в карточке и в расчёте урона монстра
+            el = "lightning"
         spec = _SPECIAL_BY_ID.get(fid, "none")
         phrase = (
             f"«{_NAMES[fid].split()[0]} не отступит!»"
