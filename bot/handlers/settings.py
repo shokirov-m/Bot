@@ -28,10 +28,12 @@ from bot.utils.game_ui import push_game_ui
 from config import settings
 from db.repository import character_repo, user_repo
 from services import anticheat_service, character_service, stat_bonus_service
+from services import unlock_service
 from services.referral_service import referral_bot_link, resolve_bot_username_for_referral
 from services.settings_service import redeem_promo, try_paid_rename
 from utils.game_images_prefs import set_game_images_hidden, game_images_enabled
 from utils.ui import LINE_SEP
+from bot.states.registration_states import RegistrationStates
 
 router = Router(name="settings")
 
@@ -109,6 +111,9 @@ async def menu_open_settings(callback: CallbackQuery, session: AsyncSession, sta
             await callback.answer("Сначала /start.", show_alert=True)
             return
         user, char = pair
+        if not unlock_service.is_unlocked(char, "menu_settings"):
+            await callback.answer("Откроется с 10 ур.", show_alert=True)
+            return
         loc = get_locale(char, callback.from_user.language_code)
         await state.clear()
         await push_game_ui(
@@ -500,13 +505,18 @@ async def stg_reset_execute(callback: CallbackQuery, session: AsyncSession, stat
         user, char = pair
         loc = get_locale(char, callback.from_user.language_code)
         await character_repo.lock_character_row(session, char.id)
-        await character_service.reset_all_progress_keep_identity(session, char)
+        await character_service.delete_character_and_all_progress(session, char)
         await session.commit()
+
+        # Сразу начать регистрацию заново (как /start без существующего героя).
         await state.clear()
+        await state.set_state(RegistrationStates.waiting_gender)
+        from bot.handlers.start import TOWER_WAKE_LORE, GENDER_PROMPT, _gender_pick_keyboard
+
         await callback.message.edit_text(
-            t(loc, "settings_reset_done"),
+            f"{TOWER_WAKE_LORE}{GENDER_PROMPT}",
             parse_mode=ParseMode.HTML,
-            reply_markup=_settings_reply_kb(loc, char, user),
+            reply_markup=_gender_pick_keyboard(),
         )
         await callback.answer()
     except Exception:

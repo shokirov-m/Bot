@@ -222,7 +222,7 @@ async def _finish_new_character_registration(
         message,
         char,
         text=body,
-        reply_markup=main_menu_with_tutorial_hints(locale=loc),
+        reply_markup=main_menu_with_tutorial_hints(locale=loc, character=char),
     )
 
 
@@ -260,7 +260,7 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
                 message,
                 character,
                 text=t(loc, "welcome_back") + "\n\n" + format_menu_hub_html(character, locale=loc),
-                reply_markup=main_menu_keyboard(locale=loc),
+                reply_markup=main_menu_keyboard(locale=loc, character=character),
             )
             return
 
@@ -349,7 +349,10 @@ async def on_nickname_entered(message: Message, session: AsyncSession, state: FS
         if existing is not None:
             await state.clear()
             loc = get_locale(existing, message.from_user.language_code if message.from_user else None)
-            await message.answer("У тебя уже есть герой. Используй меню ниже.", reply_markup=main_menu_keyboard(locale=loc))
+            await message.answer(
+                "У тебя уже есть герой. Используй меню ниже.",
+                reply_markup=main_menu_keyboard(locale=loc, character=existing),
+            )
             return
 
         await state.update_data(pending_display_name=name)
@@ -413,7 +416,7 @@ async def on_portrait_selected(callback: CallbackQuery, session: AsyncSession, s
             loc = get_locale(existing, callback.from_user.language_code)
             await callback.message.answer(
                 "У тебя уже есть герой.",
-                reply_markup=main_menu_keyboard(locale=loc),
+                reply_markup=main_menu_keyboard(locale=loc, character=existing),
             )
             return
 

@@ -45,6 +45,7 @@ from game.floors.floor_data import PORTAL_DESTINATION_FLOORS
 from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui, travel_to_floor
 from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
 from services.rest_service import apply_completed_rest_if_needed
+from services import unlock_service
 from utils.game_images_prefs import game_images_enabled
 from utils.profile_portraits import portrait_path_for_character
 
@@ -92,6 +93,20 @@ async def _char_or_alert(
     return user, char
 
 
+def _unlock_alert_text(character: object, key: str) -> str:
+    try:
+        u = unlock_service.UNLOCK_BY_KEY.get(str(key))
+        if u is None:
+            return "Раздел пока недоступен."
+        lv = int(getattr(character, "level", 1) or 1)
+        need = int(u.level)
+        if lv >= need:
+            return "Раздел пока недоступен."
+        return f"Откроется с {need} ур. (у тебя {lv})."
+    except Exception:
+        return "Раздел пока недоступен."
+
+
 @router.callback_query(F.data == "mnu:hub")
 async def menu_hub(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -122,7 +137,7 @@ async def menu_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCon
             callback.bot,
             chat_id=callback.message.chat.id,
             text=hub_text,
-            reply_markup=main_menu_keyboard(locale=loc),
+            reply_markup=main_menu_keyboard(locale=loc, character=char),
             target_message=callback.message,
             photo_path=photo_p,
             character=char,
@@ -142,13 +157,16 @@ async def menu_locations(callback: CallbackQuery, session: AsyncSession, state: 
         _, char = await _char_or_alert(session, callback)
         if char is None:
             return
+        if not unlock_service.is_unlocked(char, "menu_locations"):
+            await callback.answer(_unlock_alert_text(char, "menu_locations"), show_alert=True)
+            return
         loc = get_locale(char, callback.from_user.language_code)
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text=t(loc, "menu_locations_intro"),
-            reply_markup=locations_hub_keyboard(locale=loc),
+            reply_markup=locations_hub_keyboard(locale=loc, character=char),
             target_message=callback.message,
             photo_path=menu_locations_photo_path(),
             character=char,
@@ -170,6 +188,9 @@ async def menu_quests(callback: CallbackQuery, session: AsyncSession, state: FSM
             return
         _, char = await _char_or_alert(session, callback)
         if char is None:
+            return
+        if not unlock_service.is_unlocked(char, "menu_quests"):
+            await callback.answer(_unlock_alert_text(char, "menu_quests"), show_alert=True)
             return
         text, kb = await render_quests_hub(session, char)
         await _edit_same_message(
@@ -300,6 +321,9 @@ async def menu_portal_open(callback: CallbackQuery, session: AsyncSession, state
             return
         _, char = await _char_or_alert(session, callback)
         if char is None:
+            return
+        if not unlock_service.is_unlocked(char, "menu_portal"):
+            await callback.answer(_unlock_alert_text(char, "menu_portal"), show_alert=True)
             return
         loc = get_locale(char, callback.from_user.language_code)
         floors_txt = ", ".join(str(x) for x in PORTAL_DESTINATION_FLOORS)
@@ -456,6 +480,9 @@ async def menu_top(callback: CallbackQuery, session: AsyncSession, state: FSMCon
         _, char = await _char_or_alert(session, callback)
         if char is None:
             return
+        if not unlock_service.is_unlocked(char, "menu_top"):
+            await callback.answer(_unlock_alert_text(char, "menu_top"), show_alert=True)
+            return
         await _edit_same_message(
             callback,
             state,
@@ -479,6 +506,9 @@ async def menu_auction(callback: CallbackQuery, session: AsyncSession, state: FS
         await _clear_auction_fsm_only(state)
         _, char = await _char_or_alert(session, callback)
         if char is None:
+            return
+        if not unlock_service.is_unlocked(char, "menu_auction"):
+            await callback.answer(_unlock_alert_text(char, "menu_auction"), show_alert=True)
             return
         fl = int(char.floor_number) if char else 1
         await _edit_same_message(
@@ -507,7 +537,7 @@ async def menu_titles(callback: CallbackQuery, session: AsyncSession, state: FSM
         text = titles_screen_html(char)
         keys = title_service.unlocked_sorted(char)
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        kb = titles_pick_keyboard(keys) if keys else main_menu_keyboard(locale=loc)
+        kb = titles_pick_keyboard(keys) if keys else main_menu_keyboard(locale=loc, character=char)
         await _edit_same_message(
             callback,
             state,

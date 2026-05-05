@@ -1149,6 +1149,8 @@ async def on_profile_elements_info(
         if callback.from_user is None or callback.message is None:
             await callback.answer()
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        char = await character_repo.get_by_user_id(session, user.id) if user and not user.is_banned else None
         from game.items.runes import ELEMENTS, ELEMENT_WEAKNESS, ELEMENT_RESISTANCE
         lines = [
             "🔮 <b>Стихии монстров и слабости</b>",
@@ -1513,7 +1515,7 @@ async def cmd_lang(message: Message, session: AsyncSession, command: CommandObje
         await message.answer(
             t(arg, "lang_set", lang=arg.upper()),
             parse_mode=ParseMode.HTML,
-            reply_markup=main_menu_keyboard(locale=arg),
+            reply_markup=main_menu_keyboard(locale=arg, character=char),
         )
     except Exception:
         logger.exception("cmd_lang")

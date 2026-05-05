@@ -16,8 +16,10 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.i18n import t
 from bot.keyboards.tutorial_kb import tutorial_hints_keyboard
+from db.models.character import Character
 from game.characters.classes import all_classes_ordered
 from game.floors.floor_data import PORTAL_DESTINATION_FLOORS
+from services import unlock_service
 
 
 
@@ -61,84 +63,85 @@ def class_selection_keyboard() -> InlineKeyboardMarkup:
 
 
 
-def main_menu_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
+def main_menu_keyboard(*, locale: str = "ru", character: Character | None = None) -> InlineKeyboardMarkup:
 
     """Главное меню без слэш-команд."""
 
     loc = locale if locale in ("ru", "en") else "ru"
 
-    return InlineKeyboardMarkup(
-
-        inline_keyboard=[
-
-            [
-
-                InlineKeyboardButton(text=t(loc, "menu_profile"), callback_data="mnu:prf"),
-
-                InlineKeyboardButton(text=t(loc, "menu_floor"), callback_data="mnu:flr"),
-
-            ],
-
-            [
-
-                InlineKeyboardButton(text=t(loc, "menu_inv"), callback_data="mnu:inv"),
-
-                InlineKeyboardButton(text=t(loc, "menu_portal"), callback_data="mnu:prt"),
-
-            ],
-
-            [
-
-                InlineKeyboardButton(text=t(loc, "menu_quests"), callback_data="mnu:qst"),
-
-            ],
-
-            [
-
-                InlineKeyboardButton(text=t(loc, "menu_locations"), callback_data="mnu:loc"),
-
-            ],
-
-            [
-
-                InlineKeyboardButton(text=t(loc, "menu_home"), callback_data="hom:hub"),
-
-            ],
-
-            [
-
-                InlineKeyboardButton(text=t(loc, "menu_top"), callback_data="mnu:top"),
-
-                InlineKeyboardButton(text=t(loc, "menu_settings"), callback_data="mnu:stg"),
-
-            ],
-
-        ],
-
+    allow = (
+        unlock_service.available_main_menu_keys(character)
+        if character is not None
+        else {
+            "menu_profile",
+            "menu_floor",
+            "menu_inv",
+            "menu_portal",
+            "menu_quests",
+            "menu_locations",
+            "menu_home",
+            "menu_top",
+            "menu_settings",
+        }
     )
 
+    rows: list[list[InlineKeyboardButton]] = []
+    rows.append(
+        [
+            InlineKeyboardButton(text=t(loc, "menu_profile"), callback_data="mnu:prf"),
+            InlineKeyboardButton(text=t(loc, "menu_floor"), callback_data="mnu:flr"),
+        ],
+    )
+    inv_row: list[InlineKeyboardButton] = [
+        InlineKeyboardButton(text=t(loc, "menu_inv"), callback_data="mnu:inv"),
+    ]
+    if "menu_portal" in allow:
+        inv_row.append(InlineKeyboardButton(text=t(loc, "menu_portal"), callback_data="mnu:prt"))
+    rows.append(inv_row)
+    if "menu_quests" in allow:
+        rows.append([InlineKeyboardButton(text=t(loc, "menu_quests"), callback_data="mnu:qst")])
+    if "menu_locations" in allow:
+        rows.append([InlineKeyboardButton(text=t(loc, "menu_locations"), callback_data="mnu:loc")])
+    if "menu_home" in allow:
+        rows.append([InlineKeyboardButton(text=t(loc, "menu_home"), callback_data="hom:hub")])
+    last_row: list[InlineKeyboardButton] = []
+    if "menu_top" in allow:
+        last_row.append(InlineKeyboardButton(text=t(loc, "menu_top"), callback_data="mnu:top"))
+    if "menu_settings" in allow:
+        last_row.append(InlineKeyboardButton(text=t(loc, "menu_settings"), callback_data="mnu:stg"))
+    if last_row:
+        rows.append(last_row)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
-def locations_hub_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
+
+def locations_hub_keyboard(*, locale: str = "ru", character: Character | None = None) -> InlineKeyboardMarkup:
     """Арена, Колизей, Мастерская, Магазин, Клан."""
     loc = locale if locale in ("ru", "en") else "ru"
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text=t(loc, "menu_arena"), callback_data="mnu:arn"),
-                InlineKeyboardButton(text=t(loc, "menu_coliseum"), callback_data="mnu:col"),
-            ],
-            [
-                InlineKeyboardButton(text=t(loc, "menu_workshop"), callback_data="mnu:wsp"),
-                InlineKeyboardButton(text=t(loc, "menu_auction"), callback_data="mnu:auc"),
-            ],
-            [
-                InlineKeyboardButton(text="🏰 Клан", callback_data="mnu:clan"),
-            ],
-            [
-                InlineKeyboardButton(text=t(loc, "portal_back_menu"), callback_data="mnu:hub"),
-            ],
-        ],
-    )
+    if character is not None and not unlock_service.is_unlocked(character, "menu_locations"):
+        return InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text=t(loc, "portal_back_menu"), callback_data="mnu:hub")]],
+        )
+    allow = unlock_service.available_locations_menu_keys(character) if character is not None else None
+    allow = allow or {"menu_arena", "menu_coliseum", "menu_workshop", "menu_auction", "menu_clan"}
+    rows: list[list[InlineKeyboardButton]] = []
+    row1: list[InlineKeyboardButton] = []
+    if "menu_arena" in allow:
+        row1.append(InlineKeyboardButton(text=t(loc, "menu_arena"), callback_data="mnu:arn"))
+    if "menu_coliseum" in allow:
+        row1.append(InlineKeyboardButton(text=t(loc, "menu_coliseum"), callback_data="mnu:col"))
+    if row1:
+        rows.append(row1)
+    row2: list[InlineKeyboardButton] = []
+    if "menu_workshop" in allow:
+        row2.append(InlineKeyboardButton(text=t(loc, "menu_workshop"), callback_data="mnu:wsp"))
+    if "menu_auction" in allow:
+        row2.append(InlineKeyboardButton(text=t(loc, "menu_auction"), callback_data="mnu:auc"))
+    if row2:
+        rows.append(row2)
+    if "menu_clan" in allow:
+        rows.append([InlineKeyboardButton(text="🏰 Клан", callback_data="mnu:clan")])
+    rows.append([InlineKeyboardButton(text=t(loc, "portal_back_menu"), callback_data="mnu:hub")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 PORTAL_PAGE_SIZE = 8
@@ -204,9 +207,9 @@ def portal_screen_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def main_menu_with_tutorial_hints(*, locale: str = "ru") -> InlineKeyboardMarkup:
+def main_menu_with_tutorial_hints(*, locale: str = "ru", character: Character | None = None) -> InlineKeyboardMarkup:
     """Главное меню и две короткие подсказки — одним сообщением после регистрации."""
-    mm = main_menu_keyboard(locale=locale)
+    mm = main_menu_keyboard(locale=locale, character=character)
     tut = tutorial_hints_keyboard()
     return InlineKeyboardMarkup(inline_keyboard=[*mm.inline_keyboard, *tut.inline_keyboard])
 

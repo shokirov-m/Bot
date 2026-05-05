@@ -4,40 +4,85 @@ Floor Auras: unique mechanics for floors 21-30.
 from typing import Any
 
 def get_floor_aura(floor: int) -> dict[str, Any] | None:
-    # Floor 21-23: Chilling Fog
-    if 21 <= floor <= 23:
+    # Этажи 21–30: события-«ауры» (часть дебаффы, часть баффы).
+    f = int(floor)
+    if f == 21:
         return {
             "name": "Ледяной туман",
             "emoji": "❄️",
-            "desc": "Снижает вашу скорость и уклонение на 20%.",
-            "stat_penalty": {"dex_mult": 0.8},
+            "desc": "Холод сковывает движения: ЛОВ ×0.85.",
+            "stat_penalty": {"dex_mult": 0.85},
         }
-    
-    # Floor 24-26: Scorching Heat
-    if 24 <= floor <= 26:
+    if f == 22:
+        return {
+            "name": "Эхо удачи",
+            "emoji": "🍀",
+            "desc": "Башня подбрасывает монеты: +15% золота и опыта за победу.",
+            "reward_gold_mult": 1.15,
+            "reward_xp_mult": 1.15,
+        }
+    if f == 23:
+        return {
+            "name": "Туман призраков",
+            "emoji": "🌫️",
+            "desc": "Видимость падает: ЛОВ ×0.9 и каждые 3 хода шанс промаха +20%.",
+            "stat_penalty": {"dex_mult": 0.9},
+            "miss_chance_mod_period": 3,
+            "miss_chance_mod_value": 0.20,
+        }
+    if f == 24:
         return {
             "name": "Испепеляющий зной",
             "emoji": "🔥",
-            "desc": "Каждый ход вы теряете 5% текущего здоровья.",
-            "hp_loss_turn_pct": 0.05,
+            "desc": "Жар выжигает силы: каждый ход −4% текущего HP.",
+            "hp_loss_turn_pct": 0.04,
         }
-        
-    # Floor 27-29: Arcane Static
-    if 27 <= floor <= 29:
+    if f == 25:
+        return {
+            "name": "Тёплый источник",
+            "emoji": "💧",
+            "desc": "Скрытый родник лечит: +3% от макс. HP каждый ход.",
+            "player_regen_turn_pct_max": 0.03,
+        }
+    if f == 26:
+        return {
+            "name": "Пепельный воздух",
+            "emoji": "🫧",
+            "desc": "Тяжёлое дыхание: каждый ход −3% текущего HP, но +10% XP за победу.",
+            "hp_loss_turn_pct": 0.03,
+            "reward_xp_mult": 1.10,
+        }
+    if f == 27:
         return {
             "name": "Магические помехи",
             "emoji": "⚡",
-            "desc": "Расход маны на навыки увеличен в 1.5 раза.",
-            "mp_cost_mult": 1.5,
+            "desc": "Навыки дорожают: расход MP ×1.4.",
+            "mp_cost_mult": 1.4,
         }
-        
-    # Floor 30: Boss Aura
-    if floor == 30:
+    if f == 28:
+        return {
+            "name": "Стабильный поток",
+            "emoji": "🔷",
+            "desc": "Мана течёт ровно: расход MP ×0.85.",
+            "mp_cost_mult": 0.85,
+        }
+    if f == 29:
+        return {
+            "name": "Разряд в рунах",
+            "emoji": "🗲",
+            "desc": "Срывает концентрацию: расход MP ×1.35, каждые 4 хода шанс промаха +15%.",
+            "mp_cost_mult": 1.35,
+            "miss_chance_mod_period": 4,
+            "miss_chance_mod_value": 0.15,
+        }
+    if f == 30:
         return {
             "name": "Аура Владыки",
             "emoji": "👑",
-            "desc": "Босс восстанавливает 5% здоровья в начале каждого хода.",
+            "desc": "Враг крепнет: восстанавливает 5% HP в начале хода, но награды +20%.",
             "monster_regen_pct": 0.05,
+            "reward_gold_mult": 1.20,
+            "reward_xp_mult": 1.20,
         }
 
     # Floor 31-40: Blizzard

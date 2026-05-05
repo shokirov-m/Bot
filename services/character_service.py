@@ -370,6 +370,29 @@ async def add_experience_async(
     """
     old_level = int(character.level)
     gained = add_experience(character, amount)
+    if gained > 0:
+        try:
+            from services import unlock_service
+
+            notes = unlock_service.collect_level_unlock_notifications(
+                character,
+                old_level=old_level,
+                new_level=int(character.level),
+            )
+            if notes and bot is not None:
+                from db.repository import user_repo
+
+                user = await user_repo.get_by_id(session, int(character.user_id))
+                tid = int(user.telegram_id) if user is not None else 0
+                if tid:
+                    for msg in notes:
+                        try:
+                            await bot.send_message(tid, msg, parse_mode="HTML")
+                        except Exception:
+                            # Уведомления не должны ломать выдачу опыта.
+                            pass
+        except Exception:
+            pass
     if old_level < 2 <= int(character.level) or int(character.level) >= 3:
         from services import referral_service
 
@@ -569,6 +592,27 @@ async def reset_all_progress_keep_identity(session: AsyncSession, character: Cha
     await session.execute(delete(FloorProgress).where(FloorProgress.character_id == cid))
     await session.execute(delete(QuestProgress).where(QuestProgress.character_id == cid))
     await session.execute(delete(EnchantLog).where(EnchantLog.character_id == cid))
+    await session.flush()
+
+
+async def delete_character_and_all_progress(session: AsyncSession, character: Character) -> None:
+    """
+    Полный вайп: удалить персонажа так, будто его никогда не было.
+
+    Используется для "сброса прогресса" с полным началом регистрации: пол → ник → портрет.
+    Большинство связей удалится каскадом по FK (ondelete=CASCADE); здесь дополнительно
+    чистим ключевые таблицы прогресса, чтобы не зависеть от настроек FK в рантайме.
+    """
+    cid = int(character.id)
+    # Явно чистим "основные" прогресс-таблицы (дублирует каскады, но безопаснее).
+    await session.execute(delete(InventoryItem).where(InventoryItem.character_id == cid))
+    await session.execute(delete(FloorProgress).where(FloorProgress.character_id == cid))
+    await session.execute(delete(QuestProgress).where(QuestProgress.character_id == cid))
+    await session.execute(delete(EnchantLog).where(EnchantLog.character_id == cid))
+    await session.flush()
+
+    # Удаление самого персонажа (остальное — каскадом: кланы, лоты, и т.д.).
+    await session.delete(character)
     await session.flush()
 
     cls = get_class_or_none(character.class_key) or get_class_or_none("warrior")

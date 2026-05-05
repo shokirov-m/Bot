@@ -47,6 +47,7 @@ from game.items import item_categories as inv_cat
 from game.items.craft_resources import RESOURCE_DEFS, total_craft_resource_in_bag
 from game.items.runes import RuneData, ensure_rune_socket_list, extract_rune_from_item
 from services import craft_gacha_service, forge_service, workshop_order_service, workshop_service
+from services import unlock_service
 from services.workshop_enchant_service import (
     USE_TAG_ALCHEMY_ENCHANT,
     list_compatible_targets,
@@ -263,6 +264,9 @@ async def render_workshop_hub(query: CallbackQuery, session: AsyncSession, state
     """Текст и клавиатура хаба мастерской (меню и дом)."""
     char = await _char(session, query)
     if char is None or query.message is None:
+        return
+    if not unlock_service.is_unlocked(char, "menu_workshop"):
+        await query.answer("Откроется с 5 ур.", show_alert=True)
         return
     loc = get_locale(char, query.from_user.language_code if query.from_user else None)
     lines = [

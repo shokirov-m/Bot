@@ -315,8 +315,10 @@ async def run_shadow_match(
     base_gold = 12 + int(character.floor_number) // 2 + int(character.level)
 
     if wins >= 2:
+        from services import character_service
+
         gold = base_gold + (0 if is_npc else win_bonus)
-        character.gold = int(character.gold) + gold
+        character_service.add_gold(character, gold)
         return _finish_match(
             character,
             f"{banner}"
@@ -326,12 +328,14 @@ async def run_shadow_match(
             "win",
         )
     if losses >= 2:
+        from services import character_service
+
         raw_penalty = max(8, int(base_gold * 0.4))
         cur = int(character.gold)
         penalty = min(raw_penalty, cur)
-        if penalty > 0:
-            character.gold = cur - penalty
         gold_delta = -penalty
+        if penalty > 0:
+            character_service.add_gold(character, -penalty, spend_for="Арена: штраф", spend_kind="arena")
         return _finish_match(
             character,
             f"{banner}"
@@ -572,19 +576,21 @@ def finish_turn_duel_economy(
     opponent_mmr: int = 1000,
 ) -> tuple[str, int, Outcome]:
     """Награды, MMR, учёт дневного/дух-лимита (один бой)."""
+    from services import character_service
+
     base_gold = 12 + int(character.floor_number) // 2 + int(character.level)
     gold_delta = 0
     if outcome == "win":
         gold_delta = base_gold + (0 if is_npc else int(win_bonus))
-        character.gold = int(character.gold) + gold_delta
+        character_service.add_gold(character, gold_delta)
         report = f"Итог: <b>победа</b>.\nНаграда: <b>+{gold_delta}</b> 💰"
     elif outcome == "lose":
         raw_penalty = max(8, int(base_gold * 0.4))
         cur = int(character.gold)
         penalty = min(raw_penalty, cur)
-        if penalty > 0:
-            character.gold = cur - penalty
         gold_delta = -penalty
+        if penalty > 0:
+            character_service.add_gold(character, -penalty, spend_for="Арена: штраф", spend_kind="arena")
         report = (
             f"Итог: <b>поражение</b>.\nШтраф: <b>-{penalty}</b> 💰" if penalty > 0 else "Итог: <b>поражение</b>."
         )

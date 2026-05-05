@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.app_global import AppGlobal
 from db.models.character import Character
 from db.models.clan import Clan, ClanMembership
 from db.models.user import User
@@ -81,6 +84,38 @@ async def top_by_coliseum(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) 
     """Топ по числу побеждённых бойцов колизея (без JSON-функций SQL — совместимо со всеми SQLite)."""
     from services import coliseum_service
 
+    # Кэшируем срез, чтобы не тянуть всех персонажей на каждый показ экрана.
+    # TTL небольшой: актуальность важнее, но повторы кликов должны быть быстрыми.
+    ttl_s = 60
+    now = datetime.now(UTC)
+    row = await session.get(AppGlobal, 1)
+    payload = dict(row.payload or {}) if row is not None else {}
+    raw = payload.get("coliseum_lb_v1") or {}
+    try:
+        updated_at_s = str(raw.get("updated_at") or "")
+        updated_at = datetime.fromisoformat(updated_at_s) if updated_at_s else None
+    except Exception:
+        updated_at = None
+    cached = raw.get("character_ids")
+    if (
+        isinstance(cached, list)
+        and cached
+        and updated_at is not None
+        and (now - updated_at).total_seconds() <= ttl_s
+    ):
+        ids = [int(x) for x in cached[: int(limit)] if str(x).isdigit()]
+        if ids:
+            r = await session.execute(
+                select(Character)
+                .join(User, Character.user_id == User.id)
+                .where(User.is_banned.is_(False), Character.id.in_(ids)),
+            )
+            by_id = {int(c.id): c for c in r.scalars().all()}
+            out = [by_id[i] for i in ids if i in by_id]
+            if out:
+                return out[: int(limit)]
+
+    # Фолбэк: полный пересчёт (как раньше).
     stmt = (
         select(Character)
         .join(User, Character.user_id == User.id)
@@ -99,7 +134,24 @@ async def top_by_coliseum(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) 
             -max(int(c.highest_floor_reached or 0), int(c.floor_number or 0)),
         ),
     )
-    return chars[: int(limit)]
+    cut = chars[: int(limit)]
+    # Сохраняем кэш (id=1 создаётся в других сервисах; здесь — только если существует).
+    try:
+        if row is None:
+            row = AppGlobal(id=1, payload={})
+            session.add(row)
+            await session.flush()
+            payload = {}
+        payload["coliseum_lb_v1"] = {
+            "character_ids": [int(c.id) for c in cut],
+            "updated_at": now.isoformat(timespec="seconds"),
+        }
+        row.payload = payload
+        await session.flush()
+    except Exception:
+        # Кэш — оптимизация; не должен ломать топ.
+        pass
+    return cut
 
 
 async def get_clan_tags_for_characters(

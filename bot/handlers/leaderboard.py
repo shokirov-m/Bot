@@ -16,8 +16,11 @@ from bot.keyboards.leaderboard_kb import (
     leaderboard_categories_keyboard,
     leaderboard_classes_keyboard,
 )
+from bot.utils.game_art import menu_leaderboard_photo_path
+from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, leaderboard_repo, user_repo
 from services import leaderboard_service
+from aiogram.fsm.context import FSMContext
 
 router = Router(name="leaderboard")
 
@@ -59,18 +62,29 @@ async def cmd_top(message: Message, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("top:cat:"))
-async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
+async def on_top_category(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     if query.message is None or query.data is None:
         await query.answer()
         return
     try:
         cat = query.data.split(":")[-1]
+        loc = "ru"
+        char = None
+        if query.from_user is not None:
+            user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+            char = await character_repo.get_by_user_id(session, user.id) if user else None
+            loc = get_locale(char, query.from_user.language_code)
         
         if cat == "classes":
-            await query.message.edit_text(
-                "🎭 <b>Топ по классам</b>\nВыбери класс, чтобы увидеть лучших игроков в этой ветке:",
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text="🎭 <b>Топ по классам</b>\nВыбери класс, чтобы увидеть лучших игроков в этой ветке:",
                 reply_markup=leaderboard_classes_keyboard(),
-                parse_mode=ParseMode.HTML,
+                target_message=query.message,
+                photo_path=menu_leaderboard_photo_path(),
+                character=char,
             )
             await query.answer()
             return
@@ -78,10 +92,15 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
         if cat == "clans":
             clans = await leaderboard_repo.top_clans(session)
             text = leaderboard_service.format_clan_leaderboard_html(clans)
-            await query.message.edit_text(
-                text,
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
                 reply_markup=leaderboard_categories_keyboard(),
-                parse_mode=ParseMode.HTML,
+                target_message=query.message,
+                photo_path=menu_leaderboard_photo_path(),
+                character=char,
             )
             await query.answer()
             return
@@ -91,17 +110,20 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
             return
             
         rows = await _rows_for_category(session, cat)
-        loc = "ru"
-        if query.from_user is not None:
-            user = await user_repo.get_by_telegram_id(session, query.from_user.id)
-            ch = await character_repo.get_by_user_id(session, user.id) if user else None
-            loc = get_locale(ch, query.from_user.language_code)
         # Загружаем теги кланов для персонажей из топа
         char_ids = [int(c.id) for c in rows]
         clan_tags = await leaderboard_repo.get_clan_tags_for_characters(session, char_ids)
         text = leaderboard_service.format_leaderboard_html(cat, rows, locale=loc, clan_tags=clan_tags)
-        kb = leaderboard_categories_keyboard()
-        await query.message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=leaderboard_categories_keyboard(),
+            target_message=query.message,
+            photo_path=menu_leaderboard_photo_path(),
+            character=char,
+        )
         await query.answer()
     except Exception:
         logger.exception("top:cat")
@@ -109,7 +131,7 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("top:class:"))
-async def on_top_class(query: CallbackQuery, session: AsyncSession) -> None:
+async def on_top_class(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     if query.message is None or query.data is None:
         await query.answer()
         return
@@ -118,19 +140,25 @@ async def on_top_class(query: CallbackQuery, session: AsyncSession) -> None:
         rows = await leaderboard_repo.top_by_class(session, class_key)
         
         loc = "ru"
+        char = None
         if query.from_user is not None:
             user = await user_repo.get_by_telegram_id(session, query.from_user.id)
-            ch = await character_repo.get_by_user_id(session, user.id) if user else None
-            loc = get_locale(ch, query.from_user.language_code)
+            char = await character_repo.get_by_user_id(session, user.id) if user else None
+            loc = get_locale(char, query.from_user.language_code)
             
         char_ids = [int(c.id) for c in rows]
         clan_tags = await leaderboard_repo.get_clan_tags_for_characters(session, char_ids)
         text = leaderboard_service.format_leaderboard_html(class_key, rows, locale=loc, clan_tags=clan_tags)
         
-        await query.message.edit_text(
-            text,
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
             reply_markup=leaderboard_classes_keyboard(),
-            parse_mode=ParseMode.HTML,
+            target_message=query.message,
+            photo_path=menu_leaderboard_photo_path(),
+            character=char,
         )
         await query.answer()
     except Exception:
@@ -139,13 +167,22 @@ async def on_top_class(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data == "top:back")
-async def on_top_back(query: CallbackQuery) -> None:
+async def on_top_back(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     if query.message is None:
         await query.answer()
         return
-    await query.message.edit_text(
-        INTRO_HTML,
+    char = None
+    if query.from_user is not None:
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        char = await character_repo.get_by_user_id(session, user.id) if user else None
+    await push_game_ui(
+        state,
+        query.bot,
+        chat_id=query.message.chat.id,
+        text=INTRO_HTML,
         reply_markup=leaderboard_categories_keyboard(),
-        parse_mode=ParseMode.HTML,
+        target_message=query.message,
+        photo_path=menu_leaderboard_photo_path(),
+        character=char,
     )
     await query.answer()

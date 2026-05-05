@@ -52,8 +52,65 @@ SKILL_BY_KEY: dict[str, SkillDef] = _build_skill_by_key()
 TEMPLE_SKILL_PRICES_GOLD: dict[str, int] = {}
 
 def ensure_skill_meta(character: Character) -> None:
-    """No longer strictly needed for unlocking, but keeps meta healthy."""
-    pass
+    """
+    Нормализация meta_progress для боевых слотов и пассивки.
+
+    Исторически это место было заглушкой после перехода на дерево навыков.
+    Но meta может быть битой/устаревшей из миграций, из-за чего UI/бой
+    получают пустые или несуществующие ключи.
+    """
+    meta = dict(character.meta_progress or {})
+
+    unlocked = [sk.key for sk in arch_manager.get_unlocked_skills(character)]
+    unlocked_set = set(unlocked)
+
+    # --- skills: 3 слота ---
+    raw = meta.get("equipped_skill_keys")
+    eq_in = raw if isinstance(raw, list) else []
+    eq_norm: list[str] = []
+    seen: set[str] = set()
+    for x in eq_in:
+        if len(eq_norm) >= 3:
+            break
+        k = str(x or "").strip()
+        if not k:
+            continue
+        if k not in unlocked_set:
+            continue
+        if k in seen:
+            continue
+        seen.add(k)
+        eq_norm.append(k)
+
+    # заполнить свободные слоты первыми незадействованными открытыми
+    for k in unlocked:
+        if len(eq_norm) >= 3:
+            break
+        if k not in seen:
+            seen.add(k)
+            eq_norm.append(k)
+
+    while len(eq_norm) < 3:
+        eq_norm.append("")
+
+    meta["equipped_skill_keys"] = eq_norm
+
+    # --- passive slot ---
+    arch = arch_manager.get_character_archetype(character)
+    available_passives = {p.key for p in getattr(arch, "passives", [])}
+    pk = str(meta.get("equipped_passive_key") or "").strip()
+    if pk and pk not in available_passives:
+        pk = ""
+    meta["equipped_passive_key"] = pk
+
+    character.meta_progress = meta
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+
+        flag_modified(character, "meta_progress")
+    except Exception:
+        # В некоторых контекстах Character может быть не ORM-объектом; не критично.
+        return
 
 def learned_skill_keys(character: Character) -> set[str]:
     unlocked = arch_manager.get_unlocked_skills(character)
@@ -61,17 +118,13 @@ def learned_skill_keys(character: Character) -> set[str]:
 
 def equipped_skill_key_slots(character: Character) -> list[str]:
     # Use meta_progress to get equipped skills or default to first 3 unlocked
+    ensure_skill_meta(character)
     meta = character.meta_progress or {}
-    eq = meta.get("equipped_skill_keys", [])
-    if not eq:
-        # Default to unlocked skills
-        unlocked = [sk.key for sk in arch_manager.get_unlocked_skills(character)]
-        eq = unlocked[:3]
-        
-    res = list(eq)
+    eq = meta.get("equipped_skill_keys") or []
+    res = list(eq) if isinstance(eq, list) else []
     while len(res) < 3:
         res.append("")
-    return res
+    return res[:3]
 
 def battle_skills_tuple(character: Character) -> tuple[SkillDef, SkillDef, SkillDef]:
     """Возвращает 3 слота навыков для боя, уважая экипировку игрока."""
@@ -119,6 +172,12 @@ def set_equipped_slot(character: Character, slot_index: int, skill_key: str | No
     eq[slot_index] = skill_key or ""
     meta["equipped_skill_keys"] = eq
     character.meta_progress = meta
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+
+        flag_modified(character, "meta_progress")
+    except Exception:
+        pass
     return True
 
 def learned_passives(character: Character) -> list[PassiveV2]:
@@ -142,6 +201,12 @@ def set_passive_slot(character: Character, passive_key: str | None) -> bool:
     meta = dict(character.meta_progress or {})
     meta["equipped_passive_key"] = passive_key or ""
     character.meta_progress = meta
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+
+        flag_modified(character, "meta_progress")
+    except Exception:
+        pass
     return True
 
 

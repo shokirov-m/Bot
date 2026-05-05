@@ -7,9 +7,9 @@ from __future__ import annotations
 # Шанс появления записи о путнике на экране этажа (0–99, чем меньше roll — тем чаще).
 WANDERING_NPC_ROLL_THRESHOLD = 32  # ~32% «встреча есть»
 
-# Этажи, где действует система (первые два десятка башни).
+# Этажи, где действует система.
 WANDERING_NPC_FLOOR_MIN = 1
-WANDERING_NPC_FLOOR_MAX = 20
+WANDERING_NPC_FLOOR_MAX = 135
 
 _POOL: tuple[dict[str, str], ...] = (
     {
@@ -72,6 +72,66 @@ _POOL: tuple[dict[str, str], ...] = (
         "title": "Отшельник в тряпье",
         "hint": "Утверждает, что ночью стены башни дышат.",
     },
+    {
+        "button": "Норна",
+        "title": "Норна у узла судьбы",
+        "hint": "Слушает нити судьбы и просит «доказательство выбора».",
+    },
+    {
+        "button": "Анубис",
+        "title": "Анубисов жрец",
+        "hint": "Взвешивает сердца тварей. За «печать» обещает награду.",
+    },
+    {
+        "button": "Морриган",
+        "title": "Морриган в вороньей мантии",
+        "hint": "Говорит о долге и крови. Считает победы, а не слова.",
+    },
+    {
+        "button": "Локи",
+        "title": "Локи-насмешник",
+        "hint": "Предлагает сделку: риск, золото и маленькая ложь.",
+    },
+    {
+        "button": "Сфинкс",
+        "title": "Сфинкс у треснувшей арки",
+        "hint": "Задаёт вопрос без ответа. Принимает доказательства, не слова.",
+    },
+    {
+        "button": "Геката",
+        "title": "Геката на трёх путях",
+        "hint": "В трёх факелах — три выбора. Просит принести «тень» с боя.",
+    },
+    {
+        "button": "Трикстер",
+        "title": "Безымянный трикстер",
+        "hint": "Пахнет чернилами. Говорит, что этажи иногда «переписывают».",
+    },
+    {
+        "button": "Сибилла",
+        "title": "Сибилла из пустой ниши",
+        "hint": "Шепчет о двери, которая открывается только после десяти побед.",
+    },
+    {
+        "button": "Персей",
+        "title": "Персей со щитом-зеркалом",
+        "hint": "Советует смотреть на монстра не прямо, а через отражение.",
+    },
+    {
+        "button": "Кухулин",
+        "title": "Кухулин у костяных копий",
+        "hint": "Считает боссов. Смеётся над страхом и усталостью.",
+    },
+    {
+        "button": "Аманита",
+        "title": "Аманита, грибная ведьма",
+        "hint": "Лечит не тело, а память. Просит «крошку славы».",
+    },
+    {
+        "button": "Смотритель",
+        "title": "Смотритель трещин",
+        "hint": "Слушает стены. Говорит, что трещины появляются перед вехами.",
+    },
 )
 
 
@@ -81,6 +141,14 @@ def wandering_npc_for_floor(character_id: int, floor_number: int) -> dict[str, s
     Иначе None. Стабильно для пары (character_id, floor_number).
     """
     f = int(floor_number)
+    # Не показываем путников в городах и на рынке-хабе.
+    try:
+        from game.floors import floor_data
+
+        if floor_data.get_city_for_floor(f) is not None:
+            return None
+    except Exception:
+        pass
     if f == 3:
         return None
     if f < WANDERING_NPC_FLOOR_MIN or f > WANDERING_NPC_FLOOR_MAX:
@@ -89,5 +157,7 @@ def wandering_npc_for_floor(character_id: int, floor_number: int) -> dict[str, s
     roll = (cid * 1103515245 + f * 12345 + 11) % 100
     if roll >= WANDERING_NPC_ROLL_THRESHOLD:
         return None
-    idx = (cid + f * 31) % len(_POOL)
+    # На 1–20 — только базовые путники; выше — расширенный пул.
+    max_pool = 16 if f <= 20 else len(_POOL)
+    idx = (cid + f * 31) % int(max_pool)
     return dict(_POOL[idx])

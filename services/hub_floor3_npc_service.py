@@ -55,7 +55,7 @@ async def try_scribe_quest(session: AsyncSession, character: Character) -> tuple
     if free is None:
         return False, "Освободи хотя бы одну ячейку сумки за награду."
     character.gold = int(character.gold) - _SCRIBE_GOLD
-    character_service.add_experience(character, _SCRIBE_XP)
+    await character_service.add_experience_async(session, character, _SCRIBE_XP, bot=None)
     payload = {
         "name": "Смоляной бальзам",
         "kind": "consumable",
@@ -81,7 +81,7 @@ async def try_herbalist_quest(session: AsyncSession, character: Character) -> tu
     free = await inventory_repo.first_free_bag_slot(session, character.id)
     if free is None:
         return False, "Освободи ячейку сумки за травяной свёрток."
-    character_service.add_experience(character, _HERB_XP)
+    await character_service.add_experience_async(session, character, _HERB_XP, bot=None)
     character_service.add_gold(character, _HERB_GOLD)
     payload = {
         "name": "Травяной свёрток",

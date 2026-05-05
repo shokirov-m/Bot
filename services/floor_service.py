@@ -222,7 +222,7 @@ def _format_floor1_city_only(character: Character) -> str:
             f"{city.emoji} <b>{html.escape(city.name)}</b> — мирный хаб. "
             "Зайди в «Город»: кузница, таверна, рынок (лавка, скупщик, банк, храм призыва).",
         )
-    lines.append("📜 <b>Сюжетные NPC</b> — три необычных жителя ждут тебя здесь.")
+    lines.append("📜 <b>Сюжетные NPC</b> — несколько необычных жителей ждут тебя здесь.")
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi}")
     pend = tower_next_floor_pending(character)
@@ -379,9 +379,35 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
 
     if tutorial_battle_pending(character) and n == 2:
         lines.append("🎓 <b>Учебный бой</b> наставника — кнопка ниже.")
+    else:
+        try:
+            from services import tutorial_service
+
+            tutorial_service.advance_step_if_needed(character)
+            step = tutorial_service.current_step(character)
+            if step == tutorial_service.STEP_EQUIP:
+                lines.append("🧩 <b>Шаг 2:</b> зайди в <b>Инвентарь</b> и надень оружие/броню.")
+            elif step == tutorial_service.STEP_UNLOCKS and int(character.level or 1) < 5:
+                lines.append("🧩 <b>Шаг 3:</b> побеждай в боях — на <b>5 ур.</b> откроются новые разделы.")
+        except Exception:
+            pass
 
     if rotten_swamps_mod.is_rotten_swamps_zone(n):
         lines.append("🌿 <b>Болота:</b> туман −5 HP перед боем · пиявки · лагерь (кнопка).")
+
+    # События-ауры этажей (дебаффы/баффы), начиная с 21-го.
+    try:
+        from game.floors.aura import get_floor_aura
+
+        aura = get_floor_aura(int(n))
+        if isinstance(aura, dict) and aura.get("name") and aura.get("emoji"):
+            desc = str(aura.get("desc") or "").strip()
+            if desc:
+                lines.append(f"{aura['emoji']} <b>{html.escape(str(aura['name']))}</b>: <i>{html.escape(desc)}</i>")
+            else:
+                lines.append(f"{aura['emoji']} <b>{html.escape(str(aura['name']))}</b>")
+    except Exception:
+        pass
 
     # Survival floor banner (frozen_wastes, floors 111-120)
     floor_type = floor_data.get_zone_floor_type(n)

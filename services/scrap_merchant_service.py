@@ -61,17 +61,29 @@ def scrap_unavailable_message(floor_number: int) -> str:
 
 
 def format_scrap_menu_html(character: Character, items: list[InventoryItem]) -> str:
+    # Фильтруем "несбываемые" предметы: ремесленные ресурсы — только для верстака.
+    sellable: list[InventoryItem] = []
+    for it in items:
+        d = dict(it.item_data or {})
+        if str(d.get("kind") or "").lower().strip() == "craft_resource":
+            continue
+        sellable.append(it)
+
     lines = [
         "💰 <b>Скупщик</b>",
         "────────────",
         f"<i>Этаж {int(character.floor_number)} (город). Продай лут из сумки — золото сразу на руки.</i>",
         "",
     ]
-    if not items:
+    if not sellable:
         lines.append("<i>Сумка пуста — нечего продать.</i>")
         return "\n".join(lines)
     lines.append("<b>Предметы:</b>")
-    for it in sorted(items, key=lambda x: (x.bag_slot or 0)):
+    # В списке показываем только первые N, чтобы не упираться в лимит 4096 символов.
+    # Полный список доступен кнопками (с пагинацией в клавиатуре).
+    max_lines = 24
+    shown = 0
+    for it in sorted(sellable, key=lambda x: (x.bag_slot or 0)):
         d = dict(it.item_data or {})
         nm = html.escape(str(d.get("name", "Предмет")))
         price = scrap_gold_for_item_data(d)
@@ -79,6 +91,12 @@ def format_scrap_menu_html(character: Character, items: list[InventoryItem]) -> 
         cnt = max(1, int(d.get("count") or 1))
         cnt_part = f" ×{cnt}" if cnt > 1 else ""
         lines.append(f"• [{slot}] {nm}{cnt_part} — <b>{price}</b> 💰")
+        shown += 1
+        if shown >= max_lines:
+            break
+    if len(sellable) > shown:
+        lines.append("")
+        lines.append(f"<i>… и ещё {len(sellable) - shown} предмет(ов). Листай кнопками ниже.</i>")
     return "\n".join(lines)
 
 
@@ -97,6 +115,9 @@ async def try_sell_bag_item_by_id(
     if it is None or it.is_equipped or it.bag_slot is None:
         return False, "Предмет не в сумке."
     data = dict(it.item_data or {})
+    kind = str(data.get("kind") or "").lower().strip()
+    if kind == "craft_resource":
+        return False, "Ремесленные ресурсы нельзя продавать скупщику."
     price = scrap_gold_for_item_data(data)
     nm = html.escape(str(data.get("name", "Предмет")))
     await inventory_repo.delete_inventory_item(session, it)

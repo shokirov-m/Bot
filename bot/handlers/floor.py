@@ -49,7 +49,7 @@ from utils.ui import LINE_SEP
 router = Router(name="floor")
 
 _FLOOR_CB = re.compile(r"^fl:(\d+):([a-z0-9_]+)$")
-_SCR_CB = re.compile(r"^scr:(\d+|back|backmkt)$")
+_SCR_CB = re.compile(r"^scr:(?:(\d+)|sell:(\d+):(\d+)|pg:(\d+)|back|backmkt)$")
 
 
 @router.message(Command("floor"))
@@ -164,7 +164,7 @@ async def on_scrap_merchant_callback(
             await query.answer("Нет персонажа.", show_alert=True)
             return
         tok = m.group(1)
-        if tok == "back":
+        if tok is None and query.data.endswith("scr:back"):
             await push_floor_screen_ui(
                 session,
                 state,
@@ -176,7 +176,7 @@ async def on_scrap_merchant_callback(
             )
             await query.answer()
             return
-        if tok == "backmkt":
+        if tok is None and query.data.endswith("scr:backmkt"):
             if int(char.floor_number) != 3:
                 await push_floor_screen_ui(
                     session,
@@ -202,10 +202,28 @@ async def on_scrap_merchant_callback(
         from db.repository import inventory_repo
         from services import scrap_merchant_service
 
+        # Пагинация списка
+        pg = m.group(4)
+        if pg is not None:
+            items = await inventory_repo.list_bag_items(session, char.id)
+            text = scrap_merchant_service.format_scrap_menu_html(char, items)
+            await query.message.edit_text(
+                text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=scrap_merchant_keyboard(items, back=scrap_ui_back(char), page=int(pg)),
+            )
+            await query.answer()
+            return
+
+        # Продажа с учётом страницы
+        sell_id = m.group(2) or tok
+        sell_page = m.group(3)
+        page_n = int(sell_page) if sell_page and str(sell_page).isdigit() else 1
+
         ok, msg = await scrap_merchant_service.try_sell_bag_item_by_id(
             session,
             char,
-            int(tok),
+            int(sell_id),
             telegram_id=query.from_user.id,
             username=query.from_user.username,
             bot=query.bot,
@@ -219,7 +237,7 @@ async def on_scrap_merchant_callback(
         await query.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
-            reply_markup=scrap_merchant_keyboard(items, back=scrap_ui_back(char)),
+            reply_markup=scrap_merchant_keyboard(items, back=scrap_ui_back(char), page=page_n),
         )
         await query.answer("Продано.", show_alert=False)
     except Exception:
@@ -438,7 +456,7 @@ async def on_floor_callback(
             await query.message.edit_text(
                 text,
                 parse_mode=ParseMode.HTML,
-                reply_markup=scrap_merchant_keyboard(items, back="floor"),
+                reply_markup=scrap_merchant_keyboard(items, back="floor", page=1),
             )
             await query.answer()
             return

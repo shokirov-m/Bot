@@ -188,6 +188,16 @@ def apply_floor_aura_effects(state: dict[str, Any]) -> list[str]:
         state["player_hp"] = max(0, int(state["player_hp"]) - loss)
         logs.append(f"{aura['emoji']} <b>{aura['name']}</b>: вы теряете {loss} HP от окружения.")
         combo_break_on_player_hurt(state)
+
+    # Regen (Player)
+    if "player_regen_turn_pct_max" in aura:
+        pct = float(aura.get("player_regen_turn_pct_max", 0) or 0)
+        if pct > 0:
+            heal = max(1, int(int(state["player_hp_max"]) * pct))
+            pre = int(state["player_hp"])
+            if pre > 0 and pre < int(state["player_hp_max"]):
+                state["player_hp"] = min(int(state["player_hp_max"]), pre + heal)
+                logs.append(f"{aura['emoji']} <b>{aura['name']}</b>: вы восстановили {int(state['player_hp']) - pre} HP.")
         
     # Regen (Monster)
     if "monster_regen_pct" in aura:

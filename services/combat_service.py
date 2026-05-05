@@ -1828,6 +1828,18 @@ async def _victory_sequence(
         fgm = float(combat_state.get("floor_event_gold_mult") or 1.0)
         if fgm > 1.01:
             gross_gold = int(round(gross_gold * fgm))
+
+        # Ауры этажей (21–30 и далее): могут давать бафф/дебафф наград.
+        try:
+            aura = combat_state.get("floor_aura") or {}
+            rgm = float(aura.get("reward_gold_mult") or 1.0)
+            rxm = float(aura.get("reward_xp_mult") or 1.0)
+            if rgm > 0.01 and abs(rgm - 1.0) > 0.001:
+                gross_gold = int(round(gross_gold * rgm))
+            if rxm > 0.01 and abs(rxm - 1.0) > 0.001:
+                xp = int(round(xp * rxm))
+        except Exception:
+            pass
         gm, xm = title_service.reward_bonus_multipliers(character)
         esc_m = sink_rules.pop_next_win_xp_multiplier(character)
         mp_xp = dict(character.meta_progress or {})
@@ -1906,6 +1918,10 @@ async def _victory_sequence(
         if 2 <= _sq_floor <= 5 and ("wolf" in _sq_tkey or "волк" in _sq_nm):
             from game.quests.story_quests import increment_kill_counter
             increment_kill_counter(character, "sq_eyris_wolves")
+        # Сюжетный квест Кассандры: победы над элитными.
+        if bool(getattr(spawn.template, "is_elite", False)):
+            from game.quests.story_quests import increment_kill_counter
+            increment_kill_counter(character, "sq_cassandra_elite")
     except Exception:
         pass
 

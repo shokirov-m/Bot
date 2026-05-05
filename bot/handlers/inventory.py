@@ -292,7 +292,7 @@ async def inv_close(
             callback.bot,
             chat_id=callback.message.chat.id,
             text=hub_text,
-            reply_markup=main_menu_keyboard(locale=loc),
+            reply_markup=main_menu_keyboard(locale=loc, character=char),
             target_message=callback.message,
             photo_path=photo_p,
             character=char,
@@ -801,6 +801,14 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             target_message=callback.message,
             character=char,
         )
+        try:
+            from services import tutorial_service
+
+            tutorial_service.mark_equipped_any(char)
+            tutorial_service.advance_step_if_needed(char)
+            await session.flush()
+        except Exception:
+            pass
         await callback.answer("Надето!")
     except Exception:
         logger.exception("inv:eq")

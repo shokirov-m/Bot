@@ -89,7 +89,7 @@ async def _push_titles_screen(
     loc = get_locale(char, query.from_user.language_code if query.from_user else None)
     pg = page if keys else 0
     text = _screen_html(char, page=pg)
-    kb = titles_pick_keyboard(keys, page=pg) if keys else main_menu_keyboard(locale=loc)
+    kb = titles_pick_keyboard(keys, page=pg) if keys else main_menu_keyboard(locale=loc, character=char)
     await push_game_ui(
         state,
         query.bot,
@@ -119,7 +119,7 @@ async def cmd_titles(message: Message, session: AsyncSession) -> None:
         text = _screen_html(char, page=0)
         keys = title_service.unlocked_sorted(char)
         loc = get_locale(char, message.from_user.language_code)
-        kb = titles_pick_keyboard(keys, page=0) if keys else main_menu_keyboard(locale=loc)
+        kb = titles_pick_keyboard(keys, page=0) if keys else main_menu_keyboard(locale=loc, character=char)
         await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
     except Exception:
         logger.exception("Ошибка в /titles")
