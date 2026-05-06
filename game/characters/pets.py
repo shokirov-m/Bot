@@ -523,11 +523,11 @@ def format_city_hub_pets_hint_html(*, locale: str) -> str:
         return (
             "🐾 <b>Pets:</b> your first comes from the <b>Summoning Temple</b> on the <b>market</b> (floor 3, one free ritual). "
             "Each pet adds a <b>passive</b> in combat — <b>only one</b> is active; "
-            "pick in <b>Status</b> (Pet) or on <b>floors 8 / 48</b> when you have more than one."
+            "switch the active pet in <b>Status</b> (Pet button)."
         )
     return (
         "🐾 <b>Питомцы:</b> первого даёт <b>храм призыва</b> на <b>рынке</b> 3-го этажа (один бесплатный ритуал). "
-        "Пассив в бою — у каждого свой, активен <b>один</b>; смена: <b>статус</b> («Питомец») или этажи <b>8 и 48</b>."
+        "Пассив в бою — у каждого свой, активен <b>один</b>; смена — в <b>«Статус»</b> (кнопка «Питомец»)."
     )
 
 

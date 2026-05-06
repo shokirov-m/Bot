@@ -24,13 +24,10 @@ from bot.keyboards.forge_kb import (
     forge_enchant_slots_keyboard,
     forge_quest_keyboard,
     forge_repair_keyboard,
-    forge_rune_bag_pick_keyboard,
-    forge_rune_menu_keyboard,
-    forge_rune_socket_pick_keyboard,
     forge_set_shop_keyboard,
 )
 from db.repository import character_repo, inventory_repo, user_repo
-from game.items.runes import RuneData, ensure_rune_socket_list, extract_rune_from_item
+from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
 from game.floors import floor_data
 from game.locations import forge as forge_loc
 from game.crafting.recipes_data import forge_recipes_only
@@ -41,6 +38,12 @@ from services import character_service
 from game.items.equipment.defaults import apply_item_payload_defaults
 
 router = Router(name="forge")
+
+async def _answer_forge_runes_moved(query: CallbackQuery) -> None:
+    await query.answer(
+        "Руны: Мастерская → Ювелирная (кнопка «Мастерская» в меню).",
+        show_alert=True,
+    )
 
 
 def _basic_set_goods() -> list[tuple[str, dict, int]]:
@@ -564,24 +567,7 @@ async def forge_back_city(query: CallbackQuery, session: AsyncSession, state: FS
 @router.callback_query(F.data.startswith("frg:rnm:"))
 async def forge_rune_menu(query: CallbackQuery, session: AsyncSession) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
-            await query.answer()
-            return
-        floor_key = int(query.data.split(":")[2])
-        char = await _load_char(session, query.from_user.id)
-        if char is None:
-            await query.answer("Нет персонажа.", show_alert=True)
-            return
-        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
-            await query.answer("Здесь нет кузницы.", show_alert=True)
-            return
-        text = (
-            await forge_service.build_forge_message_html(session, char)
-            + "\n\n💎 <b>Руны</b>\nВставляй камни в гнёзда оружия (редкость влияет на число гнёз). "
-            "Извлечение — 50% потерять руну.\n⚠️ <i>Авто-крафт: две руны I одной стихии → II (−1000 💰).</i>"
-        )
-        await query.message.edit_text(text, reply_markup=forge_rune_menu_keyboard(char.floor_number))
-        await query.answer()
+        await _answer_forge_runes_moved(query)
     except Exception:
         logger.exception("frg:rnm")
         await query.answer("Ошибка.", show_alert=True)
@@ -590,28 +576,7 @@ async def forge_rune_menu(query: CallbackQuery, session: AsyncSession) -> None:
 @router.callback_query(F.data.startswith("frg:rsl:"))
 async def forge_rune_pick_bag(query: CallbackQuery, session: AsyncSession) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
-            await query.answer()
-            return
-        floor_key = int(query.data.split(":")[2])
-        char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
-            await query.answer("Нельзя.", show_alert=True)
-            return
-        bag = await inventory_repo.list_bag_items(session, char.id)
-        pairs: list[tuple[int, str]] = []
-        for it in bag:
-            rd = extract_rune_from_item(dict(it.item_data or {}))
-            if rd is not None:
-                pairs.append((int(it.id), rd.display_name))
-        if not pairs:
-            await query.answer("В сумке нет рун.", show_alert=True)
-            return
-        await query.message.edit_text(
-            "💎 <b>Выбери руну из сумки</b> — вставим в надетое оружие.",
-            reply_markup=forge_rune_bag_pick_keyboard(char.floor_number, pairs),
-        )
-        await query.answer()
+        await _answer_forge_runes_moved(query)
     except Exception:
         logger.exception("frg:rsl")
         await query.answer("Ошибка.", show_alert=True)
@@ -620,30 +585,7 @@ async def forge_rune_pick_bag(query: CallbackQuery, session: AsyncSession) -> No
 @router.callback_query(F.data.startswith("frg:rsi:"))
 async def forge_rune_socket_apply(query: CallbackQuery, session: AsyncSession) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
-            await query.answer()
-            return
-        parts = query.data.split(":")
-        floor_key = int(parts[2])
-        rune_id = int(parts[3])
-        char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
-            await query.answer("Нельзя.", show_alert=True)
-            return
-        ok, msg = await forge_service.socket_rune_into_equipped_weapon(
-            session,
-            char,
-            rune_bag_item_id=rune_id,
-        )
-        if not ok:
-            await query.answer(msg[:180], show_alert=True)
-            return
-        body = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
-            f"{body}\n\n{msg}",
-            reply_markup=forge_rune_menu_keyboard(char.floor_number),
-        )
-        await query.answer("Готово!")
+        await _answer_forge_runes_moved(query)
     except Exception:
         logger.exception("frg:rsi")
         await query.answer("Ошибка.", show_alert=True)
@@ -652,37 +594,7 @@ async def forge_rune_socket_apply(query: CallbackQuery, session: AsyncSession) -
 @router.callback_query(F.data.startswith("frg:rrm:"))
 async def forge_rune_remove_menu(query: CallbackQuery, session: AsyncSession) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
-            await query.answer()
-            return
-        floor_key = int(query.data.split(":")[2])
-        char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
-            await query.answer("Нельзя.", show_alert=True)
-            return
-        weapon = await inventory_repo.get_equipped_weapon(session, char.id)
-        if weapon is None:
-            await query.answer("Нет оружия.", show_alert=True)
-            return
-        wdata = dict(weapon.item_data or {})
-        ensure_rune_socket_list(wdata)
-        sockets = wdata.get("rune_sockets") or []
-        labels: list[tuple[int, str]] = []
-        for i, cell in enumerate(sockets):
-            if isinstance(cell, dict) and cell.get("element"):
-                try:
-                    rd = RuneData.from_dict(cell)
-                    labels.append((i, f"#{i + 1} {rd.display_name}"))
-                except (ValueError, TypeError, KeyError):
-                    labels.append((i, f"#{i + 1} ?"))
-        if not labels:
-            await query.answer("Нет вставленных рун.", show_alert=True)
-            return
-        await query.message.edit_text(
-            "🔓 <b>Извлечь руну</b>\n⚠️ 50% шанс, что руна рассыплется.",
-            reply_markup=forge_rune_socket_pick_keyboard(char.floor_number, labels),
-        )
-        await query.answer()
+        await _answer_forge_runes_moved(query)
     except Exception:
         logger.exception("frg:rrm")
         await query.answer("Ошибка.", show_alert=True)
@@ -691,30 +603,7 @@ async def forge_rune_remove_menu(query: CallbackQuery, session: AsyncSession) ->
 @router.callback_query(F.data.startswith("frg:rrx:"))
 async def forge_rune_remove_apply(query: CallbackQuery, session: AsyncSession) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
-            await query.answer()
-            return
-        parts = query.data.split(":")
-        floor_key = int(parts[2])
-        idx = int(parts[3])
-        char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
-            await query.answer("Нельзя.", show_alert=True)
-            return
-        ok, msg, _saved = await forge_service.remove_rune_from_equipped_weapon(
-            session,
-            char,
-            socket_index=idx,
-        )
-        if not ok:
-            await query.answer(msg[:180], show_alert=True)
-            return
-        body = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
-            f"{body}\n\n{msg}",
-            reply_markup=forge_rune_menu_keyboard(char.floor_number),
-        )
-        await query.answer()
+        await _answer_forge_runes_moved(query)
     except Exception:
         logger.exception("frg:rrx")
         await query.answer("Ошибка.", show_alert=True)
@@ -783,7 +672,9 @@ async def forge_disassemble_filter(query: CallbackQuery, session: AsyncSession) 
         )
         title = "🔨 <b>Разбор предмета</b>"
         if rar or knd:
-            title += f"\n<i>Фильтр:</i> {rar or 'все'} / {knd or 'все типы'}"
+            rar_s = RARITY_NAME_RU.get(str(rar), rar) if rar else "все редкости"
+            knd_s = item_kind_label_ru(str(knd)) if knd else "все типы"
+            title += f"\n<i>Фильтр:</i> {rar_s} / {knd_s}"
         if not pairs:
             title += "\n<i>Под фильтр ничего не попало.</i>"
         await query.message.edit_text(
@@ -865,24 +756,7 @@ async def forge_disassemble_apply(query: CallbackQuery, session: AsyncSession) -
 @router.callback_query(F.data.startswith("frg:rca:"))
 async def forge_rune_craft_auto(query: CallbackQuery, session: AsyncSession) -> None:
     try:
-        if query.data is None or query.from_user is None or query.message is None:
-            await query.answer()
-            return
-        floor_key = int(query.data.split(":")[2])
-        char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
-            await query.answer("Нельзя.", show_alert=True)
-            return
-        ok, msg = await forge_service.craft_rune_auto_pair_rank1(session, char)
-        if not ok:
-            await query.answer(msg[:180], show_alert=True)
-            return
-        body = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
-            f"{body}\n\n{msg}",
-            reply_markup=forge_rune_menu_keyboard(char.floor_number),
-        )
-        await query.answer("Слито!")
+        await _answer_forge_runes_moved(query)
     except Exception:
         logger.exception("frg:rca")
         await query.answer("Ошибка.", show_alert=True)

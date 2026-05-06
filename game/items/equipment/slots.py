@@ -113,6 +113,36 @@ def slot_label_ru(slot: str) -> str:
     return SLOT_LABEL_RU.get(slot, slot)
 
 
+# Подпись kind в карточках и фильтрах (русский UI).
+ITEM_KIND_LABEL_RU: dict[str, str] = {
+    "weapon": "Оружие",
+    "armor": "Броня",
+    "shield": "Щит",
+    "ring": "Кольцо",
+    "amulet": "Амулет",
+    "pants": "Поножи",
+    "helmet": "Шлем",
+    "gloves": "Перчатки",
+    "boots": "Обувь",
+    "cloak": "Плащ",
+    "consumable": "Расходник",
+    "craft_resource": "Ремесленный материал",
+    "rune": "Руна",
+    "grimoire": "Гримуар",
+    "tome": "Фолиант",
+    "orb": "Сфера",
+    "focus": "Фокус",
+    "dagger": "Кинжал",
+}
+
+
+def item_kind_label_ru(kind: str | None) -> str:
+    if not kind:
+        return ""
+    k = str(kind).strip().lower()
+    return ITEM_KIND_LABEL_RU.get(k, str(kind))
+
+
 _KIND_GEAR_ICON: dict[str, str] = {
     "weapon": "🗡️",
     "armor": "🦺",

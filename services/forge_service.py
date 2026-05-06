@@ -643,11 +643,12 @@ async def craft_rune_merge(
     *,
     element: str,
     target_rank: int,
+    require_city_forge: bool = True,
 ) -> tuple[bool, str]:
     """
     Скрафтить руну ранга N из двух рун ранга N−1 той же стихии. Стоимость 500 * N золота.
     """
-    if not forge_loc.forge_available_on_floor(character.floor_number):
+    if require_city_forge and not forge_loc.forge_available_on_floor(character.floor_number):
         return False, "Только в кузнице города."
     el = str(element).lower().strip()
     if el not in rune_sys.ELEMENTS:
@@ -677,11 +678,17 @@ async def craft_rune_merge(
     if free is None:
         return False, "Нет места в сумке."
 
+    spend_for = (
+        f"Кузница: слияние руны {el} ранг {target_rank}"
+        if require_city_forge
+        else f"Ювелирная: слияние руны {el} ранг {target_rank}"
+    )
+    spend_kind = "forge" if require_city_forge else "workshop"
     character_service.add_gold(
         character,
         -cost,
-        spend_for=f"Кузница: слияние руны {el} ранг {target_rank}",
-        spend_kind="forge",
+        spend_for=spend_for,
+        spend_kind=spend_kind,
     )
     for it in found:
         await inventory_repo.delete_inventory_item(session, it)
@@ -992,6 +999,8 @@ async def try_workshop_sweep_disassemble(
 async def craft_rune_auto_pair_rank1(
     session: AsyncSession,
     character: Character,
+    *,
+    require_city_forge: bool = True,
 ) -> tuple[bool, str]:
     """Авто: две руны ранга I одной стихии → ранг II (стоимость как у craft_rune_merge)."""
     bag = await inventory_repo.list_bag_items(session, character.id)
@@ -1002,7 +1011,13 @@ async def craft_rune_auto_pair_rank1(
             by_el.setdefault(rd.element, []).append(it)
     for el, lst in by_el.items():
         if len(lst) >= 2:
-            return await craft_rune_merge(session, character, element=el, target_rank=2)
+            return await craft_rune_merge(
+                session,
+                character,
+                element=el,
+                target_rank=2,
+                require_city_forge=require_city_forge,
+            )
     return False, "Нет двух рун ранга I одной стихии в сумке."
 
 

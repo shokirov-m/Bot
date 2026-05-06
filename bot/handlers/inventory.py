@@ -459,7 +459,11 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             if raw_img and game_images_enabled(char)
             else None
         )
-        if photo_arg is None and game_images_enabled(char) and str(data.get("kind") or "") == "craft_resource":
+        if (
+            photo_arg is None
+            and game_images_enabled(char)
+            and str(data.get("kind") or "").strip().lower() == "craft_resource"
+        ):
             rid = str(data.get("resource_id") or "").strip()
             photo_arg = craft_resource_photo_path(rid)
         await push_game_ui(

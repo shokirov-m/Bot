@@ -2643,6 +2643,9 @@ def _rehydrate_skills_and_cooldowns(combat_state: dict[str, Any], character: Cha
             sc.setdefault(k, 0)
 
 
+_combat_callback_locks: dict[int, asyncio.Lock] = {}
+
+
 async def handle_combat_callback(
     *,
     query: CallbackQuery,
@@ -2653,30 +2656,56 @@ async def handle_combat_callback(
     skill_index: int | None,
     item_id: int | None = None,
 ) -> None:
-    """Маршрутизация действий боя."""
-    data = await state.get_data()
-    combat_state: dict[str, Any] | None = data.get("combat")
-    if combat_state is None:
-        await query.answer("Нет активного боя.", show_alert=True)
-        clear_combat_backup(character)
-        try:
-            await session.flush()
-        except Exception:
-            pass
-        await state.clear()
-        if query.from_user is not None:
-            combat_idle_service.cancel_combat_idle_timer(int(query.from_user.id))
-        return
-
-    _rehydrate_skills_and_cooldowns(combat_state, character)
-
+    """Маршрутизация действий боя (сериализация колбэков на игрока — без двойной выдачи награды)."""
     if query.message is None:
         await query.answer()
         return
+    if query.from_user is None:
+        await query.answer()
+        return
+    uid = int(query.from_user.id)
+    lock = _combat_callback_locks.setdefault(uid, asyncio.Lock())
+    async with lock:
+        data = await state.get_data()
+        combat_state = data.get("combat")
+        if combat_state is None:
+            await query.answer("Нет активного боя.", show_alert=True)
+            clear_combat_backup(character)
+            try:
+                await session.flush()
+            except Exception:
+                pass
+            await state.clear()
+            combat_idle_service.cancel_combat_idle_timer(uid)
+            return
+        _rehydrate_skills_and_cooldowns(combat_state, character)
+        cls = get_class_or_none(character.class_key)
+        class_ru = cls.name_ru if cls else character.class_key
+        await _handle_combat_callback_body(
+            query=query,
+            session=session,
+            state=state,
+            character=character,
+            combat_state=combat_state,
+            class_ru=class_ru,
+            action=action,
+            skill_index=skill_index,
+            item_id=item_id,
+        )
 
-    cls = get_class_or_none(character.class_key)
-    class_ru = cls.name_ru if cls else character.class_key
 
+async def _handle_combat_callback_body(
+    *,
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    character: Character,
+    combat_state: dict[str, Any],
+    class_ru: str,
+    action: str,
+    skill_index: int | None,
+    item_id: int | None = None,
+) -> None:
     if action == "ret":
         await query.message.edit_reply_markup(reply_markup=combat_main_keyboard(character))
         if query.from_user is not None:

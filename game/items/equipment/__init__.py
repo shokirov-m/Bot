@@ -20,10 +20,12 @@ from game.items.equipment.defaults import apply_item_payload_defaults
 from game.items.equipment.secret_gear import try_roll_secret_gear_payload
 from game.items.equipment.slots import (
     EQUIP_ORDER,
+    ITEM_KIND_LABEL_RU,
     SLOT_LABEL_RU,
     equip_slot_for_kind,
     gear_icon_for_item_data,
     item_is_two_handed,
+    item_kind_label_ru,
     resolve_equip_slot_for_item_data,
     ring_slot_is_explicit,
     slot_label_ru,
@@ -57,8 +59,10 @@ __all__ = [
     "SECRET_GEAR_DROP_CHANCE",
     "SECRET_GEAR_EARLY_MAX_FLOOR",
     "EQUIP_ORDER",
+    "ITEM_KIND_LABEL_RU",
     "SLOT_LABEL_RU",
     "equip_slot_for_kind",
+    "item_kind_label_ru",
     "slot_label_ru",
     "resolve_equip_slot_for_item_data",
     "ring_slot_is_explicit",

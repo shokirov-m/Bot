@@ -43,6 +43,7 @@ from game.crafting.recipes_data import (
 )
 from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR
 from game.crafting.workshop_meta import get_workshop_state, known_blueprint_ids
+from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
 from game.items import item_categories as inv_cat
 from game.items.craft_resources import RESOURCE_DEFS, total_craft_resource_in_bag
 from game.items.runes import RuneData, ensure_rune_socket_list, extract_rune_from_item
@@ -929,14 +930,39 @@ async def workshop_rune_menu(query: CallbackQuery, session: AsyncSession, state:
             return
         text = (
             "💎 <b>Слияние рун</b>\n\n"
-            "<i>3× ранг I → II, 4× II → III, 5× III → IV, 5× IV → V (одна стихия). "
+            "<i><b>Быстро:</b> две руны ранга I одной стихии → II (кнопка «Две I → II (авто)»). "
+            "По правилам мастерской: 3× I → II, 4× II → III, 5× III → IV, 5× IV → V (одна стихия). "
             "Для ранга IV нужен <b>10 ур. ювелира</b>, для V — <b>18 ур.</b> "
-            "Выбери целевой ранг, затем стихию.</i>"
+            "Ниже — выбор ранга и стихии.</i>"
         )
         await _workshop_ui(state, query, char, text, workshop_rune_tiers_keyboard())
         await query.answer()
     except Exception:
         logger.exception("wsp:rune:menu")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "wsp:rune:auto12")
+async def workshop_rune_auto_rank12(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None:
+            return
+        await character_repo.lock_character_row(session, char.id)
+        ok, msg = await forge_service.craft_rune_auto_pair_rank1(
+            session,
+            char,
+            require_city_forge=False,
+        )
+        await session.flush()
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        text = f"{msg}\n\n💎 <b>Слияние рун</b>\n\n<i>Можно повторить.</i>"
+        await _workshop_ui(state, query, char, text, workshop_rune_tiers_keyboard())
+        await query.answer("Готово.")
+    except Exception:
+        logger.exception("wsp:rune:auto12")
         await query.answer("Ошибка.", show_alert=True)
 
 
@@ -1165,7 +1191,9 @@ async def workshop_disassemble_filter(query: CallbackQuery, session: AsyncSessio
         )
         title = "🔨 <b>Разбор предметов</b>"
         if rar or knd:
-            title += f"\n<i>Фильтр:</i> {rar or 'все'} / {knd or 'все типы'}"
+            rar_s = RARITY_NAME_RU.get(str(rar), rar) if rar else "все редкости"
+            knd_s = item_kind_label_ru(str(knd)) if knd else "все типы"
+            title += f"\n<i>Фильтр:</i> {rar_s} / {knd_s}"
         if not pairs:
             title += "\n<i>Под фильтр ничего не попало.</i>"
         await _workshop_ui(

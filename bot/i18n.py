@@ -169,8 +169,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "hub_rank_line": "🎖️ Звание: <b>{rank}</b>",
         "hub_title_line": "🏆 Титул: <b>{title}</b>",
         "hub_pet_line": (
-            "<i>🐾 Питомцы: пассивный бонус в бою, активен <b>один</b> — призыв в "
-            "<b>Городе</b>, смена в статусе или на этажах 8/48.</i>"
+            "<i>🐾 Питомцы: пассив в бою, активен <b>один</b> — призыв в <b>городе</b>, "
+            "смена в разделе <b>«Статус»</b>.</i>"
         ),
         "hub_daily_hint": "<i>Ежедневка — канал «{channel}» (кнопка ниже).</i>",
         "channel_display_name": "Испытание тьмы",
@@ -235,8 +235,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_pet_btn": "🐾 Питомец",
         "profile_pet_switch_btn": "🔄 Сменить питомца",
         "profile_pet_single_hint": (
-            "Один питомец уже даёт пассив в бою. Второго можно призвать в городе; "
-            "смена активного — в статусе (кнопка ниже), на полном экране характеристик или на этажах 8/48."
+            "Один питомец уже даёт пассив в бою. Ещё можно призвать в городе; "
+            "активного выбирай в «Статус» или на полном экране характеристик."
         ),
         "profile_pet_none_hint": (
             "Питомцев пока нет. Призыв — в разделе «Город» (лавка хаба), когда этаж с городом доступен."
@@ -485,7 +485,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "hub_title_line": "🏆 Title: <b>{title}</b>",
         "hub_pet_line": (
             "<i>🐾 Pets: passive combat bonus, only <b>one</b> active — summon in "
-            "<b>City</b>; switch in Status or on floors 8/48.</i>"
+            "<b>City</b>; switch in <b>Status</b>.</i>"
         ),
         "hub_daily_hint": "<i>Daily reward — channel «{channel}» (button below).</i>",
         "channel_display_name": "Trial of Darkness",
@@ -549,7 +549,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "profile_pet_switch_btn": "🔄 Switch pet",
         "profile_pet_single_hint": (
             "One pet already gives a combat passive. Summon more in the City; "
-            "switch the active pet in Status, on the full stats screen, or on floors 8/48."
+            "switch the active pet in Status or on the full stats screen."
         ),
         "profile_pet_none_hint": (
             "No pets yet. Summon them in City (hub shop) when a city floor is available."

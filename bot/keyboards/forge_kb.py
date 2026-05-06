@@ -6,6 +6,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.city_kb import city_hub_keyboard
 from bot.keyboards.menu_kb import menu_nav_button_row
+from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
+
+
+def _dis_rarity_filter_label(code: str) -> str:
+    if code == "all":
+        return "Все"
+    return RARITY_NAME_RU.get(code, code)
 
 __all__ = [
     "city_hub_keyboard",
@@ -132,13 +139,8 @@ def forge_dis_bag_keyboard(
     """Список предметов для разбора (item_id, label) + фильтры и свип."""
     rows: list[list[InlineKeyboardButton]] = []
     rar_btns: list[InlineKeyboardButton] = []
-    for code, lab in (
-        ("all", "Все"),
-        ("common", "common"),
-        ("uncommon", "uncommon"),
-        ("rare", "rare"),
-        ("epic", "epic"),
-    ):
+    for code in ("all", "common", "uncommon", "rare", "epic"):
+        lab = _dis_rarity_filter_label(code)
         sel = "✅ " if (rarity_filter or "all") == code else ""
         rar_btns.append(
             InlineKeyboardButton(
@@ -149,14 +151,15 @@ def forge_dis_bag_keyboard(
     rows.append(rar_btns[:3])
     rows.append(rar_btns[3:])
     knd_btns: list[InlineKeyboardButton] = []
-    for code, lab in (
-        ("all", "Все типы"),
-        ("weapon", "🗡 weapon"),
-        ("armor", "🧥 armor"),
-        ("shield", "🛡 shield"),
-        ("ring", "💍 ring"),
-        ("amulet", "📿 amulet"),
+    for code, em in (
+        ("all", ""),
+        ("weapon", "🗡 "),
+        ("armor", "🧥 "),
+        ("shield", "🛡 "),
+        ("ring", "💍 "),
+        ("amulet", "📿 "),
     ):
+        lab = "Все типы" if code == "all" else f"{em}{item_kind_label_ru(code)}"
         sel = "✅ " if (kind_filter or "all") == code else ""
         knd_btns.append(
             InlineKeyboardButton(
@@ -174,11 +177,11 @@ def forge_dis_bag_keyboard(
     rows.append(
         [
             InlineKeyboardButton(
-                text="🧹 Свип common",
+                text="🧹 Всё обычное",
                 callback_data=f"frg:dsweep:{floor_number}:common",
             ),
             InlineKeyboardButton(
-                text="🧹 Свип ≤uncommon",
+                text="🧹 До необыч. вкл.",
                 callback_data=f"frg:dsweep:{floor_number}:uncommon",
             ),
         ],
@@ -227,6 +230,7 @@ def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
                 ),
             ],
             [InlineKeyboardButton(text="🔨 Починка экипировки", callback_data=f"frg:rpr:{floor_number}")],
+            [InlineKeyboardButton(text="♻️ Разбор экипировки", callback_data=f"frg:dis:{floor_number}")],
             [InlineKeyboardButton(text="🛒 Купить базовый сет", callback_data=f"frg:set:{floor_number}")],
             [InlineKeyboardButton(text="⬅ В город", callback_data=f"frg:city:{floor_number}")],
             menu_nav_button_row(),

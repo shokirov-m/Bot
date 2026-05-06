@@ -8,6 +8,7 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale
 from bot.keyboards.economy_kb import bank_safe_keyboard, economy_hub_keyboard
 from bot.keyboards.forge_kb import city_hub_keyboard
+from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.economy import sinks as sink_rules
 from game.floors import floor_data
@@ -43,7 +45,7 @@ async def _load_char_for_mutation(session: AsyncSession, telegram_id: int):
 
 
 @router.callback_query(F.data.startswith("ecy:hub:"))
-async def economy_open_hub(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_open_hub(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -58,15 +60,16 @@ async def economy_open_hub(query: CallbackQuery, session: AsyncSession) -> None:
             return
         economy_sink_service.clear_bank_ui_back(char)
         text = economy_sink_service.economy_hub_intro_html(char)
-        try:
-            await query.message.edit_text(
-                text,
-                reply_markup=economy_hub_keyboard(floor_key),
-                parse_mode=ParseMode.HTML,
-            )
-        except TelegramBadRequest as e:
-            if not _is_message_not_modified(e):
-                raise
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=economy_hub_keyboard(floor_key),
+            target_message=query.message,
+            photo_path=None,
+            character=char,
+        )
         await query.answer()
     except Exception:
         logger.exception("ecy:hub")
@@ -74,7 +77,7 @@ async def economy_open_hub(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("ecy:back:"))
-async def economy_back_city(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_back_city(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -91,37 +94,39 @@ async def economy_back_city(query: CallbackQuery, session: AsyncSession) -> None
 
         loc = get_locale(char, query.from_user.language_code)
         economy_sink_service.clear_bank_ui_back(char)
-        try:
-            await query.message.edit_text(
-                format_city_hub_message(char),
-                reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
-                parse_mode=ParseMode.HTML,
-            )
-        except TelegramBadRequest as e:
-            if not _is_message_not_modified(e):
-                raise
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=format_city_hub_message(char),
+            reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+            target_message=query.message,
+            photo_path=None,
+            character=char,
+        )
         await query.answer()
     except Exception:
         logger.exception("ecy:back")
         await query.answer("Ошибка.", show_alert=True)
 
 
-async def _refresh_economy_screen(query: CallbackQuery, char, floor_key: int) -> None:
+async def _refresh_economy_screen(state: FSMContext, query: CallbackQuery, char, floor_key: int) -> None:
     if query.message is None:
         return
     text = economy_sink_service.economy_hub_intro_html(char)
-    try:
-        await query.message.edit_text(
-            text,
-            reply_markup=economy_hub_keyboard(floor_key),
-            parse_mode=ParseMode.HTML,
-        )
-    except TelegramBadRequest as e:
-        if not _is_message_not_modified(e):
-            raise
+    await push_game_ui(
+        state,
+        query.bot,
+        chat_id=query.message.chat.id,
+        text=text,
+        reply_markup=economy_hub_keyboard(floor_key),
+        target_message=query.message,
+        photo_path=None,
+        character=char,
+    )
 
 
-async def _refresh_bank_safe_screen(query: CallbackQuery, char, floor_key: int) -> None:
+async def _refresh_bank_safe_screen(state: FSMContext, query: CallbackQuery, char, floor_key: int) -> None:
     if query.message is None:
         return
     text = economy_sink_service.bank_safe_intro_html(char)
@@ -129,25 +134,26 @@ async def _refresh_bank_safe_screen(query: CallbackQuery, char, floor_key: int) 
     has_term = sink_rules.bank_term_state(char) is not None
     has_pi = sink_rules.bank_pending_interest(char) > 0
     seal = sink_rules.bank_seal_active(char)
-    try:
-        await query.message.edit_text(
-            text,
-            reply_markup=bank_safe_keyboard(
-                floor_key,
-                bank_back=bb,
-                has_term=has_term,
-                has_pending_interest=has_pi,
-                seal_active=seal,
-            ),
-            parse_mode=ParseMode.HTML,
-        )
-    except TelegramBadRequest as e:
-        if not _is_message_not_modified(e):
-            raise
+    await push_game_ui(
+        state,
+        query.bot,
+        chat_id=query.message.chat.id,
+        text=text,
+        reply_markup=bank_safe_keyboard(
+            floor_key,
+            bank_back=bb,
+            has_term=has_term,
+            has_pending_interest=has_pi,
+            seal_active=seal,
+        ),
+        target_message=query.message,
+        photo_path=None,
+        character=char,
+    )
 
 
 @router.callback_query(F.data.startswith("ecy:lot:"))
-async def economy_lottery(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_lottery(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -162,7 +168,7 @@ async def economy_lottery(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_economy_screen(query, char, floor_key)
+        await _refresh_economy_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:lot")
@@ -170,7 +176,7 @@ async def economy_lottery(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("ecy:mlb:"))
-async def economy_borrow(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_borrow(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -185,7 +191,7 @@ async def economy_borrow(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_economy_screen(query, char, floor_key)
+        await _refresh_economy_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:mlb")
@@ -193,7 +199,7 @@ async def economy_borrow(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("ecy:mlr:"))
-async def economy_repay(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_repay(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -208,7 +214,7 @@ async def economy_repay(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_economy_screen(query, char, floor_key)
+        await _refresh_economy_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:mlr")
@@ -216,7 +222,7 @@ async def economy_repay(query: CallbackQuery, session: AsyncSession) -> None:
 
 
 @router.callback_query(F.data.startswith("ecy:sfv:"))
-async def economy_safe_view(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_safe_view(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -235,7 +241,7 @@ async def economy_safe_view(query: CallbackQuery, session: AsyncSession) -> None
         else:
             economy_sink_service.set_bank_ui_back(char, "hub")
         await economy_sink_service.flush(session, char)
-        await _refresh_bank_safe_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(state, query, char, floor_key)
         await query.answer()
     except Exception:
         logger.exception("ecy:sfv")
@@ -243,7 +249,7 @@ async def economy_safe_view(query: CallbackQuery, session: AsyncSession) -> None
 
 
 @router.callback_query(F.data.startswith("ecy:sfd:"))
-async def economy_safe_deposit(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_safe_deposit(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -260,7 +266,7 @@ async def economy_safe_deposit(query: CallbackQuery, session: AsyncSession) -> N
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_bank_safe_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:sfd")
@@ -268,7 +274,7 @@ async def economy_safe_deposit(query: CallbackQuery, session: AsyncSession) -> N
 
 
 @router.callback_query(F.data.startswith("ecy:sfw:"))
-async def economy_safe_withdraw(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_safe_withdraw(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -285,7 +291,7 @@ async def economy_safe_withdraw(query: CallbackQuery, session: AsyncSession) -> 
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_bank_safe_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:sfw")
@@ -293,7 +299,7 @@ async def economy_safe_withdraw(query: CallbackQuery, session: AsyncSession) -> 
 
 
 @router.callback_query(F.data.startswith("ecy:sfu:"))
-async def economy_safe_upgrade(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_safe_upgrade(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -308,7 +314,7 @@ async def economy_safe_upgrade(query: CallbackQuery, session: AsyncSession) -> N
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_bank_safe_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:sfu")
@@ -316,7 +322,7 @@ async def economy_safe_upgrade(query: CallbackQuery, session: AsyncSession) -> N
 
 
 @router.callback_query(F.data.startswith("ecy:sfi:"))
-async def economy_safe_claim_interest(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_safe_claim_interest(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -331,7 +337,7 @@ async def economy_safe_claim_interest(query: CallbackQuery, session: AsyncSessio
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_bank_safe_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:sfi")
@@ -339,7 +345,7 @@ async def economy_safe_claim_interest(query: CallbackQuery, session: AsyncSessio
 
 
 @router.callback_query(F.data.startswith("ecy:sfs:"))
-async def economy_safe_seal(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_safe_seal(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -354,7 +360,7 @@ async def economy_safe_seal(query: CallbackQuery, session: AsyncSession) -> None
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_bank_safe_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:sfs")
@@ -362,7 +368,7 @@ async def economy_safe_seal(query: CallbackQuery, session: AsyncSession) -> None
 
 
 @router.callback_query(F.data.startswith("ecy:topn:"))
-async def economy_term_open(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_term_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -389,7 +395,7 @@ async def economy_term_open(query: CallbackQuery, session: AsyncSession) -> None
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_bank_safe_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:topn")
@@ -397,7 +403,7 @@ async def economy_term_open(query: CallbackQuery, session: AsyncSession) -> None
 
 
 @router.callback_query(F.data.startswith("ecy:tcl:"))
-async def economy_term_close(query: CallbackQuery, session: AsyncSession) -> None:
+async def economy_term_close(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -418,7 +424,7 @@ async def economy_term_close(query: CallbackQuery, session: AsyncSession) -> Non
             await query.answer(msg[:180], show_alert=True)
             return
         await economy_sink_service.flush(session, char)
-        await _refresh_bank_safe_screen(query, char, floor_key)
+        await _refresh_bank_safe_screen(state, query, char, floor_key)
         await query.answer(msg[:180], show_alert=True)
     except Exception:
         logger.exception("ecy:tcl")

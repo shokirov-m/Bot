@@ -46,17 +46,11 @@ def is_scrap_floor(floor_number: int) -> bool:
     return int(floor_number) in SCRAP_FLOORS
 
 
-def nearest_scrap_floor(floor_number: int) -> int:
-    f = int(floor_number)
-    return min(SCRAP_FLOORS, key=lambda x: (abs(x - f), x))
-
-
-def scrap_unavailable_message(floor_number: int) -> str:
-    near = nearest_scrap_floor(int(floor_number))
-    cities = " / ".join(str(c) for c in SCRAP_FLOORS)
+def scrap_unavailable_message(_floor_number: int) -> str:
+    """Короткий текст без HTML — для callback answer (show_alert)."""
     return (
-        f"Скупщик доступен только в городах: <b>{cities}</b>. "
-        f"Ближайший — этаж <b>{near}</b>."
+        "Скупщик только в городе. Открой «Город» на карте этажа и зайди на рынок "
+        "или к скупщику с городского яруса."
     )
 
 
@@ -134,4 +128,4 @@ async def try_sell_bag_item_by_id(
             bot=bot,
         )
     await session.flush()
-    return True, f"Продано: <b>{nm}</b> за <b>{price}</b> 💰."
+    return True, f"Продано: {nm} за {price} 💰."

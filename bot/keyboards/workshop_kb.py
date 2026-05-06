@@ -7,6 +7,13 @@ from typing import TYPE_CHECKING
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.menu_kb import menu_nav_button_row
+from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
+
+
+def _wsp_dis_rarity_label(code: str) -> str:
+    if code == "all":
+        return "Все"
+    return RARITY_NAME_RU.get(code, code)
 
 if TYPE_CHECKING:
     from db.models.character import Character
@@ -139,6 +146,12 @@ def workshop_sharpen_slots_keyboard(rows_slots: list[tuple[str, str]]) -> Inline
 def workshop_rune_tiers_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⚗️ Две I → II (авто)",
+                    callback_data="wsp:rune:auto12",
+                ),
+            ],
             [InlineKeyboardButton(text="↑ II (3× ранг I)", callback_data="wsp:rune:tier:2")],
             [InlineKeyboardButton(text="↑ III (4× ранг II)", callback_data="wsp:rune:tier:3")],
             [InlineKeyboardButton(text="↑ IV (5× ранг III)", callback_data="wsp:rune:tier:4")],
@@ -191,13 +204,8 @@ def workshop_dis_bag_keyboard(
     """Разбор в мастерской: те же фильтры, что у кузницы города."""
     rows: list[list[InlineKeyboardButton]] = []
     rar_btns: list[InlineKeyboardButton] = []
-    for code, lab in (
-        ("all", "Все"),
-        ("common", "common"),
-        ("uncommon", "uncommon"),
-        ("rare", "rare"),
-        ("epic", "epic"),
-    ):
+    for code in ("all", "common", "uncommon", "rare", "epic"):
+        lab = _wsp_dis_rarity_label(code)
         sel = "✅ " if (rarity_filter or "all") == code else ""
         rar_btns.append(
             InlineKeyboardButton(
@@ -208,14 +216,15 @@ def workshop_dis_bag_keyboard(
     rows.append(rar_btns[:3])
     rows.append(rar_btns[3:])
     knd_btns: list[InlineKeyboardButton] = []
-    for code, lab in (
-        ("all", "Все типы"),
-        ("weapon", "🗡 weapon"),
-        ("armor", "🧥 armor"),
-        ("shield", "🛡 shield"),
-        ("ring", "💍 ring"),
-        ("amulet", "📿 amulet"),
+    for code, em in (
+        ("all", ""),
+        ("weapon", "🗡 "),
+        ("armor", "🧥 "),
+        ("shield", "🛡 "),
+        ("ring", "💍 "),
+        ("amulet", "📿 "),
     ):
+        lab = "Все типы" if code == "all" else f"{em}{item_kind_label_ru(code)}"
         sel = "✅ " if (kind_filter or "all") == code else ""
         knd_btns.append(
             InlineKeyboardButton(
@@ -230,8 +239,8 @@ def workshop_dis_bag_keyboard(
         rows.append([InlineKeyboardButton(text=short, callback_data=f"wsp:brk:x:{item_id}")])
     rows.append(
         [
-            InlineKeyboardButton(text="🧹 Свип common", callback_data="wsp:brk:sw:common"),
-            InlineKeyboardButton(text="🧹 Свип ≤uncommon", callback_data="wsp:brk:sw:uncommon"),
+            InlineKeyboardButton(text="🧹 Всё обычное", callback_data="wsp:brk:sw:common"),
+            InlineKeyboardButton(text="🧹 До необыч. вкл.", callback_data="wsp:brk:sw:uncommon"),
         ],
     )
     rows.append([InlineKeyboardButton(text="⬅ К кузнице", callback_data="wsp:prof:blacksmith")])

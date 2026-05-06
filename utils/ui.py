@@ -16,6 +16,7 @@ from game.items.equipment import (
     SLOT_LABEL_RU,
     gear_icon_for_item_data,
     item_is_two_handed,
+    item_kind_label_ru,
     resolve_equip_slot_for_item_data,
     ring_slot_is_explicit,
 )
@@ -166,6 +167,7 @@ def format_inventory_item_html(
     gi = gear_icon_for_item_data(data)
     lines.append(f"{em} {gi} <b>{name}</b> · <i>{html.escape(ru)}</i>")
     kind = data.get("kind")
+    kind_key = str(kind or "").strip().lower()
     if str(kind).lower() == "weapon":
         if item_is_two_handed(data):
             lines.append("⚙️ <b>Двуручное</b> — вторая рука занята этим оружием.")
@@ -177,12 +179,14 @@ def format_inventory_item_html(
             lines.append("📌 Тип: 💍 Кольцо (первый свободный слот I или II)")
         elif slot and slot in SLOT_LABEL_RU:
             lines.append(f"📌 Тип: {SLOT_LABEL_RU[slot]}")
+        elif kind_key == "craft_resource":
+            lines.append("📌 Тип: 📦 Ремесленный материал")
         elif kind:
-            lines.append(f"📌 Тип: {html.escape(str(kind))}")
+            lines.append(f"📌 Тип: {html.escape(item_kind_label_ru(kind_key))}")
     elif slot and slot in SLOT_LABEL_RU:
         lines.append(f"📌 {SLOT_LABEL_RU[slot]}")
     elif kind:
-        lines.append(f"📌 {html.escape(str(kind))}")
+        lines.append(f"📌 {html.escape(item_kind_label_ru(kind_key))}")
     ench = enchant_rules.current_enchant_level(data)
     mult = enchant_rules.enchant_stat_multiplier(ench)
     atk = data.get("attack", data.get("atk"))
@@ -242,8 +246,11 @@ def format_inventory_item_html(
     if not compact:
         summary = data.get("summary")
         if summary:
-            lines.append("<i>Лор / текст карточки (не заменяет параметры выше):</i>")
-            lines.append(f"<i>{html.escape(str(summary))}</i>")
+            if kind_key == "craft_resource":
+                lines.append(f"📦 <i>{html.escape(str(summary))}</i>")
+            else:
+                lines.append("<i>Лор / текст карточки (не заменяет параметры выше):</i>")
+                lines.append(f"<i>{html.escape(str(summary))}</i>")
     return "\n".join(lines)
 
 
