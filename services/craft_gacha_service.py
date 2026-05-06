@@ -87,21 +87,21 @@ async def try_gacha_pull(
     *,
     times: int = 1,
     bot: "Bot | None" = None,
-) -> tuple[bool, list[str]]:
+) -> tuple[bool, list[str], list[str]]:
     """Списать золото, выдать материал(ы) и с шансом — чертёж на каждом броске."""
     from services import home_service
 
     if not home_service.can_access_workbench(character):
-        return False, ["Сначала улучши дом до ур. 2."]
+        return False, ["Сначала улучши дом до ур. 2."], []
 
     prof = str(profession).strip().lower()
     if prof not in (PROF_BLACKSMITH, PROF_ALCHEMIST, PROF_JEWELER):
-        return False, ["Неизвестная профессия."]
+        return False, ["Неизвестная профессия."], []
 
     n = max(1, min(GACHA_MAX_BATCH, int(times)))
     total_cost = GACHA_PULL_COST_GOLD * n
     if int(character.gold) < total_cost:
-        return False, [f"Нужно {total_cost:,} 💰 (×{n})."]
+        return False, [f"Нужно {total_cost:,} 💰 (×{n})."], []
 
     character_service.add_gold(
         character,
@@ -116,6 +116,7 @@ async def try_gacha_pull(
         "",
     ]
     any_item = False
+    pulled_resource_ids: list[str] = []
     for i in range(n):
         rid_pick = _weighted_pick(prof)
         if rid_pick is None:
@@ -127,7 +128,7 @@ async def try_gacha_pull(
                     spend_for="Откат гачи (таблица)",
                     spend_kind="workshop",
                 )
-            return False, lines_out + [f"Ошибка таблицы. Возврат: {refund} 💰."]
+            return False, lines_out + [f"Ошибка таблицы. Возврат: {refund} 💰."], pulled_resource_ids
 
         d = RESOURCE_DEFS.get(rid_pick) or {}
         stars = int(d.get("stars") or 1)
@@ -144,13 +145,14 @@ async def try_gacha_pull(
                     spend_kind="workshop",
                 )
             if not any_item:
-                return False, lines_out + [f"Нет места в сумке. Возврат: {refund} 💰."]
+                return False, lines_out + [f"Нет места в сумке. Возврат: {refund} 💰."], pulled_resource_ids
             return True, lines_out + [
                 "",
                 f"⚠️ <b>Сумка полна</b> — дальше {n - i} призыв(ов) не сделано, возврат <b>{refund:,}</b> 💰.",
-            ]
+            ], pulled_resource_ids
 
         any_item = True
+        pulled_resource_ids.append(str(rid_pick))
         lines_out.append(f"📦 <b>{html.escape(str(payload.get('name') or rid_pick))}</b> ×{count}")
 
         if bot is not None and stars >= 6:
@@ -176,4 +178,4 @@ async def try_gacha_pull(
             lines_out.append(f"📜 <b>Чертёж:</b> {nm}")
 
     await session.flush()
-    return True, lines_out
+    return True, lines_out, pulled_resource_ids

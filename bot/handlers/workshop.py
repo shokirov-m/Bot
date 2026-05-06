@@ -57,7 +57,11 @@ from services.workshop_enchant_service import (
 from services.workshop_leaderboard_service import cached_leaderboard_html
 from db.models.app_global import AppGlobal
 
-from bot.utils.game_art import menu_workshop_orders_photo_path, menu_workshop_photo_path
+from bot.utils.game_art import (
+    craft_resource_photo_path,
+    menu_workshop_orders_photo_path,
+    menu_workshop_photo_path,
+)
 from bot.utils.game_ui import push_game_ui
 from utils.ui import format_craft_result_effects_block_html
 
@@ -78,10 +82,13 @@ async def _workshop_ui(
     reply_markup,
     *,
     city_orders: bool = False,
+    photo_path: str | None = None,
 ) -> None:
     if query.message is None or query.bot is None:
         return
-    pp = menu_workshop_orders_photo_path() if city_orders else menu_workshop_photo_path()
+    pp = photo_path
+    if pp is None:
+        pp = menu_workshop_orders_photo_path() if city_orders else menu_workshop_photo_path()
     await push_game_ui(
         state,
         query.bot,
@@ -323,7 +330,7 @@ async def workshop_gacha_pull(query: CallbackQuery, session: AsyncSession, state
         times = 10 if parts[2] == "pull10" else 1
         prof = parts[-1].strip().lower()
         await character_repo.lock_character_row(session, char.id)
-        ok, lines = await craft_gacha_service.try_gacha_pull(
+        ok, lines, pulled_ids = await craft_gacha_service.try_gacha_pull(
             session,
             char,
             prof,
@@ -336,7 +343,16 @@ async def workshop_gacha_pull(query: CallbackQuery, session: AsyncSession, state
             body = base + "\n\n" + "\n".join(lines)
         else:
             body = base + "\n\n<i>" + "\n".join(lines) + "</i>"
-        await _workshop_ui(state, query, char, body, workshop_gacha_keyboard())
+        mat_photo = None
+        if ok and pulled_ids:
+            from game.items.craft_resources import RESOURCE_DEFS
+
+            best_id = max(
+                pulled_ids,
+                key=lambda rid: int((RESOURCE_DEFS.get(str(rid)) or {}).get("stars") or 1),
+            )
+            mat_photo = craft_resource_photo_path(best_id)
+        await _workshop_ui(state, query, char, body, workshop_gacha_keyboard(), photo_path=mat_photo)
         await query.answer("Приз!" if ok else (lines[0][:180] if lines else "Нет"))
     except Exception:
         logger.exception("wsp:gacha:pull")

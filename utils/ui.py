@@ -287,16 +287,19 @@ def format_craft_result_effects_block_html(data: dict[str, Any] | None) -> str:
 
     if kind == "craft_resource":
         sm = str(d.get("summary") or "").strip()
+        try:
+            st = int(d.get("stars") or 1)
+        except (TypeError, ValueError):
+            st = 1
+        rid = str(d.get("resource_id") or "").strip()
+        rid_bit = f" · <code>{html.escape(rid)}</code>" if rid else ""
+        rarity_ru = {1: "Обычная", 2: "Необычная", 3: "Редкая", 4: "Эпик", 5: "Легендарная", 6: "Мифик"}.get(
+            max(1, min(6, st)),
+            "Обычная",
+        )
+        prefix.append(f"<i>Ремесленный материал</i> · ⭐{st} · <b>{rarity_ru}</b>{rid_bit}")
         if sm:
             prefix.append(f"📦 <i>{html.escape(sm)}</i>")
-        else:
-            try:
-                st = int(d.get("stars") or 1)
-            except (TypeError, ValueError):
-                st = 1
-            rid = str(d.get("resource_id") or "").strip()
-            rid_bit = f" · <code>{html.escape(rid)}</code>" if rid else ""
-            prefix.append(f"<i>Ремесленный материал для верстака</i> · ⭐{st}{rid_bit}")
 
     if ut == "workshop_alchemy_enchant":
         try:

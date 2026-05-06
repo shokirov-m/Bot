@@ -24,6 +24,15 @@ def stars_display(n: int) -> str:
     return "⭐" * k
 
 
+def rarity_key_for_stars(stars: int) -> str:
+    """
+    Редкость материалов по ⭐:
+    1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary, 6 mythic.
+    """
+    s = max(1, min(6, int(stars)))
+    return ("common", "uncommon", "rare", "epic", "legendary", "mythic")[s - 1]
+
+
 # Кузнец: слитки и сплавы (12)
 # Алхимик: травы и реагенты (12)
 # Ювелир: крошка и самоцветы (12)
@@ -386,6 +395,7 @@ def craft_resource_payload(resource_id: str, count: int = 1) -> dict[str, Any]:
             "name": f"📦 Ресурс ({rid})",
             "count": max(1, int(count)),
             "stars": 1,
+            "rarity": "common",
             "summary": "Неизвестный ремесленный ресурс.",
         }
     stars = int(d.get("stars") or 1)
@@ -398,6 +408,7 @@ def craft_resource_payload(resource_id: str, count: int = 1) -> dict[str, Any]:
         "name": label,
         "count": max(1, int(count)),
         "stars": stars,
+        "rarity": rarity_key_for_stars(stars),
         "summary": str(d.get("summary") or ""),
     }
 

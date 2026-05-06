@@ -127,3 +127,18 @@ def npc_photo_path(key: str) -> str | None:
     if not k:
         return None
     return _png(f"npc/{k}.png")
+
+
+# --- Материалы ремесла (гача) ---
+
+
+def craft_resource_photo_path(resource_id: str) -> str | None:
+    """
+    Картинка ремесленного материала (гача/крафт):
+    ``materials/<resource_id>.png``.
+    """
+    raw = (resource_id or "").strip().lower()
+    rid = "".join(c for c in raw if c.isalnum() or c in "_-")
+    if not rid:
+        return None
+    return _png(f"materials/{rid}.png")

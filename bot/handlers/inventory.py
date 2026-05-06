@@ -24,6 +24,7 @@ from bot.keyboards.inventory_kb import (
 )
 from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import push_game_ui
+from bot.utils.game_art import craft_resource_photo_path
 from bot.utils.ui_photos import inventory_menu_photo_path
 from bot.utils.safe_media import normalize_photo_media
 from db.repository import character_repo, inventory_repo, user_repo
@@ -458,6 +459,9 @@ async def inv_item_view(callback: CallbackQuery, session: AsyncSession, state: F
             if raw_img and game_images_enabled(char)
             else None
         )
+        if photo_arg is None and game_images_enabled(char) and str(data.get("kind") or "") == "craft_resource":
+            rid = str(data.get("resource_id") or "").strip()
+            photo_arg = craft_resource_photo_path(rid)
         await push_game_ui(
             state,
             callback.bot,
