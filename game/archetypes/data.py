@@ -38,6 +38,11 @@ SKILLS: dict[str, SkillV2] = {
     "aco_heal": SkillV2("aco_heal", "Лечение", "Восстанавливает HP.", 25, 0, 0.0, "mag", effect_key="heal", effect_chance=1.0),
     "aco_bless": SkillV2("aco_bless", "Благословение", "Регенерация HP и MP.", 30, 5, 0.0, "mag", effect_key="hot", effect_chance=1.0),
 
+    # --- Priest subclasses buff (x2.5) ---
+    # ВАЖНО: используем отдельные ключи, чтобы не бафать базового Жреца.
+    "aco_smite_x25": SkillV2("aco_smite_x25", "Кара", "Святой свет поражает врага.", 16, 0, 1.8 * 2.5, "mag"),
+    "pal_smite_x25": SkillV2("pal_smite_x25", "Священный удар", "Световой удар паладина.", 28, 2, 3.9 * 2.5, "mag"),
+
     # --- Tier 2: Warrior specializations ---
     "grd_wall": SkillV2("grd_wall", "Стена щитов", "Мощная защитная стойка.", 28, 4, 0.0, "phys", effect_key="fortify", effect_chance=1.0),
     "grd_crush": SkillV2("grd_crush", "Сокрушение", "Тяжёлый удар с пробитием.", 24, 2, 3.8, "phys", effect_key="shred_armor", effect_chance=1.0),
@@ -85,6 +90,25 @@ PASSIVES: dict[str, PassiveV2] = {
     "pas_rng_focus": PassiveV2("pas_rng_focus", "Фокус охотника", "Урон по элитам выше на 20%.", {"elite_dmg_mult": 1.20}),
     "pas_pal_aegis": PassiveV2("pas_pal_aegis", "Эгида", "Получаемый урон ниже на 16%.", {"dmg_taken_mult": 0.84}),
     "pas_prp_blessing": PassiveV2("pas_prp_blessing", "Дар", "Восстанавливает 4% HP за ход.", {"hp_regen_pct_turn": 0.04}),
+
+    # --- Priest subclasses buff (x2.5) ---
+    # ВАЖНО: используем отдельные ключи, чтобы не бафать базовые пассивки других архетипов.
+    "pas_aco_faith_x25": PassiveV2("pas_aco_faith_x25", "Вера", "Увеличивает регенерацию MP за ход.", {"mp_regen_turn": 6 * 2.5}),
+    "pas_pal_oath_x25": PassiveV2("pas_pal_oath_x25", "Клятва", "Защита и вера.", {"def_bonus": 28.0 * 2.5, "mp_regen_turn": 6 * 2.5}),
+    # dmg_taken_mult: снижение входящего урона на 25% ⇒ множитель 0.75.
+    "pas_pal_aegis_x25": PassiveV2("pas_pal_aegis_x25", "Эгида", "Получаемый урон ниже на 25%.", {"dmg_taken_mult": 0.75}),
+    "pas_prp_grace_x25": PassiveV2(
+        "pas_prp_grace_x25",
+        "Благодать",
+        "Много регенерации маны.",
+        {"mp_regen_turn": 20 * 2.5, "mag_bonus_percent": 16 * 2.5},
+    ),
+    "pas_prp_blessing_x25": PassiveV2(
+        "pas_prp_blessing_x25",
+        "Дар",
+        "Восстанавливает 10% HP за ход.",
+        {"hp_regen_pct_turn": 0.04 * 2.5},
+    ),
 }
 
 ARCHETYPES: dict[str, Archetype] = {
@@ -187,8 +211,8 @@ ARCHETYPES: dict[str, Archetype] = {
         base_stats={"vit": 38, "int": 30, "str": 26},
         hp_multiplier=1.30,
         mp_multiplier=1.24,
-        passives=(PASSIVES["pas_pal_oath"], PASSIVES["pas_pal_aegis"]),
-        skills=("pal_smite", "pal_guard", "aco_bless"),
+        passives=(PASSIVES["pas_pal_oath_x25"], PASSIVES["pas_pal_aegis_x25"]),
+        skills=("pal_smite_x25", "pal_guard", "aco_bless"),
         requirements={"level": 50, "vit": 24, "int": 20},
     ),
     "prophet": Archetype(
@@ -196,8 +220,8 @@ ARCHETYPES: dict[str, Archetype] = {
         "Жрец чистой благодати и долгих боёв.",
         base_stats={"int": 42, "luck": 30},
         mp_multiplier=1.50,
-        passives=(PASSIVES["pas_aco_faith"], PASSIVES["pas_prp_grace"], PASSIVES["pas_prp_blessing"]),
-        skills=("prp_radiance", "prp_hymn", "aco_smite"),
+        passives=(PASSIVES["pas_aco_faith_x25"], PASSIVES["pas_prp_grace_x25"], PASSIVES["pas_prp_blessing_x25"]),
+        skills=("prp_radiance", "prp_hymn", "aco_smite_x25"),
         requirements={"level": 50, "int": 28, "luck": 18},
     ),
 }
