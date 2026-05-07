@@ -41,6 +41,7 @@ def floor_accepts_golden_goblin_event(floor_number: int) -> bool:
     from game.floors import room_clear_floor as rc5_mod
     from game.floors import room_clear_floor_10 as rc10_mod
     from game.floors import room_clear_floor_24 as rc24_mod
+    from game.floors import room_clear_floor_26 as rc26_mod
     from game.floors import wave_floor as wv_mod
 
     if (
@@ -53,6 +54,7 @@ def floor_accepts_golden_goblin_event(floor_number: int) -> bool:
         rc5_mod.is_room_clear_floor(fl)
         or rc10_mod.is_room_clear_floor_10(fl)
         or rc24_mod.is_room_clear_floor_24(fl)
+        or rc26_mod.is_room_clear_floor_26(fl)
     ):
         return False
     if wv_mod.is_wave_floor(fl):

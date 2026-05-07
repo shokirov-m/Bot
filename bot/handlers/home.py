@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.keyboards.menu_kb import menu_nav_button_row
 from bot.keyboards.home_kb import (
     alchemy_keyboard,
     buildings_keyboard,
@@ -21,9 +22,17 @@ from bot.keyboards.home_kb import (
 from bot.i18n import get_locale
 from bot.utils.game_art import menu_home_library_photo_path, menu_home_photo_path, menu_home_wardrobe_photo_path
 from bot.utils.game_ui import push_game_ui
-from db.repository import character_repo, user_repo
+from db.repository import character_repo, mercenary_repo, user_repo
 from scheduler.tasks import schedule_rest_completion_notification
-from services import home_service
+from services import home_service, mercenary_service
+from game.mercenaries.shadow_market_meta import (
+    floor_26_shadow_cleared,
+    get_merc_xp_share_percent,
+    get_party_merc_ids,
+    roster_collection_cap,
+    set_merc_xp_share_percent,
+    set_party_merc_ids,
+)
 from services.rest_service import try_begin_or_claim_rest
 
 router = Router(name="home")
@@ -851,4 +860,136 @@ async def home_alchemy_transmute(callback: CallbackQuery, session: AsyncSession,
         await callback.answer("Готово!" if ok else msg[:180], show_alert=not ok)
     except Exception:
         logger.exception("hom:alch:trans")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+def _merc_quarters_keyboard(character, mercs: list) -> InlineKeyboardMarkup:
+    party = set(get_party_merc_ids(character))
+    rows: list[list[InlineKeyboardButton]] = []
+    for m in mercs:
+        mark = "✅" if int(m.id) in party else "➕"
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{mark} {str(m.display_name)[:28]} (♥{m.loyalty})",
+                callback_data=f"hom:merc:tog:{m.id}",
+            ),
+        ])
+    xp = get_merc_xp_share_percent(character)
+    rows.append([
+        InlineKeyboardButton(text=f"📈 Доля XP: {xp}% (20)", callback_data="hom:merc:xp:20"),
+        InlineKeyboardButton(text="30%", callback_data="hom:merc:xp:30"),
+        InlineKeyboardButton(text="40%", callback_data="hom:merc:xp:40"),
+    ])
+    rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == "hom:merc_q")
+async def home_merc_quarters(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        if int(char.level) < 15:
+            await callback.answer("Покои откроются с 15 уровня.", show_alert=True)
+            return
+        mercs = await mercenary_repo.list_for_character(session, char.id)
+        cap = roster_collection_cap(char)
+        party_ids = get_party_merc_ids(char)
+        unlocked = floor_26_shadow_cleared(char)
+        hint = (
+            "\n\n🌑 <i>Чёрный рынок доступен после зачистки 26 этажа.</i>"
+            if not unlocked
+            else ""
+        )
+        text = mercenary_service.format_quarters_html(char, mercs, cap=cap, party_ids=party_ids) + hint
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_quarters_keyboard(char, mercs),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:merc_q")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:xp:"))
+async def home_merc_xp(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        pct = int(callback.data.rsplit(":", 1)[-1])
+        set_merc_xp_share_percent(char, pct)
+        await session.flush()
+        mercs = await mercenary_repo.list_for_character(session, char.id)
+        cap = roster_collection_cap(char)
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_quarters_html(char, mercs, cap=cap, party_ids=party_ids)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text + f"\n\n✅ Доля опыта наёмников: <b>{pct}%</b> от твоего опыта за бой.",
+            reply_markup=_merc_quarters_keyboard(char, mercs),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Сохранено")
+    except Exception:
+        logger.exception("hom:merc:xp")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:tog:"))
+async def home_merc_toggle_party(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        cur = list(get_party_merc_ids(char))
+        if mid in cur:
+            cur = [x for x in cur if int(x) != mid]
+        else:
+            cur.append(mid)
+        set_party_merc_ids(char, cur)
+        await session.flush()
+        mercs = await mercenary_repo.list_for_character(session, char.id)
+        cap = roster_collection_cap(char)
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_quarters_html(char, mercs, cap=cap, party_ids=party_ids)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_quarters_keyboard(char, mercs),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Отряд обновлён")
+    except Exception:
+        logger.exception("hom:merc:tog")
         await callback.answer("Ошибка.", show_alert=True)

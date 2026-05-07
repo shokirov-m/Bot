@@ -207,6 +207,15 @@ def spawns_for_tower_progress(character: Character, floor_number: int) -> list[F
     if rc24_mod.is_room_clear_floor_24(floor_number):
         return rc24_mod.all_room_clear_spawns()
 
+    # Этаж 26 — зал сомнений (рынок после полной зачистки)
+    from game.floors import room_clear_floor_26 as rc26_mod
+    if rc26_mod.is_room_clear_floor_26(floor_number):
+        from game.mercenaries.shadow_market_meta import floor_26_shadow_cleared
+
+        if floor_26_shadow_cleared(character):
+            return []
+        return rc26_mod.all_room_clear_spawns()
+
     # Этаж 27 — волны теней
     from game.floors import wave_floor_27 as wv27_mod
     if wv27_mod.is_wave_floor_27(floor_number):

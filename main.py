@@ -36,6 +36,7 @@ from bot.handlers.daily import router as daily_router
 from bot.handlers.economy_sinks import router as economy_sinks_router
 from bot.handlers.leaderboard import router as leaderboard_router
 from bot.handlers.gacha_broadcast_groups import router as gacha_broadcast_groups_router
+from bot.handlers.black_market import router as black_market_router
 from bot.handlers.home import router as home_router
 from bot.handlers.menu import router as menu_router
 from bot.handlers.settings import router as settings_router
@@ -140,6 +141,7 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(stats_alloc_router)
     dp.include_router(menu_router)
     dp.include_router(home_router)
+    dp.include_router(black_market_router)
     dp.include_router(auction_router)
     dp.include_router(settings_router)
     dp.include_router(leaderboard_router)

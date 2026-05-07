@@ -710,6 +710,53 @@ def patch_sqlite_workshop_orders_table() -> None:
         logger.exception("Патч SQLite (workshop_orders) не удался: {}", p)
 
 
+def patch_sqlite_mercenaries_table() -> None:
+    """Таблица наёмников (чёрный рынок)."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            row = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='mercenaries'",
+            ).fetchone()
+            if row is not None:
+                return
+            con.execute(
+                """
+                CREATE TABLE mercenaries (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL,
+                    display_name VARCHAR(64) NOT NULL,
+                    race_key VARCHAR(32) NOT NULL DEFAULT 'human',
+                    class_role VARCHAR(24) NOT NULL,
+                    rarity VARCHAR(24) NOT NULL DEFAULT 'common',
+                    level INTEGER NOT NULL DEFAULT 1,
+                    loyalty INTEGER NOT NULL DEFAULT 40,
+                    hp_max INTEGER NOT NULL DEFAULT 100,
+                    atk INTEGER NOT NULL DEFAULT 10,
+                    extra JSON NOT NULL DEFAULT '{}',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(character_id) REFERENCES characters (id) ON DELETE CASCADE
+                )
+                """,
+            )
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS ix_mercenaries_character_id ON mercenaries (character_id)",
+            )
+            con.commit()
+            logger.info("Патч SQLite: создана таблица mercenaries")
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (mercenaries) не удался: {}", p)
+
+
 def resolve_db_path() -> Path:
     """
     Абсолютный путь к файлу SQLite.
@@ -765,6 +812,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_stored_gear_boost_v3()
     patch_sqlite_unequip_boots_cloak()
     patch_sqlite_workshop_orders_table()
+    patch_sqlite_mercenaries_table()
     had_users = False
     if p.exists():
         try:

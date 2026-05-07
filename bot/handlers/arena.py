@@ -15,6 +15,7 @@ from bot.states.arena_states import ArenaChallengeStates, ArenaTurnStates
 from bot.states.combat_states import CombatStates
 from bot.utils.game_art import menu_arena_photo_path
 from bot.utils.game_ui import push_game_ui
+from config import is_admin as config_is_admin
 from db.models.character import Character
 from db.repository import character_repo, user_repo
 from services import arena_service
@@ -156,6 +157,16 @@ async def _run_arena_turn_flow(
         return
 
     loc = get_locale(char, (callback.from_user if callback else message.from_user).language_code)
+
+    from game.mercenaries.shadow_market_meta import arena_coliseum_block_message, party_blocks_arena_coliseum
+
+    if not config_is_admin(uid) and party_blocks_arena_coliseum(char):
+        msg = arena_coliseum_block_message()
+        if callback:
+            await callback.answer(msg, show_alert=True)
+        elif message:
+            await message.answer(msg)
+        return
 
     if arena_service.arena_daily_limit_reached(char):
         msg = t(
@@ -373,6 +384,12 @@ async def arena_opponent_id_message(message: Message, session: AsyncSession, sta
                 t(loc, "arena_daily_limit", limit=max_arena_matches_per_day(char)),
             )
             return
+        from game.mercenaries.shadow_market_meta import arena_coliseum_block_message, party_blocks_arena_coliseum
+
+        if not config_is_admin(message.from_user.id) and party_blocks_arena_coliseum(char):
+            await state.clear()
+            await message.answer(arena_coliseum_block_message(), parse_mode=ParseMode.HTML)
+            return
         tok = int(raw)
         opp, err_key = await arena_service.resolve_opponent_digit_token(session, char, tok)
         if err_key:
@@ -484,6 +501,12 @@ async def arena_phantom_fight(callback: CallbackQuery, session: AsyncSession, st
         char = await character_repo.get_by_user_id(session, user.id)
         if char is None:
             await callback.answer("Сначала создай героя.", show_alert=True)
+            return
+
+        from game.mercenaries.shadow_market_meta import arena_coliseum_block_message, party_blocks_arena_coliseum
+
+        if not config_is_admin(callback.from_user.id) and party_blocks_arena_coliseum(char):
+            await callback.answer(arena_coliseum_block_message(), show_alert=True)
             return
 
         raw_id = callback.data.split(":")[-1]

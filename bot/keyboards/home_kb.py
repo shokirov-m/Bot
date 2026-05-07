@@ -22,6 +22,8 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
 
     # Гардероб всегда
     rows.append([InlineKeyboardButton(text="🪞 Гардероб", callback_data="hom:ward")])
+    if int(character.level) >= 15:
+        rows.append([InlineKeyboardButton(text="🛏 Покои наёмников", callback_data="hom:merc_q")])
     # Передышка всегда
     rows.append([InlineKeyboardButton(text=rest_txt[:64], callback_data="hom:rest")])
 

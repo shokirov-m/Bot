@@ -30,6 +30,7 @@ from game.floors import long_floor as long_floor_mod
 from game.floors import room_clear_floor as rc_mod
 from game.floors import room_clear_floor_10 as rc10_mod
 from game.floors import room_clear_floor_24 as rc24_mod
+from game.floors import room_clear_floor_26 as rc26_mod
 from game.floors import wave_floor as wv_mod
 from game.floors import wave_floor_27 as wv27_mod
 from game.floors import explore_floor as exp_mod
@@ -279,6 +280,11 @@ async def on_room_24_locked(query: CallbackQuery, **_: object) -> None:
     await query.answer("Сначала зачисти предыдущую комнату Пещеры. 🔒", show_alert=True)
 
 
+@router.callback_query(F.data == "rc26:locked")
+async def on_room_26_locked(query: CallbackQuery, **_: object) -> None:
+    await query.answer("Сначала зачисти предыдущий зал. 🔒", show_alert=True)
+
+
 @router.callback_query(F.data == "wv27:locked")
 async def on_wave_27_locked(query: CallbackQuery, **_: object) -> None:
     await query.answer("Сначала победи предыдущую волну теней.", show_alert=True)
@@ -492,6 +498,35 @@ async def on_floor_callback(
                 "Наставник Эрида больше не распределяет классы — используй «Профессии» в статусе или меню.",
                 show_alert=True,
             )
+            return
+
+        if code == "shadow_pass":
+            if query.message is None:
+                await query.answer()
+                return
+            from game.mercenaries.shadow_market_meta import floor_26_shadow_cleared
+
+            if int(floor) != 26 or not floor_26_shadow_cleared(char):
+                await query.answer("Проход сомкнут. Сначала зачисти этаж.", show_alert=True)
+                return
+            from bot.keyboards.black_market_kb import market_hub_keyboard
+            from services import black_market_service
+
+            ok, msg = await black_market_service.try_pay_entry(session, char)
+            if not ok:
+                await query.answer(msg, show_alert=True)
+                return
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=black_market_service.format_hub_intro_html() + f"\n\n{msg}",
+                reply_markup=market_hub_keyboard(),
+                target_message=query.message,
+                photo_path=None,
+                character=char,
+            )
+            await query.answer()
             return
 
         if code == "back":
@@ -759,6 +794,60 @@ async def on_floor_callback(
                 character=char,
                 spawn=spawn,
                 free_stamina=_r24_free_stam,
+            )
+            return
+
+        # ── Этаж 26: зал сомнений ───────────────────────────────────────────
+        if code in rc26_mod.ROOM_CLEAR_26_ALL_SLOTS:
+            if not rc26_mod.is_room_clear_floor_26(floor):
+                await query.answer("Этот сценарий только на 26-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from db.repository import floor_progress_repo as fpr
+
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+
+            _actual_slot = code
+            _room_idx = rc26_mod.room_index_for_button(code)
+            if _room_idx is not None:
+                if rc26_mod.is_room_complete(_room_idx, _beaten):
+                    await query.answer("Этот зал уже зачищен. ✅", show_alert=True)
+                    return
+                _next = rc26_mod.next_slot_in_room(_room_idx, _beaten)
+                if _next is None:
+                    await query.answer("Нет доступных целей.", show_alert=True)
+                    return
+                _actual_slot = _next
+
+            if _actual_slot == rc26_mod.SLOT_BOSS and not rc26_mod.is_boss_unlocked(_beaten):
+                rooms_left = rc26_mod.TOTAL_ROOMS - rc26_mod.rooms_cleared_count(_beaten)
+                await query.answer(
+                    f"Сначала зачисти все залы. Осталось: {rooms_left}.",
+                    show_alert=True,
+                )
+                return
+
+            if _actual_slot in rc26_mod.SLOT_ROOMS and _actual_slot in _beaten:
+                await query.answer("Этот враг уже побеждён.", show_alert=True)
+                return
+
+            spawn = rc26_mod.spawn_by_slot(_actual_slot)
+            if spawn is None:
+                await query.answer("Цель не найдена.", show_alert=True)
+                return
+            _r26_mi = rc26_mod.slot_room_and_monster_index(_actual_slot)
+            _r26_free_stam = (_r26_mi is not None and _r26_mi[1] > 0)
+            await combat_service.start_combat(
+                query=query,
+                session=session,
+                state=state,
+                character=char,
+                spawn=spawn,
+                free_stamina=_r26_free_stam,
             )
             return
 

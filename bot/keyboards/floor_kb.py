@@ -21,6 +21,7 @@ from game.floors import explore_floor as exp_mod
 from game.floors import explore_floor_4 as exp4_mod
 from game.floors import explore_floor_22 as exp22_mod
 from game.floors import room_clear_floor_24 as rc24_mod
+from game.floors import room_clear_floor_26 as rc26_mod
 from game.floors import wave_floor_27 as wv27_mod
 from game.floors.monsters import FloorMonsterSpawn
 from game.floors.tower_ascent import tower_next_floor_pending
@@ -885,6 +886,98 @@ def room_clear_floor_24_keyboard(
     if rc24_mod.is_boss_unlocked(beaten):
         boss_label = "✅ 🌑 Теневой Владыка" if rc24_mod.SLOT_BOSS in beaten else "🌑 Теневой Владыка (БОСС)"
         rows.append([InlineKeyboardButton(text=boss_label, callback_data=_cb(floor_number, rc24_mod.SLOT_BOSS))])
+
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    if floor_data.get_city_for_floor(floor_number):
+        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+
+    nav: list[InlineKeyboardButton] = []
+    if floor_number < highest:
+        nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
+    if floor_number > 1:
+        nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    rows.append(nav)
+
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def room_clear_floor_26_keyboard(
+    character: Character,
+    *,
+    defeated_slots: frozenset[str] | None = None,
+    nav_ceiling: int | None = None,
+) -> InlineKeyboardMarkup:
+    """Этаж 26 — зал сомнений (зачистка комнат)."""
+    floor_number = int(character.floor_number)
+    highest = _navigation_max_floor(character, nav_ceiling)
+    beaten = defeated_slots if defeated_slots is not None else frozenset()
+    rows: list[list[InlineKeyboardButton]] = []
+
+    rows.extend(_class_arc_rows(character))
+    rows.extend(_pet_rows(character, floor_number))
+
+    room_names = ["Порог шёпота", "Зеркальный коридор", "Зал кандалов", "Площадь сомнений", "Переход"]
+    available_idx = rc26_mod.next_available_room_index(beaten)
+    for i, btn_code in enumerate(rc26_mod.ROOM_BUTTON_CODES):
+        room_slots = rc26_mod.ROOM_GROUPS[i]
+        done = sum(1 for s in room_slots if s in beaten)
+        total = len(room_slots)
+        if done == total:
+            label = f"✅ {room_names[i]}"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, btn_code))])
+        elif i == available_idx:
+            label = f"⚔️ {room_names[i]} [{done}/{total}]" if done > 0 else f"⚔️ {room_names[i]} [0/{total}]"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data=_cb(floor_number, btn_code))])
+        else:
+            label = f"🔒 {room_names[i]}"
+            rows.append([InlineKeyboardButton(text=label[:36], callback_data="rc26:locked")])
+
+    if rc26_mod.is_boss_unlocked(beaten):
+        boss_label = "✅ 🗝️ Привратник" if rc26_mod.SLOT_BOSS in beaten else "🗝️ Привратник (БОСС)"
+        rows.append([InlineKeyboardButton(text=boss_label, callback_data=_cb(floor_number, rc26_mod.SLOT_BOSS))])
+
+    pend = tower_next_floor_pending(character)
+    if pend is not None:
+        rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    if floor_data.get_city_for_floor(floor_number):
+        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+
+    nav: list[InlineKeyboardButton] = []
+    if floor_number < highest:
+        nav.append(InlineKeyboardButton(text="⬆️ Выше", callback_data="flnav:up"))
+    if floor_number > 1:
+        nav.append(InlineKeyboardButton(text="⬇️ Ниже", callback_data="flnav:dn"))
+    if show_floor_secret_search_button(floor_number):
+        nav.append(InlineKeyboardButton(text="🔮 Тайник", callback_data=_cb(floor_number, "srch")))
+    rows.append(nav)
+
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def room_clear_floor_26_cleared_keyboard(
+    character: Character,
+    *,
+    nav_ceiling: int | None = None,
+) -> InlineKeyboardMarkup:
+    """Этаж 26 после зачистки: только тёмный проход и навигация."""
+    floor_number = int(character.floor_number)
+    highest = _navigation_max_floor(character, nav_ceiling)
+    rows: list[list[InlineKeyboardButton]] = []
+
+    rows.extend(_class_arc_rows(character))
+    rows.extend(_pet_rows(character, floor_number))
+
+    rows.append(
+        [InlineKeyboardButton(text="🌑 Тёмный проход (рынок)", callback_data=_cb(floor_number, "shadow_pass"))],
+    )
 
     pend = tower_next_floor_pending(character)
     if pend is not None:

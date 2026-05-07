@@ -16,6 +16,7 @@ from db.base import Base
 if TYPE_CHECKING:
     from db.models.floor_progress import FloorProgress
     from db.models.inventory import InventoryItem
+    from db.models.mercenary import Mercenary
     from db.models.quest import QuestProgress
     from db.models.user import User
 
@@ -109,6 +110,10 @@ class Character(Base):
         cascade="all, delete-orphan",
     )
     floor_progress_rows: Mapped[list[FloorProgress]] = relationship(
+        back_populates="character",
+        cascade="all, delete-orphan",
+    )
+    mercenaries: Mapped[list["Mercenary"]] = relationship(
         back_populates="character",
         cascade="all, delete-orphan",
     )

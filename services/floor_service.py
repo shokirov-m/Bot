@@ -30,6 +30,8 @@ from bot.keyboards.floor_kb import (
     room_clear_floor_keyboard,
     room_clear_floor_10_keyboard,
     room_clear_floor_24_keyboard,
+    room_clear_floor_26_cleared_keyboard,
+    room_clear_floor_26_keyboard,
     wave_floor_screen_keyboard,
     wave_floor_27_keyboard,
 )
@@ -49,6 +51,7 @@ from game.floors import forest_beginnings as forest_beginnings_mod
 from game.floors import room_clear_floor as rc_mod
 from game.floors import room_clear_floor_10 as rc10_mod
 from game.floors import room_clear_floor_24 as rc24_mod
+from game.floors import room_clear_floor_26 as rc26_mod
 from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import wave_floor as wv_mod
 from game.floors import wave_floor_27 as wv27_mod
@@ -86,6 +89,10 @@ async def get_spawns_for_character_session(
     character: Character,
 ) -> list[FloorMonsterSpawn]:
     """Спавны этажа + золотой гоблин (если мировое событие активно здесь)."""
+    from game.mercenaries.shadow_market_meta import floor_26_shadow_cleared
+
+    if int(character.floor_number) == 26 and floor_26_shadow_cleared(character):
+        return []
     base = build_spawns_for_floor(character.floor_number)
     return await golden_goblin_service.merge_spawns_if_active(session, character, base)
 
@@ -162,6 +169,16 @@ async def floor_keyboard_for_character(
         rc24_mod.ensure_started(character)
         defeated = await defeated_slot_codes_for_floor(session, character.id, n)
         return room_clear_floor_24_keyboard(character, defeated_slots=defeated, nav_ceiling=nav_ceiling)
+
+    # Этаж 26 — зал сомнений / чёрный рынок после зачистки
+    if rc26_mod.is_room_clear_floor_26(n):
+        from game.mercenaries.shadow_market_meta import floor_26_shadow_cleared
+
+        if floor_26_shadow_cleared(character):
+            return room_clear_floor_26_cleared_keyboard(character, nav_ceiling=nav_ceiling)
+        rc26_mod.ensure_started(character)
+        defeated = await defeated_slot_codes_for_floor(session, character.id, n)
+        return room_clear_floor_26_keyboard(character, defeated_slots=defeated, nav_ceiling=nav_ceiling)
 
     # Этаж 27 — волны теней
     if wv27_mod.is_wave_floor_27(n):
@@ -353,6 +370,17 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(rc24_mod.format_room_clear_banner_html(_ds))
 
+    if rc26_mod.is_room_clear_floor_26(int(n)):
+        from game.mercenaries.shadow_market_meta import floor_26_shadow_cleared
+
+        _ds = defeated_slots if defeated_slots is not None else frozenset()
+        if floor_26_shadow_cleared(character):
+            lines.append(
+                "🌑 <b>Зал пуст.</b> Монстры не вернутся. <b>Тёмный проход</b> ведёт к рынку «Тени Башни».",
+            )
+        else:
+            lines.append(rc26_mod.format_room_clear_banner_html(_ds))
+
     if wv27_mod.is_wave_floor_27(int(n)):
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(wv27_mod.format_wave_floor_27_banner_html(_ds))
@@ -520,6 +548,14 @@ def format_floor_message_photo_caption(character: Character) -> str:
     if rc24_mod.is_room_clear_floor_24(int(n)):
         b = rc24_mod.format_room_clear_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
+    if rc26_mod.is_room_clear_floor_26(int(n)):
+        from game.mercenaries.shadow_market_meta import floor_26_shadow_cleared
+
+        if floor_26_shadow_cleared(character):
+            lines.append("🌑 Зал пуст · Тёмный проход к рынку")
+        else:
+            b = rc26_mod.format_room_clear_banner_html(frozenset())
+            lines.append(b if len(b) <= 120 else b[:117] + "…")
     if exp4_mod.is_explore_floor_4(int(n)):
         lines.append("🔍 Исследование леса · нажми кнопку ниже")
     if exp_mod.is_explore_floor(int(n)):
@@ -705,7 +741,7 @@ async def push_floor_screen_ui(
     # Для баннеров с прогрессом — читаем cleared slots
     _cleared_slots: frozenset[str] = frozenset()
     if (rc_mod.is_room_clear_floor(n) or rc10_mod.is_room_clear_floor_10(n)
-            or rc24_mod.is_room_clear_floor_24(n)
+            or rc24_mod.is_room_clear_floor_24(n) or rc26_mod.is_room_clear_floor_26(n)
             or wv_mod.is_wave_floor(n) or wv27_mod.is_wave_floor_27(n)):
         _raw_cleared = list((ex.get("slots_cleared") or []))
         _cleared_slots = frozenset(str(x) for x in _raw_cleared)

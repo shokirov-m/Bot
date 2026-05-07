@@ -42,6 +42,7 @@ from game.characters.weapon_mastery import (
     tier_for_hits,
     weapon_type_from_item_data,
 )
+from game.combat import companions as companions_mod
 from game.combat import consumables, effects, engine, formulas, monster_ai, night_mode as combat_night, passive_gear
 from game.items import runes as rune_items
 from game.balance import (
@@ -80,6 +81,7 @@ from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import room_clear_floor as room_clear_mod
 from game.floors import room_clear_floor_10 as room_clear_10_mod
 from game.floors import room_clear_floor_24 as room_clear_24_mod
+from game.floors import room_clear_floor_26 as room_clear_26_mod
 from game.floors import wave_floor as wave_floor_mod
 from game.floors import wave_floor_27 as wave_floor_27_mod
 from game.floors import explore_floor as explore_floor_mod
@@ -109,6 +111,7 @@ from services import (
     game_metrics_service,
     golden_goblin_service,
     leaderboard_service,
+    mercenary_service,
     quest_service,
     rest_service,
     season_record_service,
@@ -656,6 +659,18 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     if pl:
         pet_p = f"{pl}\n"
 
+    merc_p = ""
+    comps = list(state.get("companions") or [])
+    if comps:
+        bits = []
+        for c in comps:
+            st = "💀" if c.get("dead") else "🗡️"
+            bits.append(
+                f"{st} <b>{html.escape(str(c.get('name', '?')))}</b> "
+                f"{render_hp_bar(int(c.get('hp', 0)), int(c.get('hp_max', 1)), wrap_bar_in_code=False, spaced_numbers=True)}",
+            )
+        merc_p = "<b>▸ НАЁМНИКИ</b>\n" + "\n".join(bits) + "\n\n"
+
     logs = list(state.get("ui_logs", []) or [])
     log_lines = "\n".join(logs) if logs else ""
     taunt_line = ""
@@ -698,6 +713,7 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
         f"{mp_line}\n"
         f"{shield_p}"
         f"{pet_p}"
+        f"{merc_p}"
         f"{sep}\n"
         f"📜 Лог хода:\n"
         f"{log_block}\n"
@@ -748,6 +764,12 @@ async def start_coliseum_combat(
 
     if await state.get_state() == CombatStates.in_battle.state:
         await query.answer("Ты уже в бою.", show_alert=True)
+        return False
+
+    from game.mercenaries.shadow_market_meta import arena_coliseum_block_message, party_blocks_arena_coliseum
+
+    if not _admin_bypass and party_blocks_arena_coliseum(character):
+        await query.answer(arena_coliseum_block_message(), show_alert=True)
         return False
 
     if not _admin_bypass:
@@ -1092,6 +1114,11 @@ async def start_combat(
 
     if swamp_prefight_logs:
         _append_logs(combat_state, swamp_prefight_logs)
+
+    if not combat_state.get("is_tutorial"):
+        _comps = await mercenary_service.build_combat_companions(session, character)
+        if _comps:
+            combat_state["companions"] = _comps
 
     leech_tgt = rotten_swamps_mod.get_leech_target_floor(character)
     if leech_tgt is not None and int(character.floor_number) == leech_tgt:
@@ -1469,6 +1496,11 @@ async def _apply_tower_progress_after_victory(
     # needed.issubset(cleared) == True только когда ВСЕ нужные слоты зачищены.
     if not needed.issubset(set(cleared)):
         return ""
+
+    if cur == 26:
+        from game.mercenaries.shadow_market_meta import mark_floor_26_shadow_cleared
+
+        mark_floor_26_shadow_cleared(character)
 
     if cur >= 135:
         character.highest_floor_reached = max(int(character.highest_floor_reached), 135)
@@ -1907,6 +1939,7 @@ async def _victory_sequence(
         username=message.from_user.username if message.from_user else None,
     )
     levels_battle = await character_service.add_experience_async(session, character, xp, bot=message.bot)
+    await mercenary_service.grant_merc_xp_after_tower_win(session, character, xp, combat_state)
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
 
@@ -2240,6 +2273,9 @@ async def _victory_sequence(
     elif spawn.slot_code in room_clear_24_mod.SLOT_ROOMS:
         _next_rc_slot = room_clear_24_mod.next_slot_after_defeat(spawn.slot_code)
         _next_rc_mod = room_clear_24_mod
+    elif spawn.slot_code in room_clear_26_mod.SLOT_ROOMS:
+        _next_rc_slot = room_clear_26_mod.next_slot_after_defeat(spawn.slot_code)
+        _next_rc_mod = room_clear_26_mod
     if _next_rc_slot is not None and _next_rc_mod is not None:
         _next_rc_spawn = _next_rc_mod.spawn_by_slot(_next_rc_slot)
         _next_name = _next_rc_spawn.display_name if _next_rc_spawn else "Следующий"
@@ -2408,6 +2444,10 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
         found_rc24 = room_clear_24_mod.spawn_by_slot(slot)
         if found_rc24 is not None:
             return found_rc24
+    if slot in room_clear_26_mod.ROOM_CLEAR_26_ALL_SLOTS:
+        found_rc26 = room_clear_26_mod.spawn_by_slot(slot)
+        if found_rc26 is not None:
+            return found_rc26
     # Wave floor 27 (wv27_w1, wv27_w2, wv27_w3, wv27_boss)
     if slot in wave_floor_27_mod.WAVE_FLOOR_27_ALL_SLOTS:
         found_wv27 = wave_floor_27_mod.spawn_by_slot(slot)
@@ -2925,6 +2965,45 @@ async def _handle_combat_callback_body(
 
     m_logs = engine.apply_dot_damage_monster(combat_state)
     _append_logs(combat_state, m_logs)
+    if int(combat_state["monster"]["hp"]) <= 0:
+        continued = await _after_monster_killed_player_action(
+            query=query,
+            session=session,
+            state=state,
+            character=character,
+            combat_state=combat_state,
+            class_ru=class_ru,
+        )
+        if continued and query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
+        elif not continued:
+            await query.answer()
+        return
+
+    c_logs, outcome_c = companions_mod.companions_turn(combat_state)
+    _append_logs(combat_state, c_logs)
+    if outcome_c == "win":
+        continued = await _after_monster_killed_player_action(
+            query=query,
+            session=session,
+            state=state,
+            character=character,
+            combat_state=combat_state,
+            class_ru=class_ru,
+        )
+        if continued and query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
+        elif not continued:
+            await query.answer()
+        return
     if int(combat_state["monster"]["hp"]) <= 0:
         continued = await _after_monster_killed_player_action(
             query=query,

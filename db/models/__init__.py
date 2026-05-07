@@ -16,6 +16,7 @@ from db.models.promo_redemption import PromoRedemption
 from db.models.game_event import GameEvent
 from db.models.auction_lot import AuctionLot
 from db.models.clan import Clan, ClanMembership
+from db.models.mercenary import Mercenary
 
 __all__ = [
     "AdminLog",
@@ -28,6 +29,7 @@ __all__ = [
     "FloorProgress",
     "GameEvent",
     "InventoryItem",
+    "Mercenary",
     "PromoOffer",
     "PromoRedemption",
     "QuestProgress",

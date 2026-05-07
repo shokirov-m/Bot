@@ -185,6 +185,25 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
         replace_existing=True,
     )
 
+    async def job_black_market_weekly() -> None:
+        try:
+            from db.database import get_session_factory
+            from services.black_market_service import get_or_roll_showcase
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await get_or_roll_showcase(session)
+                await session.commit()
+        except Exception:
+            logger.exception("[BLACK_MARKET] weekly showcase tick")
+
+    scheduler.add_job(
+        job_black_market_weekly,
+        CronTrigger(day_of_week="mon", hour=0, minute=5, timezone="UTC"),
+        id="tower_black_market_weekly",
+        replace_existing=True,
+    )
+
 
 def schedule_rest_completion_notification(
     bot: Bot,

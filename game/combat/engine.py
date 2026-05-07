@@ -15,6 +15,7 @@ from game.balance import (
 )
 from game.characters.skills import SkillDef, passive_combat_modifiers, skills_for_class
 from game.coliseum import coliseum_combat_hooks as coliseum_hooks
+from game.combat import companions as companions_mod
 from game.combat import effects, formulas, monster_ai
 from game.combat.monster_abilities import (
     apply_pre_turn_abilities,
@@ -1047,6 +1048,7 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             logs.append("🛡️ Блок экипировки — входящий урон снижен.")
         dmg = new_d
     dmg = coliseum_hooks.mulan_reduce_incoming_damage(state, dmg, logs)
+    dmg = companions_mod.apply_tank_intercept_to_player_damage(state, dmg, logs)
     pre_php = int(state["player_hp"])
     shield = int(state.get("player_shield_hp", 0))
     if shield > 0:
@@ -1097,6 +1099,7 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
                 logs.append("🛡️ Блок экипировки — второй удар ослаблен.")
             dmg2 = nd2
         dmg2 = coliseum_hooks.mulan_reduce_incoming_damage(state, dmg2, logs)
+        dmg2 = companions_mod.apply_tank_intercept_to_player_damage(state, dmg2, logs)
         shield2 = int(state.get("player_shield_hp", 0))
         if shield2 > 0:
             absorbed2 = min(shield2, dmg2)
