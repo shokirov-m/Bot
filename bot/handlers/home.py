@@ -866,21 +866,106 @@ async def home_alchemy_transmute(callback: CallbackQuery, session: AsyncSession,
 def _merc_quarters_keyboard(character, mercs: list) -> InlineKeyboardMarkup:
     party = set(get_party_merc_ids(character))
     rows: list[list[InlineKeyboardButton]] = []
-    for m in mercs:
+    for mi, m in enumerate(mercs, start=1):
         mark = "✅" if int(m.id) in party else "➕"
+        label = f"{mi}.{mark}"[:6]
+        name = str(m.display_name).replace("\n", " ")[:22]
+        if len(name) >= 22:
+            name = name[:19] + "…"
         rows.append([
             InlineKeyboardButton(
-                text=f"{mark} {str(m.display_name)[:28]} (♥{m.loyalty})",
-                callback_data=f"hom:merc:tog:{m.id}",
+                text=f"{label} {name}",
+                callback_data=f"hom:merc:det:{m.id}",
             ),
         ])
     xp = get_merc_xp_share_percent(character)
     rows.append([
-        InlineKeyboardButton(text=f"📈 Доля XP: {xp}% (20)", callback_data="hom:merc:xp:20"),
-        InlineKeyboardButton(text="30%", callback_data="hom:merc:xp:30"),
-        InlineKeyboardButton(text="40%", callback_data="hom:merc:xp:40"),
+        InlineKeyboardButton(
+            text=("✓XP·20%" if xp == 20 else "XP·20%"),
+            callback_data="hom:merc:xp:20",
+        ),
+        InlineKeyboardButton(
+            text=("✓30%" if xp == 30 else "XP·30%"),
+            callback_data="hom:merc:xp:30",
+        ),
+        InlineKeyboardButton(
+            text=("✓40%" if xp == 40 else "XP·40%"),
+            callback_data="hom:merc:xp:40",
+        ),
     ])
     rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _merc_detail_keyboard(character, m) -> InlineKeyboardMarkup:
+    from game.mercenaries.constants import (
+        MERC_GEAR_ARMOR_MAX,
+        MERC_GEAR_BLADE_MAX,
+        MERC_QUARTERS_GIFT_GOLD,
+        MERC_TRAIN_GOLD,
+        merc_gear_armor_upgrade_cost,
+        merc_gear_blade_upgrade_cost,
+    )
+
+    rows: list[list[InlineKeyboardButton]] = []
+    ph = mercenary_service.merc_work_phase(m)
+
+    if ph == "idle":
+        party = set(get_party_merc_ids(character))
+        in_p = int(m.id) in party
+        rows.append([
+            InlineKeyboardButton(
+                text=("✅ Убрать из отряда" if in_p else "➕ Взять в отряд"),
+                callback_data=f"hom:merc:ptog:{m.id}",
+            ),
+        ])
+    else:
+        rows.append([
+            InlineKeyboardButton(
+                text="⏳ На подработке",
+                callback_data=f"hom:merc:wx:{m.id}",
+            ),
+        ])
+
+    tr_ok = mercenary_service.quarters_train_available_today(m)
+    tr_txt = f"🎯 Тренировка {MERC_TRAIN_GOLD}💰" if tr_ok else "🎯 Уже бились"
+    rows.append([InlineKeyboardButton(text=tr_txt[:64], callback_data=f"hom:merc:tr:{m.id}")])
+
+    ex = dict(m.extra or {})
+    b_lv = int(ex.get("gear_blade_lv", 0))
+    a_lv = int(ex.get("gear_armor_lv", 0))
+    if b_lv >= MERC_GEAR_BLADE_MAX:
+        bbtn = InlineKeyboardButton(text="⚔ Клинок MAX", callback_data=f"hom:merc:gx:{m.id}")
+    else:
+        bc = merc_gear_blade_upgrade_cost(b_lv)
+        bbtn = InlineKeyboardButton(text=f"⚔ Клинок+ {bc}💰", callback_data=f"hom:merc:gb:{m.id}")
+    if a_lv >= MERC_GEAR_ARMOR_MAX:
+        abtn = InlineKeyboardButton(text="🛡 Доспех MAX", callback_data=f"hom:merc:gx:{m.id}")
+    else:
+        ac = merc_gear_armor_upgrade_cost(a_lv)
+        abtn = InlineKeyboardButton(text=f"🛡 Доспех+ {ac}💰", callback_data=f"hom:merc:ga:{m.id}")
+    rows.append([bbtn, abtn])
+
+    dlg_lbl = "💕 Свидание" if mercenary_service.quarters_dialog_available_today(m) else "💕 Завтра снова"
+    gift_ok = mercenary_service.quarters_gift_available_today(m)
+    gift_lbl = f"🎁 Подарок {MERC_QUARTERS_GIFT_GOLD}💰" if gift_ok else "🎁 Дарили сегодня"
+    rows.append([
+        InlineKeyboardButton(text=dlg_lbl[:64], callback_data=f"hom:merc:dlg:{m.id}"),
+        InlineKeyboardButton(text=gift_lbl[:64], callback_data=f"hom:merc:gift:{m.id}"),
+    ])
+
+    if ph == "running":
+        left = max(1, mercenary_service.merc_work_seconds_left(m) // 60)
+        rows.append([
+            InlineKeyboardButton(text=f"⏳ Ещё ~{left} мин", callback_data=f"hom:merc:wr:{m.id}"),
+        ])
+    elif ph == "ready":
+        rows.append([InlineKeyboardButton(text="📥 Забрать зарплату", callback_data=f"hom:merc:wc:{m.id}")])
+    else:
+        rows.append([InlineKeyboardButton(text="💼 Подработка 2ч", callback_data=f"hom:merc:ws:{m.id}")])
+
+    rows.append([InlineKeyboardButton(text="⬅ К списку", callback_data="hom:merc_q")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -900,6 +985,15 @@ async def home_merc_quarters(callback: CallbackQuery, session: AsyncSession, sta
             return
         mercs = await mercenary_repo.list_for_character(session, char.id)
         cap = roster_collection_cap(char)
+        raw_party = get_party_merc_ids(char)
+        by_id = {int(x.id): x for x in mercs}
+        clean_party = [
+            mid for mid in raw_party
+            if (mm := by_id.get(int(mid))) is not None and not mercenary_service.merc_work_busy(mm)
+        ]
+        if clean_party != raw_party:
+            set_party_merc_ids(char, clean_party)
+            await session.flush()
         party_ids = get_party_merc_ids(char)
         unlocked = floor_26_shadow_cleared(char)
         hint = (
@@ -921,6 +1015,397 @@ async def home_merc_quarters(callback: CallbackQuery, session: AsyncSession, sta
         await callback.answer()
     except Exception:
         logger.exception("hom:merc_q")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:det:"))
+async def home_merc_detail(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:merc:det")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:dlg:"))
+async def home_merc_dialog(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        ok, msg = mercenary_service.apply_quarters_dialog(m)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        await session.flush()
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n{msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Готово")
+    except Exception:
+        logger.exception("hom:merc:dlg")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:gift:"))
+async def home_merc_gift(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        ok, msg = await mercenary_service.apply_quarters_gift(session, char, m)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Подарено")
+    except Exception:
+        logger.exception("hom:merc:gift")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:tr:"))
+async def home_merc_train(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        ok, msg = await mercenary_service.apply_merc_train(session, char, m)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Готово")
+    except Exception:
+        logger.exception("hom:merc:tr")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:gb:"))
+async def home_merc_gear_blade(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        ok, msg = await mercenary_service.upgrade_merc_gear_blade(session, char, m)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Усилено")
+    except Exception:
+        logger.exception("hom:merc:gb")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:ga:"))
+async def home_merc_gear_armor(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        ok, msg = await mercenary_service.upgrade_merc_gear_armor(session, char, m)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Усилено")
+    except Exception:
+        logger.exception("hom:merc:ga")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:ws:"))
+async def home_merc_work_start(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        ok, msg = await mercenary_service.start_merc_work_session(session, char, m)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Ушёл на смену")
+    except Exception:
+        logger.exception("hom:merc:ws")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:wc:"))
+async def home_merc_work_claim(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        ok, msg = await mercenary_service.claim_merc_work_reward(session, char, m)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Получено")
+    except Exception:
+        logger.exception("hom:merc:wc")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:wr:"))
+async def home_merc_work_remain(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.from_user is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет наёмника.", show_alert=True)
+            return
+        left = mercenary_service.merc_work_seconds_left(m) // 60
+        await callback.answer(f"До конца смены ~{max(1, left)} мин.", show_alert=True)
+    except Exception:
+        logger.exception("hom:merc:wr")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:wx:"))
+async def home_merc_work_busy_hint(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет наёмника.", show_alert=True)
+            return
+        if mercenary_service.merc_work_phase(m) == "ready":
+            await callback.answer("Сначала забери зарплату кнопкой ниже.", show_alert=True)
+        else:
+            left = mercenary_service.merc_work_seconds_left(m) // 60
+            await callback.answer(f"На подработке. Осталось ~{max(1, left)} мин.", show_alert=True)
+    except Exception:
+        logger.exception("hom:merc:wx")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:gx:"))
+async def home_merc_gear_max_hint(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    await callback.answer("Этот слот экипа уже на максимуме.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("hom:merc:ptog:"))
+async def home_merc_party_toggle_detail(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        if mercenary_service.merc_work_phase(m) != "idle":
+            await callback.answer(
+                "Пока наёмник на подработке — в отряд возьми после смены или забери зарплату.",
+                show_alert=True,
+            )
+            return
+        cur = list(get_party_merc_ids(char))
+        if mid in cur:
+            cur = [x for x in cur if int(x) != mid]
+        else:
+            cur.append(mid)
+        set_party_merc_ids(char, cur)
+        await session.flush()
+        party_ids = get_party_merc_ids(char)
+        text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_detail_keyboard(char, m),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer("Отряд обновлён")
+    except Exception:
+        logger.exception("hom:merc:ptog")
         await callback.answer("Ошибка.", show_alert=True)
 
 
@@ -954,42 +1439,4 @@ async def home_merc_xp(callback: CallbackQuery, session: AsyncSession, state: FS
         await callback.answer("Сохранено")
     except Exception:
         logger.exception("hom:merc:xp")
-        await callback.answer("Ошибка.", show_alert=True)
-
-
-@router.callback_query(F.data.startswith("hom:merc:tog:"))
-async def home_merc_toggle_party(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.data is None or callback.message is None or callback.bot is None:
-            await callback.answer()
-            return
-        char = await _char(callback, session)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-        mid = int(callback.data.rsplit(":", 1)[-1])
-        cur = list(get_party_merc_ids(char))
-        if mid in cur:
-            cur = [x for x in cur if int(x) != mid]
-        else:
-            cur.append(mid)
-        set_party_merc_ids(char, cur)
-        await session.flush()
-        mercs = await mercenary_repo.list_for_character(session, char.id)
-        cap = roster_collection_cap(char)
-        party_ids = get_party_merc_ids(char)
-        text = mercenary_service.format_quarters_html(char, mercs, cap=cap, party_ids=party_ids)
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=_merc_quarters_keyboard(char, mercs),
-            target_message=callback.message,
-            photo_path=menu_home_photo_path(),
-            character=char,
-        )
-        await callback.answer("Отряд обновлён")
-    except Exception:
-        logger.exception("hom:merc:tog")
         await callback.answer("Ошибка.", show_alert=True)

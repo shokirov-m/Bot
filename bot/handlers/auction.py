@@ -34,7 +34,7 @@ from bot.keyboards.auction_kb import (
 )
 from bot.states.auction_states import AuctionCreateStates
 from bot.states.combat_states import CombatStates
-from bot.utils.game_ui import push_game_ui
+from bot.utils.game_ui import edit_game_message_content, push_game_ui
 from db.repository import auction_repo, character_repo, inventory_repo, user_repo
 from game.economy.market import LOT_DURATION_DAYS, _expires_at_utc
 from game.items import item_categories
@@ -267,7 +267,7 @@ async def auc_hub(callback: CallbackQuery, session: AsyncSession, state: FSMCont
             return
         fl = int(char.floor_number) if char else 1
         try:
-            await callback.message.edit_text(
+            await edit_game_message_content(callback.message,
                 _shop_intro_html(),
                 parse_mode=ParseMode.HTML,
                 reply_markup=auction_hub_keyboard(fl),
@@ -294,7 +294,7 @@ async def auc_portraits(callback: CallbackQuery, session: AsyncSession, state: F
             await callback.answer("Нет доступа.", show_alert=True)
             return
         try:
-            await callback.message.edit_text(
+            await edit_game_message_content(callback.message,
                 auction_vip_portraits_screen_html(char),
                 parse_mode=ParseMode.HTML,
                 reply_markup=auction_vip_portraits_keyboard(int(char.floor_number)),
@@ -424,7 +424,7 @@ async def auc_create_start(callback: CallbackQuery, session: AsyncSession, state
             slot = int(it.bag_slot or 0)
             pairs.append((slot, item_bag_button_label(it.item_data, slot)))
         text = _shop_intro_html() + "\n<b>Ячейка сумки</b> (предмет уйдёт в лот):"
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=bag_slots_for_auction_keyboard(pairs, bag_cat=bag_cat),
@@ -461,7 +461,7 @@ async def auc_pick_slot(callback: CallbackQuery, session: AsyncSession, state: F
         await state.update_data(auc_bag_slot=slot)
         preview = format_inventory_item_html(it.item_data or {})
         text = f"{preview}\n\n<b>Цена лота</b> — одним сообщением, золото (целое ≥ 1)."
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=auction_cancel_create_keyboard(),
@@ -553,7 +553,7 @@ async def auc_browse(callback: CallbackQuery, session: AsyncSession, state: FSMC
         text = _shop_intro_html() + f"\n<b>Каталог</b> ({total})\n"
         if not lots:
             text += "<i>Сейчас нет лотов в этой категории.</i>"
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=auction_lots_page_keyboard(
@@ -608,7 +608,7 @@ async def auc_lot_detail(callback: CallbackQuery, session: AsyncSession, state: 
             browse_page=browse_page,
             browse_cat=browse_cat,
         )
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             body,
             parse_mode=ParseMode.HTML,
             reply_markup=kb,
@@ -638,7 +638,7 @@ async def auc_cancel_lot(callback: CallbackQuery, session: AsyncSession, state: 
         await callback.answer(msg[:200], show_alert=not ok)
         if ok:
             try:
-                await callback.message.edit_text(
+                await edit_game_message_content(callback.message,
                     _shop_intro_html() + f"\n\n{html.escape(msg)}",
                     parse_mode=ParseMode.HTML,
                     reply_markup=auction_hub_keyboard(),
@@ -688,7 +688,7 @@ async def auc_reprice_start(callback: CallbackQuery, session: AsyncSession, stat
             f"<b>Лот #{lid}</b> · текущая цена: <b>{format_number(cur)}</b> зол.\n"
             f"Напиши в чат <b>одним числом</b> новую цену (≥ 1)."
         )
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=auction_reprice_cancel_keyboard(lid),
@@ -727,7 +727,7 @@ async def auc_buy(callback: CallbackQuery, session: AsyncSession, state: FSMCont
         await callback.answer(msg[:200], show_alert=not ok)
         if ok:
             try:
-                await callback.message.edit_text(
+                await edit_game_message_content(callback.message,
                     _shop_intro_html() + f"\n\n✅ {html.escape(msg)}",
                     parse_mode=ParseMode.HTML,
                     reply_markup=auction_hub_keyboard(),
@@ -769,7 +769,7 @@ async def auc_my(callback: CallbackQuery, session: AsyncSession, state: FSMConte
             for l in lots
             if l.status == "active"
         ]
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=auction_my_lots_keyboard(active_lots),
@@ -801,7 +801,7 @@ async def auc_direct_start(callback: CallbackQuery, session: AsyncSession, state
             "Напиши в чат <b>одним числом</b> <b>игровой ID</b> получателя "
             "(его можно посмотреть в профиле / статусе героя — публичный номер игрока)."
         )
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=auction_cancel_create_keyboard(),
@@ -852,7 +852,7 @@ async def auc_direct_bag(callback: CallbackQuery, session: AsyncSession, state: 
             slot = int(it.bag_slot or 0)
             pairs.append((slot, item_bag_button_label(it.item_data, slot)))
         text = _shop_intro_html() + "\n\n<b>Ячейка сумки</b> для личного предложения:"
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=bag_slots_for_direct_offer_keyboard(pairs, bag_cat=bag_cat),
@@ -889,7 +889,7 @@ async def auc_direct_pick_slot(callback: CallbackQuery, session: AsyncSession, s
         await state.update_data(auc_direct_bag_slot=slot)
         preview = format_inventory_item_html(it.item_data or {})
         text = f"{preview}\n\n<b>Цена для адресата</b> — одним сообщением, золото (целое ≥ 1)."
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=auction_cancel_create_keyboard(),
@@ -1032,7 +1032,7 @@ async def auc_direct_accept(callback: CallbackQuery, session: AsyncSession, stat
                 )
         if ok:
             try:
-                await callback.message.edit_text(
+                await edit_game_message_content(callback.message,
                     f"✅ {html.escape(msg)}\n\nОткрой 🛒 <b>Магазин</b> в меню при необходимости.",
                     parse_mode=ParseMode.HTML,
                     reply_markup=auction_hub_keyboard(),
@@ -1080,7 +1080,7 @@ async def auc_direct_decline(callback: CallbackQuery, session: AsyncSession, sta
                 )
         if ok:
             try:
-                await callback.message.edit_text(
+                await edit_game_message_content(callback.message,
                     f"❌ {html.escape(msg)}",
                     parse_mode=ParseMode.HTML,
                     reply_markup=auction_hub_keyboard(),

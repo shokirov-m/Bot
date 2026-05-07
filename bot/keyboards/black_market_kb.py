@@ -24,11 +24,12 @@ def market_hub_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def jabs_lots_keyboard(n_lots: int) -> InlineKeyboardMarkup:
+def jabs_lots_keyboard(available_lot_indices: list[int]) -> InlineKeyboardMarkup:
+    """Кнопки покупки по **исходным** индексам лота в витрине недели (не перенумерованы после покупок)."""
     rows: list[list[InlineKeyboardButton]] = []
-    for i in range(n_lots):
+    for j, orig_i in enumerate(available_lot_indices):
         rows.append([
-            InlineKeyboardButton(text=f"Лот #{i + 1}", callback_data=f"bm:buy:{i}"),
+            InlineKeyboardButton(text=f"Купить лот #{j + 1}", callback_data=f"bm:buy:{int(orig_i)}"),
         ])
     rows.append([InlineKeyboardButton(text="⬅ В хаб", callback_data="bm:hub")])
     rows.append(menu_nav_button_row())

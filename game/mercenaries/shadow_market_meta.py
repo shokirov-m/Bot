@@ -129,3 +129,34 @@ def close_market_hub_session(character: Character) -> None:
     sm = _sm(character)
     sm.pop("hub_session_open", None)
     _save(character, sm)
+
+
+def get_purchased_showcase_lot_indices(character: Character, week_id: str) -> set[int]:
+    """Индексы лотов глобальной витрины, уже купленных этим героем за неделю ``week_id``."""
+    sm = _sm(character)
+    if str(sm.get("showcase_purchased_week") or "") != str(week_id):
+        return set()
+    lst = sm.get("showcase_purchased_indices") or []
+    out: set[int] = set()
+    for x in lst:
+        try:
+            out.add(int(x))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def mark_showcase_lot_purchased(character: Character, week_id: str, lot_index: int) -> None:
+    """Пометить лот с индексом ``lot_index`` купленным для текущей недели витрины."""
+    sm = _sm(character)
+    wk = str(week_id)
+    if str(sm.get("showcase_purchased_week") or "") != wk:
+        sm["showcase_purchased_week"] = wk
+        prev: list[int] = []
+    else:
+        prev = list(sm.get("showcase_purchased_indices") or [])
+    ix = int(lot_index)
+    if ix not in prev:
+        prev.append(ix)
+    sm["showcase_purchased_indices"] = prev
+    _save(character, sm)

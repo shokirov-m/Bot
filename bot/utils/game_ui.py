@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from aiogram import Bot
-from aiogram.enums import ParseMode
+from aiogram.enums import ContentType, ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, Message
@@ -23,6 +23,52 @@ from utils.game_images_prefs import game_images_enabled
 
 GAME_UI_CHAT_ID = "game_ui_chat_id"
 GAME_UI_MESSAGE_ID = "game_ui_message_id"
+
+# Сообщения, у которых контент правится через edit_message_caption, а не edit_message_text.
+_CAPTION_CONTENT_TYPES = frozenset({
+    ContentType.PHOTO,
+    ContentType.VIDEO,
+    ContentType.ANIMATION,
+    ContentType.DOCUMENT,
+    ContentType.AUDIO,
+})
+
+
+def _clamp_telegram_caption(text: str, *, limit: int = 1024) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 4)] + "\n…"
+
+
+def _message_supports_caption_edit(message: Message) -> bool:
+    ct = getattr(message, "content_type", None)
+    return ct in _CAPTION_CONTENT_TYPES
+
+
+async def edit_game_message_content(
+    message: Message,
+    text: str,
+    *,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    parse_mode: ParseMode | str = ParseMode.HTML,
+    disable_web_page_preview: bool | None = None,
+) -> bool:
+    """Текст или подпись к медиа — иначе при включённых картинках падает ``edit_text`` на медиа-сообщении."""
+    try:
+        if _message_supports_caption_edit(message):
+            cap = _clamp_telegram_caption(text)
+            await message.edit_caption(caption=cap, reply_markup=reply_markup, parse_mode=parse_mode)
+        else:
+            kw: dict = {"text": text, "reply_markup": reply_markup, "parse_mode": parse_mode}
+            if disable_web_page_preview is not None:
+                kw["disable_web_page_preview"] = disable_web_page_preview
+            await message.edit_text(**kw)
+        return True
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            return True
+        logger.warning("edit_game_message_content: {}", e)
+        return False
 
 
 async def remember_game_ui_anchor(state: FSMContext, message: Message) -> None:
@@ -88,7 +134,7 @@ async def push_game_ui(
             sent = await bot.send_message(chat_id=chat_id, **text_kw)
             await remember_game_ui_anchor(state, sent)
             return
-        if target_message.photo:
+        if _message_supports_caption_edit(target_message):
             await safe_delete_message(bot, chat_id, target_message.message_id)
             sent = await bot.send_message(chat_id=chat_id, **text_kw)
             await remember_game_ui_anchor(state, sent)
@@ -131,8 +177,24 @@ async def push_game_ui(
         try:
             await bot.edit_message_text(chat_id=cid, message_id=int(mid), **text_kw)
             return
-        except TelegramBadRequest:
-            logger.debug("push_game_ui: якорь недоступен, шлём новое")
+        except TelegramBadRequest as e:
+            err = str(e).lower()
+            if "message is not modified" in err:
+                return
+            logger.debug("push_game_ui: якорь — не текст, пробуем подпись: {}", e)
+            try:
+                await bot.edit_message_caption(
+                    chat_id=cid,
+                    message_id=int(mid),
+                    caption=_clamp_telegram_caption(text_kw["text"]),
+                    reply_markup=text_kw["reply_markup"],
+                    parse_mode=text_kw["parse_mode"],
+                )
+                return
+            except TelegramBadRequest as e2:
+                if "message is not modified" in str(e2).lower():
+                    return
+                logger.debug("push_game_ui: правка подписи якоря не вышла, шлём новое: {}", e2)
         await safe_delete_message(bot, cid, int(mid))
         sent = await bot.send_message(chat_id=chat_id, **text_kw)
         await remember_game_ui_anchor(state, sent)

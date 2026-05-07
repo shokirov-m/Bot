@@ -14,7 +14,7 @@ from bot.i18n import get_locale, t
 from bot.states.arena_states import ArenaChallengeStates, ArenaTurnStates
 from bot.states.combat_states import CombatStates
 from bot.utils.game_art import menu_arena_photo_path
-from bot.utils.game_ui import push_game_ui
+from bot.utils.game_ui import edit_game_message_content, push_game_ui
 from config import is_admin as config_is_admin
 from db.models.character import Character
 from db.repository import character_repo, user_repo
@@ -99,7 +99,8 @@ async def _start_turn_duel_for_character(
     text = f"{t(locale, 'arena_title')}\n\n{body}"
     kb = _arena_turn_keyboard()
     if target_message is not None:
-        await target_message.edit_text(
+        await edit_game_message_content(
+            target_message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=kb,
@@ -336,7 +337,7 @@ async def arena_wait_opponent_id(callback: CallbackQuery, state: FSMContext) -> 
             return
         await state.clear()
         await state.set_state(ArenaChallengeStates.waiting_opponent_token)
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             "✏️ <b>Вызов по ID</b>\n"
             "Отправь в этот чат <b>одно число</b> — игровой ID героя из «Статус» соперника "
             "или его Telegram ID (если знаешь).\n"
@@ -524,7 +525,7 @@ async def arena_phantom_fight(callback: CallbackQuery, session: AsyncSession, st
         await state.update_data(arn_duel=st)
         body = arena_service.format_turn_duel_screen_html(st, log_lines=[])
         text = f"👻 <b>Тренировочный бой</b>\n\n{body}"
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             text,
             parse_mode=ParseMode.HTML,
             reply_markup=_phantom_turn_keyboard(),
@@ -580,7 +581,7 @@ async def arena_turn_move(callback: CallbackQuery, session: AsyncSession, state:
             body = arena_service.format_turn_duel_screen_html(st, log_lines=st.get("hist"))
             title = "👻 <b>Тренировочный бой</b>" if is_phantom else t(loc, "arena_title")
             text = f"{title}\n\n{body}"
-            await callback.message.edit_text(
+            await edit_game_message_content(callback.message,
                 text,
                 parse_mode=ParseMode.HTML,
                 reply_markup=kb_now,
@@ -601,7 +602,7 @@ async def arena_turn_move(callback: CallbackQuery, session: AsyncSession, state:
                 [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
             ])
             full = f"👻 <b>Тренировочный бой</b>\n\n{body}\n\n{footer}"
-            await callback.message.edit_text(full, parse_mode=ParseMode.HTML, reply_markup=back_kb)
+            await edit_game_message_content(callback.message,full, parse_mode=ParseMode.HTML, reply_markup=back_kb)
             await callback.answer()
             await session.commit()
             return
@@ -628,7 +629,7 @@ async def arena_turn_move(callback: CallbackQuery, session: AsyncSession, state:
             [InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")],
         ])
         full = f"{header}\n\n{body}\n\n{rep}\n\n{footer}"
-        await callback.message.edit_text(full, parse_mode=ParseMode.HTML, reply_markup=back_kb)
+        await edit_game_message_content(callback.message,full, parse_mode=ParseMode.HTML, reply_markup=back_kb)
         await callback.answer()
         await session.commit()
     except Exception:

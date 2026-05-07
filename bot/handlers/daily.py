@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale, t
 from bot.keyboards.daily_kb import daily_screen_keyboard
+from bot.utils.game_ui import edit_game_message_content
 from db.repository import character_repo, user_repo
 from services import daily_service
 from services.daily_service import build_daily_body_html
@@ -88,7 +89,8 @@ async def daily_verify(callback: CallbackQuery, session: AsyncSession) -> None:
             locale=loc,
             title_html=t(loc, "daily_header"),
         )
-        await callback.message.edit_text(
+        await edit_game_message_content(
+            callback.message,
             body,
             parse_mode=ParseMode.HTML,
             reply_markup=daily_screen_keyboard(
@@ -139,7 +141,8 @@ async def daily_claim(callback: CallbackQuery, session: AsyncSession) -> None:
                 body += "\n\n" + res.message_html
             else:
                 body += "\n\n" + f"<i>{html.escape(res.message_html)}</i>"
-        await callback.message.edit_text(
+        await edit_game_message_content(
+            callback.message,
             body,
             parse_mode=ParseMode.HTML,
             reply_markup=daily_screen_keyboard(

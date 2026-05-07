@@ -1702,12 +1702,17 @@ async def _victory_sequence_coliseum(
 
     title_service.refresh_unlocks(character)
     extra_loot = "\n".join(loot_lines) if loot_lines else ""
+    fdef = fighter_by_id(fid)
+    vq_line = ""
+    if fdef is not None and getattr(fdef, "victory_quote", ""):
+        vq_line = f"\n{LINE_SEP}\n💬 <i>{html.escape(str(fdef.victory_quote))}</i>"
     body = (
         f"🏛️ <b>Победа в Колизее!</b>\n"
         f"{LINE_SEP}\n"
         f"💰 +{net_gold} золота · 📈 +{xp} опыта\n"
         f"{level_battle_suffix}"
         + (f"\n{extra_loot}" if extra_loot else "")
+        + vq_line
     )
     fl = int(character.floor_number)
     kb = InlineKeyboardMarkup(

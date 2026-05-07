@@ -111,6 +111,8 @@ def buildings_keyboard(character: Character) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if home_service.can_access_workbench(character):
         rows.append([InlineKeyboardButton(text="🛠 Верстак", callback_data="hom:bench")])
+    if int(character.level) >= 15:
+        rows.append([InlineKeyboardButton(text="🛏 Покои наёмников", callback_data="hom:merc_q")])
     rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -185,7 +187,8 @@ def mine_farm_keyboard(character: Character) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton(text="🍱 Тренировать питомцев", callback_data="hom:pet_train")])
     else:
         rows.append([InlineKeyboardButton(text=f"⛏ Расчистить шахту ({home_service.MINE_PURCHASE_GOLD:,}💰)", callback_data="hom:mine_buy")])
-        
+    if int(character.level) >= 15:
+        rows.append([InlineKeyboardButton(text="🛏 Покои наёмников", callback_data="hom:merc_q")])
     rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)

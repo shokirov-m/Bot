@@ -15,7 +15,11 @@ from bot.keyboards.black_market_kb import jabs_lots_keyboard, location_back_keyb
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.mercenaries.market_hub import LOCATIONS, dialog_pool
-from game.mercenaries.shadow_market_meta import market_hub_session_open
+from game.mercenaries.shadow_market_meta import (
+    get_purchased_showcase_lot_indices,
+    mark_showcase_lot_purchased,
+    market_hub_session_open,
+)
 from services import black_market_quest_service, black_market_service, mercenary_service
 
 router = Router(name="black_market")
@@ -92,16 +96,26 @@ async def bm_jabs(callback: CallbackQuery, session: AsyncSession, state: FSMCont
             return
         sm = await black_market_service.get_or_roll_showcase(session)
         lots = list(sm.get("lots") or [])
-        lines = [
-            "🐸 <b>Жабс</b> выставляет наёмников. Витрина обновляется раз в неделю.\n",
-            *( _format_lot_line(i, lot) for i, lot in enumerate(lots)),
-        ]
+        week_id = str(sm.get("week_id") or "")
+        bought = get_purchased_showcase_lot_indices(char, week_id)
+        available_idx = [i for i in range(len(lots)) if i not in bought]
+        if not available_idx:
+            lines = [
+                "🐸 <b>Жабс</b> моргает третьим глазом: «На этой неделе ты уже скупил всё, что я выставлял. "
+                "Загляни в понедельник».",
+            ]
+        else:
+            lines = [
+                "🐸 <b>Жабс</b> выставляет наёмников. Витрина обновляется раз в неделю.\n",
+                "Каждый лот — один наёмник; купленный лот пропадает <b>для тебя</b> до смены витрины.\n",
+                *(_format_lot_line(j, lots[i]) for j, i in enumerate(available_idx)),
+            ]
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text="\n".join(lines),
-            reply_markup=jabs_lots_keyboard(len(lots)),
+            reply_markup=jabs_lots_keyboard(available_idx),
             target_message=callback.message,
             photo_path=None,
             character=char,
@@ -128,19 +142,33 @@ async def bm_buy(callback: CallbackQuery, session: AsyncSession, state: FSMConte
         idx = int(callback.data.split(":")[-1])
         sm = await black_market_service.get_or_roll_showcase(session)
         lots = list(sm.get("lots") or [])
+        week_id = str(sm.get("week_id") or "")
         if idx < 0 or idx >= len(lots):
             await callback.answer("Лот недоступен.", show_alert=True)
+            return
+        if idx in get_purchased_showcase_lot_indices(char, week_id):
+            await callback.answer("Этот лот ты уже купил.", show_alert=True)
             return
         ok, msg = await mercenary_service.hire_from_lot(session, char, lots[idx])
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        mark_showcase_lot_purchased(char, week_id, idx)
+        await session.flush()
+        bought = get_purchased_showcase_lot_indices(char, week_id)
+        available_idx = [i for i in range(len(lots)) if i not in bought]
+        if not available_idx:
+            follow = "\n\n🐸 Жабс: «На сегодня с тобой всё — до новой витрины»."
+            kb = jabs_lots_keyboard([])
+        else:
+            follow = ""
+            kb = jabs_lots_keyboard(available_idx)
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
-            text=f"✅ {msg}\n\n<i>Настрой отряд в Доме → Покои.</i>",
-            reply_markup=jabs_lots_keyboard(len(lots)),
+            text=f"✅ {msg}\n\n<i>Настрой отряд в Доме → Покои наёмников.</i>{follow}",
+            reply_markup=kb,
             target_message=callback.message,
             photo_path=None,
             character=char,

@@ -26,6 +26,7 @@ from aiogram.types import (
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.utils.game_ui import edit_game_message_content
 from db.repository import character_repo, user_repo
 from db.models.character import Character
 from game.floors.floor_zero import (
@@ -216,7 +217,7 @@ async def on_floor0_step1(query: CallbackQuery, state: FSMContext) -> None:
         if query.message is None:
             await query.answer()
             return
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             _COMBAT_INTRO_TEXT,
             parse_mode=ParseMode.HTML,
             reply_markup=_combat_intro_kb(),
@@ -248,7 +249,7 @@ async def on_floor0_fight_start(
         cs = _shadow_state(_SHADOW_MAX_HP)
         await state.update_data({_FSM_KEY: cs})
 
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             _fight_screen(cs, char, "🌑 <i>Тень материализуется перед тобой...</i>"),
             parse_mode=ParseMode.HTML,
             reply_markup=_fight_kb(),
@@ -299,7 +300,7 @@ async def on_floor0_fight_action(
                 "💥 <b>ТЕНЬ ПОВЕРЖЕНА!</b>\n"
                 "<i>Твой удар рассекает тьму. Тень растворяется с тихим воем.</i>"
             )
-            await query.message.edit_text(
+            await edit_game_message_content(query.message,
                 victory_text,
                 parse_mode=ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
@@ -323,7 +324,7 @@ async def on_floor0_fight_action(
         await state.update_data({_FSM_KEY: cs})
         await session.flush()
 
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             _fight_screen(cs, char, log),
             parse_mode=ParseMode.HTML,
             reply_markup=_fight_kb(),
@@ -344,7 +345,7 @@ async def on_floor0_passive_choice(
         if query.message is None:
             await query.answer()
             return
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             _PASSIVE_CHOICE_INTRO,
             parse_mode=ParseMode.HTML,
             reply_markup=_passive_kb(),
@@ -382,7 +383,7 @@ async def on_floor0_choice(
         result_text = apply_floor0_passive(char, choice_key)
         await session.flush()
 
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             result_text,
             parse_mode=ParseMode.HTML,
             reply_markup=_enter_tower_kb(),

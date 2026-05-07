@@ -16,6 +16,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.menu_kb import menu_nav_button_row
+from bot.utils.game_ui import edit_game_message_content
 from db.repository import character_repo, user_repo
 from services import character_service, stat_bonus_service
 
@@ -129,7 +130,7 @@ async def st_switch_mode(callback: CallbackQuery, session: AsyncSession, state: 
             await callback.answer("Нет персонажа.", show_alert=True)
             return
         usp = int(getattr(char, "unspent_stat_points", 0) or 0)
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             _stats_text(char, new_mode),
             reply_markup=stats_keyboard(usp, new_mode),
             parse_mode=ParseMode.HTML,
@@ -181,7 +182,7 @@ async def st_allocate(callback: CallbackQuery, session: AsyncSession, state: FSM
 
         mode = await _get_mode(state)
         usp = int(getattr(char, "unspent_stat_points", 0) or 0)
-        await callback.message.edit_text(
+        await edit_game_message_content(callback.message,
             _stats_text(char, mode),
             reply_markup=stats_keyboard(usp, mode),
             parse_mode=ParseMode.HTML,

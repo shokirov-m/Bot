@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale
 from bot.utils.game_art import menu_city_photo_path
-from bot.utils.game_ui import push_game_ui
+from bot.utils.game_ui import edit_game_message_content, push_game_ui
 from bot.keyboards.forge_kb import (
     city_hub_keyboard,
     forge_actions_keyboard,
@@ -449,7 +449,7 @@ async def forge_craft_menu(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Нет рецептов.", show_alert=True)
             return
         top = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             f"{top}\n\n<i>Выбери рецепт (с материалами в сумке):</i>",
             reply_markup=forge_craft_recipes_keyboard(floor_key, rows),
             parse_mode=ParseMode.HTML,
@@ -485,7 +485,7 @@ async def forge_craft_run(query: CallbackQuery, session: AsyncSession) -> None:
             return
         body = "\n".join(lines)
         refreshed = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             f"{refreshed}\n\n{body}",
             reply_markup=forge_actions_keyboard(char.floor_number),
             parse_mode=ParseMode.HTML,
@@ -519,7 +519,7 @@ async def forge_brew_elixir(query: CallbackQuery, session: AsyncSession) -> None
 
         body = "\n".join(result_lines)
         refreshed = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             f"{refreshed}\n\n{body}",
             reply_markup=forge_actions_keyboard(char.floor_number),
         )
@@ -635,7 +635,7 @@ async def forge_disassemble_menu(query: CallbackQuery, session: AsyncSession) ->
         if not pairs:
             await query.answer("В сумке нет предметов для разбора.", show_alert=True)
             return
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             "🔨 <b>Разбор предмета</b>\n"
             "<i>Выбери вещь или используй фильтры/свип ниже.</i>",
             reply_markup=forge_dis_bag_keyboard(floor_key, pairs),
@@ -677,7 +677,7 @@ async def forge_disassemble_filter(query: CallbackQuery, session: AsyncSession) 
             title += f"\n<i>Фильтр:</i> {rar_s} / {knd_s}"
         if not pairs:
             title += "\n<i>Под фильтр ничего не попало.</i>"
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             title,
             reply_markup=forge_dis_bag_keyboard(
                 floor_key, pairs, rarity_filter=rar, kind_filter=knd,
@@ -709,7 +709,7 @@ async def forge_disassemble_sweep(query: CallbackQuery, session: AsyncSession) -
             await query.answer(msg[:180], show_alert=True)
             return
         body = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             f"{body}\n\n{msg}",
             reply_markup=forge_actions_keyboard(char.floor_number),
             parse_mode="HTML",
@@ -742,7 +742,7 @@ async def forge_disassemble_apply(query: CallbackQuery, session: AsyncSession) -
             await query.answer(msg[:180], show_alert=True)
             return
         body = await forge_service.build_forge_message_html(session, char)
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             f"{body}\n\n{msg}",
             reply_markup=forge_actions_keyboard(char.floor_number),
             parse_mode="HTML",
@@ -779,7 +779,7 @@ async def forge_quest_open(query: CallbackQuery, session: AsyncSession) -> None:
         from services import forge_quest_service as fqs
         text = fqs.format_forge_quest_html(char, floor_key)
         state = fqs._get_state(char, floor_key)
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             text,
             reply_markup=forge_quest_keyboard(floor_key, state),
             parse_mode=ParseMode.HTML,
@@ -810,7 +810,7 @@ async def forge_quest_start(query: CallbackQuery, session: AsyncSession) -> None
         await session.flush()
         text = fqs.format_forge_quest_html(char, floor_key)
         state = fqs._get_state(char, floor_key)
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             text,
             reply_markup=forge_quest_keyboard(floor_key, state),
             parse_mode=ParseMode.HTML,
@@ -844,7 +844,7 @@ async def forge_quest_claim_step(query: CallbackQuery, session: AsyncSession) ->
         text = fqs.format_forge_quest_html(char, floor_key)
         state = fqs._get_state(char, floor_key)
         await session.commit()
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             f"{text}\n\n{msg}",
             reply_markup=forge_quest_keyboard(floor_key, state),
             parse_mode=ParseMode.HTML,
@@ -875,7 +875,7 @@ async def forge_quest_final(query: CallbackQuery, session: AsyncSession) -> None
         # Читаем state ДО commit
         state = fqs._get_state(char, floor_key)
         await session.commit()
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             msg,
             reply_markup=forge_quest_keyboard(floor_key, state),
             parse_mode=ParseMode.HTML,

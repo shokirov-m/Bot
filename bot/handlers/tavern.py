@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.tavern_kb import buyer_quest_keyboard, tavern_daily_keyboard, tavern_menu_keyboard
 from bot.utils.game_art import menu_city_photo_path
-from bot.utils.game_ui import push_game_ui
+from bot.utils.game_ui import edit_game_message_content, push_game_ui
 from db.repository import character_repo, user_repo
 from game.locations import tavern as tavern_loc
 from services import tavern_service
@@ -328,7 +328,7 @@ async def tavern_buyer_final(query: CallbackQuery, session: AsyncSession) -> Non
         # Читаем state ДО commit
         state = bqs._get_state(char, floor_key)
         await session.commit()
-        await query.message.edit_text(
+        await edit_game_message_content(query.message,
             msg,
             reply_markup=buyer_quest_keyboard(floor_key, state),
             parse_mode="HTML",
