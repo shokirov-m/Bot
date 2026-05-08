@@ -49,6 +49,7 @@ from bot.handlers.floor import router as floor_router
 from bot.handlers.forest_beginnings import router as forest_beginnings_router
 from bot.handlers.quests import router as quests_router
 from bot.handlers.tavern import router as tavern_router
+from bot.handlers.red_light import router as red_light_router
 from bot.handlers.inventory import router as inventory_router
 from bot.handlers.clans import router as clans_router
 from bot.handlers.profile import router as profile_router
@@ -157,6 +158,7 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(shop_router)
     dp.include_router(quests_router)
     dp.include_router(city_router)
+    dp.include_router(red_light_router)
     dp.include_router(city_quests_router)
     dp.include_router(class_arc_router)
     dp.include_router(forest_beginnings_router)

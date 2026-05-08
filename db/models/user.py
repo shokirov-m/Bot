@@ -58,6 +58,17 @@ class User(Base):
         server_default="0",
     )
 
+    # 18+ контент: однократный выбор при первом вопросе.
+    # adult_age_declared:
+    #   - True  -> игрок подтвердил 18+
+    #   - False -> игрок заявил, что ему нет 18 (навсегда запрещает 18+ контент)
+    #   - None  -> ещё не отвечал (для старых пользователей / до внедрения)
+    adult_age_declared: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # adult_content_enabled имеет смысл только при adult_age_declared=True
+    adult_content_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    adult_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    adult_consent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -87,6 +87,7 @@ async def economy_back_city(query: CallbackQuery, session: AsyncSession, state: 
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
         if char.floor_number != floor_key:
             await query.answer("Этаж устарел.", show_alert=True)
             return
@@ -99,7 +100,7 @@ async def economy_back_city(query: CallbackQuery, session: AsyncSession, state: 
             query.bot,
             chat_id=query.message.chat.id,
             text=format_city_hub_message(char),
-            reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+            reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc, user=user),
             target_message=query.message,
             photo_path=None,
             character=char,

@@ -546,6 +546,7 @@ async def forge_back_city(query: CallbackQuery, session: AsyncSession, state: FS
         if floor_data.get_city_for_floor(char.floor_number) is None:
             await query.answer()
             return
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
         text = format_city_hub_message(char)
         loc = get_locale(char, query.from_user.language_code)
         await push_game_ui(
@@ -553,7 +554,7 @@ async def forge_back_city(query: CallbackQuery, session: AsyncSession, state: FS
             query.bot,
             chat_id=query.message.chat.id,
             text=text,
-            reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
+            reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc, user=user),
             target_message=query.message,
             photo_path=menu_city_photo_path(),
             character=char,

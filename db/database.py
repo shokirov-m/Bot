@@ -161,6 +161,46 @@ def patch_sqlite_users_notify_golden_goblin() -> None:
         logger.exception("Патч SQLite (users notify_golden_goblin) не удался: {}", p)
 
 
+def patch_sqlite_users_adult_consent_columns() -> None:
+    """Колонки 18+ (adult_age_declared/adult_content_enabled/consent meta) в users для старых БД."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            cols = {row[1] for row in con.execute("PRAGMA table_info(users)").fetchall()}
+            if not cols:
+                return
+            if "adult_age_declared" not in cols:
+                con.execute("ALTER TABLE users ADD COLUMN adult_age_declared BOOLEAN")
+                con.commit()
+                logger.info("Патч SQLite: добавлена колонка users.adult_age_declared")
+            cols = {row[1] for row in con.execute("PRAGMA table_info(users)").fetchall()}
+            if "adult_content_enabled" not in cols:
+                con.execute("ALTER TABLE users ADD COLUMN adult_content_enabled BOOLEAN")
+                con.commit()
+                logger.info("Патч SQLite: добавлена колонка users.adult_content_enabled")
+            cols = {row[1] for row in con.execute("PRAGMA table_info(users)").fetchall()}
+            if "adult_consent_at" not in cols:
+                con.execute("ALTER TABLE users ADD COLUMN adult_consent_at DATETIME")
+                con.commit()
+                logger.info("Патч SQLite: добавлена колонка users.adult_consent_at")
+            cols = {row[1] for row in con.execute("PRAGMA table_info(users)").fetchall()}
+            if "adult_consent_version" not in cols:
+                con.execute("ALTER TABLE users ADD COLUMN adult_consent_version INTEGER")
+                con.commit()
+                logger.info("Патч SQLite: добавлена колонка users.adult_consent_version")
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (users adult consent) не удался: {}", p)
+
+
 def patch_sqlite_promo_offers_table() -> None:
     """Таблица promo_offers (промокоды из админки)."""
     import sqlite3
@@ -801,6 +841,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_character_game_id()
     patch_sqlite_users_referral_columns()
     patch_sqlite_users_notify_golden_goblin()
+    patch_sqlite_users_adult_consent_columns()
     patch_sqlite_app_global_table()
     patch_sqlite_game_events_table()
     patch_sqlite_auction_lots_table()

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import html
 import re
+from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.filters import CommandStart, StateFilter
@@ -42,6 +43,8 @@ from utils.profile_portraits import (
 )
 
 router = Router(name="start")
+
+ADULT_CONSENT_VERSION = 1
 
 
 async def _answer_with_menu_hub_photo(
@@ -81,6 +84,12 @@ GENDER_PROMPT = (
     "👤 <b>Кого создаём?</b> Выбери пол героя кнопками ниже — затем ник и портрет."
 )
 
+ADULT_GATE_PROMPT = (
+    "🔞 <b>ВНИМАНИЕ 18+</b>\n\n"
+    "В игре есть раздел с контентом для взрослых. Подтверди, что тебе <b>18+</b>.\n\n"
+    "<i>Если выберешь «Мне нет 18», включить 18+ раздел позже будет невозможно.</i>"
+)
+
 NICK_PROMPT = (
     "✏️ <b>Ник</b> — одним сообщением, <b>2–24</b> символа: буквы, цифры, пробел, "
     "<code>-</code> <code>_</code>.\n"
@@ -88,6 +97,15 @@ NICK_PROMPT = (
 )
 
 NAME_RE = re.compile(r"^[\w\u0400-\u04FF \-]{2,24}$", re.UNICODE)
+
+
+def _adult_gate_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Мне 18+", callback_data="reg:age:yes")],
+            [InlineKeyboardButton(text="Мне нет 18", callback_data="reg:age:no")],
+        ],
+    )
 
 
 def _gender_pick_keyboard() -> InlineKeyboardMarkup:
@@ -264,6 +282,20 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
             )
             return
 
+        # 18+ вопрос задаём только новым героям. Для уже зарегистрированных — в настройках.
+        if user.adult_age_declared is None:
+            await state.clear()
+            ref_tid = parse_referrer_telegram_id_from_start_text(message.text)
+            if ref_tid is not None and ref_tid == int(tg.id):
+                ref_tid = None
+            await state.update_data(referrer_telegram_id=ref_tid)
+            await message.answer(
+                ADULT_GATE_PROMPT,
+                parse_mode=ParseMode.HTML,
+                reply_markup=_adult_gate_keyboard(),
+            )
+            return
+
         await state.set_state(RegistrationStates.waiting_gender)
         ref_tid = parse_referrer_telegram_id_from_start_text(message.text)
         if ref_tid is not None and ref_tid == int(tg.id):
@@ -280,6 +312,55 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
         )
     except Exception:
         logger.exception("Ошибка в обработчике /start")
+
+
+@router.callback_query(F.data.in_({"reg:age:yes", "reg:age:no"}))
+async def on_adult_gate_answer(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+
+        user = await user_repo.ensure_user(session, callback.from_user.id, callback.from_user.username)
+        if user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        # Если герой уже создан — возрастной выбор не трогаем тут (для таких — настройки).
+        existing = await character_repo.get_by_user_id(session, user.id)
+        if existing is not None:
+            await callback.answer()
+            return
+
+        if user.adult_age_declared is None:
+            want_adult = (callback.data or "") == "reg:age:yes"
+            user.adult_age_declared = bool(want_adult)
+            user.adult_content_enabled = bool(want_adult)
+            if want_adult:
+                user.adult_consent_at = datetime.now(timezone.utc)
+                user.adult_consent_version = ADULT_CONSENT_VERSION
+            else:
+                user.adult_consent_at = None
+                user.adult_consent_version = None
+            await session.commit()
+
+        # Продолжаем регистрацию: пол → ник → портрет.
+        await state.set_state(RegistrationStates.waiting_gender)
+        data = await state.get_data()
+        ref_tid = data.get("referrer_telegram_id")
+        await state.update_data(
+            pending_display_name=None,
+            pending_gender=None,
+            referrer_telegram_id=ref_tid,
+        )
+        await callback.message.edit_text(
+            f"{TOWER_WAKE_LORE}{GENDER_PROMPT}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=_gender_pick_keyboard(),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("Ошибка 18+ gate")
+        await callback.answer("Ошибка. /start", show_alert=True)
 
 
 @router.callback_query(StateFilter(RegistrationStates.waiting_gender), F.data.startswith("reg:gender:"))

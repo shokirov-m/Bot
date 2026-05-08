@@ -14,6 +14,8 @@ def settings_screen_keyboard(
     locale: str,
     character: Character | None = None,
     notify_golden_goblin: bool = True,
+    adult_age_declared: bool | None = None,
+    adult_content_enabled: bool | None = None,
 ) -> InlineKeyboardMarkup:
     loc = locale if locale in ("ru", "en") else "ru"
     hide = character is not None and not game_images_enabled(character)
@@ -23,6 +25,12 @@ def settings_screen_keyboard(
         if notify_golden_goblin
         else t(loc, "settings_golden_goblin_notify_enable")
     )
+    if adult_age_declared is None:
+        adult_btn = "🔞 18+ (подтвердить)"
+    elif adult_age_declared is False:
+        adult_btn = "🔞 18+ недоступно"
+    else:
+        adult_btn = "🔞 18+ контент: ВКЛ" if bool(adult_content_enabled) else "🔞 18+ контент: ВЫКЛ"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -75,6 +83,12 @@ def settings_screen_keyboard(
                 InlineKeyboardButton(
                     text=goblin_btn,
                     callback_data="stg:gob_notif",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=adult_btn,
+                    callback_data="stg:adult",
                 ),
             ],
             [

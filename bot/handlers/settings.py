@@ -5,12 +5,14 @@
 from __future__ import annotations
 
 import html
+from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import InlineKeyboardButton
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +39,8 @@ from bot.states.registration_states import RegistrationStates
 
 router = Router(name="settings")
 
+ADULT_CONSENT_VERSION = 1
+
 
 def _settings_body_html(locale: str) -> str:
     loc = locale if locale in ("ru", "en") else "ru"
@@ -52,7 +56,49 @@ def _settings_reply_kb(locale: str, char, user) -> InlineKeyboardMarkup:
         locale=locale,
         character=char,
         notify_golden_goblin=bool(user.notify_golden_goblin),
+        adult_age_declared=getattr(user, "adult_age_declared", None),
+        adult_content_enabled=getattr(user, "adult_content_enabled", None),
     )
+
+
+def _adult_settings_text(user) -> str:
+    if getattr(user, "adult_age_declared", None) is None:
+        return (
+            "🔞 <b>Контент 18+</b>\n\n"
+            "Подтверди, что тебе <b>18+</b>, чтобы открыть взрослые разделы.\n\n"
+            "<i>Если выберешь «Мне нет 18», включить 18+ позже будет невозможно.</i>"
+        )
+    if user.adult_age_declared is False:
+        return (
+            "🔞 <b>Контент 18+</b>\n\n"
+            "Статус: <b>недоступно</b>.\n"
+            "<i>Ранее ты выбрал(а) «Мне нет 18». Это нельзя изменить.</i>"
+        )
+    enabled = bool(getattr(user, "adult_content_enabled", False))
+    return (
+        "🔞 <b>Контент 18+</b>\n\n"
+        f"Статус: <b>{'ВКЛ' if enabled else 'ВЫКЛ'}</b>.\n"
+        "<i>Можно включать и выключать в любой момент.</i>"
+    )
+
+
+def _adult_settings_kb(user) -> InlineKeyboardMarkup:
+    rows: list[list] = []
+    if getattr(user, "adult_age_declared", None) is None:
+        rows.append([InlineKeyboardButton(text="Мне 18+", callback_data="stg:adult:yes")])
+        rows.append([InlineKeyboardButton(text="Мне нет 18", callback_data="stg:adult:no")])
+    elif user.adult_age_declared is True:
+        enabled = bool(getattr(user, "adult_content_enabled", False))
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Выключить 18+ контент" if enabled else "Включить 18+ контент",
+                    callback_data="stg:adult:toggle",
+                ),
+            ],
+        )
+    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="stg:cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def _char_gate(
@@ -456,6 +502,112 @@ async def stg_golden_goblin_notify_toggle(callback: CallbackQuery, session: Asyn
         await callback.answer()
     except Exception:
         logger.exception("stg:gob_notif")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stg:adult")
+async def stg_adult_open(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer(t("ru", "settings_combat_block"), show_alert=True)
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer("Нет героя.", show_alert=True)
+            return
+        user, char = pair
+        loc = get_locale(char, callback.from_user.language_code)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_adult_settings_text(user),
+            reply_markup=_adult_settings_kb(user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:adult")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.in_({"stg:adult:yes", "stg:adult:no"}))
+async def stg_adult_declare(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer("Нет героя.", show_alert=True)
+            return
+        user, char = pair
+        if user.adult_age_declared is not None:
+            await callback.answer()
+            return
+        want_adult = (callback.data or "") == "stg:adult:yes"
+        user.adult_age_declared = bool(want_adult)
+        user.adult_content_enabled = bool(want_adult)
+        if want_adult:
+            user.adult_consent_at = datetime.now(timezone.utc)
+            user.adult_consent_version = ADULT_CONSENT_VERSION
+        else:
+            user.adult_consent_at = None
+            user.adult_consent_version = None
+        await session.commit()
+
+        loc = get_locale(char, callback.from_user.language_code)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_adult_settings_text(user),
+            reply_markup=_adult_settings_kb(user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
+        )
+        await callback.answer("Готово.")
+    except Exception:
+        logger.exception("stg:adult:declare")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stg:adult:toggle")
+async def stg_adult_toggle(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer("Нет героя.", show_alert=True)
+            return
+        user, char = pair
+        if user.adult_age_declared is not True:
+            await callback.answer("Недоступно.", show_alert=True)
+            return
+        user.adult_content_enabled = not bool(user.adult_content_enabled)
+        await session.commit()
+        loc = get_locale(char, callback.from_user.language_code)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_adult_settings_text(user),
+            reply_markup=_adult_settings_kb(user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:adult:toggle")
         await callback.answer("Ошибка.", show_alert=True)
 
 
