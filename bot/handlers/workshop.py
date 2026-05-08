@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import html
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
@@ -55,7 +55,7 @@ from services.workshop_enchant_service import (
     summarize_scroll,
     try_apply_alchemy_enchant,
 )
-from services.workshop_leaderboard_service import cached_leaderboard_html
+from services.workshop_leaderboard_service import cached_leaderboard_html, refresh_leaderboards
 from db.models.app_global import AppGlobal
 
 from bot.utils.game_art import (
@@ -528,13 +528,43 @@ async def workshop_start(query: CallbackQuery, session: AsyncSession, state: FSM
         if not ok:
             await query.answer((lines[0] if lines else "Нельзя.")[:200], show_alert=True)
             return
-        body = "\n".join(lines)
+        success_block = "\n".join(lines)
+        r_def = get_recipe_by_id(rid)
+        prof = str(r_def.get("profession", PROF_BLACKSMITH)) if r_def else PROF_BLACKSMITH
+        title = PROF_TITLE_RU.get(prof, prof)
+        preview = await _recipe_preview_html(session, char, prof, rid)
+        if preview is None or r_def is None:
+            await _workshop_ui(
+                state,
+                query,
+                char,
+                f"🔧 <b>Мастерская</b>\n\n{success_block}",
+                workshop_main_keyboard(character=char),
+            )
+            await query.answer("Запущено.")
+            return
+        locked = bool(_recipe_locked(char, prof, r_def))
+        body = preview
+        if locked:
+            body = "🔒 <i>Недостаточно уровня профессии, станции или героя для крафта.</i>\n\n" + body
+        row_create = (
+            [InlineKeyboardButton(text="🔨 Создать", callback_data=f"wsp:start:{rid}")]
+            if not locked
+            else [InlineKeyboardButton(text="🔒 Создать (заблокировано)", callback_data="wsp:craftlocked")]
+        )
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                row_create,
+                [InlineKeyboardButton(text="⬅ К крафту", callback_data=f"wsp:craft:{prof}")],
+                menu_nav_button_row(),
+            ],
+        )
         await _workshop_ui(
             state,
             query,
             char,
-            f"🔧 <b>Мастерская</b>\n\n{body}",
-            workshop_main_keyboard(character=char),
+            f"{title}\n\n{success_block}\n\n{body}",
+            kb,
         )
         await query.answer("Запущено.")
     except Exception:
@@ -591,16 +621,91 @@ async def workshop_claim(query: CallbackQuery, session: AsyncSession, state: FSM
         if not ok:
             await query.answer((lines[0] if lines else "Нельзя.")[:200], show_alert=True)
             return
-        await _workshop_ui(
-            state,
-            query,
-            char,
-            "\n".join(lines),
-            workshop_main_keyboard(character=char),
-        )
+        ws = get_workshop_state(char)
+        crafts = list(ws.get("active_crafts") or [])
+        now = datetime.now(UTC)
+        entries: list[tuple[str, str, bool]] = []
+        for c in crafts:
+            sid2 = str(c.get("slot_id"))
+            rid = str(c.get("recipe_id"))
+            r = get_recipe_by_id(rid)
+            nm = str(r.get("name_ru", rid)) if r else rid
+            raw_ready = str(c.get("ready_at") or "")
+            try:
+                rdt = datetime.fromisoformat(raw_ready.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                rdt = now
+            ready = rdt <= now
+            lab = f"✅ Забрать: {nm}" if ready else f"⏳ {nm} до {rdt.strftime('%H:%M')} UTC"
+            entries.append((sid2, lab, ready))
+        if entries:
+            text = "📜 <b>Очередь</b>\n\n" + "\n".join(lines)
+            kb = workshop_queue_keyboard(entries)
+        else:
+            text = "\n".join(lines)
+            kb = workshop_main_keyboard(character=char)
+        await _workshop_ui(state, query, char, text, kb)
         await query.answer("Забрано.")
     except Exception:
         logger.exception("wsp:claim")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "wsp:claimall")
+async def workshop_claim_all(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        char = await _char(session, query)
+        if char is None or query.message is None:
+            return
+        ws = get_workshop_state(char)
+        crafts = list(ws.get("active_crafts") or [])
+        now = datetime.now(UTC)
+        out_lines: list[str] = []
+        n_ok = 0
+        for c in list(crafts):
+            sid = str(c.get("slot_id"))
+            raw_ready = str(c.get("ready_at") or "")
+            try:
+                rdt = datetime.fromisoformat(raw_ready.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+            if rdt > now:
+                continue
+            ok, lines = await workshop_service.try_claim_craft(session, char, sid)
+            if ok:
+                n_ok += 1
+                out_lines.extend(lines)
+        await session.commit()
+        if n_ok == 0:
+            await query.answer("Нет готовых работ или не хватает места в сумке.", show_alert=True)
+            return
+        ws = get_workshop_state(char)
+        crafts2 = list(ws.get("active_crafts") or [])
+        entries: list[tuple[str, str, bool]] = []
+        for c in crafts2:
+            sid2 = str(c.get("slot_id"))
+            rid = str(c.get("recipe_id"))
+            r = get_recipe_by_id(rid)
+            nm = str(r.get("name_ru", rid)) if r else rid
+            raw_ready = str(c.get("ready_at") or "")
+            try:
+                rdt = datetime.fromisoformat(raw_ready.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                rdt = now
+            ready = rdt <= now
+            lab = f"✅ Забрать: {nm}" if ready else f"⏳ {nm} до {rdt.strftime('%H:%M')} UTC"
+            entries.append((sid2, lab, ready))
+        head = f"📥 <b>Забрано работ: {n_ok}</b>\n\n" + "\n".join(out_lines)
+        if entries:
+            text = head + "\n\n📜 <b>Очередь</b>\n\n<i>Готово — «Забрать».</i>"
+            kb = workshop_queue_keyboard(entries)
+        else:
+            text = head
+            kb = workshop_main_keyboard(character=char)
+        await _workshop_ui(state, query, char, text, kb)
+        await query.answer(f"Забрано: {n_ok}.")
+    except Exception:
+        logger.exception("wsp:claimall")
         await query.answer("Ошибка.", show_alert=True)
 
 
@@ -1271,6 +1376,21 @@ async def workshop_lb(query: CallbackQuery, session: AsyncSession, state: FSMCon
             return
         row = await session.get(AppGlobal, 1)
         payload = dict(row.payload or {}) if row is not None else {}
+        raw_lb = payload.get("workshop_lb_v1") or {}
+        ts = str(raw_lb.get("updated_at") or "")
+        stale = True
+        try:
+            t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=UTC)
+            stale = datetime.now(UTC) - t > timedelta(seconds=75)
+        except (ValueError, TypeError):
+            stale = True
+        if stale:
+            await refresh_leaderboards(session)
+            await session.flush()
+            row = await session.get(AppGlobal, 1)
+            payload = dict(row.payload or {}) if row is not None else {}
         text = cached_leaderboard_html(payload)
         await _workshop_ui(
             state,

@@ -2064,8 +2064,10 @@ async def _victory_sequence(
             pass
         # Определяем тип материала по зоне монстра
         from game.data.monsters import KEY_TO_ZONE
+
         _zone = KEY_TO_ZONE.get(_tkey2, "")
         _floor_n = int(combat_state.get("floor", character.floor_number))
+        _mat_fallback = False
         if _zone in ("forest_beginnings",) or "ent" in _tkey2 or "treant" in _tkey2 or "vine" in _tkey2:
             _mat_drop = "wood"
         elif _zone in ("shadow_caves", "volcanic_ruins") or "golem" in _tkey2 or "stone" in _tkey2 or "sentinel" in _tkey2:
@@ -2079,6 +2081,12 @@ async def _victory_sequence(
         if _mat_drop is None and 10 <= _floor_n <= 40:
             if _zone in ("tower_ascent", "forest_beginnings") or "wolf" in _tkey2 or "beast" in _tkey2 or "bandit" in _tkey2:
                 _mat_drop = "wood"
+        # Любой этаж: базовые материалы клана не привязаны только к «лесу снизу».
+        if _mat_drop is None:
+            _mat_drop = random.choice(["wood", "stone", "herbs"])
+            _mat_fallback = True
+        if _mat_fallback:
+            _mat_chance = min(1.0, _mat_chance * 0.58)
         if _mat_drop and random.random() < _mat_chance:
             if spawn.is_major_boss:
                 _mat_amount = random.randint(2, 5)

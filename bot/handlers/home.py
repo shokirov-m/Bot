@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import html
+import json
+import re
+from pathlib import Path
+
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -21,7 +26,7 @@ from bot.keyboards.home_kb import (
 )
 from bot.i18n import get_locale
 from bot.utils.game_art import menu_home_library_photo_path, menu_home_photo_path, menu_home_wardrobe_photo_path
-from bot.utils.game_ui import push_game_ui
+from bot.utils.game_ui import push_game_ui, push_game_ui_animation, push_game_ui_video
 from db.repository import character_repo, mercenary_repo, user_repo
 from scheduler.tasks import schedule_rest_completion_notification
 from services import home_service, mercenary_service
@@ -36,6 +41,125 @@ from game.mercenaries.shadow_market_meta import (
 from services.rest_service import try_begin_or_claim_rest
 
 router = Router(name="home")
+
+MERC_ROMANCE_DATA_PATH = Path(__file__).resolve().parents[2] / "game" / "data" / "merc_quarters_romance_ru.json"
+MERC_ROMANCE_ASSETS_DIR = Path(__file__).resolve().parents[2] / "game" / "assets" / "home" / "merc_quarters" / "romance"
+
+_MERC_ROM_INTERACTION_RE = re.compile(r"^hom:merc:rom:(\d+):([a-zA-Z0-9_\-]+)(?::l)?$")
+
+
+def _adult_allowed(user) -> bool:
+    return bool(getattr(user, "adult_age_declared", None)) is True and bool(getattr(user, "adult_content_enabled", None)) is True
+
+
+_FEMALE_NAMES = frozenset({"Лира", "Мира", "Сильва", "Найра", "Эйва", "Тесс", "Инга"})
+
+
+def _merc_is_female(m) -> bool:
+    ex = dict(getattr(m, "extra", None) or {})
+    g = str(ex.get("gender") or "").strip().lower()
+    if g in ("female", "f", "woman", "girl"):
+        return True
+    if g in ("male", "m", "man", "boy"):
+        return False
+    # fallback heuristic: known female names
+    nm = str(getattr(m, "display_name", "") or "").strip()
+    return nm in _FEMALE_NAMES
+
+
+def _load_merc_romance_data() -> dict:
+    if not MERC_ROMANCE_DATA_PATH.is_file():
+        return {}
+    try:
+        raw = json.loads(MERC_ROMANCE_DATA_PATH.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except Exception:
+        logger.exception("merc romance data load failed")
+        return {}
+
+
+def _format_interaction_lines(lines: list[str], *, merc_name: str) -> str:
+    safe_name = html.escape(merc_name)
+    out = []
+    for ln in lines:
+        try:
+            out.append(str(ln).format(name=safe_name))
+        except Exception:
+            out.append(str(ln))
+    return "\n".join(out)
+
+
+def _romance_interaction_kb(mid: int, iid: str, *, from_merc_list: bool = False) -> InlineKeyboardMarkup:
+    suf = ":l" if from_merc_list else ""
+    if from_merc_list:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="Повторить", callback_data=f"hom:merc:rom:{mid}:{iid}{suf}")],
+                [
+                    InlineKeyboardButton(text="⬅ К действиям", callback_data=f"hom:merc:roml:{mid}"),
+                    InlineKeyboardButton(text="⬅ Наёмницы", callback_data="hom:merc:rom18"),
+                ],
+                [InlineKeyboardButton(text="⬅ Покои", callback_data="hom:merc_q")],
+                menu_nav_button_row(),
+            ],
+        )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Повторить", callback_data=f"hom:merc:rom:{mid}:{iid}{suf}")],
+            [InlineKeyboardButton(text="⬅ К наёмнице", callback_data=f"hom:merc:det:{mid}")],
+            [InlineKeyboardButton(text="⬅ К списку", callback_data="hom:merc_q")],
+            menu_nav_button_row(),
+        ],
+    )
+
+
+def _romance_menu_kb(mid: int, items: list[dict], *, from_merc_list: bool = False) -> InlineKeyboardMarkup:
+    suf = ":l" if from_merc_list else ""
+    rows: list[list[InlineKeyboardButton]] = []
+    for it in items[:10]:
+        iid = str(it.get("id") or "").strip()
+        lbl = str(it.get("label") or "").strip()
+        if not iid or not lbl:
+            continue
+        rows.append([InlineKeyboardButton(text=lbl[:64], callback_data=f"hom:merc:rom:{mid}:{iid}{suf}")])
+    if from_merc_list:
+        rows.append([InlineKeyboardButton(text="⬅ К списку наёмниц", callback_data="hom:merc:rom18")])
+    else:
+        rows.append([InlineKeyboardButton(text="⬅ К наёмнице", callback_data=f"hom:merc:det:{mid}")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _merc_female_romance_list_keyboard(mercs: list) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for mi, m in enumerate(mercs, start=1):
+        name = str(m.display_name).replace("\n", " ")[:28]
+        if len(name) >= 28:
+            name = name[:25] + "…"
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{mi}. 🔥 {name}",
+                callback_data=f"hom:merc:roml:{m.id}",
+            ),
+        ])
+    rows.append([InlineKeyboardButton(text="⬅ Покои", callback_data="hom:merc_q")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _romance_apply_affection(m, delta: int) -> int:
+    ex = dict(getattr(m, "extra", None) or {})
+    cur = int(ex.get("romance_aff", 0) or 0)
+    cur = max(0, cur + int(delta))
+    ex["romance_aff"] = cur
+    m.extra = ex
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+
+        flag_modified(m, "extra")
+    except Exception:
+        pass
+    return cur
 
 
 async def _char(callback: CallbackQuery, session: AsyncSession):
@@ -863,7 +987,7 @@ async def home_alchemy_transmute(callback: CallbackQuery, session: AsyncSession,
         await callback.answer("Ошибка.", show_alert=True)
 
 
-def _merc_quarters_keyboard(character, mercs: list) -> InlineKeyboardMarkup:
+def _merc_quarters_keyboard(character, mercs: list, *, user=None) -> InlineKeyboardMarkup:
     party = set(get_party_merc_ids(character))
     rows: list[list[InlineKeyboardButton]] = []
     for mi, m in enumerate(mercs, start=1):
@@ -878,6 +1002,8 @@ def _merc_quarters_keyboard(character, mercs: list) -> InlineKeyboardMarkup:
                 callback_data=f"hom:merc:det:{m.id}",
             ),
         ])
+    if user is not None and _adult_allowed(user) and any(_merc_is_female(m) for m in mercs):
+        rows.append([InlineKeyboardButton(text="🔥 18+ (наёмницы)", callback_data="hom:merc:rom18")])
     xp = get_merc_xp_share_percent(character)
     rows.append([
         InlineKeyboardButton(
@@ -898,7 +1024,7 @@ def _merc_quarters_keyboard(character, mercs: list) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _merc_detail_keyboard(character, m) -> InlineKeyboardMarkup:
+def _merc_detail_keyboard(character, m, *, user=None) -> InlineKeyboardMarkup:
     from game.mercenaries.constants import (
         MERC_GEAR_ARMOR_MAX,
         MERC_GEAR_BLADE_MAX,
@@ -955,6 +1081,10 @@ def _merc_detail_keyboard(character, m) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=gift_lbl[:64], callback_data=f"hom:merc:gift:{m.id}"),
     ])
 
+    # 18+ взаимодействия (только если включено и наёмница).
+    if user is not None and _adult_allowed(user) and _merc_is_female(m):
+        rows.append([InlineKeyboardButton(text="🔥 18+ Взаимодействия", callback_data=f"hom:merc:rom:{m.id}")])
+
     if ph == "running":
         left = max(1, mercenary_service.merc_work_seconds_left(m) // 60)
         rows.append([
@@ -1002,12 +1132,13 @@ async def home_merc_quarters(callback: CallbackQuery, session: AsyncSession, sta
             else ""
         )
         text = mercenary_service.format_quarters_html(char, mercs, cap=cap, party_ids=party_ids) + hint
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_quarters_keyboard(char, mercs),
+            reply_markup=_merc_quarters_keyboard(char, mercs, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1028,6 +1159,7 @@ async def home_merc_detail(callback: CallbackQuery, session: AsyncSession, state
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         mid = int(callback.data.rsplit(":", 1)[-1])
         m = await mercenary_repo.get_by_id(session, mid)
         if m is None or int(m.character_id) != int(char.id):
@@ -1040,7 +1172,7 @@ async def home_merc_detail(callback: CallbackQuery, session: AsyncSession, state
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1048,6 +1180,255 @@ async def home_merc_detail(callback: CallbackQuery, session: AsyncSession, state
         await callback.answer()
     except Exception:
         logger.exception("hom:merc:det")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "hom:merc:rom18")
+async def home_merc_romance_list_hub(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.bot is None or callback.from_user is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        if int(char.level) < 15:
+            await callback.answer("Покои откроются с 15 уровня.", show_alert=True)
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        if not _adult_allowed(user):
+            await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
+            return
+        mercs = await mercenary_repo.list_for_character(session, char.id)
+        females = [m for m in mercs if _merc_is_female(m)]
+        if not females:
+            await callback.answer("Нет наёмниц в ростере.", show_alert=True)
+            return
+        data = _load_merc_romance_data()
+        if not list(data.get("interactions") or []):
+            await callback.answer("Нет контента.", show_alert=True)
+            return
+        text = (
+            "🔥 <b>18+ · наёмницы</b>\n\n"
+            "<i>Выбери наёмницу — откроется меню взаимодействий.</i>"
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_merc_female_romance_list_keyboard(females),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:merc:rom18")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^hom:merc:roml:(\d+)$"))
+async def home_merc_romance_menu_from_list(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None or callback.from_user is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        if not _adult_allowed(user):
+            await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        if not _merc_is_female(m):
+            await callback.answer("Раздел доступен только для наёмниц.", show_alert=True)
+            return
+        data = _load_merc_romance_data()
+        items = list(data.get("interactions") or [])
+        items = [x for x in items if isinstance(x, dict)]
+        if not items:
+            await callback.answer("Нет контента.", show_alert=True)
+            return
+        aff = int(dict(m.extra or {}).get("romance_aff", 0) or 0)
+        text = (
+            f"🛏 <b>Покои</b> · <b>{html.escape(m.display_name)}</b>\n"
+            f"💞 Близость: <b>{aff}</b>\n\n"
+            "<i>Выбери взаимодействие.</i>"
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_romance_menu_kb(mid, items, from_merc_list=True),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:merc:roml")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^hom:merc:rom:(\d+)$"))
+async def home_merc_romance_menu(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None or callback.from_user is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        if not _adult_allowed(user):
+            await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
+            return
+        mid = int(callback.data.rsplit(":", 1)[-1])
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        if not _merc_is_female(m):
+            await callback.answer("Раздел доступен только для наёмниц.", show_alert=True)
+            return
+        data = _load_merc_romance_data()
+        items = list(data.get("interactions") or [])
+        items = [x for x in items if isinstance(x, dict)]
+        if not items:
+            await callback.answer("Нет контента.", show_alert=True)
+            return
+        aff = int(dict(m.extra or {}).get("romance_aff", 0) or 0)
+        text = (
+            f"🛏 <b>Покои</b> · <b>{html.escape(m.display_name)}</b>\n"
+            f"💞 Близость: <b>{aff}</b>\n\n"
+            "<i>Выбери взаимодействие.</i>"
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=_romance_menu_kb(mid, items, from_merc_list=False),
+            target_message=callback.message,
+            photo_path=menu_home_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:merc:rom menu")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.func(lambda d: bool(d and _MERC_ROM_INTERACTION_RE.match(d))))
+async def home_merc_romance_interaction(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None or callback.from_user is None:
+            await callback.answer()
+            return
+        char = await _char(callback, session)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        if not _adult_allowed(user):
+            await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
+            return
+        rm = _MERC_ROM_INTERACTION_RE.match(callback.data)
+        if rm is None:
+            await callback.answer()
+            return
+        mid = int(rm.group(1))
+        iid = rm.group(2)
+        from_merc_list = callback.data.endswith(":l")
+        m = await mercenary_repo.get_by_id(session, mid)
+        if m is None or int(m.character_id) != int(char.id):
+            await callback.answer("Нет такого наёмника.", show_alert=True)
+            return
+        if not _merc_is_female(m):
+            await callback.answer("Раздел доступен только для наёмниц.", show_alert=True)
+            return
+        data = _load_merc_romance_data()
+        items = list(data.get("interactions") or [])
+        items = [x for x in items if isinstance(x, dict)]
+        by_id = {str(x.get("id") or ""): x for x in items}
+        it = by_id.get(iid)
+        if it is None:
+            await callback.answer("Не найдено.", show_alert=True)
+            return
+        lines = it.get("lines")
+        lines = [x for x in (lines or []) if isinstance(x, str)]
+        body = _format_interaction_lines(lines, merc_name=str(m.display_name))
+        delta = int(it.get("aff_delta", 0) or 0)
+        if delta:
+            await mercenary_repo.get_by_id(session, mid)  # ensure loaded
+            aff_now = _romance_apply_affection(m, delta)
+            await session.commit()
+        else:
+            aff_now = int(dict(m.extra or {}).get("romance_aff", 0) or 0)
+        title = str(it.get("title") or "Взаимодействие").strip()
+        text = f"💞 <b>{html.escape(title)}</b>\n\n{body}\n\n💞 Близость: <b>{aff_now}</b>"
+
+        media_type = str(it.get("media_type") or "photo").strip().lower()
+        media = str(it.get("media") or "").strip()
+        media_path = str(MERC_ROMANCE_ASSETS_DIR / media) if media else None
+        kb = _romance_interaction_kb(mid, iid, from_merc_list=from_merc_list)
+
+        if media_type == "animation" and media_path:
+            await push_game_ui_animation(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=callback.message,
+                animation_path=media_path,
+            )
+        elif media_type == "video" and media_path:
+            await push_game_ui_video(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=callback.message,
+                video_path=media_path,
+            )
+        else:
+            await push_game_ui(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=callback.message,
+                photo_path=media_path,
+                character=char,
+            )
+        await callback.answer()
+    except Exception:
+        logger.exception("hom:merc:rom interaction")
         await callback.answer("Ошибка.", show_alert=True)
 
 
@@ -1071,6 +1452,7 @@ async def home_merc_dialog(callback: CallbackQuery, session: AsyncSession, state
             await callback.answer(msg, show_alert=True)
             return
         await session.flush()
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n{msg}"
         await push_game_ui(
@@ -1078,7 +1460,7 @@ async def home_merc_dialog(callback: CallbackQuery, session: AsyncSession, state
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1108,6 +1490,7 @@ async def home_merc_gift(callback: CallbackQuery, session: AsyncSession, state: 
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
         await push_game_ui(
@@ -1115,7 +1498,7 @@ async def home_merc_gift(callback: CallbackQuery, session: AsyncSession, state: 
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1145,6 +1528,7 @@ async def home_merc_train(callback: CallbackQuery, session: AsyncSession, state:
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
         await push_game_ui(
@@ -1152,7 +1536,7 @@ async def home_merc_train(callback: CallbackQuery, session: AsyncSession, state:
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1182,6 +1566,7 @@ async def home_merc_gear_blade(callback: CallbackQuery, session: AsyncSession, s
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
         await push_game_ui(
@@ -1189,7 +1574,7 @@ async def home_merc_gear_blade(callback: CallbackQuery, session: AsyncSession, s
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1219,6 +1604,7 @@ async def home_merc_gear_armor(callback: CallbackQuery, session: AsyncSession, s
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
         await push_game_ui(
@@ -1226,7 +1612,7 @@ async def home_merc_gear_armor(callback: CallbackQuery, session: AsyncSession, s
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1256,6 +1642,7 @@ async def home_merc_work_start(callback: CallbackQuery, session: AsyncSession, s
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
         await push_game_ui(
@@ -1263,7 +1650,7 @@ async def home_merc_work_start(callback: CallbackQuery, session: AsyncSession, s
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1293,6 +1680,7 @@ async def home_merc_work_claim(callback: CallbackQuery, session: AsyncSession, s
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
         await push_game_ui(
@@ -1300,7 +1688,7 @@ async def home_merc_work_claim(callback: CallbackQuery, session: AsyncSession, s
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1393,12 +1781,13 @@ async def home_merc_party_toggle_detail(callback: CallbackQuery, session: AsyncS
         await session.flush()
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids)
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         await push_game_ui(
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text,
-            reply_markup=_merc_detail_keyboard(char, m),
+            reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,
@@ -1419,6 +1808,7 @@ async def home_merc_xp(callback: CallbackQuery, session: AsyncSession, state: FS
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         pct = int(callback.data.rsplit(":", 1)[-1])
         set_merc_xp_share_percent(char, pct)
         await session.flush()
@@ -1431,7 +1821,7 @@ async def home_merc_xp(callback: CallbackQuery, session: AsyncSession, state: FS
             callback.bot,
             chat_id=callback.message.chat.id,
             text=text + f"\n\n✅ Доля опыта наёмников: <b>{pct}%</b> от твоего опыта за бой.",
-            reply_markup=_merc_quarters_keyboard(char, mercs),
+            reply_markup=_merc_quarters_keyboard(char, mercs, user=user),
             target_message=callback.message,
             photo_path=menu_home_photo_path(),
             character=char,

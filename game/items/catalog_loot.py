@@ -83,6 +83,11 @@ def rarities_for_floor(floor: int) -> list[str]:
     return result
 
 
+# На этажах выше верхней границы export_floor_note предмет всё ещё может выпасть,
+# но с меньшим весом — чтобы не гнать игрока на низкие этажи за «старыми» рессами.
+_CATALOG_RELAXED_FLOOR_WEIGHT = 0.44
+
+
 def roll_catalog_item(floor: int, rarities: list[str] | None = None) -> dict[str, Any] | None:
     """Случайный предмет из каталога для данного этажа.
 
@@ -90,19 +95,28 @@ def roll_catalog_item(floor: int, rarities: list[str] | None = None) -> dict[str
     Возвращает глубокую копию словаря предмета или None если пул пуст.
     """
     rarity_set = set(r.lower() for r in (rarities if rarities is not None else rarities_for_floor(floor)))
-    pool: list[dict[str, Any]] = []
+    fl = int(floor)
+    weighted: list[tuple[float, dict[str, Any]]] = []
     for item in _get_catalog():
         if str(item.get("rarity") or "common").lower() not in rarity_set:
             continue
         note = str(item.get("export_floor_note") or "").strip()
+        w = 1.0
         if note:
             try:
                 lo, hi = _parse_floor_note(note)
-                if not (lo <= int(floor) <= hi):
+                if lo <= fl <= hi:
+                    w = 1.0
+                elif fl > hi:
+                    w = float(_CATALOG_RELAXED_FLOOR_WEIGHT)
+                else:
                     continue
             except (ValueError, TypeError):
-                pass
-        pool.append(item)
-    if not pool:
+                w = 1.0
+        weighted.append((w, item))
+    if not weighted:
         return None
-    return copy.deepcopy(random.choice(pool))
+    items = [it for _, it in weighted]
+    weights = [wt for wt, _ in weighted]
+    pick = random.choices(items, weights=weights, k=1)[0]
+    return copy.deepcopy(pick)

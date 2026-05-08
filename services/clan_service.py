@@ -243,6 +243,22 @@ CAPTURE_GUARDIAN_BOSS_KEYS: dict[int, str] = {
     98: "boss_elder_lich",
 }
 
+# Подписи для игроков (ключи боссов — внутренние id шаблонов).
+CAPTURE_GUARDIAN_NAME_RU: dict[str, str] = {
+    "boss_forest_warden": "Страж древнего леса",
+    "boss_stone_golem_guardian": "Каменный голем-страж",
+    "boss_swamp_troll_warden": "Болотный тролль-страж",
+    "boss_iron_sentinel": "Железный часовой",
+    "boss_crystal_titan": "Кристальный титан",
+    "boss_shadow_lord": "Повелитель теней",
+    "boss_bone_colossus": "Костяной колосс",
+    "boss_void_herald": "Вестник Бездны",
+    "boss_storm_wyrm": "Грозовой змей",
+    "boss_lava_titan": "Лавовый титан",
+    "boss_elder_lich": "Древний лич",
+    "boss_sea_leviathan": "Морской левиафан",
+}
+
 # ─────────────────────────── Войны ──────────────────────────────────────────
 
 WAR_DECLARE_COST = 5_000
@@ -800,11 +816,17 @@ async def try_capture_floor(
     _add_event(payload, f"{html.escape(character.display_name)} инициировал захват этажа {floor_number}")
     await clan_repo.update_payload(session, clan, payload)
     guardian_key = CAPTURE_GUARDIAN_BOSS_KEYS.get(floor_number, "boss_forest_warden")
+    gname = html.escape(CAPTURE_GUARDIAN_NAME_RU.get(guardian_key, "главного босса этажа"))
+    base_h = CAPTURE_DURATION_HOURS
     return (
         True,
-        f"⚔️ Заявка на захват этажа {floor_number} подана!\n"
-        f"Победи стража (<b>{guardian_key}</b>) на этом этаже, чтобы завершить захват.\n"
-        f"<i>Для стабильного захвата рекомендуется участие 3+ членов клана.</i>",
+        f"⚔️ Заявка на захват этажа <b>{floor_number}</b> подана.\n\n"
+        f"<b>Как завершить захват</b>\n"
+        f"1) Открой этот этаж на карте башни (ты должен физически стоять на ярусе <b>{floor_number}</b>).\n"
+        f"2) Сразись с <b>главным боссом</b> этого этажа — для твоего яруса это «<b>{gname}</b>».\n"
+        f"3) После победы захват закрепится за кланом примерно на <b>{base_h}</b> ч. "
+        f"(дольше, если в клане построена <b>сторожевая башня</b>).\n\n"
+        f"<i>Совет: стабильнее проходит, если в бою участвуют 3+ члена клана.</i>",
     )
 
 

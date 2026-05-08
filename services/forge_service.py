@@ -660,19 +660,9 @@ async def craft_rune_merge(
     if int(character.gold) < cost:
         return False, f"Нужно {cost} золота."
 
-    bag = await inventory_repo.list_bag_items(session, character.id)
-    found: list[Any] = []
-    for it in bag:
-        rd = rune_sys.extract_rune_from_item(dict(it.item_data or {}))
-        if rd is None:
-            continue
-        if rd.element == el and rd.rank == prev:
-            found.append(it)
-        if len(found) >= 2:
-            break
-
-    if len(found) < 2:
-        return False, f"Нужны две руны «{el}» ранга {prev} в сумке."
+    have = await inventory_repo.count_runes_in_bag(session, int(character.id), element=el, rank=prev)
+    if have < 2:
+        return False, f"Нужны две руны «{el}» ранга {prev} в сумке (с учётом стаков)."
 
     free = await inventory_repo.first_free_bag_slot(session, character.id)
     if free is None:
@@ -690,8 +680,15 @@ async def craft_rune_merge(
         spend_for=spend_for,
         spend_kind=spend_kind,
     )
-    for it in found:
-        await inventory_repo.delete_inventory_item(session, it)
+    consumed = await inventory_repo.consume_n_runes_from_bag(
+        session,
+        int(character.id),
+        element=el,
+        rank=prev,
+        need=2,
+    )
+    if not consumed:
+        return False, "Не удалось списать руны — проверь сумку и попробуй снова."
 
     new_rune = rune_sys.RuneData(element=el, rank=target_rank)
     payload = rune_sys.rune_item_payload(new_rune)
@@ -742,19 +739,14 @@ async def try_workshop_rune_merge(
     if int(character.gold) < gold_cost:
         return False, f"Нужно {gold_cost} золота."
 
-    bag = await inventory_repo.list_bag_items(session, character.id)
-    found: list[Any] = []
-    for it in bag:
-        rd = rune_sys.extract_rune_from_item(dict(it.item_data or {}))
-        if rd is None:
-            continue
-        if rd.element == el and rd.rank == prev_rank:
-            found.append(it)
-        if len(found) >= need_n:
-            break
-
-    if len(found) < need_n:
-        return False, f"Нужно {need_n} рун «{el}» ранга {prev_rank} в сумке."
+    have = await inventory_repo.count_runes_in_bag(
+        session,
+        int(character.id),
+        element=el,
+        rank=prev_rank,
+    )
+    if have < need_n:
+        return False, f"Нужно {need_n} рун «{el}» ранга {prev_rank} в сумке (с учётом стаков)."
 
     free = await inventory_repo.first_free_bag_slot(session, character.id)
     if free is None:
@@ -766,8 +758,15 @@ async def try_workshop_rune_merge(
         spend_for=f"Мастерская: слияние руны {el} → ранг {tr}",
         spend_kind="workshop",
     )
-    for it in found[:need_n]:
-        await inventory_repo.delete_inventory_item(session, it)
+    consumed = await inventory_repo.consume_n_runes_from_bag(
+        session,
+        int(character.id),
+        element=el,
+        rank=prev_rank,
+        need=need_n,
+    )
+    if not consumed:
+        return False, "Не удалось списать руны — проверь сумку и попробуй снова."
 
     new_rune = rune_sys.RuneData(element=el, rank=tr)
     payload = rune_sys.rune_item_payload(new_rune)

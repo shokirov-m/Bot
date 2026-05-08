@@ -243,14 +243,24 @@ def format_inventory_item_html(
     cnt = max(1, int(data.get("count") or 1))
     if cnt > 1:
         lines.append(f"📦 Количество: <b>×{cnt}</b>")
+    if not compact and kind_key == "consumable":
+        ut0 = str(data.get("use_tag") or "").strip().lower()
+        if ut0 and ut0 != "workshop_alchemy_enchant":
+            lines.extend(_consumable_use_effect_lines_html(data))
     if not compact:
         summary = data.get("summary")
         if summary:
+            sm = str(summary).strip()
             if kind_key == "craft_resource":
-                lines.append(f"📦 <i>{html.escape(str(summary))}</i>")
+                lines.append(f"📦 <i>{html.escape(sm)}</i>")
+            elif any(ch.isdigit() for ch in sm):
+                lines.append(
+                    "<i>Фрагмент описания с цифрами скрыт — ориентируйся на параметры выше "
+                    "(редкость, заточка и бонусы считаются там же, что в бою).</i>",
+                )
             else:
                 lines.append("<i>Лор / текст карточки (не заменяет параметры выше):</i>")
-                lines.append(f"<i>{html.escape(str(summary))}</i>")
+                lines.append(f"<i>{html.escape(sm)}</i>")
     return "\n".join(lines)
 
 

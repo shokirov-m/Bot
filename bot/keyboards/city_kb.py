@@ -6,7 +6,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
-from db.models.user import User
 from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR
 
 
@@ -15,7 +14,6 @@ def city_hub_keyboard(
     character: Character,
     *,
     locale: str = "ru",
-    user: User | None = None,
 ) -> InlineKeyboardMarkup:
     _ = (character, locale)  # API сохранён для совместимости с вызовами
     f = int(floor_number)
@@ -46,14 +44,6 @@ def city_hub_keyboard(
     hub_rows.extend(
         [
             [InlineKeyboardButton(text="🍺 Таверна", callback_data=f"tvr:open:{floor_number}")],
-            (
-                [InlineKeyboardButton(text="🏮 Улица красных фонарей (18+)", callback_data="rl:hub:31")]
-                if f == 31
-                and user is not None
-                and bool(user.adult_age_declared) is True
-                and bool(user.adult_content_enabled) is True
-                else []
-            ),
             [InlineKeyboardButton(text="🏪 Лавка", callback_data=f"shp:main:{floor_number}:c")],
             [
                 InlineKeyboardButton(text="⚔️ Стражник", callback_data=f"cty:{floor_number}:view"),
@@ -63,6 +53,4 @@ def city_hub_keyboard(
             menu_nav_button_row(),
         ],
     )
-    # Убираем пустые строки (например, если 18+ кнопка не показана).
-    hub_rows = [row for row in hub_rows if row]
     return InlineKeyboardMarkup(inline_keyboard=hub_rows)

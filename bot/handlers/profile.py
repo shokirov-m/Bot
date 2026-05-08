@@ -377,6 +377,12 @@ def _build_profile_text(
             f"⚗️ Рунные камни: {format_number(char.rune_stones)}",
             LINE_SEP,
             f"📜 Класс: {class_title}",
+        ]
+    )
+    if arch and (arch.description_ru or "").strip():
+        lines.append(f"<i>{html.escape((arch.description_ru or '').strip())}</i>")
+    lines.extend(
+        [
             "",
             render_hp_bar(char.hp_current, char.hp_max, wrap_bar_in_code=False),
             "",

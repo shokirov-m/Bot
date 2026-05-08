@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import json
 import random
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -50,7 +51,16 @@ from game.mercenaries.shadow_market_meta import (
 
 def _merc_extra_dict(m: Mercenary) -> dict[str, Any]:
     raw = m.extra
-    return dict(raw) if isinstance(raw, dict) else {}
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return dict(parsed)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {}
 
 
 def merc_gear_atk_flat(m: Mercenary) -> int:
@@ -406,10 +416,13 @@ def format_merc_detail_html(m: Mercenary, *, party_ids: list[int]) -> str:
         wline = "💼 Подработка: <b>забери зарплату</b>."
     else:
         wline = "💼 Подработка: свободен (2 ч)."
+    eff = merc_to_combat_dict(m)
     lines = [
         f"🛏 <b>{html.escape(m.display_name)}</b>",
         f"{html.escape(rd.name_ru)}, ур.{m.level}, ♥ преданность <b>{m.loyalty}</b>",
-        f"❤️ {m.hp_max} · ⚔️ {m.atk} (база; в бою +бонус экипа и ♥)",
+        f"❤️ {m.hp_max} · ⚔️ {m.atk} <i>(база в карточке)</i>",
+        f"🛡️ <b>В бою сейчас:</b> ❤️ {eff['hp_max']} · ⚔️ {eff['atk']} "
+        f"<i>(учтены экип +{gatk}/{ghp} и множитель ♥)</i>",
         "",
         f"⚔️ Экип: клинок <b>{b_lv}/{MERC_GEAR_BLADE_MAX}</b> → +{gatk} ATK · "
         f"доспех <b>{a_lv}/{MERC_GEAR_ARMOR_MAX}</b> → +{ghp} HP",

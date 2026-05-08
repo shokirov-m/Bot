@@ -48,7 +48,9 @@ def gold_reward(floor_number: int, spawn: FloorMonsterSpawn) -> int:
         return base * GOLD_MINI_MULT + random.randint(lo, hi)
     if spawn.is_elite:
         lo, hi = GOLD_ELITE_EXTRA_RANGE
-        return int(base * GOLD_ELITE_MULT) + random.randint(lo, hi)
+        g = int(base * GOLD_ELITE_MULT) + random.randint(lo, hi)
+        bump = 1.28 + min(0.38, max(0, int(floor_number) - 8) * 0.02)
+        return max(1, int(g * bump))
     lo, hi = GOLD_NORMAL_EXTRA_RANGE
     return base + random.randint(lo, hi)
 
@@ -60,7 +62,9 @@ def experience_reward(floor_number: int, spawn: FloorMonsterSpawn) -> int:
     if spawn.is_mini_boss:
         return base * XP_MINI_MULT
     if spawn.is_elite:
-        return int(base * XP_ELITE_MULT)
+        x = int(base * XP_ELITE_MULT)
+        bump = 1.2 + min(0.32, max(0, int(floor_number) - 8) * 0.018)
+        return max(1, int(x * bump))
     return base
 
 

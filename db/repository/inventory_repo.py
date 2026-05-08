@@ -378,6 +378,61 @@ def stack_count(item: InventoryItem) -> int:
     return max(1, int(d.get("count") or 1))
 
 
+async def count_runes_in_bag(
+    session: AsyncSession,
+    character_id: int,
+    *,
+    element: str,
+    rank: int,
+) -> int:
+    """Сколько единиц рун (включая стаки) данной стихии и ранга лежит в сумке."""
+    from game.items import runes as rune_sys
+
+    el = str(element).lower().strip()
+    rk = int(rank)
+    bag = await list_bag_items(session, character_id)
+    total = 0
+    for it in bag:
+        rd = rune_sys.extract_rune_from_item(dict(it.item_data or {}))
+        if rd is None or rd.element != el or rd.rank != rk:
+            continue
+        total += stack_count(it)
+    return total
+
+
+async def consume_n_runes_from_bag(
+    session: AsyncSession,
+    character_id: int,
+    *,
+    element: str,
+    rank: int,
+    need: int,
+) -> bool:
+    """Списать need рун из сумки (по нескольким стакам при необходимости)."""
+    from game.items import runes as rune_sys
+
+    if need <= 0:
+        return True
+    el = str(element).lower().strip()
+    rk = int(rank)
+    remaining = int(need)
+    bag = await list_bag_items(session, character_id)
+    for it in list(bag):
+        if remaining <= 0:
+            break
+        rd = rune_sys.extract_rune_from_item(dict(it.item_data or {}))
+        if rd is None or rd.element != el or rd.rank != rk:
+            continue
+        cnt = stack_count(it)
+        take = min(cnt, remaining)
+        for _ in range(take):
+            await consume_one_from_stack(session, it)
+            remaining -= 1
+            if remaining <= 0:
+                break
+    return remaining <= 0
+
+
 async def consolidate_bag_stacks(session: AsyncSession, character_id: int) -> int:
     """
     Объединить уже лежащие в сумке стакаемые предметы с одинаковой сигнатурой.

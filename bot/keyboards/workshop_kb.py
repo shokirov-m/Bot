@@ -295,6 +295,10 @@ def workshop_queue_keyboard(
                     ),
                 ],
             )
+    if any(ready for _, _, ready in entries):
+        rows.append(
+            [InlineKeyboardButton(text="📥 Забрать всё готовое", callback_data="wsp:claimall")],
+        )
     rows.append([InlineKeyboardButton(text="⬅ Мастерская", callback_data="wsp:hub")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)

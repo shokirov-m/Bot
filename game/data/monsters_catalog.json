@@ -2,6 +2,7 @@
   "pools": {
     "forest_beginnings": [
       "orc",
+      "timber_wolf",
       "spider",
       "goblin",
       "boar",
@@ -1959,6 +1960,27 @@
       "display_name": "Владыка топи",
       "emoji": "👑",
       "blurb": "Три ключа в зубах — три печати на выходе."
+    },
+    "timber_wolf": {
+      "id": "timber_wolf",
+      "name": "🐺 Лесной волк",
+      "level": 3,
+      "reference_floor": 3,
+      "hp": 240,
+      "atk": 52,
+      "def": 18,
+      "exp": 28,
+      "gold": 20,
+      "element": "earth",
+      "phrases": [],
+      "skills": [],
+      "loot_table": "",
+      "image": "assets/monsters/ice_wolf.png",
+      "catalog_skip_spawn_mults": false,
+      "zone": "forest_beginnings",
+      "display_name": "Лесной волк",
+      "emoji": "🐺",
+      "blurb": "Стая стает на тропе и рвёт горло."
     }
   }
 }

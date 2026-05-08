@@ -32,7 +32,10 @@ def item_data_as_dict(raw: Any) -> dict[str, Any]:
 
 def normalize_combat_use_tag(item_data: dict[str, Any]) -> str:
     """Единый формат тега (лавка/лут могли сохранить регистр иначе)."""
-    return str(item_data.get("use_tag") or item_data.get("USE_TAG") or "").strip().lower()
+    tag = str(item_data.get("use_tag") or item_data.get("USE_TAG") or "").strip().lower()
+    if tag:
+        return tag
+    return str(item_data.get("combat_use_tag") or item_data.get("effect_tag") or "").strip().lower()
 
 
 def apply_consumable(state: dict[str, Any], item_data: dict[str, Any]) -> list[str]:

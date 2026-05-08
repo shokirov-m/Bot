@@ -62,6 +62,16 @@ _STAT_SCROLL_KEYS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _enchant_mechanical_tuple(data: dict[str, Any]) -> tuple[Any, ...]:
+    """Сравнимый снимок числовых бонусов предмета (без подписей зачарования)."""
+    d = dict(data or {})
+    resists = tuple(int(d.get(ik) or 0) for _, ik in _RESIST_SCROLL_KEYS)
+    fire_dmg = int(d.get("fire_damage_bonus_pct") or 0)
+    defense = int(d.get("defense", d.get("armor", 0)) or 0)
+    stats = tuple(int(d.get(stat_key) or 0) for _, stat_key in _STAT_SCROLL_KEYS)
+    return (resists, fire_dmg, defense, stats)
+
+
 def _merge_enchant_onto_target(scroll: dict[str, Any], target: dict[str, Any]) -> dict[str, Any]:
     out = copy.deepcopy(target)
 
@@ -129,7 +139,14 @@ async def try_apply_alchemy_enchant(
     if not can_apply_scroll_to_target(sd, td):
         return False, "Этот свиток не подходит к этому типу предмета."
 
-    new_payload = _merge_enchant_onto_target(sd, td)
+    preview = _merge_enchant_onto_target(sd, dict(td))
+    if _enchant_mechanical_tuple(td) == _enchant_mechanical_tuple(preview):
+        return (
+            False,
+            "У предмета уже максимум по этому свитку (или нечего усиливать) — свиток не тратим.",
+        )
+
+    new_payload = preview
     target_it.item_data = new_payload
     flag_modified(target_it, "item_data")
 

@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import html
+
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
@@ -18,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.menu_kb import menu_nav_button_row
 from bot.utils.game_ui import edit_game_message_content
 from db.repository import character_repo, user_repo
+from game.archetypes import manager as arch_manager
 from services import character_service, stat_bonus_service
 
 router = Router(name="stats_alloc")
@@ -36,6 +39,16 @@ def _stats_text(char, mode: int) -> str:
         )
     else:
         hint = "Свободных очков нет — повышай уровень в бою и квестах (+5 очков за уровень)."
+    arch = arch_manager.get_archetype(getattr(char, "class_key", "") or "")
+    class_block = ""
+    if arch:
+        head = html.escape(arch.full_name)
+        desc_raw = (arch.description_ru or "").strip()
+        if desc_raw:
+            short = desc_raw if len(desc_raw) <= 280 else (desc_raw[:277] + "…")
+            class_block = f"\n\n📜 <b>{head}</b>\n<i>{html.escape(short)}</i>"
+        else:
+            class_block = f"\n\n📜 <b>{head}</b>"
     return (
         "📊 <b>Характеристики</b>\n"
         f"{hint}\n\n"
@@ -43,6 +56,7 @@ def _stats_text(char, mode: int) -> str:
         f"🔮 ИНТ: {char.stat_intelligence}     🛡️ ВЫН: {char.stat_vitality}\n"
         f"🍀 УДА: {char.stat_luck}\n\n"
         f"❤️ HP: {char.hp_current}/{char.hp_max}    💙 MP: {char.mp_current}/{char.mp_max}"
+        f"{class_block}"
     )
 
 

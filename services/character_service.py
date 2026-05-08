@@ -504,12 +504,10 @@ def _apply_hp_mp_caps_from_totals(
     персонажа; при устаревшем hp_max в БД иначе «залипал» прирост от +1 СИЛ/ВЫН.
     gear_hp_flat — плоский бонус к макс. HP с надетой брони (kind=armor, поле hp_bonus).
     """
-    cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
-    if cls is None:
-        return
+    arch = arch_manager.get_character_archetype(character)
     gh = max(0, int(gear_hp_flat))
-    new_hp = max(1, int(_compute_hp_max(int(vit), int(strn), cls)) + gh)
-    new_mp = _compute_mp_max(int(intl), cls)
+    new_hp = max(1, int(_compute_hp_max(int(vit), int(strn), arch)) + gh)
+    new_mp = _compute_mp_max(int(intl), arch)
     old_hm = max(1, int(ratio_hp_old_max)) if ratio_hp_old_max is not None else max(1, int(character.hp_max))
     old_mm = max(0, int(ratio_mp_old_max)) if ratio_mp_old_max is not None else max(0, int(character.mp_max))
     character.hp_max = new_hp
@@ -551,9 +549,7 @@ async def refresh_hp_mp_from_effective(
 
     eff = await stat_bonus_service.effective_primary_stats(session, character)
     gear_hp = await stat_bonus_service.equipped_armor_hp_bonus_flat(session, int(character.id))
-    cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
-    if cls is None:
-        return
+    arch = arch_manager.get_character_archetype(character)
     ratio_hp: int | None = None
     ratio_mp: int | None = None
     if prior_effective_stats is not None:
@@ -563,8 +559,12 @@ async def refresh_hp_mp_from_effective(
             if prior_armor_hp_bonus_flat is not None
             else gear_hp
         )
-        ratio_hp = max(1, int(_compute_hp_max(int(pe["vit"]), int(pe["str"]), cls)) + old_gear_hp)
-        ratio_mp = max(0, _compute_mp_max(int(pe["int"]), cls))
+        computed_hp = max(1, int(_compute_hp_max(int(pe["vit"]), int(pe["str"]), arch)) + old_gear_hp)
+        # Если hp_max в БД «завышен» относительно формулы, долю текущего HP считаем от большего
+        # знаменателя — иначе при снятии вещи здоровье проседало сильнее пропорции.
+        ratio_hp = max(computed_hp, max(1, int(character.hp_max)))
+        computed_mp = max(0, _compute_mp_max(int(pe["int"]), arch))
+        ratio_mp = max(computed_mp, max(0, int(character.mp_max)))
     _apply_hp_mp_caps_from_totals(
         character,
         vit=int(eff["vit"]),
@@ -679,14 +679,15 @@ def nominal_primary_stats_tuple(character: Character) -> tuple[int, int, int, in
     Ожидаемые базовые статы персонажа из класса (без ручного распределения из /stats).
     После подкласса (57) статы в БД хранятся как база класса ×2.
     """
-    cls = get_class_or_none(character.class_key) or get_class_or_none("wanderer")
+    arch = arch_manager.get_character_archetype(character)
+    bs = arch.base_stats
     mult = 1
     return (
-        int(cls.strength) * mult,
-        int(cls.dexterity) * mult,
-        int(cls.intelligence) * mult,
-        int(cls.vitality) * mult,
-        int(cls.luck) * mult,
+        int(bs.get("str", 10)) * mult,
+        int(bs.get("dex", 10)) * mult,
+        int(bs.get("int", 10)) * mult,
+        int(bs.get("vit", 10)) * mult,
+        int(bs.get("luck", 10)) * mult,
     )
 
 

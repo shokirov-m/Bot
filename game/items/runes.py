@@ -255,9 +255,18 @@ def rune_item_payload(rune: RuneData) -> dict[str, Any]:
 
 
 def extract_rune_from_item(item_data: dict[str, Any] | None) -> RuneData | None:
-    if not item_data or item_data.get("kind") != "rune":
+    if not item_data:
+        return None
+    if str(item_data.get("kind") or "").strip().lower() != "rune":
         return None
     raw = item_data.get("rune")
+    if not isinstance(raw, dict):
+        el = item_data.get("element")
+        rk = item_data.get("rank") if item_data.get("rank") is not None else item_data.get("rune_rank")
+        if el is not None and rk is not None:
+            raw = {"element": el, "rank": rk}
+        else:
+            return None
     if not isinstance(raw, dict):
         return None
     try:
