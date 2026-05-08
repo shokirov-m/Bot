@@ -12,12 +12,22 @@ from aiogram.types import InlineKeyboardMarkup, Message
 from loguru import logger
 
 from bot.utils.safe_media import (
+    normalize_animation_media,
     normalize_photo_media,
+    normalize_video_media,
+    safe_answer_animation,
     safe_answer_photo,
+    safe_answer_video,
+    safe_bot_edit_message_animation,
     safe_bot_edit_message_photo,
+    safe_bot_edit_message_video,
     safe_delete_message,
+    safe_edit_message_animation,
     safe_edit_message_photo,
+    safe_edit_message_video,
+    safe_send_animation,
     safe_send_photo,
+    safe_send_video,
 )
 from utils.game_images_prefs import game_images_enabled
 
@@ -217,6 +227,259 @@ async def push_game_ui(
 
     if p is not None:
         sent = await safe_send_photo(
+            bot,
+            chat_id,
+            p,
+            caption=text,
+            reply_markup=reply_markup,
+        )
+        if sent is None:
+            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+    else:
+        sent = await bot.send_message(chat_id=chat_id, **text_kw)
+    await remember_game_ui_anchor(state, sent)
+
+
+async def push_game_ui_animation(
+    state: FSMContext,
+    bot: Bot,
+    *,
+    chat_id: int,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    target_message: Message | None = None,
+    fallback_message: Message | None = None,
+    animation_path: str | Path | None = None,
+) -> None:
+    """
+    Упрощённый вариант push_game_ui для GIF/animation.
+    Нужен для 18+ explicit: один якорь, но с анимацией.
+    """
+    p = normalize_animation_media(animation_path)
+    text_kw: dict = {
+        "text": text,
+        "reply_markup": reply_markup,
+        "parse_mode": ParseMode.HTML,
+    }
+
+    if target_message is not None and target_message.chat.id == chat_id:
+        if p is not None:
+            if getattr(target_message, "animation", None):
+                if await safe_edit_message_animation(
+                    target_message,
+                    animation_path=p,
+                    caption=text,
+                    reply_markup=reply_markup,
+                ):
+                    await remember_game_ui_anchor(state, target_message)
+                    return
+            await safe_delete_message(bot, chat_id, target_message.message_id)
+            sent = await safe_send_animation(
+                bot,
+                chat_id,
+                p,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            if sent is not None:
+                await remember_game_ui_anchor(state, sent)
+                return
+            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            await remember_game_ui_anchor(state, sent)
+            return
+        # animation_path None -> fallback to text
+        if _message_supports_caption_edit(target_message):
+            await safe_delete_message(bot, chat_id, target_message.message_id)
+            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            await remember_game_ui_anchor(state, sent)
+            return
+        try:
+            await target_message.edit_text(**text_kw)
+            await remember_game_ui_anchor(state, target_message)
+            return
+        except TelegramBadRequest:
+            logger.debug("push_game_ui_animation: edit target_message не вышел, пробуем якорь")
+
+    data = await state.get_data()
+    mid = data.get(GAME_UI_MESSAGE_ID)
+    cid = data.get(GAME_UI_CHAT_ID)
+    if mid is not None and cid == chat_id:
+        if p is not None:
+            if await safe_bot_edit_message_animation(
+                bot,
+                cid,
+                int(mid),
+                animation_path=p,
+                caption=text,
+                reply_markup=reply_markup,
+            ):
+                return
+            await safe_delete_message(bot, cid, int(mid))
+            sent = await safe_send_animation(
+                bot,
+                chat_id,
+                p,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            if sent is not None:
+                await remember_game_ui_anchor(state, sent)
+                return
+            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            await remember_game_ui_anchor(state, sent)
+            return
+        try:
+            await bot.edit_message_text(chat_id=cid, message_id=int(mid), **text_kw)
+            return
+        except TelegramBadRequest:
+            pass
+        await safe_delete_message(bot, cid, int(mid))
+        sent = await bot.send_message(chat_id=chat_id, **text_kw)
+        await remember_game_ui_anchor(state, sent)
+        return
+
+    if fallback_message is not None and fallback_message.chat.id == chat_id:
+        if p is not None:
+            sent = await safe_answer_animation(
+                fallback_message,
+                p,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            if sent is None:
+                sent = await fallback_message.answer(**text_kw)
+        else:
+            sent = await fallback_message.answer(**text_kw)
+        await remember_game_ui_anchor(state, sent)
+        return
+
+    if p is not None:
+        sent = await safe_send_animation(
+            bot,
+            chat_id,
+            p,
+            caption=text,
+            reply_markup=reply_markup,
+        )
+        if sent is None:
+            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+    else:
+        sent = await bot.send_message(chat_id=chat_id, **text_kw)
+    await remember_game_ui_anchor(state, sent)
+
+
+async def push_game_ui_video(
+    state: FSMContext,
+    bot: Bot,
+    *,
+    chat_id: int,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    target_message: Message | None = None,
+    fallback_message: Message | None = None,
+    video_path: str | Path | None = None,
+) -> None:
+    """push_game_ui для видео (MP4/WebM) через send_video/edit_message_media(InputMediaVideo)."""
+    p = normalize_video_media(video_path)
+    text_kw: dict = {
+        "text": text,
+        "reply_markup": reply_markup,
+        "parse_mode": ParseMode.HTML,
+    }
+
+    if target_message is not None and target_message.chat.id == chat_id:
+        if p is not None:
+            if getattr(target_message, "video", None):
+                if await safe_edit_message_video(
+                    target_message,
+                    video_path=p,
+                    caption=text,
+                    reply_markup=reply_markup,
+                ):
+                    await remember_game_ui_anchor(state, target_message)
+                    return
+            await safe_delete_message(bot, chat_id, target_message.message_id)
+            sent = await safe_send_video(
+                bot,
+                chat_id,
+                p,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            if sent is not None:
+                await remember_game_ui_anchor(state, sent)
+                return
+            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            await remember_game_ui_anchor(state, sent)
+            return
+        # video_path None -> fallback to text
+        if _message_supports_caption_edit(target_message):
+            await safe_delete_message(bot, chat_id, target_message.message_id)
+            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            await remember_game_ui_anchor(state, sent)
+            return
+        try:
+            await target_message.edit_text(**text_kw)
+            await remember_game_ui_anchor(state, target_message)
+            return
+        except TelegramBadRequest:
+            logger.debug("push_game_ui_video: edit target_message не вышел, пробуем якорь")
+
+    data = await state.get_data()
+    mid = data.get(GAME_UI_MESSAGE_ID)
+    cid = data.get(GAME_UI_CHAT_ID)
+    if mid is not None and cid == chat_id:
+        if p is not None:
+            if await safe_bot_edit_message_video(
+                bot,
+                cid,
+                int(mid),
+                video_path=p,
+                caption=text,
+                reply_markup=reply_markup,
+            ):
+                return
+            await safe_delete_message(bot, cid, int(mid))
+            sent = await safe_send_video(
+                bot,
+                chat_id,
+                p,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            if sent is not None:
+                await remember_game_ui_anchor(state, sent)
+                return
+            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            await remember_game_ui_anchor(state, sent)
+            return
+        try:
+            await bot.edit_message_text(chat_id=cid, message_id=int(mid), **text_kw)
+            return
+        except TelegramBadRequest:
+            pass
+        await safe_delete_message(bot, cid, int(mid))
+        sent = await bot.send_message(chat_id=chat_id, **text_kw)
+        await remember_game_ui_anchor(state, sent)
+        return
+
+    if fallback_message is not None and fallback_message.chat.id == chat_id:
+        if p is not None:
+            sent = await safe_answer_video(
+                fallback_message,
+                p,
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            if sent is None:
+                sent = await fallback_message.answer(**text_kw)
+        else:
+            sent = await fallback_message.answer(**text_kw)
+        await remember_game_ui_anchor(state, sent)
+        return
+
+    if p is not None:
+        sent = await safe_send_video(
             bot,
             chat_id,
             p,

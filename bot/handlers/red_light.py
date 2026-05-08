@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale
 from bot.keyboards.city_kb import city_hub_keyboard
 from bot.utils.game_art import menu_city_photo_path
-from bot.utils.game_ui import push_game_ui
+from bot.utils.game_ui import push_game_ui, push_game_ui_animation, push_game_ui_video
 from config import is_admin as config_is_admin
 from db.repository import character_repo, user_repo
 from game.floors import floor_data
@@ -458,22 +458,47 @@ async def _rl_explicit_profile(
     data: dict,
 ) -> None:
     c = data.get("character") if isinstance(data.get("character"), dict) else {}
-    photo = None
-    image_name = str(c.get("image") or "").strip()
-    if image_name:
-        p = EXPLICIT_IMAGE_DIR / image_name
-        if p.is_file():
-            photo = str(p)
-    await push_game_ui(
-        state,
-        callback.bot,
-        chat_id=callback.message.chat.id,
-        text=_explicit_char_profile_text(char, user, data),
-        reply_markup=_explicit_profile_kb(data),
-        target_message=callback.message,
-        photo_path=photo or menu_city_photo_path(),
-        character=char,
-    )
+    media_type = str(c.get("media_type") or "photo").strip().lower()
+    media_name = str(c.get("media") or c.get("image") or "").strip()
+    media_path = str((EXPLICIT_IMAGE_DIR / media_name)) if media_name else ""
+    text = _explicit_char_profile_text(char, user, data)
+    kb = _explicit_profile_kb(data)
+    if media_type == "animation" and media_name:
+        await push_game_ui_animation(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=kb,
+            target_message=callback.message,
+            animation_path=media_path,
+        )
+    elif media_type == "video" and media_name:
+        await push_game_ui_video(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=kb,
+            target_message=callback.message,
+            video_path=media_path,
+        )
+    else:
+        photo = None
+        if media_name:
+            p = EXPLICIT_IMAGE_DIR / media_name
+            if p.is_file():
+                photo = str(p)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=kb,
+            target_message=callback.message,
+            photo_path=photo or menu_city_photo_path(),
+            character=char,
+        )
 
 
 @router.callback_query(F.data == f"rl:exp:{FLOOR_KEY}")
@@ -554,22 +579,47 @@ async def rl_explicit_interaction(callback: CallbackQuery, session: AsyncSession
             _explicit_set_state(char, ex)
             await session.commit()
 
-        photo = None
-        img = str(it.get("image") or "").strip()
-        if img:
-            p = EXPLICIT_IMAGE_DIR / img
-            if p.is_file():
-                photo = str(p)
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=_explicit_interaction_text(it, aff_delta=aff_delta if aff_delta else None),
-            reply_markup=_explicit_interaction_kb(iid),
-            target_message=callback.message,
-            photo_path=photo or menu_city_photo_path(),
-            character=char,
-        )
+        media_type = str(it.get("media_type") or "photo").strip().lower()
+        media_name = str(it.get("media") or it.get("image") or "").strip()
+        media_path = str((EXPLICIT_IMAGE_DIR / media_name)) if media_name else ""
+        text = _explicit_interaction_text(it, aff_delta=aff_delta if aff_delta else None)
+        kb = _explicit_interaction_kb(iid)
+        if media_type == "animation" and media_name:
+            await push_game_ui_animation(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=callback.message,
+                animation_path=media_path,
+            )
+        elif media_type == "video" and media_name:
+            await push_game_ui_video(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=callback.message,
+                video_path=media_path,
+            )
+        else:
+            photo = None
+            if media_name:
+                p = EXPLICIT_IMAGE_DIR / media_name
+                if p.is_file():
+                    photo = str(p)
+            await push_game_ui(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                target_message=callback.message,
+                photo_path=photo or menu_city_photo_path(),
+                character=char,
+            )
         await callback.answer()
     except Exception:
         logger.exception("rl:exi")
