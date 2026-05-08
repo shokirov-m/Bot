@@ -44,6 +44,8 @@ router = Router(name="home")
 
 MERC_ROMANCE_DATA_PATH = Path(__file__).resolve().parents[2] / "game" / "data" / "merc_quarters_romance_ru.json"
 MERC_ROMANCE_ASSETS_DIR = Path(__file__).resolve().parents[2] / "game" / "assets" / "home" / "merc_quarters" / "romance"
+# Следующий индекс варианта по ключу "merc_id:interaction_id" (цикл при «Повторить»).
+MERC_ROM_VARIANT_CYCLE_KEY = "merc_rom_variant_cycle"
 
 _MERC_ROM_INTERACTION_RE = re.compile(r"^hom:merc:rom:(\d+):([a-zA-Z0-9_\-]+)(?::l)?$")
 
@@ -87,6 +89,47 @@ def _format_interaction_lines(lines: list[str], *, merc_name: str) -> str:
         except Exception:
             out.append(str(ln))
     return "\n".join(out)
+
+
+def _romance_single_variant_from_item(it: dict) -> dict:
+    lines = it.get("lines")
+    lines_f = [x for x in (lines or []) if isinstance(x, str)]
+    return {
+        "title": str(it.get("title") or "Взаимодействие").strip(),
+        "media_type": str(it.get("media_type") or "photo").strip().lower(),
+        "media": str(it.get("media") or "").strip(),
+        "aff_delta": int(it.get("aff_delta", 0) or 0),
+        "lines": lines_f,
+    }
+
+
+def _romance_variants_for_interaction(it: dict) -> list[dict]:
+    """Несколько вариантов сцены; без `variants` в JSON — один вариант из корневых полей."""
+    raw = it.get("variants")
+    if isinstance(raw, list) and raw:
+        parent = _romance_single_variant_from_item(it)
+        out: list[dict] = []
+        for v in raw:
+            if not isinstance(v, dict):
+                continue
+            vl = v.get("lines")
+            lines_f = [x for x in (vl or []) if isinstance(x, str)] if isinstance(vl, list) else []
+            if not lines_f:
+                lines_f = list(parent["lines"])
+            aff = parent["aff_delta"]
+            if "aff_delta" in v:
+                aff = int(v.get("aff_delta") or 0)
+            out.append(
+                {
+                    "title": str(v.get("title") or parent["title"]).strip(),
+                    "media_type": str(v.get("media_type") or parent["media_type"]).strip().lower(),
+                    "media": str(v.get("media") or parent["media"]).strip(),
+                    "aff_delta": aff,
+                    "lines": lines_f,
+                },
+            )
+        return out if out else [_romance_single_variant_from_item(it)]
+    return [_romance_single_variant_from_item(it)]
 
 
 def _romance_interaction_kb(mid: int, iid: str, *, from_merc_list: bool = False) -> InlineKeyboardMarkup:
@@ -1377,21 +1420,32 @@ async def home_merc_romance_interaction(callback: CallbackQuery, session: AsyncS
         if it is None:
             await callback.answer("Не найдено.", show_alert=True)
             return
-        lines = it.get("lines")
-        lines = [x for x in (lines or []) if isinstance(x, str)]
+        variants = _romance_variants_for_interaction(it)
+        nvar = len(variants)
+        sdata = await state.get_data()
+        cycle = dict(sdata.get(MERC_ROM_VARIANT_CYCLE_KEY) or {})
+        sk = f"{mid}:{iid}"
+        idx = int(cycle.get(sk, 0)) % nvar
+        variant = variants[idx]
+        cycle[sk] = (idx + 1) % nvar
+        await state.update_data({MERC_ROM_VARIANT_CYCLE_KEY: cycle})
+
+        lines = [x for x in variant.get("lines") or [] if isinstance(x, str)]
         body = _format_interaction_lines(lines, merc_name=str(m.display_name))
-        delta = int(it.get("aff_delta", 0) or 0)
+        delta = int(variant.get("aff_delta", 0) or 0)
         if delta:
             await mercenary_repo.get_by_id(session, mid)  # ensure loaded
             aff_now = _romance_apply_affection(m, delta)
             await session.commit()
         else:
             aff_now = int(dict(m.extra or {}).get("romance_aff", 0) or 0)
-        title = str(it.get("title") or "Взаимодействие").strip()
+        title = str(variant.get("title") or "Взаимодействие").strip()
         text = f"💞 <b>{html.escape(title)}</b>\n\n{body}\n\n💞 Близость: <b>{aff_now}</b>"
+        if nvar > 1:
+            text += f"\n\n<i>Вариант {idx + 1} из {nvar}. «Повторить» — следующий вариант по кругу.</i>"
 
-        media_type = str(it.get("media_type") or "photo").strip().lower()
-        media = str(it.get("media") or "").strip()
+        media_type = str(variant.get("media_type") or "photo").strip().lower()
+        media = str(variant.get("media") or "").strip()
         media_path = str(MERC_ROMANCE_ASSETS_DIR / media) if media else None
         kb = _romance_interaction_kb(mid, iid, from_merc_list=from_merc_list)
 
