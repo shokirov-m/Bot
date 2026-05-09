@@ -9,6 +9,10 @@ MARKET_FLOOR = 26
 
 FEATURE_BLACK_MARKET_COMBAT = True
 
+# Боевой множитель наёмников (к итоговым HP/ATK в бою).
+# Используется только в боевых расчётах; «база в карточке» (поля Mercenary.hp_max/atk) не меняется.
+MERC_COMBAT_POWER_MULT = 5.0
+
 # Покои наёмников: подарок (раз в сутки UTC, +преданность из mercenary_loyalty)
 MERC_QUARTERS_GIFT_GOLD = 250
 

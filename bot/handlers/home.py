@@ -44,6 +44,8 @@ router = Router(name="home")
 
 MERC_ROMANCE_DATA_PATH = Path(__file__).resolve().parents[2] / "game" / "data" / "merc_quarters_romance_ru.json"
 MERC_ROMANCE_ASSETS_DIR = Path(__file__).resolve().parents[2] / "game" / "assets" / "home" / "merc_quarters" / "romance"
+# Портреты наёмников (карточка наёмника + меню «Покои»).
+MERC_PORTRAITS_DIR = Path(__file__).resolve().parents[2] / "game" / "assets" / "home" / "merc_quarters" / "portraits"
 # Следующий индекс варианта по ключу "merc_id:interaction_id" (цикл при «Повторить»).
 MERC_ROM_VARIANT_CYCLE_KEY = "merc_rom_variant_cycle"
 
@@ -67,6 +69,19 @@ def _merc_is_female(m) -> bool:
     # fallback heuristic: known female names
     nm = str(getattr(m, "display_name", "") or "").strip()
     return nm in _FEMALE_NAMES
+
+
+def _merc_portrait_path(m) -> str | None:
+    ex = dict(getattr(m, "extra", None) or {})
+    fn = str(ex.get("portrait") or "").strip()
+    if not fn:
+        return None
+    return str(MERC_PORTRAITS_DIR / fn)
+
+
+def _merc_key(m) -> str:
+    ex = dict(getattr(m, "extra", None) or {})
+    return str(ex.get("merc_key") or "").strip()
 
 
 def _load_merc_romance_data() -> dict:
@@ -103,11 +118,26 @@ def _romance_single_variant_from_item(it: dict) -> dict:
     }
 
 
-def _romance_variants_for_interaction(it: dict) -> list[dict]:
-    """Несколько вариантов сцены; без `variants` в JSON — один вариант из корневых полей."""
-    raw = it.get("variants")
+def _romance_variants_for_interaction(it: dict, *, merc_key: str = "") -> list[dict]:
+    """Несколько вариантов сцены.
+
+    Поддерживает:
+    - variants: общий набор
+    - per_merc[merc_key]: переопределение (variants/title/media/aff_delta/lines) под конкретную наёмницу
+    """
+    mk = str(merc_key or "").strip()
+    base = dict(it)
+    per = base.get("per_merc")
+    if mk and isinstance(per, dict):
+        override = per.get(mk)
+        if isinstance(override, dict):
+            merged = dict(base)
+            merged.update(dict(override))
+            base = merged
+
+    raw = base.get("variants")
     if isinstance(raw, list) and raw:
-        parent = _romance_single_variant_from_item(it)
+        parent = _romance_single_variant_from_item(base)
         out: list[dict] = []
         for v in raw:
             if not isinstance(v, dict):
@@ -128,8 +158,8 @@ def _romance_variants_for_interaction(it: dict) -> list[dict]:
                     "lines": lines_f,
                 },
             )
-        return out if out else [_romance_single_variant_from_item(it)]
-    return [_romance_single_variant_from_item(it)]
+        return out if out else [_romance_single_variant_from_item(base)]
+    return [_romance_single_variant_from_item(base)]
 
 
 def _romance_interaction_kb(mid: int, iid: str, *, from_merc_list: bool = False) -> InlineKeyboardMarkup:
@@ -1210,6 +1240,7 @@ async def home_merc_detail(callback: CallbackQuery, session: AsyncSession, state
             return
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids)
+        pp = _merc_portrait_path(m) or menu_home_photo_path()
         await push_game_ui(
             state,
             callback.bot,
@@ -1217,7 +1248,7 @@ async def home_merc_detail(callback: CallbackQuery, session: AsyncSession, state
             text=text,
             reply_markup=_merc_detail_keyboard(char, m, user=user),
             target_message=callback.message,
-            photo_path=menu_home_photo_path(),
+            photo_path=pp,
             character=char,
         )
         await callback.answer()
@@ -1312,6 +1343,7 @@ async def home_merc_romance_menu_from_list(callback: CallbackQuery, session: Asy
             f"💞 Близость: <b>{aff}</b>\n\n"
             "<i>Выбери взаимодействие.</i>"
         )
+        pp = _merc_portrait_path(m) or menu_home_photo_path()
         await push_game_ui(
             state,
             callback.bot,
@@ -1319,7 +1351,7 @@ async def home_merc_romance_menu_from_list(callback: CallbackQuery, session: Asy
             text=text,
             reply_markup=_romance_menu_kb(mid, items, from_merc_list=True),
             target_message=callback.message,
-            photo_path=menu_home_photo_path(),
+            photo_path=pp,
             character=char,
         )
         await callback.answer()
@@ -1365,6 +1397,7 @@ async def home_merc_romance_menu(callback: CallbackQuery, session: AsyncSession,
             f"💞 Близость: <b>{aff}</b>\n\n"
             "<i>Выбери взаимодействие.</i>"
         )
+        pp = _merc_portrait_path(m) or menu_home_photo_path()
         await push_game_ui(
             state,
             callback.bot,
@@ -1372,7 +1405,7 @@ async def home_merc_romance_menu(callback: CallbackQuery, session: AsyncSession,
             text=text,
             reply_markup=_romance_menu_kb(mid, items, from_merc_list=False),
             target_message=callback.message,
-            photo_path=menu_home_photo_path(),
+            photo_path=pp,
             character=char,
         )
         await callback.answer()
@@ -1420,7 +1453,7 @@ async def home_merc_romance_interaction(callback: CallbackQuery, session: AsyncS
         if it is None:
             await callback.answer("Не найдено.", show_alert=True)
             return
-        variants = _romance_variants_for_interaction(it)
+        variants = _romance_variants_for_interaction(it, merc_key=_merc_key(m))
         nvar = len(variants)
         sdata = await state.get_data()
         cycle = dict(sdata.get(MERC_ROM_VARIANT_CYCLE_KEY) or {})
@@ -1446,7 +1479,13 @@ async def home_merc_romance_interaction(callback: CallbackQuery, session: AsyncS
 
         media_type = str(variant.get("media_type") or "photo").strip().lower()
         media = str(variant.get("media") or "").strip()
-        media_path = str(MERC_ROMANCE_ASSETS_DIR / media) if media else None
+        mk = _merc_key(m)
+        if media:
+            # Медиа храним отдельно по каждой наёмнице: romance/<merc_key>/<file>.
+            # Если merc_key не задан — используем старую структуру romance/<file>.
+            media_path = str((MERC_ROMANCE_ASSETS_DIR / mk / media) if mk else (MERC_ROMANCE_ASSETS_DIR / media))
+        else:
+            media_path = None
         kb = _romance_interaction_kb(mid, iid, from_merc_list=from_merc_list)
 
         if media_type == "animation" and media_path:
@@ -1582,6 +1621,7 @@ async def home_merc_train(callback: CallbackQuery, session: AsyncSession, state:
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        await session.commit()
         user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
@@ -1620,6 +1660,7 @@ async def home_merc_gear_blade(callback: CallbackQuery, session: AsyncSession, s
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        await session.commit()
         user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"
@@ -1658,6 +1699,7 @@ async def home_merc_gear_armor(callback: CallbackQuery, session: AsyncSession, s
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
+        await session.commit()
         user = await user_repo.get_by_telegram_id(session, callback.from_user.id) if callback.from_user else None
         party_ids = get_party_merc_ids(char)
         text = mercenary_service.format_merc_detail_html(m, party_ids=party_ids) + f"\n\n✅ {msg}"

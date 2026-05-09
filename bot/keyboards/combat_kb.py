@@ -11,6 +11,7 @@ from game.characters.player_skills import (
     ensure_skill_meta,
     skill_emoji,
 )
+from game.combat import consumables
 from game.items.equipment import gear_icon_for_item_data
 
 
@@ -60,19 +61,58 @@ def combat_flee_confirm_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def combat_item_picker_keyboard(bag_items: list[InventoryItem]) -> InlineKeyboardMarkup:
-    """Список расходников для боя + отмена."""
+def _combat_item_button_label(data: dict) -> str:
+    tag = consumables.normalize_combat_use_tag(data)
+    try:
+        v = int(data.get("use_value") or 0)
+    except (TypeError, ValueError):
+        v = 0
+    if tag == "heal_hp_pct":
+        return f"💚 {max(1, min(100, v))}%"
+    if tag == "heal_mp_pct":
+        return f"💙 {max(1, min(100, v))}%"
+    if tag == "heal_hp_flat":
+        return f"💚 +{max(1, v)}"
+    if tag == "heal_mp_flat":
+        return f"💙 +{max(1, v)}"
+    if tag == "cure_poison":
+        return "🧴 яд"
+    return ""
+
+
+def combat_item_picker_keyboard(bag_items: list[InventoryItem], *, page: int = 0, per_page: int = 10) -> InlineKeyboardMarkup:
+    """Список расходников для боя с пагинацией + отмена."""
+    items = list(bag_items)
+    total = len(items)
+    per = max(5, min(15, int(per_page)))
+    pages = max(1, (total + per - 1) // per)
+    pg = max(0, min(int(page), pages - 1))
+    start = pg * per
+    chunk = items[start : start + per]
+
     rows: list[list[InlineKeyboardButton]] = []
-    for it in bag_items[:20]:
+    for it in chunk:
         data = it.item_data or {}
         gi = gear_icon_for_item_data(data)
-        name = str(data.get("name", "?"))[:14]
+        name = str(data.get("name", "?"))[:16]
         count = int(data.get("count", 1))
         count_str = f" ×{count}" if count > 1 else ""
+        eff = _combat_item_button_label(data)
+        eff_str = f" {eff}" if eff else ""
         rows.append(
-            [InlineKeyboardButton(text=f"{gi} {name}{count_str}"[:64], callback_data=f"cb:itm:{it.id}")],
+            [InlineKeyboardButton(text=f"{gi}{eff_str} {name}{count_str}"[:64], callback_data=f"cb:itm:{it.id}")],
         )
-    rows.append(
-        [InlineKeyboardButton(text="⬅ В бой", callback_data="cb:ret")],
-    )
+
+    if pages > 1:
+        prev_pg = (pg - 1) % pages
+        next_pg = (pg + 1) % pages
+        rows.append(
+            [
+                InlineKeyboardButton(text="⬅", callback_data=f"cb:itmp:{prev_pg}"),
+                InlineKeyboardButton(text=f"{pg + 1}/{pages}", callback_data="cb:noop"),
+                InlineKeyboardButton(text="➡", callback_data=f"cb:itmp:{next_pg}"),
+            ],
+        )
+
+    rows.append([InlineKeyboardButton(text="⬅ В бой", callback_data="cb:ret")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

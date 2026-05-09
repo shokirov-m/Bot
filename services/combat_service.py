@@ -2708,6 +2708,7 @@ async def handle_combat_callback(
     action: str,
     skill_index: int | None,
     item_id: int | None = None,
+    item_page: int | None = None,
 ) -> None:
     """Маршрутизация действий боя (сериализация колбэков на игрока — без двойной выдачи награды)."""
     if query.message is None:
@@ -2744,6 +2745,7 @@ async def handle_combat_callback(
             action=action,
             skill_index=skill_index,
             item_id=item_id,
+            item_page=item_page,
         )
 
 
@@ -2758,6 +2760,7 @@ async def _handle_combat_callback_body(
     action: str,
     skill_index: int | None,
     item_id: int | None = None,
+    item_page: int | None = None,
 ) -> None:
     if action == "ret":
         await query.message.edit_reply_markup(reply_markup=combat_main_keyboard(character))
@@ -2781,7 +2784,7 @@ async def _handle_combat_callback_body(
                     telegram_user_id=int(query.from_user.id),
                 )
             return
-        await query.message.edit_reply_markup(reply_markup=combat_item_picker_keyboard(usable))
+        await query.message.edit_reply_markup(reply_markup=combat_item_picker_keyboard(usable, page=0))
         if query.from_user is not None:
             await combat_idle_service.arm_combat_idle_after_player_turn(
                 bot=query.bot,
@@ -2789,6 +2792,28 @@ async def _handle_combat_callback_body(
                 telegram_user_id=int(query.from_user.id),
             )
         await query.answer("Выбери предмет")
+        return
+
+    if action == "itmp":
+        usable = await _bag_combat_consumables(session, character.id)
+        if not usable:
+            await query.answer("В сумке нет зелий для боя.", show_alert=True)
+            if query.from_user is not None:
+                await combat_idle_service.arm_combat_idle_after_player_turn(
+                    bot=query.bot,
+                    state=state,
+                    telegram_user_id=int(query.from_user.id),
+                )
+            return
+        pg = int(item_page or 0)
+        await query.message.edit_reply_markup(reply_markup=combat_item_picker_keyboard(usable, page=pg))
+        if query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
+        await query.answer()
         return
 
     if action == "run_ask":

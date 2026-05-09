@@ -106,6 +106,7 @@ async def on_combat_callback(
         action = code
         skill_index: int | None = None
         item_id: int | None = None
+        item_page: int | None = None
 
         if code == "sk" and len(parts) >= 3:
             action = "sk"
@@ -118,6 +119,13 @@ async def on_combat_callback(
             action = "itm"
             try:
                 item_id = int(parts[2])
+            except ValueError:
+                await query.answer()
+                return
+        elif code == "itmp" and len(parts) >= 3:
+            action = "itmp"
+            try:
+                item_page = int(parts[2])
             except ValueError:
                 await query.answer()
                 return
@@ -135,6 +143,7 @@ async def on_combat_callback(
             action=action,
             skill_index=skill_index,
             item_id=item_id,
+            item_page=item_page,
         )
     except Exception as exc:
         # Полный лог нужен для диагностики; пользователю даём короткое сообщение с типом ошибки

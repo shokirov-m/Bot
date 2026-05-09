@@ -1,4 +1,10 @@
-"""Генерация процедурных наёмников и цен (база × BLACK_MARKET_PRICE_MULT)."""
+"""Генерация процедурных наёмников и цен (база × BLACK_MARKET_PRICE_MULT).
+
+Ограничение пула наёмниц: в игре оставлены только 3 женских архетипа:
+- эльфийка с изумрудными волосами
+- вампирша
+- волкодевушка
+"""
 
 from __future__ import annotations
 
@@ -26,9 +32,36 @@ _BASE_PRICE: dict[str, int] = {
     "legendary": 32000,
 }
 
-_NAMES_A = (
-    "Гром", "Лира", "Кейн", "Мира", "Джек", "Сильва", "Орик", "Найра",
-    "Ворн", "Эйва", "Крог", "Тесс", "Рувар", "Инга",
+_MALE_NAMES = (
+    "Гром",
+    "Кейн",
+    "Джек",
+    "Орик",
+    "Ворн",
+    "Крог",
+    "Рувар",
+)
+
+# Единственные женские наёмники (описания/картинки — через extra).
+_FEMALE_TEMPLATES: tuple[dict[str, Any], ...] = (
+    {
+        "display_name": "Эльфика (изумрудные волосы)",
+        "race_key": "elf",
+        "merc_key": "elf_emerald",
+        "portrait": "elf_emerald.png",
+    },
+    {
+        "display_name": "Вампирша",
+        "race_key": "vampire",
+        "merc_key": "vampiress",
+        "portrait": "vampiress.png",
+    },
+    {
+        "display_name": "Волкодевушка",
+        "race_key": "wolf",
+        "merc_key": "wolfgirl",
+        "portrait": "wolfgirl.png",
+    },
 )
 
 
@@ -43,12 +76,31 @@ def random_mercenary_payload(*, seed: int | None = None, rarity: str | None = No
     role_key = rng.choice(tuple(ROLES.keys()))
     rd = role_def(role_key)
     level = 1 + RARITIES.index(rar) * 3 + rng.randint(0, 2)
-    name = rng.choice(_NAMES_A)
     hp = rd.base_hp + level * 8
     atk = rd.base_atk + level * 2
+
+    # Женские лоты — только из 3 заданных.
+    # Доля женских на витрине: умеренная, чтобы не «забить» мужиков.
+    is_female = rng.random() < 0.35
+    if is_female:
+        base = dict(rng.choice(_FEMALE_TEMPLATES))
+        name = str(base["display_name"])
+        race_key = str(base.get("race_key") or "human")
+        merc_key = str(base.get("merc_key") or "female")
+        portrait = str(base.get("portrait") or "")
+        extra = {
+            "gender": "female",
+            "merc_key": merc_key,
+            "portrait": portrait,
+        }
+    else:
+        name = rng.choice(_MALE_NAMES)
+        race_key = "human"
+        extra = {"gender": "male"}
+
     return {
         "display_name": name,
-        "race_key": "human",
+        "race_key": race_key,
         "class_role": role_key,
         "rarity": rar,
         "level": level,
@@ -56,4 +108,5 @@ def random_mercenary_payload(*, seed: int | None = None, rarity: str | None = No
         "hp_max": hp,
         "atk": atk,
         "price_gold": scaled_price(rar),
+        "extra": extra,
     }

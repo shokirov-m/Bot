@@ -16,6 +16,7 @@ from db.models.mercenary import Mercenary
 from db.repository import mercenary_repo
 from game.mercenaries.constants import (
     FEATURE_BLACK_MARKET_COMBAT,
+    MERC_COMBAT_POWER_MULT,
     MERC_QUARTERS_GIFT_GOLD,
     MERC_GEAR_ARMOR_HP_EACH,
     MERC_GEAR_ARMOR_MAX,
@@ -78,8 +79,11 @@ def merc_to_combat_dict(m: Mercenary) -> dict[str, Any]:
     mult = loyalty_stat_multiplier(int(m.loyalty))
     g_atk = merc_gear_atk_flat(m)
     g_hp = merc_gear_hp_flat(m)
-    hp = max(1, int(round(int(m.hp_max) * mult)) + g_hp)
-    atk = max(1, int(round(int(m.atk) * mult)) + g_atk)
+    hp0 = max(1, int(round(int(m.hp_max) * mult)) + g_hp)
+    atk0 = max(1, int(round(int(m.atk) * mult)) + g_atk)
+    pwr = max(0.1, float(MERC_COMBAT_POWER_MULT))
+    hp = max(1, int(round(hp0 * pwr)))
+    atk = max(1, int(round(atk0 * pwr)))
     return {
         "id": int(m.id),
         "name": str(m.display_name),
@@ -169,6 +173,8 @@ async def hire_from_lot(
         return False, f"Нужно {price} 💰."
 
     character.gold = int(character.gold) - price
+    ex = lot.get("extra")
+    extra = dict(ex) if isinstance(ex, dict) else {}
     m = Mercenary(
         character_id=int(character.id),
         display_name=str(lot.get("display_name", "Наёмник")),
@@ -179,7 +185,7 @@ async def hire_from_lot(
         loyalty=int(lot.get("loyalty", 40)),
         hp_max=int(lot.get("hp_max", 100)),
         atk=int(lot.get("atk", 12)),
-        extra={},
+        extra=extra,
     )
     session.add(m)
     await session.flush()
