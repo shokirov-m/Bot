@@ -32,16 +32,6 @@ _BASE_PRICE: dict[str, int] = {
     "legendary": 32000,
 }
 
-_MALE_NAMES = (
-    "Гром",
-    "Кейн",
-    "Джек",
-    "Орик",
-    "Ворн",
-    "Крог",
-    "Рувар",
-)
-
 # Единственные женские наёмники (описания/картинки — через extra).
 _FEMALE_TEMPLATES: tuple[dict[str, Any], ...] = (
     {
@@ -64,13 +54,32 @@ _FEMALE_TEMPLATES: tuple[dict[str, Any], ...] = (
     },
 )
 
+FEMALE_TEMPLATE_BY_KEY: dict[str, dict[str, Any]] = {
+    str(t["merc_key"]): dict(t) for t in _FEMALE_TEMPLATES
+}
+
+FEMALE_TEMPLATE_DISPLAY_NAMES: frozenset[str] = frozenset(
+    str(t["display_name"]) for t in _FEMALE_TEMPLATES
+)
+
+
+def female_template_for_id(merc_id: int) -> dict[str, Any]:
+    """Стабильный архетип для записи наёмницы (миграция старых имён)."""
+    return dict(_FEMALE_TEMPLATES[int(merc_id) % len(_FEMALE_TEMPLATES)])
+
 
 def scaled_price(rarity: str) -> int:
     base = int(_BASE_PRICE.get(rarity, _BASE_PRICE["common"]))
     return base * BLACK_MARKET_PRICE_MULT
 
 
-def random_mercenary_payload(*, seed: int | None = None, rarity: str | None = None) -> dict[str, Any]:
+def random_black_market_lot_payload(
+    *,
+    seed: int | None = None,
+    slot_index: int = 0,
+    rarity: str | None = None,
+) -> dict[str, Any]:
+    """Лот чёрного рынка: только одна из трёх отредактированных наёмниц (по слоту витрины)."""
     rng = random.Random(seed)
     rar = rarity or rng.choice(RARITIES)
     role_key = rng.choice(tuple(ROLES.keys()))
@@ -79,24 +88,16 @@ def random_mercenary_payload(*, seed: int | None = None, rarity: str | None = No
     hp = rd.base_hp + level * 8
     atk = rd.base_atk + level * 2
 
-    # Женские лоты — только из 3 заданных.
-    # Доля женских на витрине: умеренная, чтобы не «забить» мужиков.
-    is_female = rng.random() < 0.35
-    if is_female:
-        base = dict(rng.choice(_FEMALE_TEMPLATES))
-        name = str(base["display_name"])
-        race_key = str(base.get("race_key") or "human")
-        merc_key = str(base.get("merc_key") or "female")
-        portrait = str(base.get("portrait") or "")
-        extra = {
-            "gender": "female",
-            "merc_key": merc_key,
-            "portrait": portrait,
-        }
-    else:
-        name = rng.choice(_MALE_NAMES)
-        race_key = "human"
-        extra = {"gender": "male"}
+    base = dict(_FEMALE_TEMPLATES[slot_index % len(_FEMALE_TEMPLATES)])
+    name = str(base["display_name"])
+    race_key = str(base.get("race_key") or "human")
+    merc_key = str(base.get("merc_key") or "female")
+    portrait = str(base.get("portrait") or "")
+    extra: dict[str, Any] = {
+        "gender": "female",
+        "merc_key": merc_key,
+        "portrait": portrait,
+    }
 
     return {
         "display_name": name,
@@ -110,3 +111,13 @@ def random_mercenary_payload(*, seed: int | None = None, rarity: str | None = No
         "price_gold": scaled_price(rar),
         "extra": extra,
     }
+
+
+def random_mercenary_payload(*, seed: int | None = None, rarity: str | None = None) -> dict[str, Any]:
+    """Обратная совместимость: случайный архетип из трёх женских."""
+    rng = random.Random(seed)
+    return random_black_market_lot_payload(
+        seed=rng.randint(1, 10_000_000),
+        slot_index=rng.randint(0, 99),
+        rarity=rarity,
+    )

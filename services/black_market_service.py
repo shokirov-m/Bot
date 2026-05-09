@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.app_global import AppGlobal
 from db.models.character import Character
 from game.mercenaries.constants import MARKET_ENTRY_COST_GOLD, MARKET_FLOOR, MARKET_MIN_LEVEL
-from game.mercenaries.mercenary_data import random_mercenary_payload
+from game.mercenaries.mercenary_data import random_black_market_lot_payload
 from game.mercenaries.shadow_market_meta import (
     close_market_hub_session as _close_market_hub_session,
     first_market_entry_free_used,
@@ -22,7 +22,7 @@ from game.mercenaries.shadow_market_meta import (
 )
 
 
-PAYLOAD_KEY = "black_market_showcase_v1"
+PAYLOAD_KEY = "black_market_showcase_v2"
 
 
 async def _ensure_app_row(session: AsyncSession) -> AppGlobal:
@@ -50,7 +50,9 @@ async def get_or_roll_showcase(session: AsyncSession) -> dict[str, Any]:
         rng = random.Random(sum(ord(c) for c in week))
         lots = []
         for i in range(6):
-            lots.append(random_mercenary_payload(seed=rng.randint(1, 10_000_000)))
+            lots.append(
+                random_black_market_lot_payload(seed=rng.randint(1, 10_000_000), slot_index=i),
+            )
         sm = {"week_id": week, "lots": lots}
         payload[PAYLOAD_KEY] = sm
         row.payload = payload

@@ -797,6 +797,111 @@ def patch_sqlite_mercenaries_table() -> None:
         logger.exception("Патч SQLite (mercenaries) не удался: {}", p)
 
 
+def patch_sqlite_migrate_female_merc_templates_v1() -> None:
+    """Женские наёмницы в БД — только три архетипа (как на витрине); статы в extra не трогаем."""
+    import json
+    import sqlite3
+
+    from loguru import logger
+
+    from game.mercenaries.mercenary_data import (
+        FEMALE_TEMPLATE_BY_KEY,
+        FEMALE_TEMPLATE_DISPLAY_NAMES,
+        female_template_for_id,
+    )
+
+    # Совпадает с bot.handlers.home._FEMALE_NAMES (старые процедурные имена).
+    legacy_female_names = frozenset({"Лира", "Мира", "Сильва", "Найра", "Эйва", "Тесс", "Инга"})
+
+    def parse_extra(raw: object) -> dict:
+        if raw is None:
+            return {}
+        if isinstance(raw, dict):
+            return dict(raw)
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8", errors="replace")
+        if isinstance(raw, str):
+            s = raw.strip()
+            if not s:
+                return {}
+            try:
+                return dict(json.loads(s))
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    def is_female_row(name: str, ex: dict) -> bool:
+        mk = str(ex.get("merc_key") or "").strip()
+        if mk in FEMALE_TEMPLATE_BY_KEY:
+            return True
+        nm = str(name or "").strip()
+        if nm in FEMALE_TEMPLATE_DISPLAY_NAMES:
+            return True
+        g = str(ex.get("gender") or "").lower()
+        if g in ("female", "f", "woman", "girl"):
+            return True
+        if g in ("male", "m", "man", "boy"):
+            return False
+        return nm in legacy_female_names
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            exists = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='mercenaries'",
+            ).fetchone()
+            if exists is None:
+                return
+            rows = con.execute(
+                "SELECT id, display_name, race_key, extra FROM mercenaries",
+            ).fetchall()
+            updated = 0
+            for mid, disp, race_key, extra_raw in rows:
+                mid_i = int(mid)
+                ex = parse_extra(extra_raw)
+                name = str(disp or "")
+                if not is_female_row(name, ex):
+                    continue
+                mk = str(ex.get("merc_key") or "").strip()
+                if mk in FEMALE_TEMPLATE_BY_KEY:
+                    tpl = FEMALE_TEMPLATE_BY_KEY[mk]
+                else:
+                    tpl = female_template_for_id(mid_i)
+                new_ex = dict(ex)
+                new_ex["gender"] = "female"
+                new_ex["merc_key"] = str(tpl["merc_key"])
+                new_ex["portrait"] = str(tpl.get("portrait") or "")
+                new_name = str(tpl["display_name"])
+                new_race = str(tpl.get("race_key") or "human")
+                if (
+                    name == new_name
+                    and str(race_key or "") == new_race
+                    and str(ex.get("merc_key") or "") == new_ex["merc_key"]
+                    and str(ex.get("portrait") or "") == new_ex["portrait"]
+                ):
+                    continue
+                con.execute(
+                    "UPDATE mercenaries SET display_name=?, race_key=?, extra=? WHERE id=?",
+                    (
+                        new_name,
+                        new_race,
+                        json.dumps(new_ex, ensure_ascii=False),
+                        mid_i,
+                    ),
+                )
+                updated += 1
+            if updated:
+                con.commit()
+                logger.info("Патч SQLite: женские наёмницы приведены к архетипам, обновлено строк: {}", updated)
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (женские наёмницы) не удался: {}", p)
+
+
 def resolve_db_path() -> Path:
     """
     Абсолютный путь к файлу SQLite.
@@ -854,6 +959,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_unequip_boots_cloak()
     patch_sqlite_workshop_orders_table()
     patch_sqlite_mercenaries_table()
+    patch_sqlite_migrate_female_merc_templates_v1()
     had_users = False
     if p.exists():
         try:
