@@ -44,3 +44,13 @@ MERC_WORK_DURATION_SEC = 2 * 3600  # 2 часа
 MERC_WORK_GOLD_BASE = 72
 MERC_WORK_GOLD_PER_LEVEL = 11
 MERC_WORK_LOYALTY_CLAIM = 1
+
+# Опыт наёмников за победу в башне: доля отнимается у героя и копится в merc.extra
+MERC_EXTRA_XP_KEY = "merc_xp"
+# Порог уровня наёмника: множитель к формуле XP героя (чем больше — тем медленнее качаются).
+MERC_XP_LEVEL_NEED_MULT = 2.5
+# Наёмник не выше героя более чем на N уровней (дальше XP копится, уровень не растёт).
+MERC_MAX_LEVELS_ABOVE_HERO = 25
+# Прирост карточных статов за уровень (как при генерации лота в mercenary_data).
+MERC_PER_LEVEL_HP = 8
+MERC_PER_LEVEL_ATK = 2

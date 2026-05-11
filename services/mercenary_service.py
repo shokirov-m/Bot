@@ -17,6 +17,10 @@ from db.repository import mercenary_repo
 from game.mercenaries.constants import (
     FEATURE_BLACK_MARKET_COMBAT,
     MERC_COMBAT_POWER_MULT,
+    MERC_EXTRA_XP_KEY,
+    MERC_MAX_LEVELS_ABOVE_HERO,
+    MERC_PER_LEVEL_ATK,
+    MERC_PER_LEVEL_HP,
     MERC_QUARTERS_GIFT_GOLD,
     MERC_GEAR_ARMOR_HP_EACH,
     MERC_GEAR_ARMOR_MAX,
@@ -30,6 +34,7 @@ from game.mercenaries.constants import (
     MERC_WORK_GOLD_BASE,
     MERC_WORK_GOLD_PER_LEVEL,
     MERC_WORK_LOYALTY_CLAIM,
+    MERC_XP_LEVEL_NEED_MULT,
     merc_gear_armor_upgrade_cost,
     merc_gear_blade_upgrade_cost,
 )
@@ -48,6 +53,7 @@ from game.mercenaries.shadow_market_meta import (
     roster_collection_cap,
     set_party_merc_ids,
 )
+from services.character_service import experience_needed_for_next_level
 
 
 def _merc_extra_dict(m: Mercenary) -> dict[str, Any]:
@@ -116,31 +122,93 @@ async def build_combat_companions(session: AsyncSession, character: Character) -
     return out
 
 
-async def grant_merc_xp_after_tower_win(
+def merc_level_cap(character: Character) -> int:
+    return max(1, int(character.level) + int(MERC_MAX_LEVELS_ABOVE_HERO))
+
+
+def merc_xp_needed_for_next_level(merc_level: int) -> int:
+    """XP до следующего уровня наёмника (медленнее героя)."""
+    lv = max(1, int(merc_level))
+    base = int(experience_needed_for_next_level(lv))
+    return max(1, int(round(base * float(MERC_XP_LEVEL_NEED_MULT))))
+
+
+def _apply_merc_baseline_stats_for_level(m: Mercenary) -> None:
+    """Карточные HP/ATK по уровню роли (как при найме из лота)."""
+    rd = role_def(str(m.class_role))
+    lv = max(1, int(m.level))
+    m.hp_max = int(rd.base_hp) + lv * int(MERC_PER_LEVEL_HP)
+    m.atk = int(rd.base_atk) + lv * int(MERC_PER_LEVEL_ATK)
+
+
+def split_tower_battle_xp_for_mercs(
+    character: Character,
+    gross_xp: int,
+    combat_state: dict[str, Any],
+) -> tuple[int, int]:
+    """Сколько опыта получает герой и сколько уходит в пул наёмников (вычитается из награды).
+
+    Пул только если в бою были живые наёмники из отряда.
+    """
+    if not FEATURE_BLACK_MARKET_COMBAT:
+        return max(0, int(gross_xp)), 0
+    comps = list(combat_state.get("companions") or [])
+    ids = [int(c["id"]) for c in comps if not c.get("dead")]
+    if not ids:
+        return max(0, int(gross_xp)), 0
+    gx = max(0, int(gross_xp))
+    share = int(get_merc_xp_share_percent(character))
+    pool = int(round(gx * (max(0, min(100, share)) / 100.0)))
+    pool = min(pool, gx)
+    hero_xp = gx - pool
+    return hero_xp, pool
+
+
+async def apply_merc_battle_xp_pool(
     session: AsyncSession,
     character: Character,
-    player_xp_gained: int,
+    merc_pool: int,
     combat_state: dict[str, Any],
 ) -> None:
-    if not FEATURE_BLACK_MARKET_COMBAT:
+    """Раздать merc_pool XP по наёмникам, участвовавшим в победе (живые в конце боя)."""
+    if not FEATURE_BLACK_MARKET_COMBAT or merc_pool <= 0:
         return
     comps = list(combat_state.get("companions") or [])
-    if not comps:
-        return
-    share = get_merc_xp_share_percent(character)
-    per = max(0, int(round(int(player_xp_gained) * (share / 100.0))))
-    if per <= 0:
-        return
     ids = [int(c["id"]) for c in comps if not c.get("dead")]
     if not ids:
         return
     rows = await mercenary_repo.get_by_ids_for_character(session, int(character.id), ids)
-    for m in rows:
-        m.level = int(m.level) + max(0, per // 200)
-        m.atk = int(m.atk) + max(0, per // 500)
-        m.hp_max = int(m.hp_max) + max(0, per // 400)
+    by_id = {int(r.id): r for r in rows}
+    ordered = [by_id[i] for i in ids if i in by_id]
+    if not ordered:
+        return
+    cap = merc_level_cap(character)
+    n = len(ordered)
+    base = merc_pool // n
+    rem = merc_pool % n
+    gains = [base + (1 if i < rem else 0) for i in range(n)]
+    for m, gain in zip(ordered, gains, strict=True):
+        ex = _merc_extra_dict(m)
+        if int(m.level) > cap:
+            m.level = cap
+            _apply_merc_baseline_stats_for_level(m)
+            ex[MERC_EXTRA_XP_KEY] = 0
+        cur_xp = int(ex.get(MERC_EXTRA_XP_KEY, 0))
+        if gain > 0:
+            cur_xp += int(gain)
+        while int(m.level) < cap:
+            need = merc_xp_needed_for_next_level(int(m.level))
+            if cur_xp < need:
+                break
+            cur_xp -= need
+            m.level = int(m.level) + 1
+            m.hp_max = int(m.hp_max) + int(MERC_PER_LEVEL_HP)
+            m.atk = int(m.atk) + int(MERC_PER_LEVEL_ATK)
+        ex[MERC_EXTRA_XP_KEY] = max(0, cur_xp)
+        m.extra = ex
         m.loyalty = min(LOYALTY_MAX, int(m.loyalty) + BATTLE_WIN_LOYALTY)
         try:
+            flag_modified(m, "extra")
             flag_modified(m, "level")
             flag_modified(m, "atk")
             flag_modified(m, "hp_max")
@@ -456,7 +524,9 @@ def format_quarters_html(
         "",
         "<b>Где что искать:</b>",
         "• <b>Доля XP наёмников</b> (20–40%) — кнопки <b>20% / 30% / 40%</b> внизу этого экрана. "
-        f"Сейчас: <b>{xp_pct}%</b> от <i>твоего</i> опыта за победу в башне; получают наёмники, с кем ты вышел в бой.",
+        f"Сейчас: <b>{xp_pct}%</b> от награды за победу в башне <b>не идёт герою</b> — эту долю делят наёмники, "
+        "с которыми ты вышел в бой (живые к концу боя). Уровень наёмника не уходит дальше, чем герой "
+        f"+{MERC_MAX_LEVELS_ABOVE_HERO}; лишний опыт копится до роста героя.",
         "• <b>Свидание</b>, <b>подарок</b>, <b>тренировка</b>, <b>экип</b> (клинок/доспех) и <b>подработка</b> — "
         "в карточке наёмника (нажми имя в списке).",
         "",

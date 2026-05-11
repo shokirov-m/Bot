@@ -1943,8 +1943,12 @@ async def _victory_sequence(
         telegram_id=message.from_user.id if message.from_user else None,
         username=message.from_user.username if message.from_user else None,
     )
-    levels_battle = await character_service.add_experience_async(session, character, xp, bot=message.bot)
-    await mercenary_service.grant_merc_xp_after_tower_win(session, character, xp, combat_state)
+    hero_xp, merc_pool = mercenary_service.split_tower_battle_xp_for_mercs(character, xp, combat_state)
+    levels_battle = await character_service.add_experience_async(session, character, hero_xp, bot=message.bot)
+    await mercenary_service.apply_merc_battle_xp_pool(session, character, merc_pool, combat_state)
+    _merc_xp_note_html = ""
+    if merc_pool > 0:
+        _merc_xp_note_html = f"\n<i>🛡️ Отряд: {merc_pool} XP из награды (всего за бой {xp}).</i>"
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
 
@@ -2330,7 +2334,7 @@ async def _victory_sequence(
                 "🏆 <b>Победа!</b> 💰 Золотой гоблин\n"
                 "✨ Награда… ▓▓▓▓▓▓▓▓▓▓\n"
                 f"{gold_gg}\n"
-                f"📈 +{xp} опыта{extra_rune}{extra_drop}{extra_rune_item}"
+                f"📈 +{hero_xp} опыта{_merc_xp_note_html}{extra_rune}{extra_drop}{extra_rune_item}"
             )
             if (floor_banner or "").strip():
                 gg_body += floor_banner
@@ -2387,7 +2391,7 @@ async def _victory_sequence(
                     message,
                     f"🏆 <b>Победа!</b> <b>{mname}</b>\n✨ Награда… {label}\n"
                     f"{gold_line}\n"
-                    f"📈 +{xp} опыта{extra_rune}{extra_drop}{extra_rune_item}"
+                    f"📈 +{hero_xp} опыта{_merc_xp_note_html}{extra_rune}{extra_drop}{extra_rune_item}"
                     f"{ml_debt_note if is_last else ''}{suffix}",
                     reply_markup=victory_kb if is_last else None,
                 )
