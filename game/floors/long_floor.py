@@ -207,6 +207,11 @@ def spawns_for_tower_progress(character: Character, floor_number: int) -> list[F
     if rc24_mod.is_room_clear_floor_24(floor_number):
         return rc24_mod.all_room_clear_spawns()
 
+    # Этаж 30 — зачистка залов, затем босс зоны (Пещеры Теней)
+    from game.floors import room_clear_floor_30 as rc30_mod
+    if rc30_mod.is_room_clear_floor_30(floor_number):
+        return rc30_mod.all_room_clear_spawns()
+
     # Этаж 26 — зал сомнений (рынок после полной зачистки)
     from game.floors import room_clear_floor_26 as rc26_mod
     if rc26_mod.is_room_clear_floor_26(floor_number):
@@ -215,6 +220,11 @@ def spawns_for_tower_progress(character: Character, floor_number: int) -> list[F
         if floor_26_shadow_cleared(character):
             return []
         return rc26_mod.all_room_clear_spawns()
+
+    # Этаж 40 — зачистка залов, затем босс зоны (Ледяные вершины)
+    from game.floors import room_clear_floor_40 as rc40_mod
+    if rc40_mod.is_room_clear_floor_40(floor_number):
+        return rc40_mod.all_room_clear_spawns()
 
     # Этаж 27 — волны теней
     from game.floors import wave_floor_27 as wv27_mod

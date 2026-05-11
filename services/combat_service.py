@@ -81,6 +81,8 @@ from game.floors import rotten_swamps as rotten_swamps_mod
 from game.floors import room_clear_floor as room_clear_mod
 from game.floors import room_clear_floor_10 as room_clear_10_mod
 from game.floors import room_clear_floor_24 as room_clear_24_mod
+from game.floors import room_clear_floor_30 as room_clear_30_mod
+from game.floors import room_clear_floor_40 as room_clear_40_mod
 from game.floors import room_clear_floor_26 as room_clear_26_mod
 from game.floors import wave_floor as wave_floor_mod
 from game.floors import wave_floor_27 as wave_floor_27_mod
@@ -2293,6 +2295,12 @@ async def _victory_sequence(
     elif spawn.slot_code in room_clear_26_mod.SLOT_ROOMS:
         _next_rc_slot = room_clear_26_mod.next_slot_after_defeat(spawn.slot_code)
         _next_rc_mod = room_clear_26_mod
+    elif spawn.slot_code in room_clear_30_mod.SLOT_ROOMS:
+        _next_rc_slot = room_clear_30_mod.next_slot_after_defeat(spawn.slot_code)
+        _next_rc_mod = room_clear_30_mod
+    elif spawn.slot_code in room_clear_40_mod.SLOT_ROOMS:
+        _next_rc_slot = room_clear_40_mod.next_slot_after_defeat(spawn.slot_code)
+        _next_rc_mod = room_clear_40_mod
     if _next_rc_slot is not None and _next_rc_mod is not None:
         _next_rc_spawn = _next_rc_mod.spawn_by_slot(_next_rc_slot)
         _next_name = _next_rc_spawn.display_name if _next_rc_spawn else "Следующий"
@@ -2461,10 +2469,18 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
         found_rc24 = room_clear_24_mod.spawn_by_slot(slot)
         if found_rc24 is not None:
             return found_rc24
+    if slot in room_clear_30_mod.ROOM_CLEAR_30_ALL_SLOTS:
+        found_rc30 = room_clear_30_mod.spawn_by_slot(slot)
+        if found_rc30 is not None:
+            return found_rc30
     if slot in room_clear_26_mod.ROOM_CLEAR_26_ALL_SLOTS:
         found_rc26 = room_clear_26_mod.spawn_by_slot(slot)
         if found_rc26 is not None:
             return found_rc26
+    if slot in room_clear_40_mod.ROOM_CLEAR_40_ALL_SLOTS:
+        found_rc40 = room_clear_40_mod.spawn_by_slot(slot)
+        if found_rc40 is not None:
+            return found_rc40
     # Wave floor 27 (wv27_w1, wv27_w2, wv27_w3, wv27_boss)
     if slot in wave_floor_27_mod.WAVE_FLOOR_27_ALL_SLOTS:
         found_wv27 = wave_floor_27_mod.spawn_by_slot(slot)

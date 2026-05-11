@@ -30,6 +30,8 @@ from game.floors import long_floor as long_floor_mod
 from game.floors import room_clear_floor as rc_mod
 from game.floors import room_clear_floor_10 as rc10_mod
 from game.floors import room_clear_floor_24 as rc24_mod
+from game.floors import room_clear_floor_30 as rc30_mod
+from game.floors import room_clear_floor_40 as rc40_mod
 from game.floors import room_clear_floor_26 as rc26_mod
 from game.floors import wave_floor as wv_mod
 from game.floors import wave_floor_27 as wv27_mod
@@ -278,6 +280,16 @@ async def on_room_10_locked(query: CallbackQuery, **_: object) -> None:
 @router.callback_query(F.data == "rc24:locked")
 async def on_room_24_locked(query: CallbackQuery, **_: object) -> None:
     await query.answer("Сначала зачисти предыдущую комнату Пещеры. 🔒", show_alert=True)
+
+
+@router.callback_query(F.data == "rc30:locked")
+async def on_room_30_locked(query: CallbackQuery, **_: object) -> None:
+    await query.answer("Сначала зачисти предыдущий зал. 🔒", show_alert=True)
+
+
+@router.callback_query(F.data == "rc40:locked")
+async def on_room_40_locked(query: CallbackQuery, **_: object) -> None:
+    await query.answer("Сначала зачисти предыдущий зал. 🔒", show_alert=True)
 
 
 @router.callback_query(F.data == "rc26:locked")
@@ -797,6 +809,60 @@ async def on_floor_callback(
             )
             return
 
+        # ── Этаж 30: залы тьмы → босс зоны ───────────────────────────────────
+        if code in rc30_mod.ROOM_CLEAR_30_ALL_SLOTS:
+            if not rc30_mod.is_room_clear_floor_30(floor):
+                await query.answer("Этот сценарий только на 30-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from db.repository import floor_progress_repo as fpr
+
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+
+            _actual_slot = code
+            _room_idx = rc30_mod.room_index_for_button(code)
+            if _room_idx is not None:
+                if rc30_mod.is_room_complete(_room_idx, _beaten):
+                    await query.answer("Этот зал уже зачищен. ✅", show_alert=True)
+                    return
+                _next = rc30_mod.next_slot_in_room(_room_idx, _beaten)
+                if _next is None:
+                    await query.answer("Нет доступных целей.", show_alert=True)
+                    return
+                _actual_slot = _next
+
+            if _actual_slot == rc30_mod.SLOT_BOSS and not rc30_mod.is_boss_unlocked(_beaten):
+                rooms_left = rc30_mod.TOTAL_ROOMS - rc30_mod.rooms_cleared_count(_beaten)
+                await query.answer(
+                    f"Сначала зачисти все залы. Осталось: {rooms_left}.",
+                    show_alert=True,
+                )
+                return
+
+            if _actual_slot in rc30_mod.SLOT_ROOMS and _actual_slot in _beaten:
+                await query.answer("Этот враг уже побеждён.", show_alert=True)
+                return
+
+            spawn = rc30_mod.spawn_by_slot(_actual_slot)
+            if spawn is None:
+                await query.answer("Цель не найдена.", show_alert=True)
+                return
+            _r30_mi = rc30_mod.slot_room_and_monster_index(_actual_slot)
+            _r30_free_stam = (_r30_mi is not None and _r30_mi[1] > 0)
+            await combat_service.start_combat(
+                query=query,
+                session=session,
+                state=state,
+                character=char,
+                spawn=spawn,
+                free_stamina=_r30_free_stam,
+            )
+            return
+
         # ── Этаж 26: зал сомнений ───────────────────────────────────────────
         if code in rc26_mod.ROOM_CLEAR_26_ALL_SLOTS:
             if not rc26_mod.is_room_clear_floor_26(floor):
@@ -848,6 +914,60 @@ async def on_floor_callback(
                 character=char,
                 spawn=spawn,
                 free_stamina=_r26_free_stam,
+            )
+            return
+
+        # ── Этаж 40: ледяные залы → босс зоны ─────────────────────────────────
+        if code in rc40_mod.ROOM_CLEAR_40_ALL_SLOTS:
+            if not rc40_mod.is_room_clear_floor_40(floor):
+                await query.answer("Этот сценарий только на 40-м этаже.", show_alert=True)
+                return
+            if query.message is None:
+                await query.answer()
+                return
+            from db.repository import floor_progress_repo as fpr
+
+            _row = await fpr.ensure_floor_row(session, char.id, floor)
+            _ex = dict(_row.extra or {})
+            _beaten = frozenset(str(x) for x in (_ex.get("slots_cleared") or []))
+
+            _actual_slot = code
+            _room_idx = rc40_mod.room_index_for_button(code)
+            if _room_idx is not None:
+                if rc40_mod.is_room_complete(_room_idx, _beaten):
+                    await query.answer("Этот зал уже зачищен. ✅", show_alert=True)
+                    return
+                _next = rc40_mod.next_slot_in_room(_room_idx, _beaten)
+                if _next is None:
+                    await query.answer("Нет доступных целей.", show_alert=True)
+                    return
+                _actual_slot = _next
+
+            if _actual_slot == rc40_mod.SLOT_BOSS and not rc40_mod.is_boss_unlocked(_beaten):
+                rooms_left = rc40_mod.TOTAL_ROOMS - rc40_mod.rooms_cleared_count(_beaten)
+                await query.answer(
+                    f"Сначала зачисти все залы. Осталось: {rooms_left}.",
+                    show_alert=True,
+                )
+                return
+
+            if _actual_slot in rc40_mod.SLOT_ROOMS and _actual_slot in _beaten:
+                await query.answer("Этот враг уже побеждён.", show_alert=True)
+                return
+
+            spawn = rc40_mod.spawn_by_slot(_actual_slot)
+            if spawn is None:
+                await query.answer("Цель не найдена.", show_alert=True)
+                return
+            _r40_mi = rc40_mod.slot_room_and_monster_index(_actual_slot)
+            _r40_free_stam = (_r40_mi is not None and _r40_mi[1] > 0)
+            await combat_service.start_combat(
+                query=query,
+                session=session,
+                state=state,
+                character=char,
+                spawn=spawn,
+                free_stamina=_r40_free_stam,
             )
             return
 

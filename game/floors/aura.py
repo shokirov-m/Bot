@@ -1,5 +1,5 @@
 """
-Floor Auras: unique mechanics for floors 21-30.
+Floor Auras: уникальные механики 21–30, буран 31–40; на 30-м — аура сильного босса.
 """
 from typing import Any
 
@@ -85,8 +85,8 @@ def get_floor_aura(floor: int) -> dict[str, Any] | None:
             "reward_xp_mult": 1.20,
         }
 
-    # Floor 31-40: Blizzard
-    if 31 <= floor <= 40:
+    # Этажи 31–40: буран (сценарий «комнаты→босс» на 40-м — в room_clear_floor_40).
+    if 31 <= f <= 40:
         return {
             "name": "Снежный буран",
             "emoji": "🌨️",
