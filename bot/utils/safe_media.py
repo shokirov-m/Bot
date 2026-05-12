@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from aiogram import Bot
@@ -78,22 +79,36 @@ async def safe_edit_message_photo(
     photo_path: Path | str,
     caption: str,
     reply_markup: InlineKeyboardMarkup | None = None,
-    parse_mode: ParseMode | str = ParseMode.HTML,
+    parse_mode: ParseMode | str | None = ParseMode.HTML,
 ) -> bool:
     """Поменять медиа у сообщения с фото. False — нужен другой путь (удалить/отправить заново)."""
     try:
-        media = InputMediaPhoto(
-            media=_photo_input_file(photo_path),
-            caption=caption,
-            parse_mode=parse_mode,
-        )
+        kw_media: dict = {
+            "media": _photo_input_file(photo_path),
+            "caption": caption,
+        }
+        if parse_mode is not None:
+            kw_media["parse_mode"] = parse_mode
+        media = InputMediaPhoto(**kw_media)
         await message.edit_media(media=media, reply_markup=reply_markup)
         return True
     except TelegramBadRequest as e:
         if _is_not_modified(e):
             return True
         logger.debug("safe_edit_message_photo: {}", e)
-        return False
+        if parse_mode is None:
+            return False
+        plain = re.sub(r"<[^>]+>", "", caption).strip() or "…"
+        try:
+            media = InputMediaPhoto(
+                media=_photo_input_file(photo_path),
+                caption=plain[:1024],
+            )
+            await message.edit_media(media=media, reply_markup=reply_markup)
+            return True
+        except TelegramBadRequest as e2:
+            logger.debug("safe_edit_message_photo plain caption: {}", e2)
+            return False
 
 
 async def safe_bot_edit_message_photo(
@@ -133,19 +148,33 @@ async def safe_send_photo(
     *,
     caption: str,
     reply_markup: InlineKeyboardMarkup | None = None,
-    parse_mode: ParseMode | str = ParseMode.HTML,
+    parse_mode: ParseMode | str | None = ParseMode.HTML,
 ) -> Message | None:
     try:
-        return await bot.send_photo(
-            chat_id=chat_id,
-            photo=_photo_input_file(photo_path),
-            caption=caption,
-            reply_markup=reply_markup,
-            parse_mode=parse_mode,
-        )
+        kw: dict = {
+            "chat_id": chat_id,
+            "photo": _photo_input_file(photo_path),
+            "caption": caption,
+            "reply_markup": reply_markup,
+        }
+        if parse_mode is not None:
+            kw["parse_mode"] = parse_mode
+        return await bot.send_photo(**kw)
     except TelegramBadRequest as e:
         logger.warning("safe_send_photo TelegramBadRequest: {}", e)
-        return None
+        if parse_mode is None:
+            return None
+        plain = re.sub(r"<[^>]+>", "", caption).strip() or "…"
+        try:
+            return await bot.send_photo(
+                chat_id=chat_id,
+                photo=_photo_input_file(photo_path),
+                caption=plain[:1024],
+                reply_markup=reply_markup,
+            )
+        except TelegramBadRequest as e2:
+            logger.warning("safe_send_photo plain caption retry: {}", e2)
+            return None
     except OSError as e:
         logger.warning("safe_send_photo OSError (чтение файла): {}", e)
         return None

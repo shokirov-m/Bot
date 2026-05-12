@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import html
+import re
 from datetime import UTC, datetime
 
 from aiogram import F, Router
@@ -351,28 +352,28 @@ async def auc_vip_portrait_preview(callback: CallbackQuery, session: AsyncSessio
                 if p.is_file():
                     img = str(p)
             name = html.escape(g.name)
-            blurb_html = html.escape(g.blurb).replace("\n", "<br/>")
+            raw_blurb = g.blurb
         else:
             already_owned = bool(pk and home_service.has_portrait_unlock(char, pk))
             _p = portrait_path_if_exists(pk) if pk else None
             img = str(_p) if _p else None
             name = html.escape(portrait_title_ru(pk) if pk else g.name)
-            blurb_html = html.escape(portrait_blurb_ru(pk) if pk else g.blurb)
+            raw_blurb = portrait_blurb_ru(pk) if pk else g.blurb
 
-        cap_lines = [
-            f"{g.emoji} <b>{name}</b>",
-            f"<i>{blurb_html}</i>",
-            "",
-            f"Цена: <b>{g.stars_price} ⭐ Telegram Stars</b>",
-        ]
+        plain_blurb = re.sub(r"<[^>]*>", "", str(raw_blurb or "")).strip()
+        blurb_body = html.escape(plain_blurb).replace("\n", "<br/>")
+        caption = (
+            f"{g.emoji} <b>{name}</b>\n\n"
+            f"{blurb_body}\n\n"
+            f"Цена: <b>{g.stars_price} ⭐ Telegram Stars</b>"
+        )
         if already_owned:
             if vs == "vip_star_bonus":
-                cap_lines.append("\n✅ <i>Уже активирован.</i>")
+                caption += "\n\n✅ Уже активирован."
             else:
-                cap_lines.append("\n✅ <i>Уже в твоём гардеробе.</i>")
+                caption += "\n\n✅ Уже в твоём гардеробе."
         elif img is None:
-            cap_lines.append("\n⚠️ <i>Изображение пока не загружено.</i>")
-        caption = "\n".join(cap_lines)
+            caption += "\n\n⚠️ Изображение пока не загружено."
         await push_game_ui(
             state,
             callback.bot,

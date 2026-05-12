@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from aiogram import Bot
@@ -45,9 +46,53 @@ _CAPTION_CONTENT_TYPES = frozenset({
 
 
 def _clamp_telegram_caption(text: str, *, limit: int = 1024) -> str:
+    """Подпись к фото ≤1024; обрезка не должна рвать незакрытый тег/сущность HTML."""
     if len(text) <= limit:
         return text
-    return text[: max(0, limit - 4)] + "\n…"
+    room = max(0, limit - 4)
+    chunk = text[:room]
+    nl = chunk.rfind("\n")
+    if nl > room * 2 // 3:
+        chunk = chunk[:nl]
+    lt = chunk.rfind("<")
+    if lt != -1 and ">" not in chunk[lt:]:
+        chunk = chunk[:lt].rstrip()
+    amp = chunk.rfind("&")
+    if amp != -1 and ";" not in chunk[amp:]:
+        chunk = chunk[:amp].rstrip()
+    return chunk + "\n…"
+
+
+async def _bot_send_message_resilient(
+    bot: Bot,
+    *,
+    chat_id: int,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None,
+    parse_mode: ParseMode | str | None,
+) -> Message | None:
+    """send_message с откатом на текст без HTML, если Telegram отверг разметку."""
+    kw: dict = {"chat_id": chat_id, "text": text, "reply_markup": reply_markup}
+    if parse_mode is not None:
+        kw["parse_mode"] = parse_mode
+    try:
+        return await bot.send_message(**kw)
+    except TelegramBadRequest as e:
+        logger.warning("push_game_ui send_message: {}", e)
+        if parse_mode is None:
+            return None
+        plain = re.sub(r"<[^>]+>", "", text).strip()
+        if not plain:
+            plain = "…"
+        try:
+            return await bot.send_message(
+                chat_id=chat_id,
+                text=plain[:4096],
+                reply_markup=reply_markup,
+            )
+        except TelegramBadRequest as e2:
+            logger.warning("push_game_ui send_message plain fallback: {}", e2)
+            return None
 
 
 def _message_supports_caption_edit(message: Message) -> bool:
@@ -157,11 +202,24 @@ async def push_game_ui(
                 return
             except TelegramBadRequest as e:
                 logger.warning("push_game_ui: откат после неудачного send_photo: {}", e)
-            sent = await bot.send_message(chat_id=chat_id, **text_kw)
-            await remember_game_ui_anchor(state, sent)
+            sent = await _bot_send_message_resilient(
+                bot,
+                chat_id=chat_id,
+                text=text_kw["text"],
+                reply_markup=text_kw.get("reply_markup"),
+                parse_mode=text_kw.get("parse_mode"),
+            )
+            if sent is not None:
+                await remember_game_ui_anchor(state, sent)
             return
         if _message_supports_caption_edit(target_message):
-            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            sent = await _bot_send_message_resilient(
+                bot,
+                chat_id=chat_id,
+                text=text_kw["text"],
+                reply_markup=text_kw.get("reply_markup"),
+                parse_mode=text_kw.get("parse_mode"),
+            )
             if sent is not None:
                 await remember_game_ui_anchor(state, sent)
                 await safe_delete_message(bot, chat_id, target_message.message_id)
@@ -210,7 +268,13 @@ async def push_game_ui(
                 return
             except TelegramBadRequest as e:
                 logger.warning("push_game_ui якорь: откат после неудачного send_photo: {}", e)
-            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            sent = await _bot_send_message_resilient(
+                bot,
+                chat_id=chat_id,
+                text=text_kw["text"],
+                reply_markup=text_kw.get("reply_markup"),
+                parse_mode=text_kw.get("parse_mode"),
+            )
             if sent is not None:
                 await remember_game_ui_anchor(state, sent)
                 await safe_delete_message(bot, cid, int(mid))
@@ -236,7 +300,13 @@ async def push_game_ui(
                 if "message is not modified" in str(e2).lower():
                     return
                 logger.debug("push_game_ui: правка подписи якоря не вышла, шлём новое: {}", e2)
-        sent = await bot.send_message(chat_id=chat_id, **text_kw)
+        sent = await _bot_send_message_resilient(
+            bot,
+            chat_id=chat_id,
+            text=text_kw["text"],
+            reply_markup=text_kw.get("reply_markup"),
+            parse_mode=text_kw.get("parse_mode"),
+        )
         if sent is not None:
             await remember_game_ui_anchor(state, sent)
             await safe_delete_message(bot, cid, int(mid))
@@ -266,10 +336,23 @@ async def push_game_ui(
             reply_markup=reply_markup,
         )
         if sent is None:
-            sent = await bot.send_message(chat_id=chat_id, **text_kw)
+            sent = await _bot_send_message_resilient(
+                bot,
+                chat_id=chat_id,
+                text=text_kw["text"],
+                reply_markup=text_kw.get("reply_markup"),
+                parse_mode=text_kw.get("parse_mode"),
+            )
     else:
-        sent = await bot.send_message(chat_id=chat_id, **text_kw)
-    await remember_game_ui_anchor(state, sent)
+        sent = await _bot_send_message_resilient(
+            bot,
+            chat_id=chat_id,
+            text=text_kw["text"],
+            reply_markup=text_kw.get("reply_markup"),
+            parse_mode=text_kw.get("parse_mode"),
+        )
+    if sent is not None:
+        await remember_game_ui_anchor(state, sent)
 
 
 async def push_game_ui_animation(
