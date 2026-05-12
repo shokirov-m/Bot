@@ -204,6 +204,7 @@ def admin_title_grant_keyboard(
 
     per = 8
     n = len(ALL_TITLES)
+    start = max(0, int(page_idx)) * per
     chunk = ALL_TITLES[start : start + per]
     cid = int(character_id)
     pg = int(return_page)
@@ -240,6 +241,9 @@ def admin_title_grant_keyboard(
         rows.append(nav)
     rows.append([InlineKeyboardButton(text="⬅️ В панель", callback_data="adm:hub")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_promo_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
