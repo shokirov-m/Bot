@@ -2,7 +2,7 @@
 Пути к PNG: локации, монстры, предметы.
 
 Файлы экипировки — ``tower_bot/assets/items/{stem}.png`` (item_gear_png).
-Монстры — ``tower_bot/assets/monsters/{key}.png``.
+Монстры — ``tower_bot/assets/monsters/{template}.png`` или ``assets/monsters/{zone_key}/{template}.png``.
 """
 
 from __future__ import annotations
@@ -13,11 +13,12 @@ from game.floors import floor_data
 
 # Явный путь, если файл назван иначе (редко).
 _BATTLE_PORTRAIT_OVERRIDES: dict[str, str] = {
-    "golden_goblin": "assets/monsters/golden.png",
+    "golden_goblin": "assets/monsters/rotten_swamps/golden.png",
+    "mimic_chest": "assets/images/treasure/chest_mimic.png",
     # Мини-босс болот (этаж 15): тот же арт, что у карточки короля слизней.
-    "mini_bog_queen": "assets/monsters/boss_slime_king.png",
+    "mini_bog_queen": "assets/monsters/rotten_swamps/boss_slime_king.png",
     # Мажор болот (этаж 20): файл спрайта называется snake.png.
-    "boss_slime_king": "assets/monsters/snake.png",
+    "boss_slime_king": "assets/monsters/rotten_swamps/snake.png",
 }
 
 # «elite_» = 6 символов; срез [7:] ломал ключ (elite_orc → «rc») и портрет/каталог.
@@ -78,7 +79,24 @@ def location_image_for_floor(floor_number: int) -> Path | None:
     return None
 
 
-def _monster_png_resolved(template_key: str, *, default_fallback: bool) -> Path | None:
+def secret_chest_png(kind: str) -> str | None:
+    """PNG тайника: closed / empty / gold / mimic → ``chest_{kind}.png`` (mimic → ``chest_mimic.png``)."""
+    k = (kind or "closed").lower().strip()
+    if k == "mimic":
+        p = _ASSETS_IMAGES / "treasure" / "chest_mimic.png"
+        return str(p) if p.is_file() else None
+    if k not in ("closed", "empty", "gold"):
+        k = "closed"
+    p = _ASSETS_IMAGES / "treasure" / f"chest_{k}.png"
+    return str(p) if p.is_file() else None
+
+
+def _monster_png_resolved(
+    template_key: str,
+    *,
+    default_fallback: bool,
+    zone_key: str | None = None,
+) -> Path | None:
     k = (template_key or "").strip()
     if not k:
         return None
@@ -90,6 +108,14 @@ def _monster_png_resolved(template_key: str, *, default_fallback: bool) -> Path 
             return p
     base_k = k[len(_ELITE_PREFIX) :] if k.startswith(_ELITE_PREFIX) else k
     mon_dir = root / "assets" / "monsters"
+    if zone_key:
+        zk = (zone_key or "").strip()
+        if zk:
+            zdir = mon_dir / zk
+            for cand in (k, base_k):
+                p = zdir / f"{cand}.png"
+                if p.is_file():
+                    return p
     for cand in (k, base_k):
         p = mon_dir / f"{cand}.png"
         if p.is_file():
@@ -100,14 +126,20 @@ def _monster_png_resolved(template_key: str, *, default_fallback: bool) -> Path 
     return None
 
 
-def monster_image_for_template(template_key: str) -> Path | None:
+def monster_image_for_template(template_key: str, *, zone_key: str | None = None) -> Path | None:
     """Картинка монстра для UI; при отсутствии файла — ``default.png``, если есть."""
-    return _monster_png_resolved(template_key, default_fallback=True)
+    return _monster_png_resolved(template_key, default_fallback=True, zone_key=zone_key)
 
 
-def combat_monster_portrait_path(template_key: str) -> str | None:
+def combat_monster_portrait_path(template_key: str, *, floor_number: int | None = None) -> str | None:
     """PNG для экрана боя — только если файл существует (без подстановки default)."""
-    p = _monster_png_resolved(template_key, default_fallback=False)
+    zone_key: str | None = None
+    if floor_number is not None:
+        try:
+            zone_key = floor_data.get_zone_for_floor(int(floor_number)).key
+        except Exception:
+            zone_key = None
+    p = _monster_png_resolved(template_key, default_fallback=False, zone_key=zone_key)
     return str(p) if p is not None else None
 
 

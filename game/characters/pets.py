@@ -290,10 +290,14 @@ def pet_passive_delta(character: Character) -> dict[str, float | int]:
 
 
 def _fmt_def_bonus(v: float) -> str:
-    x = round(float(v), 1)
-    if abs(x - int(x)) < 1e-6:
-        return str(int(x))
-    return f"{x:.1f}".rstrip("0").rstrip(".")
+    from decimal import ROUND_HALF_UP, Decimal
+
+    q = Decimal(str(float(v))).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    xf = float(q)
+    if abs(xf - round(xf)) < 1e-9:
+        return str(int(round(xf)))
+    s = f"{xf:.1f}".rstrip("0").rstrip(".")
+    return s or "0"
 
 
 def format_pet_passive_plain(passive: dict[str, float | int], *, locale: str) -> str:

@@ -42,7 +42,7 @@ def _cb(floor_number: int, code: str) -> str:
 
 
 def show_floor_secret_search_button(floor_number: int) -> bool:
-    """Кнопка тайника на карте этажа (логика совпадает с services.floor_service.try_secret_search)."""
+    """Кнопка тайника на карте этажа (логика: services.secret_chest_service)."""
     return int(floor_number) >= 2
 
 
@@ -1180,9 +1180,30 @@ def wave_floor_27_keyboard(
 
 
 def secret_result_keyboard(floor_number: int) -> InlineKeyboardMarkup:
-    """После текста обыска — вернуться к списку целей."""
+    """После открытия сундука / текста обыска — вернуться к списку целей."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗺️ К этажу",
+                    callback_data=_cb(floor_number, "return"),
+                ),
+            ],
+            menu_nav_button_row(),
+        ],
+    )
+
+
+def secret_chest_closed_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+    """Закрытый сундук тайника: открыть или уйти на карту этажа."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗝️ Открыть",
+                    callback_data=_cb(floor_number, "chest_open"),
+                ),
+            ],
             [
                 InlineKeyboardButton(
                     text="🗺️ К этажу",

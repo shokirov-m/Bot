@@ -16,7 +16,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.keyboards.floor_kb import secret_result_keyboard
+from bot.keyboards.floor_kb import secret_chest_closed_keyboard, secret_result_keyboard
 from bot.keyboards.forest_kb import forest_mushroom_keyboard, forest_spirit_keyboard
 from bot.states.combat_states import CombatStates
 from bot.utils.game_ui import push_game_ui
@@ -42,6 +42,7 @@ from services import combat_service, golden_goblin_service
 from services.floor_service import (
     floor_keyboard_for_character,
     get_spawns_for_character_session,
+    open_secret_chest,
     push_floor_screen_ui,
     travel_by_delta,
     travel_to_floor,
@@ -1451,6 +1452,43 @@ async def on_floor_callback(
             await query.answer()
             return
 
+        if code == "chest_open":
+            if query.message is None:
+                await query.answer()
+                return
+            oc = await open_secret_chest(
+                session,
+                char,
+                telegram_id=query.from_user.id if query.from_user else None,
+                username=query.from_user.username if query.from_user else None,
+                bot=query.bot,
+            )
+            if oc.alert:
+                await query.answer(oc.alert, show_alert=True)
+                return
+            if oc.mimic_combat_spawn is not None:
+                await combat_service.start_combat(
+                    query=query,
+                    session=session,
+                    state=state,
+                    character=char,
+                    spawn=oc.mimic_combat_spawn,
+                )
+                await query.answer()
+                return
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=oc.body_html or "",
+                reply_markup=secret_result_keyboard(char.floor_number),
+                target_message=query.message,
+                photo_path=oc.photo_path,
+                character=char,
+            )
+            await query.answer()
+            return
+
         if code == "srch":
             if query.message is None:
                 await query.answer()
@@ -1465,8 +1503,10 @@ async def on_floor_callback(
                 query.bot,
                 chat_id=query.message.chat.id,
                 text=outcome.body_html or "",
-                reply_markup=secret_result_keyboard(char.floor_number),
+                reply_markup=secret_chest_closed_keyboard(char.floor_number),
                 target_message=query.message,
+                photo_path=outcome.photo_path,
+                character=char,
             )
             await query.answer()
             return

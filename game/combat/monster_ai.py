@@ -269,12 +269,24 @@ def sync_boss_phase(state: dict[str, Any]) -> list[str]:
         line = boss_entry_line(m["name"], is_major_boss=bool(m.get("is_major_boss")), phase=2)
         logs.append(f"⚡ <b>Фаза 2</b>: {line}")
         logs.append("⚙️ <i>Урон врага ×1.12; возможны более жёсткие приёмы.</i>")
+        key = str(m.get("template_key", ""))
+        prof = profile_for_monster(key)
+        if prof.skills_ru:
+            logs.append(
+                f"🎯 <i>Чаще «тяжёлый» скилл:</i> <b>{prof.skills_ru[-1]}</b> "
+                f"(обычные: {prof.skills_ru[0]}{' …' if len(prof.skills_ru) > 1 else ''})",
+            )
+        if prof.has_fortify:
+            logs.append("🛡️ <i>Может чаще включать защитный режим (укрепление), пока HP ниже половины.</i>")
     phase = int(state.get("monster_phase", 1))
     if m.get("is_milestone_boss") and phase == 2 and pct <= 0.25:
         state["monster_phase"] = 3
         line = boss_entry_line(m["name"], is_major_boss=bool(m.get("is_major_boss")), phase=3)
         logs.append(f"💀 <b>Фаза 3 — ЯРОСТЬ:</b> {line}")
         logs.append("☠️ <i>Урон врага ×1.50; спецудары чаще смертельны.</i>")
+        logs.append(
+            "🔥 <i>Финальная фаза:</i> приоритет на <b>сильные спецприёмы</b> и жёсткие строки из набора «гнев вехи».",
+        )
     return logs
 
 

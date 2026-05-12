@@ -120,6 +120,7 @@ from services import (
     quest_service,
     rest_service,
     season_record_service,
+    secret_chest_service,
     stat_bonus_service,
     title_service,
 )
@@ -889,8 +890,9 @@ async def start_coliseum_combat(
         return False
 
     tpl_key = str(monster.get("template_key") or "")
+    _battle_floor_photo = int(combat_state.get("floor", character.floor_number))
     battle_photo = (
-        combat_monster_portrait_path(tpl_key)
+        combat_monster_portrait_path(tpl_key, floor_number=_battle_floor_photo)
         if game_images_enabled(character)
         else None
     )
@@ -1075,6 +1077,8 @@ async def start_combat(
     combat_state["night_battle"] = night_on
     if str(spawn.slot_code) == golden_goblin_service.SLOT_CODE:
         combat_state["golden_goblin_wave"] = await golden_goblin_service.current_wave(session)
+    if str(spawn.slot_code) == secret_chest_service.MIMIC_SLOT_CODE:
+        combat_state["secret_mimic_chest"] = True
     wa, wtype, wmult, w_item = await _weapon_profile(session, character)
     combat_state["weapon_attack"] = wa
     combat_state["player_weapon_type"] = wtype
@@ -1195,8 +1199,9 @@ async def start_combat(
         return False
 
     tpl_key = str(monster.get("template_key") or "")
+    _battle_floor_photo = int(combat_state.get("floor", character.floor_number))
     battle_photo = (
-        combat_monster_portrait_path(tpl_key)
+        combat_monster_portrait_path(tpl_key, floor_number=_battle_floor_photo)
         if game_images_enabled(character)
         else None
     )
@@ -2001,7 +2006,8 @@ async def _victory_sequence(
         _merc_xp_note_html = f"\n<i>🛡️ Отряд: {merc_pool} XP из награды (всего за бой {xp}).</i>"
         if merc_refund > 0:
             _merc_xp_note_html += (
-                f"\n<i>Наёмники на максимальном уровне для героя — <b>{merc_refund}</b> XP добавлено герою.</i>"
+                f"\n<i>Наёмники на максимальном уровне для героя — <b>{merc_refund}</b> XP "
+                "вернулось герою (в т.ч. «зависший» опыт наёмника).</i>"
             )
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
@@ -2203,14 +2209,18 @@ async def _victory_sequence(
             _edef = _HOME_ELIXIRS.get(str(_ek))
             if _edef is not None:
                 _elixir_drop_mult *= float((_edef.get("buff") or {}).get("drop_mult", 1.0))
-        _drop_triggered = roll_item_drop(
-            spawn,
-            int(character.floor_number),
-            stat_luck=_luck,
-            fame_loot_mult=_fam * _elixir_drop_mult,
-        ) or (
-            _home_loot_extra > 0 and random.random() < _home_loot_extra
-        )
+        _is_secret_mimic = bool(combat_state.get("secret_mimic_chest"))
+        if _is_secret_mimic:
+            _drop_triggered = False
+        else:
+            _drop_triggered = roll_item_drop(
+                spawn,
+                int(character.floor_number),
+                stat_luck=_luck,
+                fame_loot_mult=_fam * _elixir_drop_mult,
+            ) or (
+                _home_loot_extra > 0 and random.random() < _home_loot_extra
+            )
         if _drop_triggered:
             slot = await inventory_repo.first_free_bag_slot(session, character.id)
             if slot is not None:
@@ -2227,6 +2237,26 @@ async def _victory_sequence(
         extra_drop = ""
         if dropped:
             extra_drop = f"\n📦 <b>{html.escape(drop_label)}</b> — в сумку"
+
+        if _is_secret_mimic:
+            from game.items import catalog_loot
+
+            _mfloor = int(battle_floor)
+            _mitem = catalog_loot.roll_catalog_item(_mfloor)
+            _m_slot = await inventory_repo.first_free_bag_slot(session, character.id)
+            if _mitem is not None and _m_slot is not None:
+                await inventory_repo.add_bag_item(
+                    session,
+                    character.id,
+                    copy.deepcopy(_mitem),
+                    bag_slot=_m_slot,
+                )
+                _mname = html.escape(str(_mitem.get("name", "Предмет")))
+                extra_drop += f"\n📦 <b>Добыча мимика:</b> {_mname} — в сумку."
+            elif _mitem is not None:
+                extra_drop += "\n⚠️ <b>Мимик пал</b>, но сумка полна — особый предмет утерян."
+            else:
+                extra_drop += "\n⚠️ <b>Мимик пал</b>, но подходящей добычи по этажу не нашлось."
 
         # Runes and Trophies
         extra_rune_item = ""
@@ -2501,6 +2531,8 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
             return build_coliseum_spawn(n)
     if slot == golden_goblin_service.SLOT_CODE:
         return golden_goblin_service.build_spawn()
+    if slot == secret_chest_service.MIMIC_SLOT_CODE:
+        return secret_chest_service.build_mimic_spawn()
     if slot in long_floor_mod.LONG_FLOOR_SLOTS:
         found_lf = long_floor_mod.spawn_by_slot(slot)
         if found_lf is not None:

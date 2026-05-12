@@ -75,6 +75,7 @@ def _settings_handbook_html() -> str:
         BANK_TERM_OPTIONS,
     )
     from services import golden_goblin_service, home_service
+    from game.mercenaries import constants as merc_const
 
     mx = int(settings.MAX_STAMINA)
     reg = int(settings.STAMINA_REGEN_INTERVAL)
@@ -97,7 +98,9 @@ def _settings_handbook_html() -> str:
         f"Срочные вклады: <i>{html.escape(term_lines)}</i>.\n\n"
         f"<b>Дом: шахта</b> — покупка расчистки: <b>{home_service.MINE_PURCHASE_GOLD:,}</b> 💰; "
         "тик ресурсов (база): <b>3</b> ч.\n"
-        "<b>Дом: библиотека</b> — перерыв между сеансами: <b>24</b> ч.\n\n"
+        "<b>Дом: библиотека</b> — перерыв между сеансами: <b>24</b> ч.\n"
+        f"<b>Наёмники: смена на работу</b> — длительность смены: <b>{merc_const.MERC_WORK_DURATION_SEC // 3600}</b> ч "
+        f"(награда при сдаче зависит от уровня; см. покои в Доме).\n\n"
         "<i>Остальные лимиты смотри в соответствующих экранах города / дома.</i>"
     )
 

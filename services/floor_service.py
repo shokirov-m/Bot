@@ -9,7 +9,6 @@ import copy
 import html
 import json
 import random
-from dataclasses import dataclass
 
 from aiogram import Bot
 from aiogram.enums import ParseMode
@@ -68,15 +67,15 @@ from game.floors.tower_ascent import (
     tower_next_floor_pending,
 )
 from services.rest_service import apply_completed_rest_if_needed
-from game.items.equipment import (
-    SECRET_GEAR_DROP_CHANCE,
-    SECRET_GEAR_EARLY_MAX_FLOOR,
-    UI_PLACEHOLDER_IMAGE_URL,
-    try_roll_secret_gear_payload,
-)
+from game.items.equipment import UI_PLACEHOLDER_IMAGE_URL
 from game.floors.monsters import FloorMonsterSpawn, build_spawns_for_floor
 from services import golden_goblin_service
-from services import character_service, title_service
+from services import character_service
+from services.secret_chest_service import (
+    SecretSearchOutcome,
+    open_secret_chest,
+    present_secret_chest,
+)
 from utils.game_images_prefs import game_images_enabled
 from services.tutorial_battle_service import tutorial_battle_pending
 from utils.image_assets import location_image_for_floor
@@ -851,14 +850,6 @@ async def push_floor_screen_ui(
     )
 
 
-@dataclass(slots=True)
-class SecretSearchOutcome:
-    """Результат обыска: либо короткий alert, либо HTML для сообщения."""
-
-    alert: str | None
-    body_html: str | None
-
-
 def _floor_progress_extra_as_dict(raw: object) -> dict[str, object]:
     """Нормализация floor_progress.extra: JSON иногда приходит строкой — ``dict(raw)`` даёт ValueError."""
     if raw is None:
@@ -957,85 +948,5 @@ async def try_secret_search(
     session: AsyncSession,
     character: Character,
 ) -> SecretSearchOutcome:
-    """
-    Один бросок тайника на текущем «заходе» этажа (счётчик visits в floor_progress).
-    """
-    n = int(character.floor_number)
-    if n == 1:
-        return SecretSearchOutcome(
-            alert="На первом ярусе только город — тайников здесь нет.",
-            body_html=None,
-        )
-    row = await floor_progress_repo.ensure_floor_row(session, character.id, n)
-    visits = int(row.visits or 0)
-    extra = _floor_progress_extra_as_dict(row.extra)
-    _prev_raw = extra.get("secret_attempt_visit", -1)
-    try:
-        prev_attempt = int(_prev_raw)
-    except (TypeError, ValueError):
-        prev_attempt = -1
-    if prev_attempt == visits:
-        return SecretSearchOutcome(
-            alert=(
-                "🔍 Тайник уже обыскан.\n\n"
-                "После каждой победы в бою на этом этаже тайник обновляется — "
-                "победи монстра и попробуй снова.\n"
-                "(Шанс найти: 15%)"
-            ),
-            body_html=None,
-        )
-
-    extra["secret_attempt_visit"] = visits
-    row.extra = extra
-    flag_modified(row, "extra")
-
-    if random.random() >= floor_data.SECRET_ROOM_CHANCE:
-        await session.flush()
-        return SecretSearchOutcome(
-            alert=None,
-            body_html=(
-                "🔍 <b>Ничего.</b>\n"
-                "Трещина в камне оказалась бликом факела — ни сундука, ни прохода.\n\n"
-                "<i>Победи в бою на этом этаже, чтобы обыскать снова.</i>"
-            ),
-        )
-
-    row.secret_rooms_found = int(row.secret_rooms_found) + 1
-    gold_bonus = 8 + n * 2
-    xp_bonus = 5 + n
-    character_service.add_gold(character, gold_bonus)
-    lv = await character_service.add_experience_async(session, character, xp_bonus, bot=None)
-    title_service.refresh_unlocks(character)
-
-    gear_html = ""
-    gear_payload = try_roll_secret_gear_payload(n)
-    if gear_payload is not None:
-        free = await inventory_repo.first_free_bag_slot(session, character.id)
-        if free is None:
-            gear_html = (
-                "\n⚠️ <b>Снаряжение в кисете есть</b>, но сумка полна — "
-                "освободи ячейку и загляни в тайник снова после следующего боя."
-            )
-        else:
-            await inventory_repo.add_bag_item(
-                session,
-                character.id,
-                copy.deepcopy(gear_payload),
-                bag_slot=free,
-            )
-            gname = html.escape(str(gear_payload.get("name", "Предмет")))
-            gear_html = f"\n📦 <b>{gname}</b> — в сумку (ячейка {free})."
-
-    await session.flush()
-    body = (
-        "✨ <b>Тайник!</b>\n"
-        "За сдвижной плитой — кисет прошлого странника.\n"
-        f"💰 +{gold_bonus} золота\n"
-        f"📈 +{xp_bonus} опыта"
-        f"{character_service.level_up_notice_html(character, lv)}"
-        f"{gear_html}"
-    )
-    return SecretSearchOutcome(
-        alert=None,
-        body_html=body,
-    )
+    """Шаг 1 тайника: показать закрытый сундук (подробности в secret_chest_service)."""
+    return await present_secret_chest(session, character)

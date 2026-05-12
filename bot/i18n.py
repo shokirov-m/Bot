@@ -49,7 +49,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "<i>Нужен открытый маршрут: твой «максимум этажа» ≥ цели. Город по-прежнему с кнопки "
             "«Город» на карте этажа, если ты уже на городском ярусе.</i>"
         ),
-        "portal_btn_floor": "📍 {n}",
+        "portal_btn_floor": "{n}",
         "portal_btn_floor_locked": "🔒 {n}",
         "portal_locked_alert": "Этаж {n} ещё не открыт — поднимись выше в башне.",
         "portal_same_floor": "Ты уже на этом этаже.",
@@ -364,7 +364,7 @@ STRINGS: dict[str, dict[str, str]] = {
             "<i>You must have the floor unlocked: your <b>highest reached floor</b> ≥ target. "
             "The city hub is still opened with the <b>City</b> button on the floor map when you are on a city floor.</i>"
         ),
-        "portal_btn_floor": "📍 {n}",
+        "portal_btn_floor": "{n}",
         "portal_btn_floor_locked": "🔒 {n}",
         "portal_locked_alert": "Floor {n} is not unlocked yet — climb higher in the tower.",
         "portal_same_floor": "You are already on this floor.",

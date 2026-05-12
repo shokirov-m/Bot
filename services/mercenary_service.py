@@ -194,12 +194,16 @@ async def apply_merc_battle_xp_pool(
     for m, gain in zip(ordered, gains, strict=True):
         ex = _merc_extra_dict(m)
         if int(m.level) > cap:
+            refund_hero_xp += int(ex.get(MERC_EXTRA_XP_KEY, 0))
             m.level = cap
             _apply_merc_baseline_stats_for_level(m)
             ex[MERC_EXTRA_XP_KEY] = 0
         if int(m.level) >= cap:
+            banked = int(ex.get(MERC_EXTRA_XP_KEY, 0))
+            if banked > 0:
+                refund_hero_xp += banked
+                ex[MERC_EXTRA_XP_KEY] = 0
             refund_hero_xp += int(gain)
-            ex[MERC_EXTRA_XP_KEY] = max(0, int(ex.get(MERC_EXTRA_XP_KEY, 0)))
             m.extra = ex
             m.loyalty = min(LOYALTY_MAX, int(m.loyalty) + BATTLE_WIN_LOYALTY)
             try:
