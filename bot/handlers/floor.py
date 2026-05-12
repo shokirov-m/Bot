@@ -142,6 +142,43 @@ async def on_floor_nav_step(
         await query.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data == "flnav:retfloor")
+async def on_floor_nav_return_from_repair(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Вернуться на карту этажа после починки с поля (не из города)."""
+    try:
+        if query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        user = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if user is None or user.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await query.answer("Сначала /start.", show_alert=True)
+            return
+        await push_floor_screen_ui(
+            session,
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            character=char,
+            reply_markup=await floor_keyboard_for_character(session, char, telegram_user_id=query.from_user.id),
+            target_message=query.message,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("flnav:retfloor")
+        await query.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data.startswith("scr:"))
 async def on_scrap_merchant_callback(
     query: CallbackQuery,

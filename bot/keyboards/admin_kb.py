@@ -123,10 +123,17 @@ def admin_player_snapshot_keyboard(*, character_id: int, return_page: int) -> In
                 InlineKeyboardButton(text="🎯 До 100 ур.", callback_data=f"adm:lvs:{cid}:{pg}:100"),
             ],
             [
-                InlineKeyboardButton(
-                    text="⬅️ К списку игроков",
-                    callback_data=f"adm:pl:{pg}",
-                ),
+                InlineKeyboardButton(text="✨ +1 оч. стата", callback_data=f"adm:usp:{cid}:{pg}:1"),
+                InlineKeyboardButton(text="✨ +5", callback_data=f"adm:usp:{cid}:{pg}:5"),
+                InlineKeyboardButton(text="✨ +10", callback_data=f"adm:usp:{cid}:{pg}:10"),
+            ],
+            [
+                InlineKeyboardButton(text="✨ +25", callback_data=f"adm:usp:{cid}:{pg}:25"),
+                InlineKeyboardButton(text="✨ +50", callback_data=f"adm:usp:{cid}:{pg}:50"),
+                InlineKeyboardButton(text="✨ +100", callback_data=f"adm:usp:{cid}:{pg}:100"),
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ К списку игроков", callback_data=f"adm:pl:{pg}"),
             ],
             [
                 InlineKeyboardButton(text="⬅️ В панель", callback_data="adm:hub"),

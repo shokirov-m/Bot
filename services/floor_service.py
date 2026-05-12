@@ -901,10 +901,6 @@ async def travel_to_floor(
         mp.pop(forest_beginnings_mod.META_KEY, None)
         character.meta_progress = mp
     character.floor_number = target_floor
-    row = await floor_progress_repo.ensure_floor_row(session, character.id, target_floor)
-    ex = dict(row.extra or {})
-    ex["slots_cleared"] = []
-    row.extra = ex
     await session.flush()
     if telegram_id is not None and target_floor != old_floor:
         from services import anticheat_service

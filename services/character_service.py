@@ -495,6 +495,27 @@ async def admin_grant_character_levels(
     return d, None
 
 
+_ADMIN_UNSPENT_STAT_SINGLE_MAX = 10_000
+_ADMIN_UNSPENT_STAT_TOTAL_CAP = 9_999_999
+
+
+def admin_grant_unspent_stat_points(character: Character, amount: int) -> tuple[bool, str]:
+    """
+    Админ: добавить свободные очки характеристик (поле unspent_stat_points), без уровня.
+    Распределение — только игроком в /stats.
+    """
+    n = int(amount)
+    if n <= 0:
+        return False, "Нужно положительное число очков."
+    if n > _ADMIN_UNSPENT_STAT_SINGLE_MAX:
+        return False, f"За раз не больше {_ADMIN_UNSPENT_STAT_SINGLE_MAX} очков."
+    cur = int(getattr(character, "unspent_stat_points", 0) or 0)
+    if cur + n > _ADMIN_UNSPENT_STAT_TOTAL_CAP:
+        return False, f"Слишком много свободных очков (лимит {_ADMIN_UNSPENT_STAT_TOTAL_CAP})."
+    character.unspent_stat_points = cur + n
+    return True, ""
+
+
 _STAT_FIELD_BY_KEY: dict[str, str] = {
     "str": "stat_strength",
     "dex": "stat_dexterity",

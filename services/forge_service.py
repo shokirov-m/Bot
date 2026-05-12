@@ -1129,14 +1129,26 @@ async def craft_rune_auto_pair_rank1(
 async def build_repair_message_html(session: AsyncSession, character: Character) -> str:
     """Экран починки: баланс, сумма «всё», компактный список только надетых вещей с прочностью."""
     city = floor_data.get_city_for_floor(character.floor_number)
-    cname = html.escape(city.name if city else "Город")
-    cemoji = city.emoji if city else "🏙️"
     gold = int(character.gold)
     total_all = await durability_mod.total_repair_cost_equipped(session, character.id)
+    if city is not None:
+        cname = html.escape(city.name)
+        cemoji = city.emoji
+        header_lines = [
+            f"{cemoji} <b>Кузница</b> — {cname}",
+            "",
+            "🔨 <b>ПОЧИНКА</b>",
+        ]
+    else:
+        fl = int(character.floor_number)
+        header_lines = [
+            f"🔨 <b>Починка</b> — этаж <b>{fl}</b>",
+            "<i>Те же тарифы, что в городской кузнице.</i>",
+            "",
+            "🔨 <b>ПОЧИНКА</b>",
+        ]
     lines: list[str] = [
-        f"{cemoji} <b>Кузница</b> — {cname}",
-        "",
-        "🔨 <b>ПОЧИНКА</b>",
+        *header_lines,
         "",
         f"💰 Ваш баланс: <b>{gold:,}</b> 🟡",
         f"💰 Стоимость починки всех предметов: <b>{total_all}</b> 💰",
@@ -1208,8 +1220,8 @@ async def try_repair_equipped_slot(
     character: Character,
     equip_slot: str,
 ) -> tuple[bool, list[str]]:
-    if not forge_loc.forge_available_on_floor(character.floor_number):
-        return False, ["Кузница только в городах-хабах башни."]
+    if not forge_loc.repair_allowed_on_floor(character.floor_number):
+        return False, ["Починка здесь недоступна."]
     if equip_slot not in equip_meta.EQUIP_ORDER:
         return False, ["Неизвестный слот экипировки."]
     item = await inventory_repo.get_equipped_in_slot(session, character.id, equip_slot)
@@ -1227,10 +1239,11 @@ async def try_repair_equipped_slot(
         return False, [f"Нужно {cost} золота, у тебя {int(character.gold):,}."]
 
     slot_lab = html.escape(equip_meta.SLOT_LABEL_RU.get(equip_slot, equip_slot))
+    _place = "Кузница" if forge_loc.forge_available_on_floor(character.floor_number) else "Этаж"
     character_service.add_gold(
         character,
         -cost,
-        spend_for=f"Кузница: починка ({slot_lab})",
+        spend_for=f"{_place}: починка ({slot_lab})",
         spend_kind="forge",
     )
     dmax = int(data["durability_max"])
@@ -1241,18 +1254,19 @@ async def try_repair_equipped_slot(
 
 
 async def try_repair_all_equipped(session: AsyncSession, character: Character) -> tuple[bool, list[str]]:
-    if not forge_loc.forge_available_on_floor(character.floor_number):
-        return False, ["Кузница только в городах-хабах башни."]
+    if not forge_loc.repair_allowed_on_floor(character.floor_number):
+        return False, ["Починка здесь недоступна."]
     total = await durability_mod.total_repair_cost_equipped(session, character.id)
     if total <= 0:
         return False, ["Вся экипировка в полном порядке."]
     if int(character.gold) < total:
         return False, [f"Нужно {total} золота, у тебя {int(character.gold):,}."]
 
+    _place = "Кузница" if forge_loc.forge_available_on_floor(character.floor_number) else "Этаж"
     character_service.add_gold(
         character,
         -total,
-        spend_for="Кузница: починка всей экипировки",
+        spend_for=f"{_place}: починка всей экипировки",
         spend_kind="forge",
     )
     items = await inventory_repo.list_equipped_items(session, character.id)

@@ -19,11 +19,23 @@ if TYPE_CHECKING:
     from db.models.character import Character
 
 
-def workshop_prof_hub_keyboard(profession: str) -> InlineKeyboardMarkup:
+def workshop_prof_hub_keyboard(profession: str, *, repair_floor: int | None = None) -> InlineKeyboardMarkup:
     """Хаб профессии: крафт + специализация (заточка / зачарование / руны)."""
     pk = str(profession).strip().lower()
     rows: list[list[InlineKeyboardButton]] = []
     if pk == "blacksmith":
+        if repair_floor is not None:
+            from game.locations import forge as _forge_loc
+
+            if _forge_loc.repair_allowed_on_floor(int(repair_floor)):
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="🔨 Починка за золото (как в кузнице)",
+                            callback_data=f"frg:rpr:{int(repair_floor)}",
+                        ),
+                    ],
+                )
         rows.append([InlineKeyboardButton(text="🔨 Крафт", callback_data=f"wsp:craft:{pk}")])
         rows.append([InlineKeyboardButton(text="✨ Заточка экипировки", callback_data="wsp:sharp:menu")])
         rows.append([InlineKeyboardButton(text="🔨 Разбор предметов", callback_data="wsp:brk:menu")])

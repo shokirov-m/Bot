@@ -806,6 +806,73 @@ async def cb_admin_level_set(callback: CallbackQuery, session: AsyncSession) -> 
         await callback.answer("Ошибка БД.", show_alert=True)
 
 
+_ALLOWED_ADMIN_UNSPENT_STAT_DELTAS = frozenset({1, 5, 10, 25, 50, 100})
+
+
+@router.callback_query(F.data.startswith("adm:usp:"), IsAdmin())
+async def cb_admin_grant_unspent_stat_points(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Свободные очки характеристик (не уровень) — игрок тратит в /stats."""
+    if callback.from_user is None or callback.message is None:
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    if len(parts) != 5 or parts[1] != "usp" or not parts[2].isdigit() or not parts[3].isdigit() or not parts[4].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    page = int(parts[3])
+    amt = int(parts[4])
+    if amt not in _ALLOWED_ADMIN_UNSPENT_STAT_DELTAS:
+        await callback.answer("Недопустимое значение.", show_alert=True)
+        return
+    try:
+        ch = await character_repo.get_by_id(session, cid)
+        if ch is None:
+            await callback.answer("Персонаж не найден.", show_alert=True)
+            return
+        u = await user_repo.get_by_id(session, int(ch.user_id))
+        if u is None:
+            await callback.answer("Пользователь не найден.", show_alert=True)
+            return
+        old = int(getattr(ch, "unspent_stat_points", 0) or 0)
+        ok, err = character_service.admin_grant_unspent_stat_points(ch, amt)
+        if not ok:
+            await callback.answer(err or "Ошибка.", show_alert=True)
+            return
+        new = int(ch.unspent_stat_points)
+        await anticheat_service.log_admin_action(
+            session,
+            actor_telegram_id=int(callback.from_user.id),
+            target_user_id=int(u.id),
+            action="admin_grant_unspent_stat_points",
+            message=f"+{amt} своб. очков → {old}→{new}",
+            payload={
+                "character_id": int(ch.id),
+                "telegram_id": int(u.telegram_id),
+                "amount": amt,
+                "unspent_before": old,
+                "unspent_after": new,
+            },
+        )
+        await session.commit()
+        body, ch2 = await _admin_player_snapshot_html(session, cid)
+        if body is None or ch2 is None:
+            await callback.answer("Готово, но карточку обновить не удалось.", show_alert=True)
+            return
+        await _safe_edit_panel(
+            callback.message,
+            _truncate_html(body),
+            reply_markup=admin_player_snapshot_keyboard(
+                character_id=cid,
+                return_page=page,
+            ),
+        )
+        await callback.answer(f"+{amt} своб. очков (/stats). Сейчас: {new} ✓")
+    except Exception:
+        logger.exception("adm:usp")
+        await callback.answer("Ошибка БД.", show_alert=True)
+
+
 @router.callback_query(F.data == "adm:lv_id", IsAdmin())
 async def cb_admin_level_by_id(callback: CallbackQuery, state: FSMContext) -> None:
     await _prompt_fsm(

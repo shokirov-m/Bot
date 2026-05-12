@@ -254,6 +254,8 @@ def forge_dis_bag_keyboard(
 def forge_repair_keyboard(
     floor_number: int,
     slot_rows: list[tuple[str, str]],
+    *,
+    return_to_floor: bool = False,
 ) -> InlineKeyboardMarkup:
     rows_btn: list[list[InlineKeyboardButton]] = []
     if slot_rows:
@@ -274,7 +276,10 @@ def forge_repair_keyboard(
                 ),
             ],
         )
-    rows_btn.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
+    if return_to_floor:
+        rows_btn.append([InlineKeyboardButton(text="⬅ К этажу", callback_data="flnav:retfloor")])
+    else:
+        rows_btn.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
     rows_btn.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows_btn)
 

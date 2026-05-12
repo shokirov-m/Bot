@@ -41,6 +41,21 @@ def _cb(floor_number: int, code: str) -> str:
     return f"fl:{floor_number}:{code}"
 
 
+def _append_tower_field_repair_row(rows: list[list[InlineKeyboardButton]], floor_number: int) -> None:
+    """Починка за золото с карты этажа (как в городской кузнице), на сценарных этажах."""
+    from game.locations import forge as forge_loc
+
+    if forge_loc.tower_field_repair_allowed(int(floor_number)):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🔨 Починка экипировки",
+                    callback_data=f"frg:rpr:{int(floor_number)}",
+                ),
+            ],
+        )
+
+
 def show_floor_secret_search_button(floor_number: int) -> bool:
     """Кнопка тайника на карте этажа (логика: services.secret_chest_service)."""
     return int(floor_number) >= 2
@@ -476,6 +491,8 @@ def room_clear_floor_keyboard(
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
 
+    _append_tower_field_repair_row(rows, floor_number)
+
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
 
@@ -534,6 +551,8 @@ def wave_floor_screen_keyboard(
     pend = tower_next_floor_pending(character)
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    _append_tower_field_repair_row(rows, floor_number)
 
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
@@ -594,6 +613,8 @@ def room_clear_floor_10_keyboard(
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
 
+    _append_tower_field_repair_row(rows, floor_number)
+
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
 
@@ -645,6 +666,8 @@ def explore_floor_4_keyboard(
     pend = tower_next_floor_pending(character)
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    _append_tower_field_repair_row(rows, floor_number)
 
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
@@ -728,6 +751,8 @@ def explore_floor_keyboard(
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
 
+    _append_tower_field_repair_row(rows, floor_number)
+
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
 
@@ -809,6 +834,8 @@ def explore_floor_22_keyboard(
     pend = tower_next_floor_pending(character)
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    _append_tower_field_repair_row(rows, floor_number)
 
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
@@ -893,6 +920,8 @@ def room_clear_floor_24_keyboard(
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
 
+    _append_tower_field_repair_row(rows, floor_number)
+
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
 
@@ -953,6 +982,8 @@ def room_clear_floor_30_keyboard(
     pend = tower_next_floor_pending(character)
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    _append_tower_field_repair_row(rows, floor_number)
 
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
@@ -1015,6 +1046,8 @@ def room_clear_floor_40_keyboard(
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
 
+    _append_tower_field_repair_row(rows, floor_number)
+
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
 
@@ -1070,6 +1103,8 @@ def room_clear_floor_26_keyboard(
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
 
+    _append_tower_field_repair_row(rows, floor_number)
+
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
 
@@ -1106,6 +1141,8 @@ def room_clear_floor_26_cleared_keyboard(
     pend = tower_next_floor_pending(character)
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    _append_tower_field_repair_row(rows, floor_number)
 
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
@@ -1162,6 +1199,8 @@ def wave_floor_27_keyboard(
     pend = tower_next_floor_pending(character)
     if pend is not None:
         rows.append([InlineKeyboardButton(text=f"⬆️ Этаж {pend}", callback_data=_cb(floor_number, "ascend"))])
+
+    _append_tower_field_repair_row(rows, floor_number)
 
     if floor_data.get_city_for_floor(floor_number):
         rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])

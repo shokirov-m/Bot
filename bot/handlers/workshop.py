@@ -378,7 +378,7 @@ async def workshop_prof(query: CallbackQuery, session: AsyncSession, state: FSMC
             query,
             char,
             "\n".join(lines),
-            workshop_prof_hub_keyboard(prof),
+            workshop_prof_hub_keyboard(prof, repair_floor=int(char.floor_number)),
         )
         await query.answer()
     except Exception:
@@ -1332,7 +1332,7 @@ async def workshop_disassemble_apply(query: CallbackQuery, session: AsyncSession
         kb = (
             workshop_dis_bag_keyboard(pairs)
             if pairs
-            else workshop_prof_hub_keyboard("blacksmith")
+            else workshop_prof_hub_keyboard("blacksmith", repair_floor=int(char.floor_number))
         )
         await _workshop_ui(state, query, char, text, kb)
         await query.answer("Разобрано.")
@@ -1359,7 +1359,7 @@ async def workshop_disassemble_sweep(query: CallbackQuery, session: AsyncSession
         kb = (
             workshop_dis_bag_keyboard(pairs)
             if pairs
-            else workshop_prof_hub_keyboard("blacksmith")
+            else workshop_prof_hub_keyboard("blacksmith", repair_floor=int(char.floor_number))
         )
         await _workshop_ui(state, query, char, text, kb)
         await query.answer("Свип готов.")

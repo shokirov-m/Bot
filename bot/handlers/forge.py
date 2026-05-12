@@ -187,6 +187,13 @@ async def _load_char(session: AsyncSession, telegram_id: int):
     return await character_repo.get_by_user_id(session, user.id)
 
 
+def _repair_keyboard_return_to_floor(char) -> bool:
+    """С этажа (не из города-хаба) — кнопка «К этажу» вместо «Кузница»."""
+    return forge_loc.repair_allowed_on_floor(int(char.floor_number)) and not forge_loc.forge_available_on_floor(
+        int(char.floor_number),
+    )
+
+
 @router.callback_query(F.data.startswith("frg:main:"))
 async def forge_open_main(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -319,8 +326,8 @@ async def forge_repair_menu(query: CallbackQuery, session: AsyncSession, state: 
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
-            await query.answer("Кузница недоступна.", show_alert=True)
+        if char.floor_number != floor_key or not forge_loc.repair_allowed_on_floor(char.floor_number):
+            await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         text = await forge_service.build_repair_message_html(session, char)
         rows = await forge_service.list_repair_slot_button_rows(session, char.id)
@@ -329,7 +336,11 @@ async def forge_repair_menu(query: CallbackQuery, session: AsyncSession, state: 
             query.bot,
             chat_id=query.message.chat.id,
             text=text,
-            reply_markup=forge_repair_keyboard(char.floor_number, rows),
+            reply_markup=forge_repair_keyboard(
+                char.floor_number,
+                rows,
+                return_to_floor=_repair_keyboard_return_to_floor(char),
+            ),
             target_message=query.message,
             photo_path=menu_city_photo_path(),
             character=char,
@@ -352,8 +363,8 @@ async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession, s
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
-            await query.answer("Кузница недоступна.", show_alert=True)
+        if char.floor_number != floor_key or not forge_loc.repair_allowed_on_floor(char.floor_number):
+            await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         ok, lines = await forge_service.try_repair_equipped_slot(session, char, slot)
         if ok:
@@ -364,7 +375,11 @@ async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession, s
                 query.bot,
                 chat_id=query.message.chat.id,
                 text=text,
-                reply_markup=forge_repair_keyboard(char.floor_number, rows),
+                reply_markup=forge_repair_keyboard(
+                    char.floor_number,
+                    rows,
+                    return_to_floor=_repair_keyboard_return_to_floor(char),
+                ),
                 target_message=query.message,
                 photo_path=menu_city_photo_path(),
                 character=char,
@@ -388,8 +403,8 @@ async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession, st
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
-            await query.answer("Кузница недоступна.", show_alert=True)
+        if char.floor_number != floor_key or not forge_loc.repair_allowed_on_floor(char.floor_number):
+            await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         ok, lines = await forge_service.try_repair_all_equipped(session, char)
         if ok:
@@ -400,7 +415,11 @@ async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession, st
                 query.bot,
                 chat_id=query.message.chat.id,
                 text=text,
-                reply_markup=forge_repair_keyboard(char.floor_number, rows),
+                reply_markup=forge_repair_keyboard(
+                    char.floor_number,
+                    rows,
+                    return_to_floor=_repair_keyboard_return_to_floor(char),
+                ),
                 target_message=query.message,
                 photo_path=menu_city_photo_path(),
                 character=char,
