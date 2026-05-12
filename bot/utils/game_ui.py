@@ -121,33 +121,50 @@ async def push_game_ui(
 
     if target_message is not None and target_message.chat.id == chat_id:
         if p is not None:
+            cap = _clamp_telegram_caption(text)
             if target_message.photo:
                 if await safe_edit_message_photo(
                     target_message,
                     photo_path=p,
-                    caption=text,
+                    caption=cap,
                     reply_markup=reply_markup,
                 ):
                     await remember_game_ui_anchor(state, target_message)
                     return
-            await safe_delete_message(bot, chat_id, target_message.message_id)
+            # Нельзя сделать edit_media — шлём новое фото и только потом удаляем старое,
+            # иначе при ошибке send_photo сообщение уже удалено и экран «пропадает».
             sent = await safe_send_photo(
                 bot,
                 chat_id,
                 p,
-                caption=text,
+                caption=cap,
                 reply_markup=reply_markup,
             )
             if sent is not None:
+                await safe_delete_message(bot, chat_id, target_message.message_id)
                 await remember_game_ui_anchor(state, sent)
                 return
+            try:
+                if _message_supports_caption_edit(target_message):
+                    await target_message.edit_caption(
+                        caption=cap,
+                        reply_markup=reply_markup,
+                        parse_mode=ParseMode.HTML,
+                    )
+                else:
+                    await target_message.edit_text(**text_kw)
+                await remember_game_ui_anchor(state, target_message)
+                return
+            except TelegramBadRequest as e:
+                logger.warning("push_game_ui: откат после неудачного send_photo: {}", e)
             sent = await bot.send_message(chat_id=chat_id, **text_kw)
             await remember_game_ui_anchor(state, sent)
             return
         if _message_supports_caption_edit(target_message):
-            await safe_delete_message(bot, chat_id, target_message.message_id)
             sent = await bot.send_message(chat_id=chat_id, **text_kw)
-            await remember_game_ui_anchor(state, sent)
+            if sent is not None:
+                await safe_delete_message(bot, chat_id, target_message.message_id)
+                await remember_game_ui_anchor(state, sent)
             return
         try:
             await target_message.edit_text(**text_kw)
@@ -161,28 +178,42 @@ async def push_game_ui(
     cid = data.get(GAME_UI_CHAT_ID)
     if mid is not None and cid == chat_id:
         if p is not None:
+            cap = _clamp_telegram_caption(text)
             if await safe_bot_edit_message_photo(
                 bot,
                 cid,
                 int(mid),
                 photo_path=p,
-                caption=text,
+                caption=cap,
                 reply_markup=reply_markup,
             ):
                 return
-            await safe_delete_message(bot, cid, int(mid))
             sent = await safe_send_photo(
                 bot,
                 chat_id,
                 p,
-                caption=text,
+                caption=cap,
                 reply_markup=reply_markup,
             )
             if sent is not None:
+                await safe_delete_message(bot, cid, int(mid))
                 await remember_game_ui_anchor(state, sent)
                 return
+            try:
+                await bot.edit_message_caption(
+                    chat_id=cid,
+                    message_id=int(mid),
+                    caption=cap,
+                    reply_markup=reply_markup,
+                    parse_mode=ParseMode.HTML,
+                )
+                return
+            except TelegramBadRequest as e:
+                logger.warning("push_game_ui якорь: откат после неудачного send_photo: {}", e)
             sent = await bot.send_message(chat_id=chat_id, **text_kw)
-            await remember_game_ui_anchor(state, sent)
+            if sent is not None:
+                await safe_delete_message(bot, cid, int(mid))
+                await remember_game_ui_anchor(state, sent)
             return
         try:
             await bot.edit_message_text(chat_id=cid, message_id=int(mid), **text_kw)
@@ -205,9 +236,10 @@ async def push_game_ui(
                 if "message is not modified" in str(e2).lower():
                     return
                 logger.debug("push_game_ui: правка подписи якоря не вышла, шлём новое: {}", e2)
-        await safe_delete_message(bot, cid, int(mid))
         sent = await bot.send_message(chat_id=chat_id, **text_kw)
-        await remember_game_ui_anchor(state, sent)
+        if sent is not None:
+            await safe_delete_message(bot, cid, int(mid))
+            await remember_game_ui_anchor(state, sent)
         return
 
     if fallback_message is not None and fallback_message.chat.id == chat_id:
@@ -215,7 +247,7 @@ async def push_game_ui(
             sent = await safe_answer_photo(
                 fallback_message,
                 p,
-                caption=text,
+                caption=_clamp_telegram_caption(text),
                 reply_markup=reply_markup,
             )
             if sent is None:
@@ -230,7 +262,7 @@ async def push_game_ui(
             bot,
             chat_id,
             p,
-            caption=text,
+            caption=_clamp_telegram_caption(text),
             reply_markup=reply_markup,
         )
         if sent is None:
