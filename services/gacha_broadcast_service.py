@@ -95,9 +95,6 @@ async def notify_high_star_material(
     """Рассылка при ⭐6+ (гача): сначала чат из настроек, иначе из БД, иначе ЛС игроку."""
     if stars < 6:
         return
-    row = await _ensure_app_row(session)
-    chat_ids = _chat_ids_from_payload(dict(row.payload or {}))
-
     user = await user_repo.get_by_id(session, int(character.user_id))
     uname = (user.username or "").strip() if user is not None else ""
     dn = html.escape((character.display_name or "?").strip() or "?")
@@ -113,8 +110,6 @@ async def notify_high_star_material(
         tail += f" ×{qty}"
     tail += f" ({star_label}★)."
     text = f"🎰 {who} {tail}"
-
-    sent_group = False
     primary = _parse_broadcast_chat_id()
     thread_id = settings.GACHA_BROADCAST_MESSAGE_THREAD_ID
     if primary is not None and thread_id is None:
@@ -122,12 +117,32 @@ async def notify_high_star_material(
             "gacha_broadcast: GACHA_BROADCAST_MESSAGE_THREAD_ID не задан — в форуме сообщение "
             "уйдёт в общий раздел. Задай число из ссылки на тему: t.me/tower_of_trial/<ЭТО_ЧИСЛО>",
         )
+    await send_tower_community_announcement(bot, session, character=character, html_text=text)
+
+
+async def send_tower_community_announcement(
+    bot: Bot,
+    session: AsyncSession,
+    *,
+    character: Character,
+    html_text: str,
+) -> None:
+    """
+    Сообщение в те же каналы, что и гача 6★: GACHA_BROADCAST_CHAT (+ thread), затем группы из payload, затем ЛС.
+    """
+    row = await _ensure_app_row(session)
+    chat_ids = _chat_ids_from_payload(dict(row.payload or {}))
+    user = await user_repo.get_by_id(session, int(character.user_id))
+
+    sent_group = False
+    primary = _parse_broadcast_chat_id()
+    thread_id = settings.GACHA_BROADCAST_MESSAGE_THREAD_ID
     if primary is not None:
         try:
             kwargs: dict[str, Any] = {"parse_mode": ParseMode.HTML}
             if thread_id is not None:
                 kwargs["message_thread_id"] = int(thread_id)
-            await bot.send_message(primary, text, **kwargs)
+            await bot.send_message(primary, html_text, **kwargs)
             return
         except Exception:
             logger.exception(
@@ -138,7 +153,7 @@ async def notify_high_star_material(
 
     for ch in chat_ids:
         try:
-            await bot.send_message(int(ch), text, parse_mode=ParseMode.HTML)
+            await bot.send_message(int(ch), html_text, parse_mode=ParseMode.HTML)
             sent_group = True
         except Exception:
             logger.warning("gacha_broadcast: не удалось отправить в chat_id={}", ch)
@@ -146,23 +161,16 @@ async def notify_high_star_material(
     if sent_group:
         return
 
-    # Ни основной чат, ни подписанные группы — дублируем в личку игроку
-    if primary is None and not chat_ids:
-        logger.info("gacha_broadcast: нет целевого чата в настройках и БД — отправка 6★ в ЛС игроку")
-    elif not sent_group:
-        logger.warning(
-            "gacha_broadcast: ни основной чат, ни группы из БД не приняли сообщение — пробуем ЛС игроку",
-        )
     if user is None:
         logger.warning(
-            "gacha_broadcast: 6★ без доставки — нет чатов в payload и нет user для ЛС (character_id={})",
+            "tower_announce: нет доставки — нет чатов и нет user (character_id={})",
             character.id,
         )
         return
     tg = int(user.telegram_id)
     try:
-        await bot.send_message(tg, text, parse_mode=ParseMode.HTML)
-        logger.info("gacha_broadcast: 6★ отправлено в ЛС telegram_id={}", tg)
+        await bot.send_message(tg, html_text, parse_mode=ParseMode.HTML)
+        logger.info("tower_announce: отправлено в ЛС telegram_id={}", tg)
     except Exception:
-        logger.warning("gacha_broadcast: не удалось отправить в ЛС telegram_id={}", tg)
+        logger.warning("tower_announce: не удалось отправить в ЛС telegram_id={}", tg)
 

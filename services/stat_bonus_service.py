@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.character import Character
 from db.models.inventory import InventoryItem
 from db.repository import inventory_repo
-from game.characters.titles import TITLE_BY_KEY
 from game.items import enchant as enchant_rules
 from game.items.rarity_scaling import scaled_armor_defense_value
 from game.archetypes import manager as arch_manager
@@ -102,10 +101,10 @@ async def equipped_gear_stat_bonuses(session: AsyncSession, character_id: int) -
     return total
 
 
-def _title_stat_row(key: str | None) -> dict[str, int]:
+def _title_stat_row(character: Character, key: str | None) -> dict[str, int]:
     if not key:
         return empty_stat_bonus_map()
-    td = TITLE_BY_KEY.get(key)
+    td = title_service.title_def_for(character, key)
     if td is None:
         return empty_stat_bonus_map()
     return {
@@ -128,7 +127,7 @@ def active_title_stat_bonuses(character: Character) -> dict[str, int]:
         keys.append(k2)
     out = empty_stat_bonus_map()
     for k in keys:
-        row = _title_stat_row(k)
+        row = _title_stat_row(character, k)
         for sk in STAT_KEYS:
             out[sk] += row[sk]
     return out

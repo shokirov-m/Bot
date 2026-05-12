@@ -110,6 +110,9 @@ def admin_player_snapshot_keyboard(*, character_id: int, return_page: int) -> In
                 InlineKeyboardButton(text="🏅 Выдать титул", callback_data=f"adm:tish:{cid}:{pg}"),
             ],
             [
+                InlineKeyboardButton(text="🌟 Персональный титул", callback_data=f"adm:tcst:{cid}:{pg}"),
+            ],
+            [
                 InlineKeyboardButton(text="➕ +1 ур.", callback_data=f"adm:lvw:{cid}:{pg}:1"),
                 InlineKeyboardButton(text="➕ +5 ур.", callback_data=f"adm:lvw:{cid}:{pg}:5"),
                 InlineKeyboardButton(text="➕ +10 ур.", callback_data=f"adm:lvw:{cid}:{pg}:10"),

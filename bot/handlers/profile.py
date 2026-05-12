@@ -57,7 +57,7 @@ from game.characters.player_skills import (
     skill_emoji,
 )
 from game.characters.skills import passive_combat_modifiers_merged
-from game.characters.titles import TITLE_BY_KEY, format_title_bonus_brief
+from game.characters.titles import format_title_bonus_brief
 from game.crafting.recipes_data import PROF_ALCHEMIST, PROF_BLACKSMITH, PROF_JEWELER
 from game.crafting.workshop_meta import get_workshop_state, save_workshop_state
 from game.characters.weapon_mastery import (
@@ -331,9 +331,12 @@ def _build_profile_text(
         title_service.active_title_key(char),
         title_service.active_secondary_title_key(char),
     ):
-        if tk and tk in TITLE_BY_KEY:
-            td = TITLE_BY_KEY[tk]
-            title_slots.append((td.name_ru, format_title_bonus_brief(td)))
+        if tk:
+            td = title_service.title_def_for(char, tk)
+            if td is not None:
+                title_slots.append((td.name_ru, format_title_bonus_brief(td)))
+            else:
+                title_slots.append(None)
         else:
             title_slots.append(None)
     named = [s for s in title_slots if s]

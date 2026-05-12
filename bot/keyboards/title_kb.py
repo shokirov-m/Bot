@@ -5,12 +5,13 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.menu_kb import menu_nav_button_row
-from game.characters.titles import TITLE_BY_KEY
+from db.models.character import Character
+from services import title_service
 
 TITLE_KEYS_PAGE_SIZE = 5
 
 
-def titles_pick_keyboard(unlocked_keys: list[str], *, page: int = 0) -> InlineKeyboardMarkup:
+def titles_pick_keyboard(character: Character, unlocked_keys: list[str], *, page: int = 0) -> InlineKeyboardMarkup:
     n = len(unlocked_keys)
     pages = max(1, (n + TITLE_KEYS_PAGE_SIZE - 1) // TITLE_KEYS_PAGE_SIZE) if n else 1
     page = max(0, min(page, pages - 1))
@@ -18,7 +19,7 @@ def titles_pick_keyboard(unlocked_keys: list[str], *, page: int = 0) -> InlineKe
 
     rows: list[list[InlineKeyboardButton]] = []
     for key in chunk:
-        t = TITLE_BY_KEY.get(key)
+        t = title_service.title_def_for(character, key)
         if t is None:
             continue
         base = t.name_ru

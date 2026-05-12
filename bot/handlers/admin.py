@@ -575,6 +575,43 @@ async def cb_admin_title_grant_open(callback: CallbackQuery, session: AsyncSessi
         await callback.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data.startswith("adm:tcst:"), IsAdmin())
+async def cb_admin_custom_title_start(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Персональный титул: имя + бонусы текстом, объявление в канале гачи."""
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    if len(parts) != 4 or not parts[2].isdigit() or not parts[3].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    pg = int(parts[3])
+    ch = await character_repo.get_by_id(session, cid)
+    if ch is None:
+        await callback.answer("Персонаж не найден.", show_alert=True)
+        return
+    await state.set_state(AdminStates.waiting_input)
+    await state.update_data(
+        admin_kind="custom_title_name",
+        custom_title_cid=cid,
+        custom_title_pg=pg,
+    )
+    await callback.message.answer(
+        "🌟 <b>Персональный титул</b>\n\n"
+        f"Игрок: <b>{html.escape((ch.display_name or '?').strip() or '?')}</b> (id <code>{cid}</code>)\n\n"
+        "Шаг <b>1/2</b>: одной строкой пришли <b>название</b> титула (1–48 символов, без HTML).\n\n"
+        "Отмена: кнопка ниже.",
+        parse_mode=ParseMode.HTML,
+        reply_markup=admin_cancel_keyboard(),
+    )
+    await callback.answer("Жду название…")
+
+
 @router.callback_query(F.data.startswith("adm:ttp:"), IsAdmin())
 async def cb_admin_title_grant_page(callback: CallbackQuery, session: AsyncSession) -> None:
     if callback.message is None:
@@ -1205,6 +1242,120 @@ async def admin_fsm_text(message: Message, session: AsyncSession, state: FSMCont
         await message.answer(msg, parse_mode=ParseMode.HTML if ok else None)
 
     try:
+        if kind == "custom_title_name":
+            nm = text.strip()
+            if len(nm) < 1 or len(nm) > 48:
+                await message.answer("Название: от 1 до 48 символов. Повтори.")
+                return
+            await state.update_data(
+                admin_kind="custom_title_bonuses",
+                custom_title_name=nm,
+            )
+            await message.answer(
+                "Шаг <b>2/2</b>: семь целых чисел через пробел:\n"
+                "<code>золото% опыт% СИЛ ЛОВ ИНТ ВЫН УДА</code>\n"
+                "Пример: <code>5 0 2 0 0 0 0</code>\n\n"
+                "Лимиты: золото% и опыт% — <b>0…30</b>, каждый стат — <b>0…25</b>.",
+                parse_mode=ParseMode.HTML,
+                reply_markup=admin_cancel_keyboard(),
+            )
+            return
+
+        if kind == "custom_title_bonuses":
+            parts = text.split()
+            if len(parts) != 7:
+                await message.answer("Нужно ровно <b>7</b> чисел через пробел.", parse_mode=ParseMode.HTML)
+                return
+            try:
+                g, x, sstr, sdex, sint, svit, sluck = (int(p) for p in parts)
+            except ValueError:
+                await message.answer("Только целые числа.")
+                return
+            g = max(0, min(30, g))
+            x = max(0, min(30, x))
+            sstr = max(0, min(25, sstr))
+            sdex = max(0, min(25, sdex))
+            sint = max(0, min(25, sint))
+            svit = max(0, min(25, svit))
+            sluck = max(0, min(25, sluck))
+            cid = int(data.get("custom_title_cid") or 0)
+            pg = int(data.get("custom_title_pg") or 0)
+            nm = str(data.get("custom_title_name") or "").strip()
+            if not nm:
+                await message.answer("Сессия сброшена. Начни снова с карточки игрока.")
+                await _try_restore_hub_from_state(message.bot, state)
+                return
+            ch = await character_repo.get_by_id(session, cid)
+            if ch is None:
+                await message.answer("Персонаж не найден.")
+                await _try_restore_hub_from_state(message.bot, state)
+                return
+            ok_grant, err_or_name, new_key = title_service.admin_grant_custom_title(
+                ch,
+                name_ru=nm,
+                gold_bonus_pct=g,
+                xp_bonus_pct=x,
+                stat_str=sstr,
+                stat_dex=sdex,
+                stat_int=sint,
+                stat_vit=svit,
+                stat_luck=sluck,
+            )
+            if not ok_grant:
+                await message.answer(err_or_name)
+                return
+            await anticheat_service.log_admin_action(
+                session,
+                actor_telegram_id=int(actor_id),
+                target_user_id=int(ch.user_id),
+                action="admin_grant_custom_title",
+                message=f"{new_key}:{nm}",
+                payload={
+                    "character_id": cid,
+                    "title_key": new_key,
+                    "name_ru": nm,
+                    "bonuses": {
+                        "gold_pct": g,
+                        "xp_pct": x,
+                        "str": sstr,
+                        "dex": sdex,
+                        "int": sint,
+                        "vit": svit,
+                        "luck": sluck,
+                    },
+                },
+            )
+            await session.commit()
+            from services import gacha_broadcast_service
+
+            u = await user_repo.get_by_id(session, int(ch.user_id))
+            uname = (u.username or "").strip() if u is not None else ""
+            dn = html.escape((ch.display_name or "?").strip() or "?")
+            tnh = html.escape(nm)
+            announce = f"🏅 Ранкер <b>{dn}</b>"
+            if uname:
+                announce += f" (@{html.escape(uname)})"
+            announce += f" награждён титулом <b>{tnh}</b> от башни за усердный труд!"
+            await gacha_broadcast_service.send_tower_community_announcement(
+                message.bot,
+                session,
+                character=ch,
+                html_text=announce,
+            )
+            await state.clear()
+            body, ch2 = await _admin_player_snapshot_html(session, cid)
+            if body is not None and ch2 is not None:
+                await message.answer(
+                    _truncate_html(body),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=admin_player_snapshot_keyboard(character_id=cid, return_page=pg),
+                )
+            await message.answer(
+                f"✅ Персональный титул выдан: <b>{html.escape(nm)}</b> (ключ <code>{html.escape(new_key)}</code>).",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
         if kind == "user":
             if not text.isdigit():
                 await message.answer("Нужен числовой Telegram ID.")

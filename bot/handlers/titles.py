@@ -21,7 +21,7 @@ from bot.keyboards.title_kb import TITLE_KEYS_PAGE_SIZE, titles_pick_keyboard
 from bot.utils.game_art import menu_titles_photo_path
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
-from game.characters.titles import TITLE_BY_KEY, format_title_bonus_line
+from game.characters.titles import format_title_bonus_line
 from services import title_service
 from utils.ui import LINE_SEP
 
@@ -61,7 +61,9 @@ def _screen_html(character, *, page: int = 0) -> str:  # noqa: ANN001
         "<b>Открытые (эта страница):</b>",
     ]
     for k in chunk:
-        t = TITLE_BY_KEY[k]
+        t = title_service.title_def_for(character, k)
+        if t is None:
+            continue
         lines.append(
             f"• <b>{html.escape(t.name_ru)}</b>\n"
             f"  <i>Бонус:</i> {html.escape(format_title_bonus_line(t))}",
@@ -89,7 +91,7 @@ async def _push_titles_screen(
     loc = get_locale(char, query.from_user.language_code if query.from_user else None)
     pg = page if keys else 0
     text = _screen_html(char, page=pg)
-    kb = titles_pick_keyboard(keys, page=pg) if keys else main_menu_keyboard(locale=loc, character=char)
+    kb = titles_pick_keyboard(char, keys, page=pg) if keys else main_menu_keyboard(locale=loc, character=char)
     await push_game_ui(
         state,
         query.bot,
@@ -119,7 +121,7 @@ async def cmd_titles(message: Message, session: AsyncSession) -> None:
         text = _screen_html(char, page=0)
         keys = title_service.unlocked_sorted(char)
         loc = get_locale(char, message.from_user.language_code)
-        kb = titles_pick_keyboard(keys, page=0) if keys else main_menu_keyboard(locale=loc, character=char)
+        kb = titles_pick_keyboard(char, keys, page=0) if keys else main_menu_keyboard(locale=loc, character=char)
         await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
     except Exception:
         logger.exception("Ошибка в /titles")

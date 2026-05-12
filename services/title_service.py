@@ -1,14 +1,20 @@
 """
 Разблокировка титулов (meta_progress.titles_unlocked) и смена active_title (+ второй слот в meta).
+Персональные титулы от администратора: meta_progress.custom_titles_v1 + ключи ct_*.
 """
 
 from __future__ import annotations
 
+import secrets
+from typing import Any
+
 from db.models.character import Character
-from game.characters.titles import ALL_TITLES, TITLE_BY_KEY
+from game.characters.titles import ALL_TITLES, TITLE_BY_KEY, TitleDef
 
 _META_UNLOCKED = "titles_unlocked"
 _META_SECONDARY_TITLE = "active_title_secondary_name_ru"
+_META_CUSTOM = "custom_titles_v1"
+_CUSTOM_PREFIX = "ct_"
 
 
 def _unlocked_list(character: Character) -> list[str]:
@@ -16,6 +22,45 @@ def _unlocked_list(character: Character) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [str(x) for x in raw]
+
+
+def custom_titles_map(character: Character) -> dict[str, dict[str, Any]]:
+    raw = (character.meta_progress or {}).get(_META_CUSTOM)
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for k, v in raw.items():
+        ks = str(k).strip()
+        if not ks.startswith(_CUSTOM_PREFIX):
+            continue
+        if isinstance(v, dict):
+            out[ks] = dict(v)
+    return out
+
+
+def title_def_for(character: Character, key: str) -> TitleDef | None:
+    """Каталожный или персональный титул (по meta)."""
+    td = TITLE_BY_KEY.get(key)
+    if td is not None:
+        return td
+    data = custom_titles_map(character).get(key)
+    if data is None:
+        return None
+    name_ru = str(data.get("name_ru", "")).strip() or "Титул"
+    return TitleDef(
+        key,
+        name_ru,
+        9000,
+        lambda c, k=key: k in _unlocked_list(c),
+        "Награда от башни",
+        gold_bonus_pct=int(data.get("gold_bonus_pct", 0) or 0),
+        xp_bonus_pct=int(data.get("xp_bonus_pct", 0) or 0),
+        stat_str=int(data.get("stat_str", 0) or 0),
+        stat_dex=int(data.get("stat_dex", 0) or 0),
+        stat_int=int(data.get("stat_int", 0) or 0),
+        stat_vit=int(data.get("stat_vit", 0) or 0),
+        stat_luck=int(data.get("stat_luck", 0) or 0),
+    )
 
 
 def refresh_unlocks(character: Character) -> list[str]:
@@ -39,9 +84,15 @@ def refresh_unlocks(character: Character) -> list[str]:
 
 
 def unlocked_sorted(character: Character) -> list[str]:
-    """Ключи открытых титулов по порядку сортировки в реестре."""
+    """Ключи открытых титулов: сначала каталог по sort, затем персональные по имени."""
     have = set(_unlocked_list(character))
-    return [t.key for t in ALL_TITLES if t.key in have]
+    built = [t.key for t in ALL_TITLES if t.key in have]
+    cmap = custom_titles_map(character)
+    customs = sorted(
+        [k for k in have if k.startswith(_CUSTOM_PREFIX) and k in cmap],
+        key=lambda k: str(cmap[k].get("name_ru") or k).lower(),
+    )
+    return built + customs
 
 
 def display_names(keys: list[str]) -> list[str]:
@@ -56,15 +107,25 @@ def _name_ru_for_secondary(character: Character) -> str | None:
     return s or None
 
 
+def _key_by_display_name(character: Character, name_ru: str) -> str | None:
+    s = (name_ru or "").strip()
+    if not s:
+        return None
+    for tt in ALL_TITLES:
+        if tt.name_ru == s:
+            return tt.key
+    for k, data in custom_titles_map(character).items():
+        if str(data.get("name_ru", "")).strip() == s:
+            return k
+    return None
+
+
 def active_secondary_title_key(character: Character) -> str | None:
     """Второй активный титул (имя в meta, как у основного)."""
     at = _name_ru_for_secondary(character)
     if not at:
         return None
-    for tt in ALL_TITLES:
-        if tt.name_ru == at:
-            return tt.key
-    return None
+    return _key_by_display_name(character, at)
 
 
 def equip(character: Character, key: str, *, slot: int = 1) -> tuple[bool, str]:
@@ -72,7 +133,7 @@ def equip(character: Character, key: str, *, slot: int = 1) -> tuple[bool, str]:
     refresh_unlocks(character)
     if key not in set(_unlocked_list(character)):
         return False, "Титул ещё не открыт."
-    td = TITLE_BY_KEY.get(key)
+    td = title_def_for(character, key)
     if td is None:
         return False, "Неизвестный титул."
     if slot == 1 and active_secondary_title_key(character) == key:
@@ -104,10 +165,7 @@ def active_title_key(character: Character) -> str | None:
     at = character.active_title
     if not at:
         return None
-    for tt in ALL_TITLES:
-        if tt.name_ru == at:
-            return tt.key
-    return None
+    return _key_by_display_name(character, str(at))
 
 
 def reward_bonus_multipliers(character: Character) -> tuple[float, float]:
@@ -116,7 +174,7 @@ def reward_bonus_multipliers(character: Character) -> tuple[float, float]:
     for k in (active_title_key(character), active_secondary_title_key(character)):
         if not k:
             continue
-        tt = TITLE_BY_KEY.get(k)
+        tt = title_def_for(character, k)
         if tt is None:
             continue
         gm *= 1.0 + tt.gold_bonus_pct / 100.0
@@ -136,6 +194,47 @@ def admin_ensure_title_unlocked(character: Character, key: str) -> tuple[bool, s
     character.meta_progress = mp
     td = TITLE_BY_KEY[key]
     return True, td.name_ru
+
+
+def admin_grant_custom_title(
+    character: Character,
+    *,
+    name_ru: str,
+    gold_bonus_pct: int,
+    xp_bonus_pct: int,
+    stat_str: int,
+    stat_dex: int,
+    stat_int: int,
+    stat_vit: int,
+    stat_luck: int,
+) -> tuple[bool, str, str]:
+    """
+    Админ: создать персональный титул и открыть его игроку.
+    Возвращает (ok, сообщение об ошибке или имя титула, ключ ct_*).
+    """
+    nm = (name_ru or "").strip()
+    if len(nm) < 1 or len(nm) > 48:
+        return False, "Имя титула: от 1 до 48 символов.", ""
+    key = f"{_CUSTOM_PREFIX}{secrets.token_hex(6)}"
+    mp = dict(character.meta_progress or {})
+    ct = dict(custom_titles_map(character))
+    ct[key] = {
+        "name_ru": nm,
+        "gold_bonus_pct": int(gold_bonus_pct),
+        "xp_bonus_pct": int(xp_bonus_pct),
+        "stat_str": int(stat_str),
+        "stat_dex": int(stat_dex),
+        "stat_int": int(stat_int),
+        "stat_vit": int(stat_vit),
+        "stat_luck": int(stat_luck),
+    }
+    mp[_META_CUSTOM] = ct
+    raw = mp.get(_META_UNLOCKED)
+    have: set[str] = set(str(x) for x in raw) if isinstance(raw, list) else set()
+    have.add(key)
+    mp[_META_UNLOCKED] = sorted(have)
+    character.meta_progress = mp
+    return True, nm, key
 
 
 def grant_title_key(character: Character, key: str, *, silent: bool = False) -> bool:
