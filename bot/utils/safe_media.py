@@ -383,3 +383,6 @@ async def safe_delete_message(bot: Bot, chat_id: int, message_id: int) -> None:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
     except TelegramBadRequest as e:
         logger.debug("safe_delete_message: {}", e)
+    except Exception as e:
+        # Forbidden / network и т.д. — не рвём цепочку UI (якорь уже может указывать на новое сообщение)
+        logger.warning("safe_delete_message: {}", e)

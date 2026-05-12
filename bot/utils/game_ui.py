@@ -141,8 +141,8 @@ async def push_game_ui(
                 reply_markup=reply_markup,
             )
             if sent is not None:
-                await safe_delete_message(bot, chat_id, target_message.message_id)
                 await remember_game_ui_anchor(state, sent)
+                await safe_delete_message(bot, chat_id, target_message.message_id)
                 return
             try:
                 if _message_supports_caption_edit(target_message):
@@ -163,8 +163,8 @@ async def push_game_ui(
         if _message_supports_caption_edit(target_message):
             sent = await bot.send_message(chat_id=chat_id, **text_kw)
             if sent is not None:
-                await safe_delete_message(bot, chat_id, target_message.message_id)
                 await remember_game_ui_anchor(state, sent)
+                await safe_delete_message(bot, chat_id, target_message.message_id)
             return
         try:
             await target_message.edit_text(**text_kw)
@@ -196,8 +196,8 @@ async def push_game_ui(
                 reply_markup=reply_markup,
             )
             if sent is not None:
-                await safe_delete_message(bot, cid, int(mid))
                 await remember_game_ui_anchor(state, sent)
+                await safe_delete_message(bot, cid, int(mid))
                 return
             try:
                 await bot.edit_message_caption(
@@ -212,8 +212,8 @@ async def push_game_ui(
                 logger.warning("push_game_ui якорь: откат после неудачного send_photo: {}", e)
             sent = await bot.send_message(chat_id=chat_id, **text_kw)
             if sent is not None:
-                await safe_delete_message(bot, cid, int(mid))
                 await remember_game_ui_anchor(state, sent)
+                await safe_delete_message(bot, cid, int(mid))
             return
         try:
             await bot.edit_message_text(chat_id=cid, message_id=int(mid), **text_kw)
@@ -238,8 +238,8 @@ async def push_game_ui(
                 logger.debug("push_game_ui: правка подписи якоря не вышла, шлём новое: {}", e2)
         sent = await bot.send_message(chat_id=chat_id, **text_kw)
         if sent is not None:
-            await safe_delete_message(bot, cid, int(mid))
             await remember_game_ui_anchor(state, sent)
+            await safe_delete_message(bot, cid, int(mid))
         return
 
     if fallback_message is not None and fallback_message.chat.id == chat_id:
