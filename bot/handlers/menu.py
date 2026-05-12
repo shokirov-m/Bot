@@ -537,7 +537,7 @@ async def menu_titles(callback: CallbackQuery, session: AsyncSession, state: FSM
         text = titles_screen_html(char)
         keys = title_service.unlocked_sorted(char)
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        kb = titles_pick_keyboard(keys) if keys else main_menu_keyboard(locale=loc, character=char)
+        kb = titles_pick_keyboard(char, keys, page=0) if keys else main_menu_keyboard(locale=loc, character=char)
         await _edit_same_message(
             callback,
             state,
