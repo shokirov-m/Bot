@@ -423,6 +423,9 @@ def _apply_weapon_runes_to_state(
     runes_list = parse_weapon_runes(weapon_item_data)
     mon_el = str(combat_state.get("monster", {}).get("element") or "earth")
     pct = calculate_elemental_bonus(runes_list, mon_el, character.element)
+    from services import vip_shop_bonus_service as _vsb
+
+    combat_state["vip_frostlord_elem_bonus_pct"] = int(_vsb.ice_elemental_bonus_percent(character, runes_list))
     combat_state["weapon_rune_flat_elemental"] = int(total_weapon_rune_flat_elemental_damage(runes_list))
     loc_rune = get_locale(character, None)
     if pct >= 30:
@@ -537,6 +540,7 @@ def _build_combat_dict(
         "mastery_strike_pending": False,
         "tutorial_phase": 0,
         "weapon_rune_bonus_pct": 0,
+        "vip_frostlord_elem_bonus_pct": 0,
         "player_fire_resist_pct": 0,
         "player_ice_resist_pct": 0,
         "player_lightning_resist_pct": 0,

@@ -170,6 +170,8 @@ def active_title_key(character: Character) -> str | None:
 
 def reward_bonus_multipliers(character: Character) -> tuple[float, float]:
     """Множители (золото, опыт) за победу — оба слота титула перемножаются."""
+    from services import vip_shop_bonus_service as _vsb
+
     gm, xm = 1.0, 1.0
     for k in (active_title_key(character), active_secondary_title_key(character)):
         if not k:
@@ -179,6 +181,9 @@ def reward_bonus_multipliers(character: Character) -> tuple[float, float]:
             continue
         gm *= 1.0 + tt.gold_bonus_pct / 100.0
         xm *= 1.0 + tt.xp_bonus_pct / 100.0
+    gb = int(_vsb.gold_bonus_pct(character))
+    if gb > 0:
+        gm *= 1.0 + gb / 100.0
     return gm, xm
 
 

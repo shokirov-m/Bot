@@ -14,7 +14,7 @@ from db.models.character import Character
 from db.repository import inventory_repo
 from game.combat import consumables as combat_consumables
 from game.economy import shop as shop_data
-from services import character_service, home_service
+from services import character_service, home_service, vip_shop_bonus_service
 from services.fame_bonuses import npc_merchant_price_multiplier
 from utils.ui import LINE_SEP
 
@@ -76,23 +76,30 @@ def format_vip_shop_html(character: Character) -> str:
     """VIP-раздел магазина: облики за Telegram Stars."""
     lines = [
         "⭐ <b>VIP-магазин</b>",
-        "<i>Особые облики для профиля — покупаются за Telegram Stars.</i>",
+        "<i>Особые облики и коллекционные бонусы — за Telegram Stars.</i>",
         "<i>Звёзды — внутренняя валюта Telegram, купить можно прямо в приложении.</i>",
         LINE_SEP,
-        "🖼️ <b>Облики:</b>",
+        "🖼️ <b>Каталог:</b>",
     ]
+
+    def _owned(g) -> bool:
+        vs = str(g.item_data.get("virtual_shop") or "")
+        if vs == "vip_star_bonus":
+            bid = str(g.item_data.get("vip_bonus_id") or "").strip()
+            return vip_bonus_owned(character, bid) if bid else False
+        pk = str(g.item_data.get("portrait_key") or "")
+        return bool(pk and home_service.has_portrait_unlock(character, pk))
+
     for g in shop_data.VIP_STAR_GOODS:
-        pk = g.item_data.get("portrait_key", "")
-        already = home_service.has_portrait_unlock(character, pk)
-        status = " ✅ <i>уже куплен</i>" if already else f" — <b>{g.stars_price} ⭐</b>"
+        already = _owned(g)
+        status = " ✅ <i>уже куплено</i>" if already else f" — <b>{g.stars_price} ⭐</b>"
         lines.append(
             f"{g.emoji} <b>{html.escape(g.name)}</b>{status}\n"
-            f"<i>{html.escape(g.blurb)}</i>"
+            f"<i>{html.escape(g.blurb)}</i>",
         )
     lines.append(LINE_SEP)
     lines.append(
-        "<i>💡 После оплаты облик сразу появится в "
-        "<b>Дом → Гардероб</b>.</i>"
+        "<i>💡 Облики — в <b>Дом → Гардероб</b>. Бонусы арта действуют сразу после оплаты.</i>",
     )
     return "\n".join(lines)
 
@@ -189,6 +196,30 @@ def apply_stars_portrait_unlock(character: Character, portrait_key: str) -> tupl
     from utils.profile_portraits import portrait_title_ru
     disp = portrait_title_ru(pk)
     return True, f"⭐ Облик «{html.escape(disp)}» открыт в <b>Дом → Гардероб</b>."
+
+
+def vip_bonus_owned(character: Character, bonus_id: str) -> bool:
+    bid = str(bonus_id).strip().lower()
+    if bid == vip_shop_bonus_service.VIP_BONUS_ID_FROST_THRONE:
+        return vip_shop_bonus_service.has_frost_throne_bundle(character)
+    return False
+
+
+def apply_stars_vip_bonus_unlock(character: Character, bonus_id: str) -> tuple[bool, str]:
+    """Разблокировать VIP-бонус (не облик) после оплаты Stars."""
+    bid = str(bonus_id).strip().lower()
+    if bid == vip_shop_bonus_service.VIP_BONUS_ID_FROST_THRONE:
+        if vip_shop_bonus_service.has_frost_throne_bundle(character):
+            return False, "Этот набор уже куплен."
+        vip_shop_bonus_service.unlock_frost_throne_bundle(character)
+        return (
+            True,
+            "⭐ <b>«Владыка морозного трона»</b> активирован.\n"
+            "• <b>+5%</b> к золоту с побед.\n"
+            "• <b>+15%</b> к элементальному урону <b>льдом</b>, если на оружии есть "
+            "<b>руна льда</b> или стихия героя — <b>лёд</b>.",
+        )
+    return False, "Неизвестный бонус."
 
 
 async def try_use_bag_ration_by_id(

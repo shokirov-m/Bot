@@ -17,6 +17,7 @@ def auction_vip_portraits_screen_html(character: Character) -> str:
     import html as _html
 
     from game.economy.shop import VIP_STAR_GOODS
+    from services import shop_service
     from services.home_service import has_portrait_unlock
 
     lines = [
@@ -26,8 +27,13 @@ def auction_vip_portraits_screen_html(character: Character) -> str:
         LINE_SEP,
     ]
     for g in VIP_STAR_GOODS:
-        pk = str(g.item_data.get("portrait_key", ""))
-        owned = has_portrait_unlock(character, pk)
+        vs = str(g.item_data.get("virtual_shop") or "")
+        if vs == "vip_star_bonus":
+            bid = str(g.item_data.get("vip_bonus_id") or "").strip()
+            owned = shop_service.vip_bonus_owned(character, bid) if bid else False
+        else:
+            pk = str(g.item_data.get("portrait_key", ""))
+            owned = bool(pk and has_portrait_unlock(character, pk))
         status = " ✅ <i>уже куплен</i>" if owned else f" — <b>{g.stars_price} ⭐</b>"
         lines.append(f"{g.emoji} <b>{_html.escape(g.name)}</b>{status}\n<i>{_html.escape(g.blurb)}</i>")
     return "\n".join(lines)
@@ -44,25 +50,33 @@ def auction_vip_portrait_preview_keyboard(
     *,
     stars_price: int,
     already_owned: bool,
+    buy_origin: str = "a",
 ) -> InlineKeyboardMarkup:
     """Предпросмотр VIP-облика: купить за Stars (если ещё нет) и назад."""
     fl = int(floor_number)
     gk = good_key.strip()[:32]
+    bo = (buy_origin or "a").strip().lower()[:2]
+    if bo not in ("a", "c", "f", "m", "h", "u"):
+        bo = "a"
     rows: list[list[InlineKeyboardButton]] = []
     if not already_owned:
         rows.append(
             [
                 InlineKeyboardButton(
                     text=f"⭐ Купить · {stars_price} Telegram Stars"[:64],
-                    callback_data=f"shp:vbuy:{fl}:{gk}:a",
+                    callback_data=f"shp:vbuy:{fl}:{gk}:{bo}",
                 ),
             ],
         )
     else:
         rows.append(
-            [InlineKeyboardButton(text="✅ Уже в гардеробе", callback_data="auc:prvown")],
+            [InlineKeyboardButton(text="✅ Уже куплено", callback_data="auc:prvown")],
         )
-    rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data="auc:prt")])
+    if bo == "a":
+        back_cd = "auc:prt"
+    else:
+        back_cd = f"shp:vip:{fl}:{bo}"
+    rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data=back_cd)])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -94,7 +108,7 @@ def auction_vip_portraits_keyboard(floor_number: int) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text=label,
-                    callback_data=f"auc:vpr:{fl}:{g.key}",
+                    callback_data=f"auc:vpr:{fl}:{g.key}:a",
                 ),
             ],
         )

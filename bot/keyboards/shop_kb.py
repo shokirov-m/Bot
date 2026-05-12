@@ -61,7 +61,7 @@ def shop_vip_keyboard(floor_number: int, origin: str) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text=label,
-                    callback_data=f"shp:vbuy:{floor_number}:{g.key}:{origin}",
+                    callback_data=f"auc:vpr:{floor_number}:{g.key}:{origin}",
                 ),
             ],
         )

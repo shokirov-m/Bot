@@ -242,18 +242,33 @@ async def shop_vip_buy(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Товар не найден.", show_alert=True)
             return
 
-        pk = str(good.item_data.get("portrait_key", ""))
-        from services.home_service import has_portrait_unlock
-        if pk and has_portrait_unlock(char, pk):
-            await query.answer("Этот облик уже куплен.", show_alert=True)
-            return
+        vs = str(good.item_data.get("virtual_shop") or "")
+        if vs == "vip_star_bonus":
+            bid = str(good.item_data.get("vip_bonus_id") or "").strip()
+            if not bid:
+                await query.answer("Ошибка товара.", show_alert=True)
+                return
+            if shop_service.vip_bonus_owned(char, bid):
+                await query.answer("Этот набор уже куплен.", show_alert=True)
+                return
+            payload = f"vipbonus:{bid}:{query.from_user.id}"
+        else:
+            pk = str(good.item_data.get("portrait_key", ""))
+            from services.home_service import has_portrait_unlock
+            if not pk:
+                await query.answer("Товар не поддерживается.", show_alert=True)
+                return
+            if has_portrait_unlock(char, pk):
+                await query.answer("Этот облик уже куплен.", show_alert=True)
+                return
+            payload = f"portrait:{pk}:{query.from_user.id}"
 
         # Отправляем инвойс — Telegram Stars (currency="XTR")
         await query.bot.send_invoice(
             chat_id=query.message.chat.id,
             title=good.name,
             description=good.blurb,
-            payload=f"portrait:{pk}:{query.from_user.id}",
+            payload=payload,
             currency="XTR",
             prices=[LabeledPrice(label=good.name, amount=good.stars_price)],
         )
@@ -269,7 +284,7 @@ async def pre_checkout_handler(pre_checkout_query: PreCheckoutQuery) -> None:
     try:
         payload = pre_checkout_query.invoice_payload
         # Проверяем формат полезной нагрузки: portrait:<key>:<user_id>
-        if payload.startswith("portrait:"):
+        if payload.startswith("portrait:") or payload.startswith("vipbonus:"):
             await pre_checkout_query.answer(ok=True)
         else:
             await pre_checkout_query.answer(ok=False, error_message="Неизвестный товар.")
@@ -289,45 +304,82 @@ async def successful_payment_handler(message: Message, session: AsyncSession) ->
         stars = message.successful_payment.total_amount
         currency = message.successful_payment.currency
 
-        if not payload.startswith("portrait:"):
-            return
+        if payload.startswith("portrait:"):
+            parts = payload.split(":")
+            if len(parts) < 3:
+                return
+            portrait_key = parts[1]
+            expected_uid = int(parts[2]) if parts[2].isdigit() else -1
 
-        parts = payload.split(":")
-        if len(parts) < 3:
-            return
-        portrait_key = parts[1]
-        expected_uid = int(parts[2]) if parts[2].isdigit() else -1
+            if message.from_user.id != expected_uid:
+                await message.answer("⚠️ Ошибка: несоответствие пользователя.")
+                return
 
-        if message.from_user.id != expected_uid:
-            await message.answer("⚠️ Ошибка: несоответствие пользователя.")
-            return
+            char = await _load_char(session, message.from_user.id)
+            if char is None:
+                await message.answer("⚠️ Персонаж не найден.")
+                return
 
-        char = await _load_char(session, message.from_user.id)
-        if char is None:
-            await message.answer("⚠️ Персонаж не найден.")
-            return
+            ok, result_msg = shop_service.apply_stars_portrait_unlock(char, portrait_key)
+            await session.flush()
 
-        ok, result_msg = shop_service.apply_stars_portrait_unlock(char, portrait_key)
-        await session.flush()
-
-        if ok:
-            await message.answer(
-                f"✅ Оплата прошла! −{stars} ⭐\n{result_msg}",
-                parse_mode=ParseMode.HTML,
-            )
-        else:
-            # Уже куплен — деньги вернёт Telegram автоматически (refund), но сообщим игроку
-            await message.answer(
-                f"ℹ️ {result_msg}\n<i>Telegram вернёт {stars} ⭐ на счёт.</i>",
-                parse_mode=ParseMode.HTML,
-            )
-            # Возврат Stars
-            try:
-                await message.bot.refund_star_payment(
-                    user_id=message.from_user.id,
-                    telegram_payment_charge_id=message.successful_payment.telegram_payment_charge_id,
+            if ok:
+                await message.answer(
+                    f"✅ Оплата прошла! −{stars} ⭐\n{result_msg}",
+                    parse_mode=ParseMode.HTML,
                 )
-            except Exception:
-                logger.warning("Stars refund failed for already-owned portrait")
+            else:
+                # Уже куплен — деньги вернёт Telegram автоматически (refund), но сообщим игроку
+                await message.answer(
+                    f"ℹ️ {result_msg}\n<i>Telegram вернёт {stars} ⭐ на счёт.</i>",
+                    parse_mode=ParseMode.HTML,
+                )
+                # Возврат Stars
+                try:
+                    await message.bot.refund_star_payment(
+                        user_id=message.from_user.id,
+                        telegram_payment_charge_id=message.successful_payment.telegram_payment_charge_id,
+                    )
+                except Exception:
+                    logger.warning("Stars refund failed for already-owned portrait")
+            return
+
+        if payload.startswith("vipbonus:"):
+            parts = payload.split(":")
+            if len(parts) < 3:
+                return
+            bonus_id = parts[1]
+            expected_uid = int(parts[2]) if parts[2].isdigit() else -1
+
+            if message.from_user.id != expected_uid:
+                await message.answer("⚠️ Ошибка: несоответствие пользователя.")
+                return
+
+            char = await _load_char(session, message.from_user.id)
+            if char is None:
+                await message.answer("⚠️ Персонаж не найден.")
+                return
+
+            ok, result_msg = shop_service.apply_stars_vip_bonus_unlock(char, bonus_id)
+            await session.commit()
+
+            if ok:
+                await message.answer(
+                    f"✅ Оплата прошла! −{stars} ⭐\n{result_msg}",
+                    parse_mode=ParseMode.HTML,
+                )
+            else:
+                await message.answer(
+                    f"ℹ️ {result_msg}\n<i>Telegram вернёт {stars} ⭐ на счёт.</i>",
+                    parse_mode=ParseMode.HTML,
+                )
+                try:
+                    await message.bot.refund_star_payment(
+                        user_id=message.from_user.id,
+                        telegram_payment_charge_id=message.successful_payment.telegram_payment_charge_id,
+                    )
+                except Exception:
+                    logger.warning("Stars refund failed for already-owned vip bonus")
+            return
     except Exception:
         logger.exception("successful_payment")

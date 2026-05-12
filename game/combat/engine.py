@@ -417,7 +417,8 @@ def combined_player_elemental_damage_percent(state: dict[str, Any], *, magic_ski
     mon = str((_m(state)).get("element") or "earth").strip().lower()
     atk_el = player_attack_element_for_matchup(state, magic_skill=magic_skill)
     table = elemental_bonus_percent(atk_el, mon)
-    total = rb + table
+    vip_ex = int(state.get("vip_frostlord_elem_bonus_pct", 0))
+    total = rb + table + vip_ex
     return max(_ELEMENTAL_DAMAGE_PCT_FLOOR, min(_ELEMENTAL_DAMAGE_PCT_CAP, total))
 
 

@@ -322,31 +322,54 @@ async def auc_vip_portrait_preview(callback: CallbackQuery, session: AsyncSessio
             return
         fl = int(parts[2])
         gk = str(parts[3]).strip().lower()
+        buy_origin = str(parts[4]).strip().lower()[:2] if len(parts) >= 5 else "a"
+        if buy_origin not in ("a", "c", "f", "m", "h", "u"):
+            buy_origin = "a"
         _, char = await _load_char(session, callback.from_user.id)
         if char is None:
             await callback.answer("Нет доступа.", show_alert=True)
             return
         from game.economy.shop import vip_good_by_key
+        from services import shop_service
+        from utils.image_assets import tower_bot_root
         from utils.profile_portraits import portrait_blurb_ru, portrait_path_if_exists, portrait_title_ru
 
         g = vip_good_by_key(gk)
         if g is None:
-            await callback.answer("Облик не найден.", show_alert=True)
+            await callback.answer("Товар не найден.", show_alert=True)
             return
+        vs = str(g.item_data.get("virtual_shop") or "")
         pk = str(g.item_data.get("portrait_key") or "").strip()
-        already_owned = bool(pk and home_service.has_portrait_unlock(char, pk))
-        img = portrait_path_if_exists(pk) if pk else None
+        rel_preview = str(g.item_data.get("preview_image") or "").strip()
 
-        name = html.escape(portrait_title_ru(pk) if pk else g.name)
-        blurb = html.escape(portrait_blurb_ru(pk) if pk else g.blurb)
+        img: str | None = None
+        if vs == "vip_star_bonus":
+            bid = str(g.item_data.get("vip_bonus_id") or "").strip()
+            already_owned = shop_service.vip_bonus_owned(char, bid) if bid else False
+            if rel_preview:
+                p = tower_bot_root() / rel_preview
+                if p.is_file():
+                    img = str(p)
+            name = html.escape(g.name)
+            blurb_html = html.escape(g.blurb).replace("\n", "<br/>")
+        else:
+            already_owned = bool(pk and home_service.has_portrait_unlock(char, pk))
+            _p = portrait_path_if_exists(pk) if pk else None
+            img = str(_p) if _p else None
+            name = html.escape(portrait_title_ru(pk) if pk else g.name)
+            blurb_html = html.escape(portrait_blurb_ru(pk) if pk else g.blurb)
+
         cap_lines = [
-            f"🖼 <b>{name}</b>",
-            f"<i>{blurb}</i>",
+            f"{g.emoji} <b>{name}</b>",
+            f"<i>{blurb_html}</i>",
             "",
             f"Цена: <b>{g.stars_price} ⭐ Telegram Stars</b>",
         ]
         if already_owned:
-            cap_lines.append("\n✅ <i>Уже в твоём гардеробе.</i>")
+            if vs == "vip_star_bonus":
+                cap_lines.append("\n✅ <i>Уже активирован.</i>")
+            else:
+                cap_lines.append("\n✅ <i>Уже в твоём гардеробе.</i>")
         elif img is None:
             cap_lines.append("\n⚠️ <i>Изображение пока не загружено.</i>")
         caption = "\n".join(cap_lines)
@@ -359,9 +382,10 @@ async def auc_vip_portrait_preview(callback: CallbackQuery, session: AsyncSessio
                 fl, g.key,
                 stars_price=g.stars_price,
                 already_owned=already_owned,
+                buy_origin=buy_origin,
             ),
             target_message=callback.message,
-            photo_path=str(img) if img is not None else None,
+            photo_path=img,
             character=char,
         )
         await callback.answer()
@@ -383,8 +407,8 @@ async def auc_portrait_preview_legacy(callback: CallbackQuery, session: AsyncSes
 
 @router.callback_query(F.data == "auc:prvown")
 async def auc_portrait_already_owned_stub(callback: CallbackQuery) -> None:
-    """Кнопка при уже купленном облике из превью магазина."""
-    await callback.answer("Этот облик уже в гардеробе дома.", show_alert=True)
+    """Кнопка при уже купленном VIP-товаре из превью."""
+    await callback.answer("Этот товар уже куплен.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("auc:create"))
