@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from game.locations.tavern import TAVERN_MENU
+from game.locations.tavern import tavern_offers_for_floor
 
 
 def tavern_menu_keyboard(floor_number: int) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    for o in TAVERN_MENU:
+    for o in tavern_offers_for_floor(floor_number):
         label = f"{o.emoji} {o.name} — {o.price}💰"
         if len(label) > 64:
             label = label[:61] + "…"

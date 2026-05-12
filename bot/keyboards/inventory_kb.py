@@ -9,9 +9,10 @@ from db.models.inventory import InventoryItem
 from game.items import item_categories
 from game.items import equipment as equip_meta
 from game.items.equipment import RARITY_EMOJI, gear_icon_for_item_data
+from game.items.runes import parse_weapon_runes
 from utils.ui import item_bag_button_label
 
-BAG_PAGE_SIZE = 8
+BAG_PAGE_SIZE = 10
 
 # Сортировка сумки: редкость (легендарные сверху), затем номер ячейки.
 _RARITY_SORT: dict[str, int] = {
@@ -24,9 +25,10 @@ _RARITY_SORT: dict[str, int] = {
 }
 
 
-def _bag_sort_key(it: InventoryItem) -> tuple[int, int]:
+def _bag_sort_key(it: InventoryItem) -> tuple[int, str, int]:
     r = str((it.item_data or {}).get("rarity") or "common").lower()
-    return (_RARITY_SORT.get(r, 99), it.bag_slot or 0)
+    nm = str((it.item_data or {}).get("name") or "").lower()
+    return (_RARITY_SORT.get(r, 99), nm, it.bag_slot or 0)
 
 
 def _equip_button_label(it: InventoryItem) -> str:
@@ -35,7 +37,12 @@ def _equip_button_label(it: InventoryItem) -> str:
     r = str(data.get("rarity") or "common").lower()
     em = RARITY_EMOJI.get(r, "⚪")
     name = str(data.get("name", "?"))[:10]
-    return f"{gi}{em} {name}"[:32]
+    wr = parse_weapon_runes(data)
+    tag = f"💎{len(wr)}" if wr else ""
+    base = f"{gi}{em} {name}"
+    if tag:
+        base = f"{base} {tag}"
+    return base[:32]
 
 
 def inventory_hub_keyboard() -> InlineKeyboardMarkup:
@@ -77,7 +84,7 @@ def bag_tab_keyboard(
     *,
     section: str,
 ) -> InlineKeyboardMarkup:
-    """Список предметов сумки в секции: сортировка по редкости, по 8 на страницу."""
+    """Список предметов сумки в секции: сортировка по редкости, по одному в ряд, 10 на страницу."""
     ic = item_categories
     sec = section if section in ic.ALL_INV_SECTIONS else ic.INV_SEC_WEAPON
     sorted_items = sorted(
@@ -87,21 +94,15 @@ def bag_tab_keyboard(
     start = page * BAG_PAGE_SIZE
     chunk = sorted_items[start : start + BAG_PAGE_SIZE]
     rows: list[list[InlineKeyboardButton]] = []
-    for i in range(0, len(chunk), 2):
-        row: list[InlineKeyboardButton] = [
-            InlineKeyboardButton(
-                text=item_bag_button_label(chunk[i].item_data),
-                callback_data=f"inv:it:{chunk[i].id}:b:{page}:{sec}",
-            ),
-        ]
-        if i + 1 < len(chunk):
-            row.append(
+    for it in chunk:
+        rows.append(
+            [
                 InlineKeyboardButton(
-                    text=item_bag_button_label(chunk[i + 1].item_data),
-                    callback_data=f"inv:it:{chunk[i + 1].id}:b:{page}:{sec}",
+                    text=item_bag_button_label(it.item_data),
+                    callback_data=f"inv:it:{it.id}:b:{page}:{sec}",
                 ),
-            )
-        rows.append(row)
+            ],
+        )
     nav: list[InlineKeyboardButton] = []
     if start > 0:
         nav.append(

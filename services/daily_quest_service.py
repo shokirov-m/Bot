@@ -40,6 +40,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from db.models.character import Character
 from game.quests.daily_quests import (
     DailyQuestTemplate,
+    daily_quest_floor_band_for_tier,
     pool_for_tier,
     tier_for_floor,
     type_label,
@@ -88,6 +89,7 @@ def _generate_quests(
     take = min(max(1, n_slots), len(pool))
     selected: list[DailyQuestTemplate] = rng.sample(pool, take)
 
+    lo, hi = daily_quest_floor_band_for_tier(tier)
     quests = []
     for i, tpl in enumerate(selected):
         quests.append({
@@ -102,6 +104,8 @@ def _generate_quests(
             "reward_gold": tpl.reward_gold,
             "reward_xp": tpl.reward_xp,
             "reward_rune": tpl.reward_rune,
+            "progress_floor_lo": lo,
+            "progress_floor_hi": hi,
         })
     return quests
 
@@ -124,6 +128,7 @@ def _extend_quests_to_count(
     date_int = int(today.replace("-", ""))
     rng = random.Random(date_int * 10000 + int(character.id) + 777)
     i = len(quests)
+    lo, hi = daily_quest_floor_band_for_tier(tier)
     while len(quests) < need and free_tpl:
         tpl = rng.choice(free_tpl)
         free_tpl = [p for p in free_tpl if p.key != tpl.key]
@@ -140,6 +145,8 @@ def _extend_quests_to_count(
                 "reward_gold": tpl.reward_gold,
                 "reward_xp": tpl.reward_xp,
                 "reward_rune": tpl.reward_rune,
+                "progress_floor_lo": lo,
+                "progress_floor_hi": hi,
             },
         )
         i += 1
@@ -212,10 +219,19 @@ def record_battle_result(
     state = _ensure_today(character)
     quests: list[dict] = state.get("quests") or []
     changed = False
+    floor_now = int(character.floor_number)
 
     for q in quests:
         if q.get("claimed"):
             continue
+        lo = q.get("progress_floor_lo")
+        hi = q.get("progress_floor_hi")
+        if lo is not None and hi is not None:
+            try:
+                if not (int(lo) <= floor_now <= int(hi)):
+                    continue
+            except (TypeError, ValueError):
+                pass
         cur = int(q.get("current", 0))
         target = int(q.get("target", 1))
         if cur >= target:
@@ -368,6 +384,13 @@ def format_daily_quests_html(character: Character) -> str:
 
         lines.append(f"<b>{type_label(qt)} — {title}</b>")
         lines.append(f"<i>{desc}</i>")
+        flo = q.get("progress_floor_lo")
+        fhi = q.get("progress_floor_hi")
+        if flo is not None and fhi is not None:
+            try:
+                lines.append(f"<i>Прогресс только на этажах {int(flo)}–{int(fhi)}.</i>")
+            except (TypeError, ValueError):
+                pass
         lines.append(f"{bar_line}  {status}")
         lines.append(f"Награда: {reward_txt}")
         lines.append("")

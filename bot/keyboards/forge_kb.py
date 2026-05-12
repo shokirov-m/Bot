@@ -6,7 +6,9 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.city_kb import city_hub_keyboard
 from bot.keyboards.menu_kb import menu_nav_button_row
+from game.floors import floor_data
 from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
+from game.locations import forge as forge_loc
 
 
 def _dis_rarity_filter_label(code: str) -> str:
@@ -24,7 +26,32 @@ __all__ = [
     "forge_rune_bag_pick_keyboard",
     "forge_rune_menu_keyboard",
     "forge_rune_socket_pick_keyboard",
+    "forge_star_merge_pick_keyboard",
 ]
+
+
+def _forge_star_merge_row_visible(floor_number: int) -> bool:
+    if not forge_loc.forge_available_on_floor(floor_number):
+        return False
+    c = floor_data.get_city_for_floor(int(floor_number))
+    return c is not None and int(c.floor) >= 61
+
+
+def forge_star_merge_pick_keyboard(floor_number: int, items: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for iid, lab in items[:14]:
+        short = lab if len(lab) <= 40 else lab[:37] + "…"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=short,
+                    callback_data=f"frg:stx:{floor_number}:{iid}",
+                ),
+            ],
+        )
+    rows.append([InlineKeyboardButton(text="⬅ Кузница", callback_data=f"frg:main:{floor_number}")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def forge_rune_menu_keyboard(floor_number: int) -> InlineKeyboardMarkup:
@@ -135,6 +162,9 @@ def forge_dis_bag_keyboard(
     *,
     rarity_filter: str | None = None,
     kind_filter: str | None = None,
+    multi_mode: bool = False,
+    selected_ids: set[int] | frozenset[int] | None = None,
+    n_selected: int = 0,
 ) -> InlineKeyboardMarkup:
     """Список предметов для разбора (item_id, label) + фильтры и свип."""
     rows: list[list[InlineKeyboardButton]] = []
@@ -169,10 +199,32 @@ def forge_dis_bag_keyboard(
         )
     rows.append(knd_btns[:3])
     rows.append(knd_btns[3:])
+    sel = frozenset(selected_ids or ())
     for item_id, label in items[:12]:
-        short = label if len(label) <= 38 else label[:35] + "…"
+        short = label if len(label) <= 34 else label[:31] + "…"
+        if multi_mode:
+            prefix = "✅ " if int(item_id) in sel else "☐ "
+            cb = f"frg:dipk:{floor_number}:{item_id}"
+        else:
+            prefix = ""
+            cb = f"frg:disx:{floor_number}:{item_id}"
+        rows.append([InlineKeyboardButton(text=f"{prefix}{short}", callback_data=cb)])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="✅ Мультивыбор" if multi_mode else "☐ Мультивыбор",
+                callback_data=f"frg:dimul:{floor_number}",
+            ),
+        ],
+    )
+    if multi_mode and n_selected > 0:
         rows.append(
-            [InlineKeyboardButton(text=short, callback_data=f"frg:disx:{floor_number}:{item_id}")]
+            [
+                InlineKeyboardButton(
+                    text=f"🔥 Разобрать ({n_selected})",
+                    callback_data=f"frg:dibat:{floor_number}",
+                ),
+            ],
         )
     rows.append(
         [
@@ -183,6 +235,14 @@ def forge_dis_bag_keyboard(
             InlineKeyboardButton(
                 text="🧹 До необыч. вкл.",
                 callback_data=f"frg:dsweep:{floor_number}:uncommon",
+            ),
+        ],
+    )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="🧹 До редк. вкл.",
+                callback_data=f"frg:dsweep:{floor_number}:rare",
             ),
         ],
     )
@@ -220,22 +280,25 @@ def forge_repair_keyboard(
 
 
 def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="✨ Заточить предмет", callback_data=f"frg:ench:{floor_number}")],
-            [
-                InlineKeyboardButton(
-                    text="⚗️ Заточка + руна (без −1)",
-                    callback_data=f"frg:enchw:{floor_number}",
-                ),
-            ],
-            [InlineKeyboardButton(text="🔨 Починка экипировки", callback_data=f"frg:rpr:{floor_number}")],
-            [InlineKeyboardButton(text="♻️ Разбор экипировки", callback_data=f"frg:dis:{floor_number}")],
-            [InlineKeyboardButton(text="🛒 Купить базовый сет", callback_data=f"frg:set:{floor_number}")],
-            [InlineKeyboardButton(text="⬅ В город", callback_data=f"frg:city:{floor_number}")],
-            menu_nav_button_row(),
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="✨ Заточить предмет", callback_data=f"frg:ench:{floor_number}")],
+        [
+            InlineKeyboardButton(
+                text="⚗️ Заточка + руна (без −1)",
+                callback_data=f"frg:enchw:{floor_number}",
+            ),
         ],
-    )
+        [InlineKeyboardButton(text="🔨 Починка экипировки", callback_data=f"frg:rpr:{floor_number}")],
+        [InlineKeyboardButton(text="♻️ Разбор экипировки", callback_data=f"frg:dis:{floor_number}")],
+    ]
+    if _forge_star_merge_row_visible(floor_number):
+        rows.append(
+            [InlineKeyboardButton(text="⭐ Слияние звёзд (5→+1)", callback_data=f"frg:stm:{floor_number}")],
+        )
+    rows.append([InlineKeyboardButton(text="🛒 Купить базовый сет", callback_data=f"frg:set:{floor_number}")])
+    rows.append([InlineKeyboardButton(text="⬅ В город", callback_data=f"frg:city:{floor_number}")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def forge_set_shop_keyboard(

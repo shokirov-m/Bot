@@ -23,6 +23,7 @@ def leaderboard_categories_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🎭 Классы", callback_data="top:cat:classes"),
             ],
             [
+                InlineKeyboardButton(text="⚒️ Мастера", callback_data="top:cat:wsp"),
                 InlineKeyboardButton(text="🏰 Кланы", callback_data="top:cat:clans"),
             ],
             menu_nav_button_row(),

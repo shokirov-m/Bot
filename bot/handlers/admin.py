@@ -29,14 +29,18 @@ from bot.keyboards.admin_kb import (
     admin_player_snapshot_keyboard,
     admin_players_browser_keyboard,
     admin_promo_keyboard,
+    admin_spend_ledger_nav_keyboard,
+    admin_title_grant_keyboard,
 )
 from bot.states.admin_states import AdminStates
 from config import settings
 from db.models.character import Character
 from db.models.inventory import InventoryItem
 from db.repository import admin_log_repo, character_repo, inventory_repo, user_repo
+from db.repository import clan_repo, mercenary_repo
 from game.items import equipment as equipment_mod
-from services import anticheat_service, character_service
+from game.characters.path_ranks import path_rank_name_ru
+from services import anticheat_service, arena_service, character_service, title_service
 from services.activity_service import activity_admin_lines, format_dt_utc, format_duration_ru
 from services.admin_promo_service import handle_admin_promo, promo_help_html
 
@@ -126,6 +130,31 @@ async def _admin_player_snapshot_html(session: AsyncSession, character_id: int) 
             last_activity_utc = str(last_iso)
     else:
         last_activity_utc = format_dt_utc(ch.updated_at)
+
+    clan_line = ""
+    mem = await clan_repo.get_membership(session, int(ch.id))
+    if mem is not None:
+        cl = await clan_repo.get_clan(session, int(mem.clan_id))
+        if cl is not None:
+            tag = f" [{cl.tag}]" if cl.tag else ""
+            clan_line = f"Клан: «{cl.name}»{tag} · роль: {mem.role}"
+
+    arena_mmr_line = f"Арена MMR: {arena_service.arena_mmr(ch)}"
+    pr = path_rank_name_ru(ch)
+    path_rank_line = f"Звание (путь): {pr}" if pr else ""
+
+    sec_raw = (ch.meta_progress or {}).get("active_title_secondary_name_ru")
+    sec_s = str(sec_raw).strip() if sec_raw else ""
+    t_parts = []
+    if ch.active_title:
+        t_parts.append(f"① {ch.active_title}")
+    if sec_s:
+        t_parts.append(f"② {sec_s}")
+    titles_line = "Титулы: " + " · ".join(t_parts) if t_parts else ""
+
+    merc_n = await mercenary_repo.count_for_character(session, int(ch.id))
+    mercenaries_line = f"Наёмников в ростере: {merc_n}"
+
     body = panel.format_admin_player_snapshot_html(
         telegram_id=int(u.telegram_id),
         username=u.username,
@@ -145,6 +174,11 @@ async def _admin_player_snapshot_html(session: AsyncSession, character_id: int) 
         hero_created_at_utc=format_dt_utc(ch.created_at),
         estimated_playtime_ru=est_play,
         last_activity_utc=last_activity_utc,
+        clan_line=clan_line,
+        arena_mmr_line=arena_mmr_line,
+        titles_line=titles_line,
+        mercenaries_line=mercenaries_line,
+        path_rank_line=path_rank_line,
     )
     return body, ch
 
@@ -478,31 +512,146 @@ async def cb_admin_player_view(callback: CallbackQuery, session: AsyncSession, s
 
 @router.callback_query(F.data.startswith("adm:pur:"), IsAdmin())
 async def cb_admin_player_purchases(callback: CallbackQuery, session: AsyncSession) -> None:
-    """Журнал трат золота (meta_progress), для админа."""
+    """Журнал трат золота (meta_progress), для админа — с пагинацией."""
     if callback.message is None:
         await callback.answer()
         return
     parts = (callback.data or "").split(":")
-    if len(parts) < 4 or parts[0] != "adm" or parts[1] != "pur" or not parts[2].isdigit() or not parts[3].isdigit():
+    if len(parts) != 5 or parts[0] != "adm" or parts[1] != "pur" or not parts[2].isdigit() or not parts[3].isdigit():
+        await callback.answer()
+        return
+    if not parts[4].isdigit():
         await callback.answer()
         return
     cid = int(parts[2])
     ret_page = int(parts[3])
+    page = int(parts[4])
     try:
         ch = await character_repo.get_by_id(session, cid)
         if ch is None:
             await callback.answer("Персонаж не найден.", show_alert=True)
             return
-        text = character_service.format_spend_ledger_admin_html(ch)
+        text, cur_page, total_pages = character_service.format_spend_ledger_admin_html(ch, page=page)
         await _safe_edit_panel(
             callback.message,
             _truncate_html(text),
-            reply_markup=admin_player_purchases_back_keyboard(character_id=cid, return_page=ret_page),
+            reply_markup=admin_spend_ledger_nav_keyboard(
+                character_id=cid,
+                return_page=ret_page,
+                page=cur_page,
+                total_pages=total_pages,
+            ),
         )
         await callback.answer()
     except Exception:
         logger.exception("adm:pur")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("adm:tish:"), IsAdmin())
+async def cb_admin_title_grant_open(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    if len(parts) != 4 or not parts[2].isdigit() or not parts[3].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    pg = int(parts[3])
+    try:
+        ch = await character_repo.get_by_id(session, cid)
+        if ch is None:
+            await callback.answer("Персонаж не найден.", show_alert=True)
+            return
+        await _safe_edit_panel(
+            callback.message,
+            "🏅 <b>Выдача титула</b>\n\n<i>Выбери строку — титул откроется в списке игрока (можно экипировать в профиле).</i>",
+            reply_markup=admin_title_grant_keyboard(character_id=cid, return_page=pg, page_idx=0),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("adm:tish")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("adm:ttp:"), IsAdmin())
+async def cb_admin_title_grant_page(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.message is None:
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    if len(parts) != 5 or not parts[2].isdigit() or not parts[3].isdigit() or not parts[4].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    pg = int(parts[3])
+    pidx = int(parts[4])
+    try:
+        ch = await character_repo.get_by_id(session, cid)
+        if ch is None:
+            await callback.answer("Персонаж не найден.", show_alert=True)
+            return
+        await _safe_edit_panel(
+            callback.message,
+            "🏅 <b>Выдача титула</b>\n\n<i>Выбери строку — титул откроется в списке игрока.</i>",
+            reply_markup=admin_title_grant_keyboard(character_id=cid, return_page=pg, page_idx=pidx),
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("adm:ttp")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("adm:tti:"), IsAdmin())
+async def cb_admin_title_grant_apply(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.message is None or callback.from_user is None:
+        await callback.answer()
+        return
+    parts = (callback.data or "").split(":")
+    if len(parts) != 5 or not parts[2].isdigit() or not parts[3].isdigit() or not parts[4].isdigit():
+        await callback.answer()
+        return
+    cid = int(parts[2])
+    pg = int(parts[3])
+    idx = int(parts[4])
+    try:
+        from game.characters.titles import ALL_TITLES
+
+        if idx < 0 or idx >= len(ALL_TITLES):
+            await callback.answer("Неверный индекс.", show_alert=True)
+            return
+        ch = await character_repo.get_by_id(session, cid)
+        if ch is None:
+            await callback.answer("Персонаж не найден.", show_alert=True)
+            return
+        key = ALL_TITLES[idx].key
+        ok, msg = title_service.admin_ensure_title_unlocked(ch, key)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        await anticheat_service.log_admin_action(
+            session,
+            actor_telegram_id=int(callback.from_user.id),
+            target_user_id=int(ch.user_id),
+            action="admin_grant_title",
+            message=f"title:{key}",
+            payload={"character_id": cid, "title_key": key},
+        )
+        await session.commit()
+        body, ch2 = await _admin_player_snapshot_html(session, cid)
+        if body is None or ch2 is None:
+            await callback.answer("Сохранено.", show_alert=True)
+            return
+        await _safe_edit_panel(
+            callback.message,
+            _truncate_html(body),
+            reply_markup=admin_player_snapshot_keyboard(character_id=cid, return_page=pg),
+        )
+        await callback.answer(f"Титул «{msg}» ✓")
+    except Exception:
+        logger.exception("adm:tti")
+        await callback.answer("Ошибка БД.", show_alert=True)
 
 
 async def _admin_apply_level_and_refresh(

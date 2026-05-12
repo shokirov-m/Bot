@@ -10,6 +10,7 @@ from typing import Any
 from game.items import enchant as enchant_rules
 from game.items.chance_fields import chance_map_from_item_data, format_chance_map_html
 from game.items import durability as durability_mod
+from game.items.runes import parse_weapon_runes
 from game.items.equipment import (
     RARITY_EMOJI,
     RARITY_NAME_RU,
@@ -208,6 +209,10 @@ def format_inventory_item_html(
     dur_html = durability_mod.format_durability_line_html(data)
     if dur_html:
         lines.append(dur_html)
+    wr = parse_weapon_runes(data)
+    if wr:
+        rn = " · ".join(html.escape(r.display_name) for r in wr)
+        lines.append(f"💎 <b>Руны в оружии:</b> {rn}")
     st_line = format_item_stat_bonus_line(data)
     if st_line:
         lines.append(st_line)
@@ -350,14 +355,18 @@ def item_bag_button_label(data: dict[str, Any] | None, _bag_slot: int | None = N
     cnt_suffix = f" ×{cnt}" if cnt > 1 else ""
     name_budget = 11 if cnt <= 1 else max(6, 11 - len(cnt_suffix))
     name = str(data.get("name", "?"))[:name_budget]
+    wr = parse_weapon_runes(data)
+    rune_suffix = f"💎{len(wr)}" if wr else ""
     atk = data.get("attack", data.get("atk"))
     if atk is not None:
         ench = enchant_rules.current_enchant_level(data)
         mult = enchant_rules.enchant_stat_multiplier(ench)
         eff = max(1, int(round(scaled_weapon_attack_value(int(atk), data) * mult)))
-        s = f"{gi}{em} {name} {eff}{cnt_suffix}"
+        mid = f" {rune_suffix}" if rune_suffix else ""
+        s = f"{gi}{em} {name}{mid} {eff}{cnt_suffix}"
     else:
-        s = f"{gi}{em} {name}{cnt_suffix}"
+        mid = f" {rune_suffix}" if rune_suffix else ""
+        s = f"{gi}{em} {name}{mid}{cnt_suffix}"
     return s[:30]
 
 

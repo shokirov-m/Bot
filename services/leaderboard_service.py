@@ -10,6 +10,7 @@ from bot.i18n import t
 from db.models.character import Character
 from db.models.clan import Clan
 from db.repository import leaderboard_repo
+from game.characters.path_ranks import path_rank_name_ru
 from services import coliseum_service
 
 RANKER_TOP_N = 5
@@ -169,7 +170,9 @@ def format_leaderboard_html(
             extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
         elif category in ("warrior", "mage", "scout", "acolyte"):
             best = max(int(c.highest_floor_reached or 0), int(c.floor_number or 0))
-            extra = f"Ур.{c.level} · этаж {best}"
+            pr = path_rank_name_ru(c)
+            pr_part = f" · {html.escape(pr)}" if pr else ""
+            extra = f"Ур.{c.level} · этаж {best}{pr_part}"
         else:
             extra = f"{int(c.gold):,} 💰 · Ур.{c.level}"
         lines.append(f"{med} <b>{tag_prefix}{name}</b>{ranker_suffix}\n   <i>{extra}</i>")

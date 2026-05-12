@@ -401,6 +401,104 @@ async def try_disassemble_bag_item(
     )
 
 
+FORGE_DIS_PICK_KEY = "forge_dis_pick"
+FORGE_DIS_MULTI_KEY = "forge_dis_multi"
+
+
+def disassemble_selection_ids(character: Character) -> set[int]:
+    raw = (character.meta_progress or {}).get(FORGE_DIS_PICK_KEY) or []
+    out: set[int] = set()
+    if not isinstance(raw, list):
+        return out
+    for x in raw:
+        try:
+            out.add(int(x))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def disassemble_multi_mode(character: Character) -> bool:
+    return bool((character.meta_progress or {}).get(FORGE_DIS_MULTI_KEY))
+
+
+async def forge_disassemble_ui_reset(session: AsyncSession, character: Character) -> None:
+    mp = dict(character.meta_progress or {})
+    mp.pop(FORGE_DIS_PICK_KEY, None)
+    mp.pop(FORGE_DIS_MULTI_KEY, None)
+    mp.pop("forge_dis_rar", None)
+    mp.pop("forge_dis_knd", None)
+    character.meta_progress = mp
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(character, "meta_progress")
+    await session.flush()
+
+
+async def forge_disassemble_selection_toggle(
+    session: AsyncSession,
+    character: Character,
+    item_id: int,
+) -> set[int]:
+    sel = disassemble_selection_ids(character)
+    iid = int(item_id)
+    if iid in sel:
+        sel.remove(iid)
+    else:
+        sel.add(iid)
+    mp = dict(character.meta_progress or {})
+    mp[FORGE_DIS_PICK_KEY] = sorted(sel)
+    mp[FORGE_DIS_MULTI_KEY] = True
+    character.meta_progress = mp
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(character, "meta_progress")
+    await session.flush()
+    return sel
+
+
+async def forge_disassemble_multi_toggle(session: AsyncSession, character: Character) -> bool:
+    """Вкл/выкл режим мультивыбора. Возвращает новое состояние (True = включён)."""
+    mp = dict(character.meta_progress or {})
+    if mp.pop(FORGE_DIS_MULTI_KEY, None):
+        mp.pop(FORGE_DIS_PICK_KEY, None)
+        character.meta_progress = mp
+        from sqlalchemy.orm.attributes import flag_modified
+
+        flag_modified(character, "meta_progress")
+        await session.flush()
+        return False
+    mp[FORGE_DIS_MULTI_KEY] = True
+    character.meta_progress = mp
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(character, "meta_progress")
+    await session.flush()
+    return True
+
+
+async def try_disassemble_selected_batch(
+    session: AsyncSession,
+    character: Character,
+    *,
+    limit: int = 24,
+) -> tuple[bool, str]:
+    ids = sorted(disassemble_selection_ids(character))
+    if not ids:
+        return False, "Нет выбранных предметов."
+    parts: list[str] = []
+    n_ok = 0
+    for iid in ids[: int(limit)]:
+        ok, msg = await try_disassemble_bag_item(session, character, int(iid))
+        if ok:
+            n_ok += 1
+            parts.append(msg)
+    await forge_disassemble_ui_reset(session, character)
+    if n_ok == 0:
+        return False, "Не удалось разобрать выбранное."
+    return True, "\n\n".join(parts)
+
+
 _RARITY_ORDER: tuple[str, ...] = ("common", "uncommon", "rare", "epic", "legendary", "mythic")
 
 
@@ -410,6 +508,14 @@ def _rarity_le(a: str, b: str) -> bool:
     if a not in _RARITY_ORDER or b not in _RARITY_ORDER:
         return False
     return _RARITY_ORDER.index(a) <= _RARITY_ORDER.index(b)
+
+
+def _disassemble_list_sort_key(it: InventoryItem) -> tuple[int, str, int]:
+    d = dict(it.item_data or {})
+    r = str(d.get("rarity") or "common").lower()
+    ri = _RARITY_ORDER.index(r) if r in _RARITY_ORDER else 0
+    # Выше в списке — более редкие (больший индекс в _RARITY_ORDER).
+    return (5 - ri, str(d.get("name") or "").lower(), it.bag_slot or 0)
 
 
 async def list_disassemblable_items(
@@ -422,7 +528,7 @@ async def list_disassemblable_items(
     """Список предметов для разбора с учётом фильтров. (item_id, label)."""
     bag = await inventory_repo.list_bag_items(session, character.id)
     rows: list[tuple[int, str]] = []
-    for it in sorted(bag, key=lambda x: x.bag_slot or 0):
+    for it in sorted(bag, key=_disassemble_list_sort_key):
         if it.is_equipped:
             continue
         d = dict(it.item_data or {})
@@ -1161,3 +1267,141 @@ async def try_repair_all_equipped(session: AsyncSession, character: Character) -
             it.item_data = data
     await session.flush()
     return True, [f"✅ Всё отремонтировано за <b>{total}</b> 💰."]
+
+
+_STAR_MERGE_MIN_CITY_FLOOR = 61
+
+_RARITY_SORT: dict[str, int] = {
+    "common": 0,
+    "uncommon": 1,
+    "rare": 2,
+    "epic": 3,
+    "legendary": 4,
+    "mythic": 5,
+}
+
+
+def _rarity_sort_rank(data: dict[str, Any]) -> int:
+    return _RARITY_SORT.get(str(data.get("rarity") or "common").lower(), 0)
+
+
+def star_merge_unlocked_on_floor(floor_number: int) -> bool:
+    if not forge_loc.forge_available_on_floor(floor_number):
+        return False
+    c = floor_data.get_city_for_floor(int(floor_number))
+    return c is not None and int(c.floor) >= _STAR_MERGE_MIN_CITY_FLOOR
+
+
+def _star_merge_bucket(data: dict[str, Any]) -> str | None:
+    kind = str(data.get("kind") or "").lower()
+    if kind == "weapon":
+        return "weapon"
+    if kind in ("ring", "amulet"):
+        return "jewelry"
+    if kind in (
+        "armor",
+        "pants",
+        "helmet",
+        "gloves",
+        "shield",
+        "grimoire",
+        "tome",
+        "orb",
+        "focus",
+        "dagger",
+    ):
+        return "armor_line"
+    return None
+
+
+def star_merge_gold_cost(enchant_lv: int) -> int:
+    e = max(0, min(enchant_rules.MAX_ENCHANT, int(enchant_lv)))
+    return 1500 + e * 600
+
+
+async def list_star_merge_targets(session: AsyncSession, character_id: int) -> list[tuple[int, str]]:
+    """(item_id, label) — предметы в сумке, по которым хватает 4 дубликатов той же линии и +."""
+    bag = await inventory_repo.list_bag_items(session, character_id)
+    buckets: dict[tuple[str, int], list[InventoryItem]] = {}
+    for it in bag:
+        if it.is_equipped:
+            continue
+        data = dict(it.item_data or {})
+        if durability_mod.item_is_broken(data):
+            continue
+        b = _star_merge_bucket(data)
+        if b is None:
+            continue
+        lv = enchant_rules.current_enchant_level(data)
+        buckets.setdefault((b, lv), []).append(it)
+    out: list[tuple[int, str]] = []
+    for (_b, lv), group in buckets.items():
+        if len(group) < 5:
+            continue
+        group_sorted = sorted(
+            group,
+            key=lambda x: (-_rarity_sort_rank(dict(x.item_data or {})), -int(x.id)),
+        )
+        for cand in group_sorted[:12]:
+            d = dict(cand.item_data or {})
+            nm = html.escape(str(d.get("name", "?"))[:24])
+            stars = render_enchant_stars(lv)
+            out.append((int(cand.id), f"⭐{stars} {nm}"))
+    return out[:14]
+
+
+async def try_star_merge(session: AsyncSession, character: Character, target_item_id: int) -> tuple[bool, list[str]]:
+    if not forge_loc.forge_available_on_floor(character.floor_number):
+        return False, ["Кузница только в городах-хабах башни."]
+    if not star_merge_unlocked_on_floor(int(character.floor_number)):
+        return False, ["Слияние звёзд доступно с <b>города 61+</b>."]
+    target = await inventory_repo.get_item_for_character(session, int(character.id), int(target_item_id))
+    if target is None or target.is_equipped:
+        return False, ["Выбери предмет из сумки (не экипировку)."]
+    tdata = dict(target.item_data or {})
+    if durability_mod.item_is_broken(tdata):
+        return False, ["Сломанный предмет нельзя усилить."]
+    bucket = _star_merge_bucket(tdata)
+    if bucket is None:
+        return False, ["Этот тип не подходит для слияния (оружие / броня / украшения)."]
+    lv = enchant_rules.current_enchant_level(tdata)
+    if lv >= enchant_rules.MAX_ENCHANT:
+        return False, [f"Уже максимальная заточка (+{enchant_rules.MAX_ENCHANT})."]
+    gold_need = star_merge_gold_cost(lv)
+    if int(character.gold) < gold_need:
+        return False, [f"Нужно {gold_need:,} 💰."]
+    bag = await inventory_repo.list_bag_items(session, character.id)
+    same: list[InventoryItem] = []
+    for it in bag:
+        if it.is_equipped:
+            continue
+        d = dict(it.item_data or {})
+        if durability_mod.item_is_broken(d):
+            continue
+        if _star_merge_bucket(d) != bucket or enchant_rules.current_enchant_level(d) != lv:
+            continue
+        same.append(it)
+    if len(same) < 5:
+        return False, ["Нужно 5 предметов одной линии и с одинаковой заточкой в сумке."]
+    others = [it for it in same if int(it.id) != int(target_item_id)]
+    fodder = sorted(others, key=lambda it: (_rarity_sort_rank(dict(it.item_data or {})), int(it.id)))[:4]
+    if len(fodder) < 4:
+        return False, ["Не хватает дубликатов — проверь сумку."]
+    character_service.add_gold(
+        character,
+        -gold_need,
+        spend_for="Кузница: слияние звёзд",
+        spend_kind="forge",
+    )
+    for it in fodder:
+        await inventory_repo.delete_inventory_item(session, it)
+    new_data, _d = enchant_rules.apply_enchant_change(dict(tdata), "success")
+    target.item_data = new_data
+    title_service.refresh_unlocks(character)
+    await session.flush()
+    stars_b = render_enchant_stars(lv)
+    stars_a = render_enchant_stars(lv + 1)
+    return True, [
+        f"⭐ <b>Слияние звёзд!</b> {stars_b} → {stars_a}",
+        f"−{gold_need:,} 💰 · сожжено 4 дубликата.",
+    ]

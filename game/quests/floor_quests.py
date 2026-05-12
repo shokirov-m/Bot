@@ -29,7 +29,10 @@ def npc_quest_template(floor_number: int) -> FloorQuestTemplate | None:
 
 
 def reward_for_quest(floor_number: int, kills_needed: int) -> tuple[int, int]:
-    """Золото и опыт за выполнение (снимок при принятии)."""
-    gold = 35 + floor_number * 3 + kills_needed * 10
-    xp = 20 + floor_number * 2 + kills_needed * 8
+    """Золото и опыт за выполнение (снимок при принятии). Усиление с этажом."""
+    f = max(1, int(floor_number))
+    k = max(1, int(kills_needed))
+    mult = 1.0 + (f - 1) * 0.015
+    gold = int((45 + f * 5 + k * 14) * mult)
+    xp = int((28 + f * 3 + k * 10) * mult)
     return gold, xp

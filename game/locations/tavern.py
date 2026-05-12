@@ -49,10 +49,47 @@ TAVERN_MENU: tuple[TavernOffer, ...] = (
     ),
 )
 
+# Доп. блюда в хабах 61 и 91 (ключ города — city.floor из floor_data).
+TAVERN_EXTRAS_BY_CITY: dict[int, tuple[TavernOffer, ...]] = {
+    61: (
+        TavernOffer(
+            key="mulled",
+            name="Глинтвейн стражей",
+            emoji="🍷",
+            price=150,
+            blurb="Согревает: +20% HP и +14% MP.",
+        ),
+        TavernOffer(
+            key="throne_cut",
+            name="Стейк «У врата»",
+            emoji="🥩",
+            price=220,
+            blurb="Щедрая порция: +40% HP и +30% MP.",
+        ),
+    ),
+    91: (
+        TavernOffer(
+            key="star_soup",
+            name="Суп звёздной соли",
+            emoji="✨",
+            price=320,
+            blurb="Рецепт верхних этажей: +55% HP и +40% MP.",
+        ),
+    ),
+}
 
-def offer_by_key(key: str) -> TavernOffer | None:
+
+def tavern_offers_for_floor(floor_number: int) -> tuple[TavernOffer, ...]:
+    city = floor_data.get_city_for_floor(int(floor_number))
+    cf = int(city.floor) if city is not None else 0
+    extra = TAVERN_EXTRAS_BY_CITY.get(cf, ())
+    return TAVERN_MENU + extra
+
+
+def offer_by_key(key: str, *, floor_number: int | None = None) -> TavernOffer | None:
     k = key.strip().lower()
-    for o in TAVERN_MENU:
+    pool = tavern_offers_for_floor(int(floor_number)) if floor_number is not None else TAVERN_MENU
+    for o in pool:
         if o.key == k:
             return o
     return None

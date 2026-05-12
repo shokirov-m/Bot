@@ -15,6 +15,22 @@ from game.combat import consumables
 from game.items.equipment import gear_icon_for_item_data
 
 
+def combat_boss_intro_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⚔️ Напасть", callback_data="cb:boss_go")],
+        ],
+    )
+
+
+def combat_coup_de_grace_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⚔️ Добить", callback_data="cb:coup")],
+        ],
+    )
+
+
 def combat_main_keyboard(character: Character) -> InlineKeyboardMarkup:
     """Четыре действия + три экипированных навыка + предмет."""
     ensure_skill_meta(character)

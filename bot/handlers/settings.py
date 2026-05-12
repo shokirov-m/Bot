@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale, set_locale, t
 from bot.keyboards.settings_kb import (
     settings_cancel_keyboard,
+    settings_handbook_back_keyboard,
+    settings_notifications_hub_keyboard,
     settings_reset_confirm_keyboard,
     settings_screen_keyboard,
     settings_stat_reset_confirm_keyboard,
@@ -48,6 +50,55 @@ def _settings_body_html(locale: str) -> str:
         f"{t(loc, 'settings_title')}\n"
         f"{LINE_SEP}\n"
         f"{t(loc, 'settings_intro')}"
+    )
+
+
+def _settings_notifications_html(locale: str) -> str:
+    loc = locale if locale in ("ru", "en") else "ru"
+    if loc == "en":
+        return (
+            "🔔 <b>Notifications</b>\n\n"
+            "Configure optional alerts. More channels may appear here later.\n"
+        )
+    return (
+        "🔔 <b>Уведомления</b>\n\n"
+        "Настрой опциональные оповещения. Позже сюда можно вынести другие каналы.\n"
+    )
+
+
+def _settings_handbook_html() -> str:
+    from game.economy.sinks import (
+        BANK_INTEREST_CAP_PCT_BASE,
+        BANK_INTEREST_CAP_PCT_SEAL,
+        BANK_RATE_PER_HOUR_BASE,
+        BANK_RATE_PER_HOUR_SEAL,
+        BANK_TERM_OPTIONS,
+    )
+    from services import golden_goblin_service, home_service
+
+    mx = int(settings.MAX_STAMINA)
+    reg = int(settings.STAMINA_REGEN_INTERVAL)
+    bank_base_pct = int(round(BANK_RATE_PER_HOUR_BASE * 100))
+    bank_seal_pct = int(round(BANK_RATE_PER_HOUR_SEAL * 100))
+    cap_base_pct = int(round(BANK_INTEREST_CAP_PCT_BASE * 100))
+    cap_seal_pct = int(round(BANK_INTEREST_CAP_PCT_SEAL * 100))
+    term_lines = ", ".join(f"{h}ч → {int(p * 100)}%" for h, p in BANK_TERM_OPTIONS)
+    return (
+        "📖 <b>Справочник</b> (цифры из конфигурации и игровых модулей)\n\n"
+        f"⚡ Макс. стамина: <b>{mx}</b> · восстановление 1 ед.: <b>~{reg}</b> с\n"
+        f"💤 Полное восстановление HP/MP всем (фон): <b>{int(settings.PASSIVE_HP_MP_INTERVAL_SECONDS)}</b> с\n"
+        f"✏️ Смена имени героя: <b>{int(settings.DISPLAY_NAME_CHANGE_GOLD):,}</b> 💰\n\n"
+        "<b>Золотой гоблин</b> (ивент): этажи "
+        f"<b>{golden_goblin_service.FLOOR_MIN}–{golden_goblin_service.FLOOR_MAX}</b>.\n\n"
+        "<b>Банк (сейф)</b>: базовая ставка накопления "
+        f"<b>~{bank_base_pct}%</b> в час (с печатью <b>~{bank_seal_pct}%</b>); "
+        f"потолок «висящих» процентов от тела вклада: до <b>~{cap_base_pct}%</b> "
+        f"(с печатью до <b>~{cap_seal_pct}%</b>).\n"
+        f"Срочные вклады: <i>{html.escape(term_lines)}</i>.\n\n"
+        f"<b>Дом: шахта</b> — покупка расчистки: <b>{home_service.MINE_PURCHASE_GOLD:,}</b> 💰; "
+        "тик ресурсов (база): <b>3</b> ч.\n"
+        "<b>Дом: библиотека</b> — перерыв между сеансами: <b>24</b> ч.\n\n"
+        "<i>Остальные лимиты смотри в соответствующих экранах города / дома.</i>"
     )
 
 
@@ -439,6 +490,98 @@ async def stg_lang_toggle(callback: CallbackQuery, session: AsyncSession, state:
         await callback.answer("Ошибка.", show_alert=True)
 
 
+@router.callback_query(F.data == "stg:root")
+async def stg_settings_root(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer()
+            return
+        user, char = pair
+        loc = get_locale(char, callback.from_user.language_code)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_body_html(loc),
+            reply_markup=_settings_reply_kb(loc, char, user),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:root")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stg:notif")
+async def stg_notifications_hub(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer(t("ru", "settings_combat_block"), show_alert=True)
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer("Нет героя.", show_alert=True)
+            return
+        user, char = pair
+        loc = get_locale(char, callback.from_user.language_code)
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_notifications_html(loc),
+            reply_markup=settings_notifications_hub_keyboard(
+                locale=loc,
+                notify_golden_goblin=bool(user.notify_golden_goblin),
+            ),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:notif")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stg:wiki")
+async def stg_handbook(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.from_user is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer(t("ru", "settings_combat_block"), show_alert=True)
+            return
+        pair = await _char_gate(session, callback)
+        if pair is None:
+            await callback.answer("Нет героя.", show_alert=True)
+            return
+        user, char = pair
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=_settings_handbook_html(),
+            reply_markup=settings_handbook_back_keyboard(),
+            target_message=callback.message,
+            photo_path=menu_settings_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("stg:wiki")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
 @router.callback_query(F.data == "stg:img")
 async def stg_game_images_toggle(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -493,8 +636,11 @@ async def stg_golden_goblin_notify_toggle(callback: CallbackQuery, session: Asyn
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
-            text=_settings_body_html(loc),
-            reply_markup=_settings_reply_kb(loc, char, user),
+            text=_settings_notifications_html(loc),
+            reply_markup=settings_notifications_hub_keyboard(
+                locale=loc,
+                notify_golden_goblin=bool(user.notify_golden_goblin),
+            ),
             target_message=callback.message,
             photo_path=menu_settings_photo_path(),
             character=char,

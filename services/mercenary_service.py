@@ -169,30 +169,45 @@ async def apply_merc_battle_xp_pool(
     character: Character,
     merc_pool: int,
     combat_state: dict[str, Any],
-) -> None:
-    """Раздать merc_pool XP по наёмникам, участвовавшим в победе (живые в конце боя)."""
+) -> int:
+    """Раздать merc_pool XP по наёмникам, участвовавшим в победе (живые в конце боя).
+
+    Возвращает XP, не влезший наёмникам на капе уровня — отдать герою, чтобы не «сгорал».
+    """
     if not FEATURE_BLACK_MARKET_COMBAT or merc_pool <= 0:
-        return
+        return 0
     comps = list(combat_state.get("companions") or [])
     ids = [int(c["id"]) for c in comps if not c.get("dead")]
     if not ids:
-        return
+        return 0
     rows = await mercenary_repo.get_by_ids_for_character(session, int(character.id), ids)
     by_id = {int(r.id): r for r in rows}
     ordered = [by_id[i] for i in ids if i in by_id]
     if not ordered:
-        return
+        return 0
     cap = merc_level_cap(character)
     n = len(ordered)
     base = merc_pool // n
     rem = merc_pool % n
     gains = [base + (1 if i < rem else 0) for i in range(n)]
+    refund_hero_xp = 0
     for m, gain in zip(ordered, gains, strict=True):
         ex = _merc_extra_dict(m)
         if int(m.level) > cap:
             m.level = cap
             _apply_merc_baseline_stats_for_level(m)
             ex[MERC_EXTRA_XP_KEY] = 0
+        if int(m.level) >= cap:
+            refund_hero_xp += int(gain)
+            ex[MERC_EXTRA_XP_KEY] = max(0, int(ex.get(MERC_EXTRA_XP_KEY, 0)))
+            m.extra = ex
+            m.loyalty = min(LOYALTY_MAX, int(m.loyalty) + BATTLE_WIN_LOYALTY)
+            try:
+                flag_modified(m, "extra")
+                flag_modified(m, "loyalty")
+            except Exception:
+                pass
+            continue
         cur_xp = int(ex.get(MERC_EXTRA_XP_KEY, 0))
         if gain > 0:
             cur_xp += int(gain)
@@ -215,6 +230,7 @@ async def apply_merc_battle_xp_pool(
             flag_modified(m, "loyalty")
         except Exception:
             pass
+    return refund_hero_xp
 
 
 def apply_knockout_no_loyalty_penalty(combat_state: dict[str, Any]) -> None:

@@ -104,7 +104,10 @@ def admin_player_snapshot_keyboard(*, character_id: int, return_page: int) -> In
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🛒 Покупки / траты 💰", callback_data=f"adm:pur:{cid}:{pg}"),
+                InlineKeyboardButton(text="🛒 Покупки / траты 💰", callback_data=f"adm:pur:{cid}:{pg}:0"),
+            ],
+            [
+                InlineKeyboardButton(text="🏅 Выдать титул", callback_data=f"adm:tish:{cid}:{pg}"),
             ],
             [
                 InlineKeyboardButton(text="➕ +1 ур.", callback_data=f"adm:lvw:{cid}:{pg}:1"),
@@ -148,7 +151,95 @@ def admin_player_purchases_back_keyboard(*, character_id: int, return_page: int)
     )
 
 
-def admin_promo_keyboard() -> InlineKeyboardMarkup:
+def admin_spend_ledger_nav_keyboard(
+    *,
+    character_id: int,
+    return_page: int,
+    page: int,
+    total_pages: int,
+) -> InlineKeyboardMarkup:
+    """◀▶ для журнала трат (adm:pur:id:ret:page)."""
+    cid = int(character_id)
+    pg = int(return_page)
+    cur = int(page)
+    tp = max(1, int(total_pages))
+    row: list[InlineKeyboardButton] = []
+    if cur > 0:
+        row.append(
+            InlineKeyboardButton(
+                text="◀️",
+                callback_data=f"adm:pur:{cid}:{pg}:{cur - 1}",
+            ),
+        )
+    if cur < tp - 1:
+        row.append(
+            InlineKeyboardButton(
+                text="▶️",
+                callback_data=f"adm:pur:{cid}:{pg}:{cur + 1}",
+            ),
+        )
+    rows: list[list[InlineKeyboardButton]] = []
+    if row:
+        rows.append(row)
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="⬅️ К карточке игрока",
+                callback_data=f"adm:pv:{cid}:{pg}",
+            ),
+        ],
+    )
+    rows.append([InlineKeyboardButton(text="⬅️ В панель", callback_data="adm:hub")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_title_grant_keyboard(
+    *,
+    character_id: int,
+    return_page: int,
+    page_idx: int,
+) -> InlineKeyboardMarkup:
+    """Постраничный список титулов для выдачи (adm:tti / adm:ttp)."""
+    from game.characters.titles import ALL_TITLES, format_title_bonus_brief
+
+    per = 8
+    n = len(ALL_TITLES)
+    chunk = ALL_TITLES[start : start + per]
+    cid = int(character_id)
+    pg = int(return_page)
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="⬅️ К карточке", callback_data=f"adm:pv:{cid}:{pg}")],
+    ]
+    for i, td in enumerate(chunk):
+        idx = start + i
+        lab = (td.name_ru + " · " + format_title_bonus_brief(td))[:58]
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=lab,
+                    callback_data=f"adm:tti:{cid}:{pg}:{idx}",
+                ),
+            ],
+        )
+    nav: list[InlineKeyboardButton] = []
+    if start > 0:
+        nav.append(
+            InlineKeyboardButton(
+                text="◀️ стр.",
+                callback_data=f"adm:ttp:{cid}:{pg}:{max(0, int(page_idx) - 1)}",
+            ),
+        )
+    if start + per < n:
+        nav.append(
+            InlineKeyboardButton(
+                text="стр. ▶️",
+                callback_data=f"adm:ttp:{cid}:{pg}:{int(page_idx) + 1}",
+            ),
+        )
+    if nav:
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(text="⬅️ В панель", callback_data="adm:hub")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [

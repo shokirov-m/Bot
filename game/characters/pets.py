@@ -289,13 +289,20 @@ def pet_passive_delta(character: Character) -> dict[str, float | int]:
     return _scale_passive(dict(d.passive), lv)
 
 
+def _fmt_def_bonus(v: float) -> str:
+    x = round(float(v), 1)
+    if abs(x - int(x)) < 1e-6:
+        return str(int(x))
+    return f"{x:.1f}".rstrip("0").rstrip(".")
+
+
 def format_pet_passive_plain(passive: dict[str, float | int], *, locale: str) -> str:
     """Краткое описание пассивки питомца (RU/EN) для UI."""
     loc = "en" if str(locale).lower().startswith("en") else "ru"
     parts: list[str] = []
     if "def_bonus" in passive:
         v = float(passive["def_bonus"])
-        vs = str(int(v)) if v == int(v) else str(v)
+        vs = _fmt_def_bonus(v)
         parts.append(
             f"+{vs} {'defense in combat' if loc == 'en' else 'к защите в бою'}",
         )
@@ -339,7 +346,7 @@ def format_pet_passive_status_compact(passive: dict[str, float | int], *, locale
         parts.append(f"+{ps}% dodge" if loc == "en" else f"+{ps}% уклон")
     if "def_bonus" in passive:
         v = float(passive["def_bonus"])
-        vs = str(int(v)) if v == int(v) else str(v)
+        vs = _fmt_def_bonus(v)
         parts.append(f"+{vs} defense" if loc == "en" else f"+{vs} защита")
     if "mp_regen_turn" in passive:
         v = int(passive["mp_regen_turn"])
@@ -426,7 +433,7 @@ def format_pet_combat_highlight_line_html(character: Character, *, locale: str) 
             return f"🐾 <b>Питомец:</b> +{p}% к уклонению."
     if "def_bonus" in d:
         v = float(d["def_bonus"])
-        vs = str(int(v)) if v == int(v) else str(v)
+        vs = _fmt_def_bonus(v)
         if loc == "en":
             return f"🐾 <b>Pet:</b> +{vs} defense in combat."
         return f"🐾 <b>Питомец:</b> +{vs} к защите в бою."
@@ -441,7 +448,7 @@ def format_pet_passive_battle_parens(passive: dict[str, float | int], *, locale:
     parts: list[str] = []
     if "def_bonus" in passive:
         v = float(passive["def_bonus"])
-        vs = str(int(v)) if v == int(v) else str(v)
+        vs = _fmt_def_bonus(v)
         parts.append(f"Defense +{vs}" if loc == "en" else f"Защита +{vs}")
     if "crit_bonus" in passive:
         p = round(float(passive["crit_bonus"]) * 100.0, 1)

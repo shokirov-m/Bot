@@ -17,7 +17,18 @@ def skill_tree_keyboard(character: Character, locale: str = "ru") -> InlineKeybo
     
     # Header showing SP
     rows.append([InlineKeyboardButton(text=f"✨ Очки навыков: {sp}", callback_data="inv:noop")])
-    
+
+    if arch_manager.skill_tree_fully_unlocked(character) and sp > 0:
+        gold_amt = max(150, int(character.level or 1) * 40)
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"💰 1 SP → {gold_amt:,} золота",
+                    callback_data="tree:spxg",
+                ),
+            ],
+        )
+
     # Filter nodes into branches (optional, for now just list them)
     # We'll group them by their parent status to show a logical order
     

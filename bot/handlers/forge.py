@@ -25,6 +25,7 @@ from bot.keyboards.forge_kb import (
     forge_quest_keyboard,
     forge_repair_keyboard,
     forge_set_shop_keyboard,
+    forge_star_merge_pick_keyboard,
 )
 from db.repository import character_repo, inventory_repo, user_repo
 from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
@@ -217,6 +218,93 @@ async def forge_open_main(query: CallbackQuery, session: AsyncSession, state: FS
         await query.answer()
     except Exception:
         logger.exception("frg:main")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:stm:\d+$"))
+async def forge_star_merge_menu(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(str(query.data).split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Кузница недоступна.", show_alert=True)
+            return
+        if not forge_service.star_merge_unlocked_on_floor(int(char.floor_number)):
+            await query.answer("Слияние звёзд откроется в городе с этажа 61.", show_alert=True)
+            return
+        rows = await forge_service.list_star_merge_targets(session, char.id)
+        if not rows:
+            await query.answer(
+                "Нет пятёрки в сумке: один тип линии (оружие / броня / украшения) и один уровень заточки.",
+                show_alert=True,
+            )
+            return
+        cost0 = forge_service.star_merge_gold_cost(0)
+        text = (
+            "⭐ <b>Слияние звёзд</b>\n"
+            "Сожги <b>4 дубликата</b> из сумки с тем же типом линии и той же заточкой — "
+            "заточка выбранного предмета <b>+1</b>.\n"
+            f"<i>Золото: от {cost0:,} 💰 (растёт с уровнем ✨).</i>"
+        )
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=forge_star_merge_pick_keyboard(char.floor_number, rows),
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("frg:stm")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:stx:\d+:\d+$"))
+async def forge_star_merge_apply(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        _, _, fl_s, iid_s = str(query.data).split(":", 3)
+        floor_key = int(fl_s)
+        item_id = int(iid_s)
+        char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Кузница недоступна.", show_alert=True)
+            return
+        ok, lines = await forge_service.try_star_merge(session, char, item_id)
+        if not ok:
+            msg = lines[0] if lines else "Нельзя."
+            await query.answer(msg, show_alert=True)
+            return
+        note = "\n".join(lines)
+        body = await forge_service.build_forge_message_html(session, char)
+        text = f"{note}\n\n{body}"
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=forge_actions_keyboard(char.floor_number),
+            target_message=query.message,
+            photo_path=menu_city_photo_path(),
+            character=char,
+        )
+        await query.answer("Готово!")
+    except Exception:
+        logger.exception("frg:stx")
         await query.answer("Ошибка.", show_alert=True)
 
 
@@ -615,6 +703,49 @@ def _norm_filter(v: str) -> str | None:
     return str(v).lower()
 
 
+async def _render_forge_disassemble_screen(
+    *,
+    query: CallbackQuery,
+    session: AsyncSession,
+    char,
+    floor_key: int,
+    top_note: str | None = None,
+) -> None:
+    if query.message is None:
+        return
+    mp = dict(char.meta_progress or {})
+    rar = _norm_filter(str(mp.get("forge_dis_rar") or "all"))
+    knd = _norm_filter(str(mp.get("forge_dis_knd") or "all"))
+    pairs = await forge_service.list_disassemblable_items(
+        session, char, rarity_filter=rar, kind_filter=knd,
+    )
+    title = "🔨 <b>Разбор предмета</b>"
+    if top_note:
+        title += "\n" + top_note
+    if rar or knd:
+        rar_s = RARITY_NAME_RU.get(str(rar), rar) if rar else "все редкости"
+        knd_s = item_kind_label_ru(str(knd)) if knd else "все типы"
+        title += f"\n<i>Фильтр:</i> {rar_s} / {knd_s}"
+    if not pairs:
+        title += "\n<i>Под фильтр ничего не попало.</i>" if (rar or knd) else "\n<i>В сумке нет вещей для разбора.</i>"
+    sel = forge_service.disassemble_selection_ids(char)
+    mm = forge_service.disassemble_multi_mode(char)
+    await edit_game_message_content(
+        query.message,
+        title,
+        reply_markup=forge_dis_bag_keyboard(
+            floor_key,
+            pairs,
+            rarity_filter=rar,
+            kind_filter=knd,
+            multi_mode=mm,
+            selected_ids=sel,
+            n_selected=len(sel),
+        ),
+        parse_mode="HTML",
+    )
+
+
 @router.callback_query(F.data.regexp(r"^frg:dis:\d+$"))
 async def forge_disassemble_menu(query: CallbackQuery, session: AsyncSession) -> None:
     """Показать список предметов из сумки для разбора (без фильтров)."""
@@ -635,11 +766,9 @@ async def forge_disassemble_menu(query: CallbackQuery, session: AsyncSession) ->
         if not pairs:
             await query.answer("В сумке нет предметов для разбора.", show_alert=True)
             return
-        await edit_game_message_content(query.message,
-            "🔨 <b>Разбор предмета</b>\n"
-            "<i>Выбери вещь или используй фильтры/свип ниже.</i>",
-            reply_markup=forge_dis_bag_keyboard(floor_key, pairs),
-            parse_mode="HTML",
+        await forge_service.forge_disassemble_ui_reset(session, char)
+        await _render_forge_disassemble_screen(
+            query=query, session=session, char=char, floor_key=floor_key,
         )
         await query.answer("Выбери предмет для разбора")
     except Exception:
@@ -665,24 +794,16 @@ async def forge_disassemble_filter(query: CallbackQuery, session: AsyncSession) 
         if not forge_loc.forge_available_on_floor(char.floor_number):
             await query.answer("Здесь нет кузницы.", show_alert=True)
             return
-        rar = _norm_filter(rar_code)
-        knd = _norm_filter(knd_code)
-        pairs = await forge_service.list_disassemblable_items(
-            session, char, rarity_filter=rar, kind_filter=knd,
-        )
-        title = "🔨 <b>Разбор предмета</b>"
-        if rar or knd:
-            rar_s = RARITY_NAME_RU.get(str(rar), rar) if rar else "все редкости"
-            knd_s = item_kind_label_ru(str(knd)) if knd else "все типы"
-            title += f"\n<i>Фильтр:</i> {rar_s} / {knd_s}"
-        if not pairs:
-            title += "\n<i>Под фильтр ничего не попало.</i>"
-        await edit_game_message_content(query.message,
-            title,
-            reply_markup=forge_dis_bag_keyboard(
-                floor_key, pairs, rarity_filter=rar, kind_filter=knd,
-            ),
-            parse_mode="HTML",
+        from sqlalchemy.orm.attributes import flag_modified
+
+        mp = dict(char.meta_progress or {})
+        mp["forge_dis_rar"] = rar_code
+        mp["forge_dis_knd"] = knd_code
+        char.meta_progress = mp
+        flag_modified(char, "meta_progress")
+        await session.flush()
+        await _render_forge_disassemble_screen(
+            query=query, session=session, char=char, floor_key=floor_key,
         )
         await query.answer()
     except Exception:
@@ -741,15 +862,83 @@ async def forge_disassemble_apply(query: CallbackQuery, session: AsyncSession) -
         if not ok:
             await query.answer(msg[:180], show_alert=True)
             return
-        body = await forge_service.build_forge_message_html(session, char)
-        await edit_game_message_content(query.message,
-            f"{body}\n\n{msg}",
-            reply_markup=forge_actions_keyboard(char.floor_number),
-            parse_mode="HTML",
+        await _render_forge_disassemble_screen(
+            query=query, session=session, char=char, floor_key=floor_key, top_note=msg,
         )
         await query.answer("Разобрано!")
     except Exception:
         logger.exception("frg:disx")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:dimul:\d+$"))
+async def forge_disassemble_multi_toggle_handler(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Недоступно.", show_alert=True)
+            return
+        await forge_service.forge_disassemble_multi_toggle(session, char)
+        await _render_forge_disassemble_screen(
+            query=query, session=session, char=char, floor_key=floor_key,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("frg:dimul")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:dipk:\d+:\d+$"))
+async def forge_disassemble_pick_toggle(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        parts = query.data.split(":")
+        floor_key = int(parts[2])
+        item_id = int(parts[3])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Недоступно.", show_alert=True)
+            return
+        if not forge_service.disassemble_multi_mode(char):
+            await query.answer("Включи «Мультивыбор».", show_alert=True)
+            return
+        await forge_service.forge_disassemble_selection_toggle(session, char, item_id)
+        await _render_forge_disassemble_screen(
+            query=query, session=session, char=char, floor_key=floor_key,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("frg:dipk")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^frg:dibat:\d+$"))
+async def forge_disassemble_batch_apply(query: CallbackQuery, session: AsyncSession) -> None:
+    try:
+        if query.data is None or query.from_user is None or query.message is None:
+            await query.answer()
+            return
+        floor_key = int(query.data.split(":")[2])
+        char = await _load_char(session, query.from_user.id)
+        if char is None or char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+            await query.answer("Недоступно.", show_alert=True)
+            return
+        ok, msg = await forge_service.try_disassemble_selected_batch(session, char)
+        if not ok:
+            await query.answer(msg[:180], show_alert=True)
+            return
+        await _render_forge_disassemble_screen(
+            query=query, session=session, char=char, floor_key=floor_key, top_note=msg,
+        )
+        await query.answer("Готово!")
+    except Exception:
+        logger.exception("frg:dibat")
         await query.answer("Ошибка.", show_alert=True)
 
 

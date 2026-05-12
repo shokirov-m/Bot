@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale, t
 from bot.keyboards.combat_kb import (
+    combat_boss_intro_keyboard,
+    combat_coup_de_grace_keyboard,
     combat_flee_confirm_keyboard,
     combat_item_picker_keyboard,
     combat_main_keyboard,
@@ -43,6 +45,7 @@ from game.characters.weapon_mastery import (
     weapon_type_from_item_data,
 )
 from game.combat import companions as companions_mod
+from game.combat.boss_streak import bump_defeat_streak, clear_defeat_streak, defeat_tier_for_battle
 from game.combat import consumables, effects, engine, formulas, monster_ai, night_mode as combat_night, passive_gear
 from game.items import runes as rune_items
 from game.balance import (
@@ -1139,8 +1142,15 @@ async def start_combat(
         )
         await session.flush()
 
+    combat_state["boss_defeat_tier"] = defeat_tier_for_battle(character, combat_state)
+
     taunt = engine.opening_taunt(combat_state)
     combat_state["battle_taunt_html"] = _taunt_banner_html(taunt)
+    boss_like = bool(spawn.is_mini_boss) or bool(spawn.is_major_boss)
+    if boss_like and not combat_state.get("is_tutorial"):
+        combat_state["boss_intro_pending"] = True
+    else:
+        combat_state["boss_intro_pending"] = False
 
     await game_metrics_service.record_event(
         session,
@@ -1156,9 +1166,19 @@ async def start_combat(
 
     cls = get_class_or_none(character.class_key)
     class_ru = cls.name_ru if cls else character.class_key
-    text = format_battle_view(combat_state, class_ru)
-    text = _low_hp_entry_warning_html(character) + text
-    kb = combat_main_keyboard(character)
+    if combat_state.get("boss_intro_pending"):
+        mname = html.escape(str(monster.get("name") or "Босс"))
+        intro = (
+            f"⚔️ <b>Перед боем</b>\n\n"
+            f"👹 {mname} бросает тебе вызов.\n"
+            f"<i>Стамина за вход уже списана.</i>\n\n"
+        )
+        text = _low_hp_entry_warning_html(character) + intro + format_battle_view(combat_state, class_ru)
+        kb = combat_boss_intro_keyboard()
+    else:
+        text = format_battle_view(combat_state, class_ru)
+        text = _low_hp_entry_warning_html(character) + text
+        kb = combat_main_keyboard(character)
 
     if query.message is None:
         clear_combat_backup(character)
@@ -1609,6 +1629,31 @@ async def _after_monster_killed_player_action(
     if query.message is None:
         return False
     await _flush_weapon_mastery(session, character, combat_state)
+    mdead = combat_state.get("monster") or {}
+    if (
+        bool(mdead.get("is_major_boss") or mdead.get("is_mini_boss"))
+        and not combat_state.get("is_coliseum")
+        and not combat_state.get("is_tutorial")
+    ):
+        combat_state["pending_boss_coup_de_grace"] = True
+        combat_state.setdefault("ui_logs", []).append(
+            "💀 <b>Враг повержен.</b> Нанеси <b>добивающий удар</b>, чтобы завершить бой.",
+        )
+        await state.update_data(combat=combat_state)
+        persist_combat_backup(character, combat_state)
+        await session.flush()
+        if query.message:
+            try:
+                await _safe_edit_combat_message_text(
+                    state,
+                    query.message,
+                    format_battle_view(combat_state, class_ru),
+                    reply_markup=combat_coup_de_grace_keyboard(),
+                )
+            except Exception:
+                logger.exception("coup de grace: refresh combat UI")
+        await query.answer()
+        return True
     if combat_state.get("is_tutorial") and int(combat_state.get("tutorial_phase", 1)) < 2:
         combat_state["tutorial_phase"] = 2
         combat_state["monster"] = _tutorial_monster_wave2()
@@ -1825,6 +1870,7 @@ async def _victory_sequence(
         return
 
     await character_repo.lock_character_row(session, character.id)
+    clear_defeat_streak(character, combat_state)
 
     spawn = _spawn_from_state(character, combat_state)
     if spawn is None:
@@ -1947,10 +1993,16 @@ async def _victory_sequence(
     )
     hero_xp, merc_pool = mercenary_service.split_tower_battle_xp_for_mercs(character, xp, combat_state)
     levels_battle = await character_service.add_experience_async(session, character, hero_xp, bot=message.bot)
-    await mercenary_service.apply_merc_battle_xp_pool(session, character, merc_pool, combat_state)
+    merc_refund = await mercenary_service.apply_merc_battle_xp_pool(session, character, merc_pool, combat_state)
+    if merc_refund > 0:
+        levels_battle += await character_service.add_experience_async(session, character, merc_refund, bot=message.bot)
     _merc_xp_note_html = ""
     if merc_pool > 0:
         _merc_xp_note_html = f"\n<i>🛡️ Отряд: {merc_pool} XP из награды (всего за бой {xp}).</i>"
+        if merc_refund > 0:
+            _merc_xp_note_html += (
+                f"\n<i>Наёмники на максимальном уровне для героя — <b>{merc_refund}</b> XP добавлено герою.</i>"
+            )
     level_battle_suffix = character_service.level_up_notice_html(character, levels_battle)
     character.total_kills = int(character.total_kills) + 1
 
@@ -2601,6 +2653,11 @@ async def _defeat_sequence(
             await state.clear()
         return
 
+    if combat_state and not combat_state.get("is_tutorial") and not combat_state.get("is_coliseum"):
+        m0 = combat_state.get("monster") or {}
+        if m0.get("is_major_boss") or m0.get("is_mini_boss"):
+            bump_defeat_streak(character, combat_state)
+
     await character_repo.lock_character_row(session, character.id)
     await session.refresh(character, attribute_names=["gold"])
 
@@ -2791,6 +2848,58 @@ async def _handle_combat_callback_body(
                 telegram_user_id=int(query.from_user.id),
             )
         await query.answer()
+        return
+
+    if action == "boss_go":
+        if not combat_state.get("boss_intro_pending"):
+            await query.answer()
+            return
+        combat_state["boss_intro_pending"] = False
+        await state.update_data(combat=combat_state)
+        persist_combat_backup(character, combat_state)
+        try:
+            await _safe_edit_combat_message_text(
+                state,
+                query.message,
+                _low_hp_entry_warning_html(character) + format_battle_view(combat_state, class_ru),
+                reply_markup=combat_main_keyboard(character),
+            )
+        except Exception:
+            logger.exception("boss_go: refresh combat UI")
+        await query.answer("В бой!")
+        return
+
+    if action == "coup":
+        if not combat_state.get("pending_boss_coup_de_grace"):
+            await query.answer()
+            return
+        combat_state["pending_boss_coup_de_grace"] = False
+        combat_state.setdefault("ui_logs", []).append("⚔️ <b>Добивание:</b> последний удар — победа!")
+        await state.update_data(combat=combat_state)
+        persist_combat_backup(character, combat_state)
+        await session.flush()
+        await _victory_sequence(
+            message=query.message,
+            state=state,
+            session=session,
+            character=character,
+            combat_state=combat_state,
+        )
+        await query.answer("Победа!")
+        return
+
+    if combat_state.get("boss_intro_pending"):
+        await query.answer("Сначала нажми «Напасть».", show_alert=True)
+        return
+
+    if combat_state.get("pending_boss_coup_de_grace"):
+        await query.answer("Сначала нажми «Добить», чтобы забрать добычу.", show_alert=True)
+        if query.from_user is not None:
+            await combat_idle_service.arm_combat_idle_after_player_turn(
+                bot=query.bot,
+                state=state,
+                telegram_user_id=int(query.from_user.id),
+            )
         return
 
     if action == "item":
@@ -3137,6 +3246,7 @@ async def _handle_combat_callback_body(
         )
     except Exception:
         logger.exception("Не удалось обновить сообщение боя")
+    combat_state["battle_taunt_html"] = ""
     await state.update_data(combat=combat_state)
     persist_combat_backup(character, combat_state)
     await session.flush()

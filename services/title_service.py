@@ -124,6 +124,20 @@ def reward_bonus_multipliers(character: Character) -> tuple[float, float]:
     return gm, xm
 
 
+def admin_ensure_title_unlocked(character: Character, key: str) -> tuple[bool, str]:
+    """Админ: гарантированно добавить ключ в titles_unlocked (даже если уже был)."""
+    if key not in TITLE_BY_KEY:
+        return False, "Неизвестный ключ титула."
+    mp = dict(character.meta_progress or {})
+    raw = mp.get(_META_UNLOCKED)
+    have: set[str] = set(str(x) for x in raw) if isinstance(raw, list) else set()
+    have.add(key)
+    mp[_META_UNLOCKED] = sorted(have)
+    character.meta_progress = mp
+    td = TITLE_BY_KEY[key]
+    return True, td.name_ru
+
+
 def grant_title_key(character: Character, key: str, *, silent: bool = False) -> bool:
     """
     Выдать титул по ключу (для наград квестов/Колизея): дописать в meta_progress.titles_unlocked.

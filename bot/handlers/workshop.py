@@ -1383,7 +1383,7 @@ async def workshop_lb(query: CallbackQuery, session: AsyncSession, state: FSMCon
             t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
             if t.tzinfo is None:
                 t = t.replace(tzinfo=UTC)
-            stale = datetime.now(UTC) - t > timedelta(seconds=75)
+            stale = datetime.now(UTC) - t > timedelta(seconds=300)
         except (ValueError, TypeError):
             stale = True
         if stale:

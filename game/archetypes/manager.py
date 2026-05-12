@@ -341,3 +341,27 @@ def try_unlock_node(character: Character, node_key: str, *, admin_bypass: bool =
     flag_modified(character, "meta_progress")
 
     return True, f"Изучено: {node.name_ru}!"
+
+
+def skill_tree_fully_unlocked(character: Character) -> bool:
+    tree = get_character_tree(character)
+    if not tree:
+        return False
+    unlocked = get_unlocked_node_keys(character)
+    return all(k in unlocked for k in tree)
+
+
+def consume_one_unspent_sp(character: Character) -> tuple[bool, str]:
+    """Списать 1 SP при полностью открытом древе (пост-кап)."""
+    if int(character.level or 0) < 10:
+        return False, "Доступно с 10 уровня."
+    if not skill_tree_fully_unlocked(character):
+        return False, "Сначала открой все узлы древа."
+    sp = get_character_sp(character)
+    if sp < 1:
+        return False, "Нет свободных SP."
+    mp = dict(character.meta_progress or {})
+    mp["unspent_sp"] = sp - 1
+    character.meta_progress = mp
+    flag_modified(character, "meta_progress")
+    return True, "ok"

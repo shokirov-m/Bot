@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.black_market_kb import jabs_lots_keyboard, location_back_keyboard, market_hub_keyboard
 from bot.utils.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
-from game.mercenaries.market_hub import LOCATIONS, dialog_pool
+from game.mercenaries.market_hub import LOCATIONS, dialog_pool, HUB_MECHANICS_RU
 from game.mercenaries.shadow_market_meta import (
     get_purchased_showcase_lot_indices,
     mark_showcase_lot_purchased,
@@ -199,6 +199,9 @@ async def bm_location(callback: CallbackQuery, session: AsyncSession, state: FSM
             return
         dlg = random.choice(dialog_pool(key))
         body = f"<b>{html.escape(loc.title_ru)}</b>\n<i>{html.escape(loc.intro_ru)}</i>\n\n💬 {html.escape(dlg)}"
+        mech = HUB_MECHANICS_RU.get(key)
+        if mech:
+            body += f"\n\n⚙️ <i>{html.escape(mech)}</i>"
 
         qk = f"hub_{key}"
         if black_market_quest_service.quest_status(char, qk) != "done":

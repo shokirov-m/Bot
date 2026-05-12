@@ -71,8 +71,16 @@ def record_spend_ledger(
     character.meta_progress = mp
 
 
-def format_spend_ledger_admin_html(character: Character) -> str:
-    """HTML для админки: последние траты золота."""
+SPEND_LEDGER_ADMIN_PAGE_SIZE = 12
+
+
+def format_spend_ledger_admin_html(
+    character: Character,
+    *,
+    page: int = 0,
+    page_size: int = SPEND_LEDGER_ADMIN_PAGE_SIZE,
+) -> tuple[str, int, int]:
+    """HTML для админки: траты золота с пагинацией. Возвращает (html, page, total_pages)."""
     import html as html_mod
 
     items = list((character.meta_progress or {}).get(SPEND_LEDGER_KEY) or [])
@@ -80,20 +88,29 @@ def format_spend_ledger_admin_html(character: Character) -> str:
         return (
             "🛒 <b>Расходы золота</b>\n\n"
             "<i>Записей пока нет. История ведётся с момента обновления бота; "
-            "прошлые операции сюда не переносятся.</i>"
+            "прошлые операции сюда не переносятся.</i>",
+            0,
+            1,
         )
+    rev = list(reversed(items))
+    total = len(rev)
+    psize = max(1, int(page_size))
+    total_pages = max(1, (total + psize - 1) // psize)
+    pg = max(0, min(int(page), total_pages - 1))
+    chunk = rev[pg * psize : (pg + 1) * psize]
     lines: list[str] = [
-        "🛒 <b>Расходы золота (последние записи)</b>",
-        "<i>Сумма · описание · время (UTC)</i>\n",
+        "🛒 <b>Расходы золота</b>",
+        f"<i>Стр. <b>{pg + 1}</b>/<b>{total_pages}</b> · всего записей: <b>{total}</b> · "
+        f"по <b>{psize}</b> на страницу · сумма · описание · время (UTC)</i>\n",
     ]
-    for row in reversed(items):
+    for row in chunk:
         a = int(row.get("a", 0))
         lab = str(row.get("l", ""))[:220]
         t = str(row.get("t", "?"))[:40]
         lines.append(
             f"· <b>{a:,}</b> 💰 — {html_mod.escape(lab)} <i>({html_mod.escape(t)})</i>",
         )
-    return "\n".join(lines)
+    return "\n".join(lines), pg, total_pages
 
 
 def zone_multiplier_for_floor(floor_number: int) -> float:

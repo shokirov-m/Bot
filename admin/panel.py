@@ -86,6 +86,11 @@ def format_admin_player_snapshot_html(
     hero_created_at_utc: str,
     estimated_playtime_ru: str,
     last_activity_utc: str,
+    clan_line: str = "",
+    arena_mmr_line: str = "",
+    titles_line: str = "",
+    mercenaries_line: str = "",
+    path_rank_line: str = "",
 ) -> str:
     """Краткий статус героя и надетые вещи (админка)."""
     ban = "🚫 <b>бан</b>" if is_banned else "✅ активен"
@@ -99,11 +104,26 @@ def format_admin_player_snapshot_html(
         f"Последняя активность: <b>{html.escape(last_activity_utc)}</b>\n"
         f"<i>Оценка времени — по апдейтам Telegram; между событиями не больше 12 мин за раз, перерыв &gt;48ч не суммируется.</i>\n\n"
     )
+    extra = ""
+    if clan_line:
+        extra += f"{html.escape(clan_line)}\n"
+    if arena_mmr_line:
+        extra += f"{html.escape(arena_mmr_line)}\n"
+    if path_rank_line:
+        extra += f"{html.escape(path_rank_line)}\n"
+    if titles_line:
+        extra += f"{html.escape(titles_line)}\n"
+    if mercenaries_line:
+        extra += f"{html.escape(mercenaries_line)}\n"
+    if extra:
+        extra = extra.rstrip() + "\n\n"
+
     return (
         f"👤 <b>{html.escape(display_name)}</b>\n"
         f"TG <code>{telegram_id}</code> {un}\n"
         f"{ban} · ур. <b>{level}</b> · этаж <b>{floor_number}</b> · класс <code>{html.escape(class_key)}</code>{pts_line}\n"
         f"HP <b>{hp_current}</b>/<b>{hp_max}</b> · MP <b>{mp_current}</b>/<b>{mp_max}</b> · 💰 <b>{gold}</b>\n\n"
+        f"{extra}"
         f"{activity_block}"
         f"<b>Надето:</b>\n{eq_block}"
     )

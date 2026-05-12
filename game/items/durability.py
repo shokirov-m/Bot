@@ -15,7 +15,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from game.items.equipment.slots import resolve_equip_slot_for_item_data
 
-DEFAULT_DURABILITY_MAX: int = 300
+# Исторический дефолт до привязки к редкости (для миграции старых предметов).
+LEGACY_DEFAULT_DURABILITY_MAX: int = 300
+
+# Макс. прочность по редкости (ТЗ башни).
+DURABILITY_MAX_BY_RARITY: dict[str, int] = {
+    "common": 100,
+    "uncommon": 150,
+    "rare": 300,
+    "epic": 500,
+    "legendary": 1000,
+    "mythic": 1500,
+}
+
+DEFAULT_DURABILITY_MAX: int = DURABILITY_MAX_BY_RARITY["rare"]
 
 # За один «тик» в 2% от максимума прочности (в монетах); тариф снижен ~вдвое к исходному балансу
 REPAIR_GOLD_PER_2_PERCENT: dict[str, int] = {
@@ -39,6 +52,13 @@ def _mono_bar(current: int, maximum: int, length: int = _BAR_LEN) -> str:
     return "█" * filled + "░" * (length - filled)
 
 
+def durability_max_for_rarity(data: dict[str, Any] | None) -> int:
+    if not data:
+        return DEFAULT_DURABILITY_MAX
+    r = str(data.get("rarity") or "common").lower()
+    return int(DURABILITY_MAX_BY_RARITY.get(r, DURABILITY_MAX_BY_RARITY["common"]))
+
+
 def payload_supports_durability(data: dict[str, Any] | None) -> bool:
     if not data:
         return False
@@ -52,10 +72,23 @@ def ensure_gear_durability_defaults(data: dict[str, Any]) -> None:
     """Инициализация прочности для снаряжения (на месте, мутирует data)."""
     if not payload_supports_durability(data):
         return
+    canon = durability_max_for_rarity(data)
     dmax = int(data.get("durability_max") or 0)
+    dcur = int(data.get("durability") or 0) if "durability" in data else None
     if dmax <= 0:
-        dmax = DEFAULT_DURABILITY_MAX
+        dmax = canon
         data["durability_max"] = dmax
+    elif dmax == LEGACY_DEFAULT_DURABILITY_MAX and canon != LEGACY_DEFAULT_DURABILITY_MAX:
+        # Миграция со старого единого максимума 300 на лимит по редкости.
+        old_max = dmax
+        dmax = canon
+        data["durability_max"] = dmax
+        if dcur is None:
+            data["durability"] = dmax
+        else:
+            scaled = int(round(dcur * (dmax / float(old_max)))) if old_max > 0 else dmax
+            data["durability"] = max(0, min(scaled, dmax))
+        return
     if "durability" not in data:
         data["durability"] = dmax
     else:
@@ -68,7 +101,7 @@ def durability_pair(data: dict[str, Any] | None) -> tuple[int, int]:
         return 0, 0
     dmax = int(data.get("durability_max") or 0)
     if dmax <= 0:
-        dmax = DEFAULT_DURABILITY_MAX
+        dmax = durability_max_for_rarity(data)
     if "durability" not in data:
         return dmax, dmax
     dcur = int(data.get("durability") or 0)

@@ -105,6 +105,44 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession, state: FS
             await query.answer()
             return
 
+        if cat == "wsp":
+            from datetime import UTC, datetime, timedelta
+
+            from db.models.app_global import AppGlobal
+            from services.workshop_leaderboard_service import cached_leaderboard_html, refresh_leaderboards
+
+            row = await session.get(AppGlobal, 1)
+            payload = dict(row.payload or {}) if row is not None else {}
+            raw_lb = payload.get("workshop_lb_v1") or {}
+            ts = str(raw_lb.get("updated_at") or "")
+            stale = True
+            try:
+                t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                if t.tzinfo is None:
+                    t = t.replace(tzinfo=UTC)
+                stale = datetime.now(UTC) - t > timedelta(seconds=300)
+            except (ValueError, TypeError):
+                stale = True
+            if stale:
+                await refresh_leaderboards(session)
+                await session.flush()
+                row = await session.get(AppGlobal, 1)
+                payload = dict(row.payload or {}) if row is not None else {}
+            body = cached_leaderboard_html(payload)
+            text = f"🏆 <b>Топ мастеров мастерской</b>\n\n{body}"
+            await push_game_ui(
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                text=text,
+                reply_markup=leaderboard_categories_keyboard(),
+                target_message=query.message,
+                photo_path=menu_leaderboard_photo_path(),
+                character=char,
+            )
+            await query.answer()
+            return
+
         if cat not in _FETCHERS:
             await query.answer()
             return

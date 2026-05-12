@@ -247,16 +247,18 @@ def format_achievement_bonuses_html(character: Character) -> str:
 
 
 def format_achievements_html(character: Character) -> str:
-    """Returns HTML listing only COMPLETED achievements."""
-    claimed = get_claimed_keys(character)
-    if not claimed:
-        return "🏆 <b>Твои достижения</b>\n\n<i>Пока нет выполненных достижений. Продолжай путь!</i>"
-    
-    lines = ["🏆 <b>Выполненные достижения</b>", ""]
-    for key in claimed:
-        ach = ACHIEVEMENTS.get(key)
-        if not ach: continue
-        lines.append(f"✅ <b>{ach['name']}</b>")
-        lines.append(f"└ <i>{ach['desc']}</i>")
-        
-    return "\n".join(lines)
+    """Список достижений: выполненные и закрытые с условием (награда не показывается)."""
+    claimed = set(get_claimed_keys(character))
+    lines: list[str] = ["🏆 <b>Достижения</b>", ""]
+    for key, ach in ACHIEVEMENTS.items():
+        name = html.escape(str(ach.get("name", key)))
+        desc = html.escape(str(ach.get("desc", "")))
+        if key in claimed:
+            lines.append(f"✅ <b>{name}</b>")
+            lines.append(f"└ <i>{desc}</i>")
+        else:
+            lines.append(f"🔒 <b>{name}</b>")
+            lines.append(f"└ <i>{desc}</i>")
+        lines.append("")
+    lines.append("<i>Выполненные награды начисляются автоматически.</i>")
+    return "\n".join(lines).rstrip()

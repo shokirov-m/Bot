@@ -20,11 +20,7 @@ def settings_screen_keyboard(
     loc = locale if locale in ("ru", "en") else "ru"
     hide = character is not None and not game_images_enabled(character)
     img_btn = t(loc, "settings_images_enable") if hide else t(loc, "settings_images_disable")
-    goblin_btn = (
-        t(loc, "settings_golden_goblin_notify_disable")
-        if notify_golden_goblin
-        else t(loc, "settings_golden_goblin_notify_enable")
-    )
+    _ = notify_golden_goblin  # флаг читается в подменю «Уведомления»
     if adult_age_declared is None:
         adult_btn = "🔞 18+ (подтвердить)"
     elif adult_age_declared is False:
@@ -74,15 +70,15 @@ def settings_screen_keyboard(
                 ),
             ],
             [
-                InlineKeyboardButton(
-                    text=img_btn,
-                    callback_data="stg:img",
-                ),
+                InlineKeyboardButton(text="🔔 Уведомления", callback_data="stg:notif"),
+            ],
+            [
+                InlineKeyboardButton(text="📖 Справочник", callback_data="stg:wiki"),
             ],
             [
                 InlineKeyboardButton(
-                    text=goblin_btn,
-                    callback_data="stg:gob_notif",
+                    text=img_btn,
+                    callback_data="stg:img",
                 ),
             ],
             [
@@ -158,4 +154,29 @@ def settings_cancel_keyboard(*, locale: str) -> InlineKeyboardMarkup:
                 ),
             ],
         ],
+    )
+
+
+def settings_notifications_hub_keyboard(*, locale: str, notify_golden_goblin: bool) -> InlineKeyboardMarkup:
+    loc = locale if locale in ("ru", "en") else "ru"
+    goblin_btn = (
+        t(loc, "settings_golden_goblin_notify_disable")
+        if notify_golden_goblin
+        else t(loc, "settings_golden_goblin_notify_enable")
+    )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=goblin_btn, callback_data="stg:gob_notif"),
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="stg:root"),
+            ],
+        ],
+    )
+
+
+def settings_handbook_back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data="stg:root")]],
     )

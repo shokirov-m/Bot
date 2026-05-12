@@ -146,6 +146,36 @@ def pick_taunt(monster_name: str, template_key: str = "") -> str:
     return random.choice(taunts_for_monster(monster_name, template_key))
 
 
+DEFEAT_SPIKE_TAUNTS: tuple[str, ...] = (
+    "Снова ты. Усталость на лице — и в ударе.",
+    "Башня запоминает слабых. Ты в списке.",
+    "Ещё один заход? Покажи, что выучил урок.",
+)
+
+DEFEAT_CRUSH_TAUNTS: tuple[str, ...] = (
+    "Третий раз — не случайность. Ты кормишь мой аппетит.",
+    "Падать у меня под ногами стало твоей привычкой.",
+    "Я уже знаю твой следующий ход. И он снова ошибочный.",
+)
+
+
+def pick_opening_taunt_with_tier(
+    monster_name: str,
+    template_key: str,
+    *,
+    defeat_tier: int,
+) -> str:
+    """Чем выше defeat_tier, тем злее реплика (после серии поражений от этого босса)."""
+    t = max(0, int(defeat_tier))
+    if t >= 3:
+        return random.choice(DEFEAT_CRUSH_TAUNTS)
+    if t >= 1:
+        base = pick_provocation_taunt(monster_name, template_key)
+        extra = random.choice(DEFEAT_SPIKE_TAUNTS)
+        return f"{base} {extra}"
+    return pick_taunt(monster_name, template_key)
+
+
 def pick_provocation_taunt(monster_name: str, template_key: str = "") -> str:
     """Насмешка, когда у игрока много HP (провокация)."""
     extras = [
@@ -237,12 +267,14 @@ def sync_boss_phase(state: dict[str, Any]) -> list[str]:
     if phase == 1 and pct <= 0.50:
         state["monster_phase"] = 2
         line = boss_entry_line(m["name"], is_major_boss=bool(m.get("is_major_boss")), phase=2)
-        logs.append(f"⚡ Фаза 2: {line}")
+        logs.append(f"⚡ <b>Фаза 2</b>: {line}")
+        logs.append("⚙️ <i>Урон врага ×1.12; возможны более жёсткие приёмы.</i>")
     phase = int(state.get("monster_phase", 1))
     if m.get("is_milestone_boss") and phase == 2 and pct <= 0.25:
         state["monster_phase"] = 3
         line = boss_entry_line(m["name"], is_major_boss=bool(m.get("is_major_boss")), phase=3)
         logs.append(f"💀 <b>Фаза 3 — ЯРОСТЬ:</b> {line}")
+        logs.append("☠️ <i>Урон врага ×1.50; спецудары чаще смертельны.</i>")
     return logs
 
 
@@ -349,11 +381,18 @@ def special_attack_name(element: str) -> str:
 def opening_taunt_line(state: dict[str, Any]) -> str:
     """Первая реплика в бою."""
     m = state["monster"]
+    tier = int(state.get("boss_defeat_tier", 0) or 0)
     phrases = m.get("catalog_phrases") or []
     if isinstance(phrases, list) and phrases:
         line = random.choice([str(p) for p in phrases if str(p).strip()])
         if line.strip():
-            return f"💬 «{line.strip()}»"
+            base = f"💬 «{line.strip()}»"
+            if tier >= 3 and (m.get("is_major_boss") or m.get("is_mini_boss")):
+                return base + f"\n💬 «{random.choice(DEFEAT_CRUSH_TAUNTS)}»"
+            if tier >= 1 and (m.get("is_major_boss") or m.get("is_mini_boss")):
+                return base + f"\n💬 «{random.choice(DEFEAT_SPIKE_TAUNTS)}»"
+            return base
     if m.get("is_major_boss") or m.get("is_mini_boss"):
-        return f"💬 {boss_entry_line(m['name'], is_major_boss=bool(m.get('is_major_boss')), phase=1)}"
-    return f"💬 «{pick_taunt(m['name'], str(m.get('template_key', '')))}»"
+        extra = pick_opening_taunt_with_tier(m["name"], str(m.get("template_key", "")), defeat_tier=tier)
+        return f"💬 {boss_entry_line(m['name'], is_major_boss=bool(m.get('is_major_boss')), phase=1)}\n💬 «{extra}»"
+    return f"💬 «{pick_opening_taunt_with_tier(m['name'], str(m.get('template_key', '')), defeat_tier=tier)}»"

@@ -205,11 +205,12 @@ def _build_profile_text(
     stat_derivatives_block: str = "",
     skill_tree_passives_block: str = "",
 ) -> str:
-    arch = arch_manager.get_archetype(char.class_key)
+    ck = str(char.class_key or "wanderer").lower().strip()
+    arch = arch_manager.get_archetype(ck)
     if arch:
         class_title = f"{arch.emoji} {html.escape(arch.name_ru)}"
     else:
-        class_title = html.escape(char.class_key)
+        class_title = html.escape(ck)
     loc = locale if locale in ("ru", "en") else "ru"
     rank_raw = path_rank_name_ru(char)
     rank_s = html.escape(rank_raw) if rank_raw else "—"
@@ -360,6 +361,12 @@ def _build_profile_text(
     lines.append(_title_row("①", title_slots[0]))
     lines.append(_title_row("②", title_slots[1]))
     lines.append("")
+    if arch:
+        about = (getattr(arch, "description_ru", None) or "").strip()
+        if about:
+            lines.append("📘 <b>Об архетипе</b>")
+            lines.append(f"<i>{html.escape(about[:900])}</i>")
+            lines.append("")
     lines.append("🌐 Глобальные бонусы:")
     if not gp_plain or gp_plain == "—":
         lines.append(" —")
@@ -1065,6 +1072,58 @@ async def on_tree_node_buy(callback: CallbackQuery, session: AsyncSession, state
     except Exception:
         logger.exception("tree:buy")
         await callback.answer("Ошибка при изучении.", show_alert=True)
+
+
+@router.callback_query(F.data == "tree:spxg")
+async def on_tree_sp_exchange_gold(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    """Пост-кап: обменять 1 неизрасходованный SP на золото, если все узлы открыты."""
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        if user is None or user.is_banned:
+            await callback.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        if char.level >= 10:
+            arch_manager.sync_unspent_sp_with_tree(char)
+        ok, err = arch_manager.consume_one_unspent_sp(char)
+        if not ok:
+            await callback.answer(err, show_alert=True)
+            return
+        gold_amt = max(150, int(char.level or 1) * 40)
+        character_service.add_gold(
+            char,
+            gold_amt,
+            spend_for="",
+            spend_kind="skill_tree",
+        )
+        await session.commit()
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        text = (
+            "🌳 <b>Древо навыков</b>\n\n"
+            f"Обмен: <b>−1 SP</b> → <b>+{gold_amt:,}</b> 💰 "
+            "<i>(доступно, пока древо полностью открыто и есть очки.)</i>"
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=skill_tree_keyboard(char, locale=loc),
+            target_message=callback.message,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
+        )
+        await callback.answer("Готово!")
+    except Exception:
+        logger.exception("tree:spxg")
+        await callback.answer("Ошибка.", show_alert=True)
+
 
 @router.callback_query(F.data == "prf:skills_equip")
 async def on_profile_skills_equip_menu(

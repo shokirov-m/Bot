@@ -18,6 +18,7 @@ from utils.ui import LINE_SEP_TAVERN
 
 LODGING_DAILY_LIMIT = 5
 _LODGING_META = "lodging_daily_v1"
+_LODGING_META_V2 = "lodging_daily_v2"
 
 # Ежедневная ротация: meta_progress.tavern_daily_v1 = {date, bought_blueprints[], bought_gears[]}
 _TAVERN_DAILY_META = "tavern_daily_v1"
@@ -25,26 +26,38 @@ _TAVERN_DAILY_META = "tavern_daily_v1"
 META_KNOWN_RECIPES = "known_recipes"
 
 
-def _lodging_uses_today(character: Character) -> int:
-    """Сколько раз куплен ночлег сегодня (UTC)."""
+def _lodging_city_key(character: Character) -> str:
+    city = floor_data.get_city_for_floor(int(character.floor_number))
+    if city is None:
+        return "unknown"
+    return str(int(city.floor))
+
+
+def _lodging_uses_today_for_city(character: Character, city_key: str) -> int:
+    """Сколько ночлегов куплено сегодня (UTC) в данном городе."""
     mp = character.meta_progress or {}
-    raw = mp.get(_LODGING_META)
-    if not isinstance(raw, dict):
-        return 0
     today = datetime.now(UTC).date().isoformat()
-    if raw.get("date") != today:
-        return 0
-    return int(raw.get("count", 0))
+    raw2 = mp.get(_LODGING_META_V2)
+    if isinstance(raw2, dict) and raw2.get("date") == today:
+        by = raw2.get("by_city") or {}
+        if isinstance(by, dict):
+            return int(by.get(city_key, 0))
+    raw = mp.get(_LODGING_META)
+    if isinstance(raw, dict) and raw.get("date") == today:
+        return int(raw.get("count", 0))
+    return 0
 
 
-def _increment_lodging_uses(character: Character) -> None:
+def _increment_lodging_uses_for_city(character: Character, city_key: str) -> None:
     mp = dict(character.meta_progress or {})
     today = datetime.now(UTC).date().isoformat()
-    raw = mp.get(_LODGING_META)
-    if not isinstance(raw, dict) or raw.get("date") != today:
-        raw = {"date": today, "count": 0}
-    raw["count"] = int(raw.get("count", 0)) + 1
-    mp[_LODGING_META] = raw
+    raw2 = mp.get(_LODGING_META_V2)
+    if not isinstance(raw2, dict) or raw2.get("date") != today:
+        raw2 = {"date": today, "by_city": {}}
+    by = dict(raw2.get("by_city") or {}) if isinstance(raw2.get("by_city"), dict) else {}
+    by[city_key] = int(by.get(city_key, 0)) + 1
+    raw2["by_city"] = by
+    mp[_LODGING_META_V2] = raw2
     character.meta_progress = mp
 
 
@@ -52,7 +65,8 @@ def format_tavern_welcome_html(character: Character) -> str:
     city = floor_data.get_city_for_floor(character.floor_number)
     cname = html.escape(city.name) if city else "Город"
     cem = city.emoji if city else "🏠"
-    lodging_uses = _lodging_uses_today(character)
+    ck = _lodging_city_key(character)
+    lodging_uses = _lodging_uses_today_for_city(character, ck)
     lines = [
         f"{cem} <b>Таверна «У усталого стража»</b> — {cname}",
         "<i>Хозяин кивает: «Этаж не прощает слабых. Поешь — и снова в бой.»</i>",
@@ -64,7 +78,7 @@ def format_tavern_welcome_html(character: Character) -> str:
         LINE_SEP_TAVERN,
         "<b>Меню:</b>",
     ]
-    for o in tavern_loc.TAVERN_MENU:
+    for o in tavern_loc.tavern_offers_for_floor(int(character.floor_number)):
         extra = ""
         if o.key == "lodging":
             left = LODGING_DAILY_LIMIT - lodging_uses
@@ -97,7 +111,7 @@ async def try_buy_offer(
     if not tavern_loc.tavern_available_on_floor(character.floor_number):
         return False, "Таверна только в городах на этажах 31, 61 и 91."
 
-    offer = tavern_loc.offer_by_key(offer_key)
+    offer = tavern_loc.offer_by_key(offer_key, floor_number=int(character.floor_number))
     if offer is None:
         return False, "Нет такого блюда в меню."
 
@@ -108,11 +122,12 @@ async def try_buy_offer(
     if offer.key == "lodging":
         if int(character.stamina) >= settings.MAX_STAMINA:
             return False, "Стамина уже полная — ночлег не нужен."
-        uses_today = _lodging_uses_today(character)
+        ck = _lodging_city_key(character)
+        uses_today = _lodging_uses_today_for_city(character, ck)
         if uses_today >= LODGING_DAILY_LIMIT:
             return False, (
-                f"Лимит ночлегов на сегодня исчерпан ({LODGING_DAILY_LIMIT}/{LODGING_DAILY_LIMIT}). "
-                "Возвращайся завтра."
+                f"Лимит ночлегов в этом городе на сегодня исчерпан ({LODGING_DAILY_LIMIT}/{LODGING_DAILY_LIMIT}). "
+                "Возвращайся завтра или смени город."
             )
 
     from services import character_service
@@ -139,6 +154,18 @@ async def try_buy_offer(
             f"HP <b>{character.hp_current}</b> / {character.hp_max}, "
             f"MP <b>{character.mp_current}</b> / {character.mp_max}."
         )
+    elif offer.key in ("mulled", "throne_cut", "star_soup"):
+        hp_p, mp_p = {
+            "mulled": (0.20, 0.14),
+            "throne_cut": (0.40, 0.30),
+            "star_soup": (0.55, 0.40),
+        }[offer.key]
+        _heal_percent(character, hp_p, mp_p)
+        msg = (
+            f"{offer.emoji} <b>{html.escape(offer.name)}</b>. "
+            f"HP <b>{character.hp_current}</b> / {character.hp_max}, "
+            f"MP <b>{character.mp_current}</b> / {character.mp_max}."
+        )
     elif offer.key == "feast":
         character.hp_current = int(character.hp_max)
         character.mp_current = int(character.mp_max)
@@ -155,8 +182,9 @@ async def try_buy_offer(
         character.mp_current = min(int(character.mp_max), int(character.mp_current) + int(int(character.mp_max) * 0.4))
         hp_line = f", ❤️ +{min(hp_restore, int(character.hp_max)//2)} HP" if hp_restore > 0 else ""
         mp_line = f", 💙 +{min(mp_restore, int(int(character.mp_max)*0.4))} MP" if mp_restore > 0 else ""
-        _increment_lodging_uses(character)
-        uses_now = _lodging_uses_today(character)
+        ck = _lodging_city_key(character)
+        _increment_lodging_uses_for_city(character, ck)
+        uses_now = _lodging_uses_today_for_city(character, ck)
         left = LODGING_DAILY_LIMIT - uses_now
         msg = (
             f"🛏️ Выспался. Стамина <b>+{gained}</b>{hp_line}{mp_line} "

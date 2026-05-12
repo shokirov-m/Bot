@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import html
 import random
 from typing import Any, Literal
 
@@ -239,19 +240,19 @@ def apply_dot_damage_player(state: dict[str, Any]) -> list[str]:
         if e.get("key") == "burn":
             dmg = max(1, int(mx * int(e.get("potency_percent", 5)) / 100))
             hp -= dmg
-            logs.append(f"🔥 Поджог: −{dmg} HP")
+            logs.append(f"→ 👤 🔥 Поджог: −{dmg} HP")
         elif e.get("key") == "poison":
             dmg = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
             hp -= dmg
-            logs.append(f"💀 Яд: −{dmg} HP")
+            logs.append(f"→ 👤 💀 Яд: −{dmg} HP")
         elif e.get("key") == "bleed":
             dmg = max(1, int(mx * int(e.get("potency_percent", 2)) / 100))
             hp -= dmg
-            logs.append(f"🩸 Кровотечение: −{dmg} HP")
+            logs.append(f"→ 👤 🩸 Кровотечение: −{dmg} HP")
         elif e.get("key") == "hot":
             heal = max(1, int(mx * int(e.get("potency_percent", 5)) / 100))
             hp = min(mx, hp + heal)
-            logs.append(f"🌿 Исцеление со временем: +{heal} HP")
+            logs.append(f"→ 👤 🌿 Исцеление со временем: +{heal} HP")
         turns = int(e.get("turns", 0)) - 1
         if turns > 0:
             e["turns"] = turns
@@ -274,15 +275,15 @@ def apply_dot_damage_monster(state: dict[str, Any]) -> list[str]:
         if e.get("key") == "burn":
             dmg = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
             hp -= dmg
-            logs.append(f"🔥 Враг горит: −{dmg} HP")
+            logs.append(f"→ 👹 🔥 Враг горит: −{dmg} HP")
         elif e.get("key") == "bleed":
             dmg = max(1, int(mx * int(e.get("potency_percent", 4)) / 100))
             hp -= dmg
-            logs.append(f"🩸 Враг истекает кровью: −{dmg} HP")
+            logs.append(f"→ 👹 🩸 Враг истекает кровью: −{dmg} HP")
         elif e.get("key") == "poison":
             dmg = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
             hp -= dmg
-            logs.append(f"☠️ Яд: −{dmg} HP")
+            logs.append(f"→ 👹 ☠️ Яд: −{dmg} HP")
         turns = int(e.get("turns", 0)) - 1
         if turns > 0:
             e["turns"] = turns
@@ -561,9 +562,9 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     dmg = apply_rune_golem_absorb(state, dmg, logs)
 
     if crit:
-        logs.append(f"→ Ты нанёс 🗡️ {dmg} урона [КРИТ💥]")
+        logs.append(f"→ 👤 Герой: 🗡️ {dmg} урона [КРИТ💥]")
     else:
-        logs.append(f"→ Ты нанёс 🗡️ {dmg} урона")
+        logs.append(f"→ 👤 Герой: 🗡️ {dmg} урона")
 
     apply_equipment_on_hit_procs(state, mods, logs)
 
@@ -841,9 +842,9 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
 
     tag = "🔮" if sk.kind == "mag" else "🗡️"
     if crit:
-        logs.append(f"{tag} {sk.name}: {dmg} урона [КРИТ💥]")
+        logs.append(f"→ 👤 Герой: {tag} {sk.name}: {dmg} урона [КРИТ💥]")
     else:
-        logs.append(f"{tag} {sk.name}: {dmg} урона")
+        logs.append(f"→ 👤 Герой: {tag} {sk.name}: {dmg} урона")
 
     apply_equipment_on_hit_procs(state, mods, logs)
 
@@ -944,10 +945,6 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
         _coliseum_bump_monster_turn(state, logs)
         return logs, "continue"
 
-    php = int(state["player_hp"]) / max(1, int(state["player_hp_max"]))
-    if php > 0.80 and random.random() < 0.35:
-        logs.append(f"💬 «{monster_ai.pick_provocation_taunt(m['name'], tk)}»")
-
     dodge_flat = float(_mods(state).get("dodge_bonus", 0.0)) + float(state.get("player_temp_dodge", 0.0))
     if formulas.roll_dodge(int(_stats(state)["dex"]), dodge_bonus_flat=dodge_flat):
         logs.append("🏃 Ты увернулся от атаки!")
@@ -960,6 +957,10 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
         logs.append(f"💬 «{monster_ai.pick_taunt(m['name'], tk)}»")
         _coliseum_bump_monster_turn(state, logs)
         return logs, "continue"
+
+    php = int(state["player_hp"]) / max(1, int(state["player_hp_max"]))
+    if php > 0.80 and random.random() < 0.35:
+        logs.append(f"💬 «{monster_ai.pick_provocation_taunt(m['name'], tk)}»")
 
     if action == "fortify":
         state["monster_fortify_flat"] = 8
@@ -1061,7 +1062,9 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     if int(state["player_hp"]) < pre_php:
         combo_break_on_player_hurt(state)
     if dmg > 0:
-        logs.append(f"→ {m.get('emoji', '👹')} Удар по тебе: −{dmg} HP")
+        em = str(m.get("emoji") or "👹")
+        mn = html.escape(str(m.get("name") or "Враг"))
+        logs.append(f"→ {em} <b>{mn}</b>: −{dmg} HP")
         record_monster_last_damage_to_player(state, dmg)
         if int(state["player_hp"]) > 0:
             if bool(m.get("applies_poison_on_hit")) and random.random() < 0.42:

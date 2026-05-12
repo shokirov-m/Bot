@@ -131,6 +131,18 @@ def pool_for_tier(tier: int) -> list[DailyQuestTemplate]:
     return _TIER_POOLS.get(tier, TIER_1)
 
 
+def daily_quest_floor_band_for_tier(tier: int) -> tuple[int, int]:
+    """Этажи башни, на которых засчитывается прогресс ежедневки этого тира."""
+    ti = max(1, min(5, int(tier)))
+    return {
+        1: (1, 10),
+        2: (11, 20),
+        3: (21, 30),
+        4: (31, 50),
+        5: (51, 135),
+    }[ti]
+
+
 def type_label(quest_type: str) -> str:
     return {
         "kills_any":   "🗡️ Убийства",
