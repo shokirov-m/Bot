@@ -9,7 +9,7 @@ from __future__ import annotations
 import html
 import secrets
 import string
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -24,13 +24,13 @@ from aiogram.types import FSInputFile
 from config import settings
 from db.models.character import Character
 from db.repository import character_repo, sticker_duel_challenge_repo, user_repo
-from game.floors.monster_appearances_ru import APPEARANCE_RU
 from game.sticker_pack.battle import duel_winner_from_scores, resolve_duel_scores
 from game.tower_cards import monster_cards as tc
 from services import character_service
 from services import vip_shop_bonus_service
 
 META_KEY = "tower_cards_v1"
+SPIN_COOLDOWN = timedelta(hours=12)
 MAX_PAID_SPINS_PER_DAY = 20
 MAX_DUELS_PER_DAY = 40
 DUEL_WIN_GOLD = 25
@@ -121,6 +121,24 @@ def can_buy_paid_spin_gold(character: Character) -> bool:
     return int(character.gold) >= int(settings.STICKER_GACHA_GOLD_PULL)
 
 
+def spin_seconds_until_available(character: Character) -> int:
+    """Сколько секунд ждать до следующей крутки гачи; 0 — можно крутить."""
+    st = sticker_pack_slot(character)
+    raw = st.get("last_spin_utc")
+    if not raw:
+        return 0
+    try:
+        last = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return 0
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=UTC)
+    until = last + SPIN_COOLDOWN
+    now = datetime.now(UTC)
+    sec = int((until - now).total_seconds())
+    return max(0, sec)
+
+
 def _card_label_html(template_key: str, row: dict[str, Any] | None) -> str:
     nm = html.escape(str(row.get("name_ru")) if row else tc.display_name(template_key))
     em = str(row.get("emoji")) if row and row.get("emoji") else tc.emoji_for(template_key)
@@ -138,6 +156,15 @@ def perform_spin(
     """
     meta = dict(character.meta_progress or {})
     slot = _slot(meta)
+    wait = spin_seconds_until_available(character)
+    if wait > 0:
+        return (
+            False,
+            f"⏳ Крутка на перезарядке. Снова можно через <b>{html.escape(tc.format_wait_hm_ru(wait))}</b>.",
+            None,
+            None,
+        )
+
     today = _utc_today()
     g = _gacha_sub(slot)
     if g.get("date") != today:
@@ -166,7 +193,6 @@ def perform_spin(
         row = dict(coll_all[sid])
         row["atk"] = int(row.get("atk", 0)) + 2
         coll_all[sid] = row
-        msg_extra = f"<b>Дубликат!</b> +2 ATK → теперь <b>{row['atk']}</b> ATK."
     else:
         coll_all[sid] = {
             "atk": atk,
@@ -178,8 +204,6 @@ def perform_spin(
             "source_floor": src_floor,
             "raw_element": raw_el,
         }
-        stars = tc.RARITY_STARS_RU.get(tier, "⭐")
-        msg_extra = f"Новая карта: <b>{html.escape(name_ru)}</b> {stars}."
 
     if paid:
         g["paid_used"] = int(g.get("paid_used", 0)) + 1
@@ -188,18 +212,19 @@ def perform_spin(
 
     slot["collection"] = coll_all
     slot["gacha"] = g
+    slot["last_spin_utc"] = datetime.now(UTC).replace(microsecond=0).isoformat()
     _save_slot(character, meta, slot)
 
-    stars = tc.RARITY_STARS_RU.get(tier, "⭐")
-    vis = APPEARANCE_RU.get(tc.base_template_key(sid), "")
-    vis_html = f"\n<i>{html.escape(vis[:220])}{'…' if len(vis) > 220 else ''}</i>" if vis else ""
-    body = (
-        f"🎴 <b>Выпало:</b> {html.escape(emoji)} <b>{html.escape(name_ru)}</b> {stars}\n"
-        f"Этаж образца: <b>{src_floor}</b> · стихия (дуэль): <b>{d_el}</b> · было: <i>{html.escape(raw_el)}</i>\n"
-        f"ATK <b>{coll_all[sid]['atk']}</b> · DEF <b>{coll_all[sid]['def']}</b>\n"
-        f"{msg_extra}"
-        f"{vis_html}"
+    card = tc.format_monster_card_spawn_html(
+        spawn,
+        src_floor,
+        atk=int(coll_all[sid]["atk"]),
+        deff=int(coll_all[sid]["def"]),
     )
+    foot = ""
+    if dup:
+        foot = f"\n\n<i>Дубликат: +{tc.DUPLICATE_ATK_BONUS} к атаке уже учтены в «СИЛЕ».</i>"
+    body = f"🎴 <b>Выпало</b>\n\n{card}{foot}"
     return True, body, sid, src_floor
 
 
@@ -266,43 +291,59 @@ def profile_sticker_lines_html(character: Character) -> str:
     best = best_owned_sticker(character)
     lines = [f"🎴 <b>Коллекция карточек (этажи 1–20):</b> {own}/{total}"]
     if best:
-        sid, row, name = best
-        rarity = str(row.get("rarity", "common"))
-        stars = tc.RARITY_STARS_RU.get(rarity, "⭐")
+        sid, row, _name = best
+        lines.append("")
+        lines.append(tc.format_monster_card_from_collection_row(sid, row))
+    wait = spin_seconds_until_available(character)
+    if wait > 0:
         lines.append(
-            f"🏆 <b>Сильнейшая карта:</b> {html.escape(name)} {stars} "
-            f"(<b>{int(row.get('atk', 0))}</b> ATK / <b>{int(row.get('def', 0))}</b> DEF)",
+            f"⏳ <b>До следующей крутки:</b> {html.escape(tc.format_wait_hm_ru(wait))}",
         )
     return "\n".join(lines)
 
 
 def format_collection_screen_html(character: Character) -> str:
     coll = collection_map(character)
-    lines = [
-        "📦 <b>Альбом карточек</b>",
-        f"<i>Собрано уникальных: {len(coll)}/{tc.TW_POOL_TOTAL}</i>",
-        "",
-    ]
+    header = "\n".join(
+        [
+            "📦 <b>Альбом карточек</b>",
+            f"<i>Собрано уникальных: {len(coll)}/{tc.TW_POOL_TOTAL}</i>",
+            "",
+        ],
+    )
     if not coll:
-        lines.append("<i>Пока пусто — крути гачу в меню «Локации» → карточная арена.</i>")
-        return "\n".join(lines)
+        return header + "<i>Пока пусто — крути гачу в меню «Локации» → карточная арена.</i>"
+
     by_rare: dict[str, list[tuple[str, dict[str, Any]]]] = {}
     for sid, row in sorted(coll.items(), key=lambda x: x[0]):
         r = str(row.get("rarity", "common"))
         by_rare.setdefault(r, []).append((sid, row))
+
+    parts: list[str] = [header]
+    used = len(header)
+    budget = 3900
+    shown = 0
+    sep = "\n────────\n"
     for r in tc.RARITY_ORDER:
         if r not in by_rare:
             continue
-        lines.append(f"<b>{r.upper()}</b>")
+        hdr = f"<b>{html.escape(tc.RARITY_HEADER_RU.get(r, r))}</b>\n"
+        if used + len(hdr) > budget - 120:
+            break
+        parts.append(hdr)
+        used += len(hdr)
         for sid, row in by_rare[r]:
-            nm = html.escape(str(row.get("name_ru", tc.display_name(sid))))
-            sf = int(row.get("source_floor", 0) or 0)
-            lines.append(
-                f"  · {nm} — ATK {int(row.get('atk', 0))}, DEF {int(row.get('def', 0))}, "
-                f"дуэль: {html.escape(str(row.get('element', '?')))}, эт.{sf}",
-            )
-        lines.append("")
-    return "\n".join(lines).rstrip()
+            block = tc.format_monster_card_from_collection_row(sid, row)
+            add = (sep if shown > 0 else "") + block
+            if used + len(add) > budget:
+                parts.append(f"\n\n<i>…и ещё {len(coll) - shown} карт.</i>")
+                return "".join(parts).rstrip()
+            parts.append(add)
+            used += len(add)
+            shown += 1
+    if shown < len(coll):
+        parts.append(f"\n\n<i>…и ещё {len(coll) - shown} карт.</i>")
+    return "".join(parts).rstrip()
 
 
 def _challenge_code() -> str:
@@ -426,7 +467,7 @@ async def resolve_duel_by_code(
     if outcome == "draw":
         await sticker_duel_challenge_repo.delete_challenge(session, code)
         await session.flush()
-        return True, f"🤝 <b>Ничья!</b>\n{na} vs {nd}\nОчки: {sa:.1f} — {sb:.1f}"
+        return True, f"🤝 <b>Ничья!</b>\n{na} и {nd}\nОчки: {sa:.1f} — {sb:.1f}"
 
     if outcome == "a":
         win_ch, lose_ch = attacker, defender
@@ -460,8 +501,8 @@ async def resolve_duel_by_code(
 
     return True, (
         f"⚔️ <b>{win_name}</b> побеждает <b>{lose_name}</b>!\n"
-        f"Счёт: {sa:.1f} vs {sb:.1f}\n"
-        f"Победитель: +{DUEL_WIN_GOLD} 💰, +{DUEL_WIN_XP} XP · проигравший: +{DUEL_LOSS_GOLD} 💰, +{DUEL_LOSS_XP} XP\n"
+        f"Счёт: {sa:.1f} — {sb:.1f}\n"
+        f"Победитель: +{DUEL_WIN_GOLD} 💰, +{DUEL_WIN_XP} опыта · проигравший: +{DUEL_LOSS_GOLD} 💰, +{DUEL_LOSS_XP} опыта\n"
         f"<i>Рейтинг обновлён.</i>"
     )
 

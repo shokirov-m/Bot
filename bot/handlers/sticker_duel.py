@@ -27,7 +27,6 @@ from db.repository import character_repo, sticker_duel_challenge_repo, user_repo
 from services import arena_service
 from services import sticker_duel_service
 from services import unlock_service
-from game.floors.monster_appearances_ru import APPEARANCE_RU
 from game.tower_cards import monster_cards as tc
 
 
@@ -58,7 +57,7 @@ def _hub_html(char, loc: str = "ru") -> str:
         + sticker_duel_service.profile_sticker_lines_html(char)
         + "\n\n<i>Случайная карта монстра (этажи 1–20) в чат: <code>/towercard</code>, "
         "<code>/stickercard</code> или <code>/стикер</code> · "
-        "<code>/stickerhelp</code> — ATK, DEF, редкость и дуэльные стихии.</i>"
+        "<code>/stickerhelp</code> — атака, защита, редкость и стихии.</i>"
     )
 
 
@@ -703,15 +702,17 @@ STICKER_MECHANICS_HTML = (
     "📖 <b>Карточная арена башни</b>\n\n"
     "<b>1. Коллекция</b>\n"
     "Карты — монстры с <b>этажей 1–20</b>. В мета-прогрессе хранятся ключ шаблона, "
-    "<b>имя</b>, <b>редкость</b> (звёздность), <b>стихия для дуэли</b> (огонь / вода / земля), "
-    "<b>ATK</b> и <b>DEF</b> (масштаб от этажа выпадения).\n\n"
-    "<b>2. ATK и DEF</b>\n"
+    "<b>имя</b>, <b>редкость</b> (звёздность), <b>стихия для дуэли</b> (огонь, вода, земля), "
+    "<b>атака</b> и <b>защита</b> (масштаб от этажа выпадения).\n\n"
+    "<b>2. Атака и защита</b>\n"
     "Берутся из каталога монстров башни и умножаются на коэффициент этажа. "
-    "При дубликате той же карты к ATK добавляется <b>+2</b>.\n\n"
-    "<b>3. Дуэль</b>\n"
+    "При дубликате той же карты к атаке добавляется <b>+2</b>.\n\n"
+    "<b>3. Перезарядка крутки</b>\n"
+    "После любой прокрутки гачи следующая доступна не раньше чем через <b>12 часов</b>.\n\n"
+    "<b>4. Дуэль</b>\n"
     "Игроки выбирают карты из коллекции; победитель считается по стихиям (камень-ножницы-бумага) "
-    "и при ничьей по сумме ATK+DEF.\n\n"
-    "<b>4. Превью в чате</b>\n"
+    "и при ничьей по сумме атаки и защиты.\n\n"
+    "<b>5. Превью в чате</b>\n"
     "<code>/towercard</code>, <code>/stickercard</code> или <code>/стикер</code> — "
     "случайная карта с картинкой <i>без</i> записи в альбом.\n\n"
     "<b>Админ</b>: <code>/admin_sticker_set имя_набора</code> — список стикеров Telegram (если нужен для других целей)."
@@ -727,22 +728,9 @@ async def cmd_stickercard(message: Message, session: AsyncSession) -> None:
             return
         fl, spawn = tc.pick_random_spawn_f1_20()
         sid = spawn.template.key
-        tier = tc.tier_for_spawn(spawn, fl)
-        atk, deff = tc.scaled_atk_def(sid, fl)
-        raw_el = spawn.template.element
-        d_el = tc.duel_element(raw_el)
-        name_ru = spawn.template.name
-        emoji = spawn.template.emoji
-        stars = tc.RARITY_STARS_RU.get(tier, "⭐")
-        vis = APPEARANCE_RU.get(tc.base_template_key(sid), "")
-        vis_html = f"\n<i>{html.escape(vis[:400])}{'…' if len(vis) > 400 else ''}</i>" if vis else ""
-        cap = (
-            f"🎴 <b>{html.escape(emoji)} {html.escape(name_ru)}</b> {stars}\n"
-            f"Этаж: <b>{fl}</b> · дуэльная стихия: <b>{html.escape(d_el)}</b> · в игре: <i>{html.escape(raw_el)}</i>\n"
-            f"ATK <b>{atk}</b> · DEF <b>{deff}</b> <i>(как при первом выпадении с этого этажа)</i>"
-            f"{vis_html}\n\n"
-            "<i>Только превью — в альбом попадает карта из гачи в меню арены.</i>"
-        )
+        cap = tc.format_monster_card_spawn_html(spawn, fl, description_max_len=360)
+        if len(cap) > 1020:
+            cap = cap[:1000] + "\n…"
         p = tc.portrait_path(sid, fl)
         if p is not None and p.is_file():
             await message.bot.send_photo(message.chat.id, FSInputFile(p), caption=cap, parse_mode=ParseMode.HTML)
