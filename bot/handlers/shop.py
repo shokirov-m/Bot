@@ -429,7 +429,7 @@ async def successful_payment_handler(message: Message, session: AsyncSession) ->
             await character_repo.lock_character_row(session, char.id)
             from services import sticker_duel_service
 
-            ok, result_msg, sid = sticker_duel_service.apply_sticker_gacha_paid_spin_slot_only(char)
+            ok, result_msg, sid, src_floor = sticker_duel_service.apply_sticker_gacha_paid_spin_slot_only(char)
             await session.commit()
             if not ok:
                 await message.answer(
@@ -448,7 +448,7 @@ async def successful_payment_handler(message: Message, session: AsyncSession) ->
                 f"✅ Оплата прошла! −{stars} ⭐\n{result_msg}",
                 parse_mode=ParseMode.HTML,
             )
-            await sticker_duel_service.send_sticker_effect_if_configured(message.bot, message.chat.id, sid)
+            await sticker_duel_service.send_card_art_after_pull(message.bot, message.chat.id, sid, src_floor)
             await sticker_duel_service.mirror_sticker_spin_to_gacha_chat(
                 message.bot,
                 session,

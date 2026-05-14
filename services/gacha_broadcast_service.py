@@ -8,10 +8,12 @@
 from __future__ import annotations
 
 import html
+from pathlib import Path
 from typing import Any
 
 from aiogram import Bot
 from aiogram.enums import ParseMode
+from aiogram.types import FSInputFile
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -181,9 +183,10 @@ async def broadcast_sticker_pack_activity(
     *,
     html_text: str,
     sticker_file_ids: tuple[str, ...] = (),
+    image_paths: tuple[str, ...] = (),
 ) -> None:
     """
-    Крутка стикер-гачи или итог дуэли — в те же цели, что и объявления гачи башни:
+    Крутка карточной гачи / итог дуэли — в те же цели, что и объявления гачи башни:
     сначала GACHA_BROADCAST_CHAT (+ ветка форума), затем chat_id из payload, без ЛС.
     """
     if not getattr(settings, "STICKER_MIRROR_TO_GACHA_CHAT", True):
@@ -211,6 +214,16 @@ async def broadcast_sticker_pack_activity(
                     await bot.send_sticker(chat, fid, **st_kw)
                 except Exception:
                     logger.debug("sticker_broadcast: send_sticker failed chat={}", chat)
+            for img_path in image_paths:
+                if not img_path:
+                    continue
+                p = Path(img_path)
+                if not p.is_file():
+                    continue
+                try:
+                    await bot.send_photo(chat, FSInputFile(p), **st_kw)
+                except Exception:
+                    logger.debug("sticker_broadcast: send_photo failed chat={}", chat)
             await bot.send_message(chat, html_text, **msg_kw)
             return True
         except Exception:

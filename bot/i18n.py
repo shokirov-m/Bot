@@ -62,10 +62,10 @@ STRINGS: dict[str, dict[str, str]] = {
             "🗺 <b>Локации</b>\n\n"
             "<i>Арена PvP, Колизей PvE, ремесло, торговля и клан.</i>"
         ),
-        "menu_sticker_btn": "🎴 Стикер-арена",
-        "sticker_arena_title": "🎴 <b>Стикер-арена</b>",
+        "menu_sticker_btn": "🎴 Карточная арена",
+        "sticker_arena_title": "🎴 <b>Карточная арена</b>",
         "sticker_arena_subtitle": (
-            "<i>Виртуальная коллекция и дуэли по ATK/DEF и стихии (огонь / вода / земля).</i>"
+            "<i>Карты монстров этажей 1–20: коллекция, дуэли по стихиям и ATK/DEF.</i>"
         ),
         "sticker_arena_free_left": "Бесплатных круток сегодня осталось: <b>{n}</b>.",
         "sticker_arena_paid_left": "Платных круток сегодня осталось: <b>{n}</b> (по {gold} 💰).",

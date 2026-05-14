@@ -1,20 +1,19 @@
 """
-Стикер-арена: гача, альбом, дуэли, ТОП. Меню Локации → Стикер-арена (mnu:stk).
+Карточная арена башни: гача монстров 1–20 этажа, альбом, дуэли, ТОП. Меню Локации → Стикер-арена (mnu:stk).
 Команды: /collection, /stickerpull, /stickerdueltop, /stickerleaderboard, /duel, /duel_accept <код>,
-/stickercard (случайный стикер из набора в чат), /stickerhelp (как устроены ATK/DEF и каталог).
+/towercard и /stickercard (случайная карта-превью в чат, без записи в коллекцию), /stickerhelp.
 """
 
 from __future__ import annotations
 
 import html
-import random
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, LabeledPrice, Message
+from aiogram.types import CallbackQuery, FSInputFile, LabeledPrice, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +27,8 @@ from db.repository import character_repo, sticker_duel_challenge_repo, user_repo
 from services import arena_service
 from services import sticker_duel_service
 from services import unlock_service
+from game.floors.monster_appearances_ru import APPEARANCE_RU
+from game.tower_cards import monster_cards as tc
 
 
 class StickerDuelStates(StatesGroup):
@@ -41,8 +42,6 @@ def _hub_html(char, loc: str = "ru") -> str:
     loc = "ru"
     free_left = max(0, sticker_duel_service.free_spin_cap(char) - sticker_duel_service.free_spins_used_today(char))
     paid_left = max(0, 20 - sticker_duel_service.paid_spins_used_today(char))
-    pack = (settings.STICKER_PACK_TELEGRAM_NAME or "").strip()
-    link = ("\n" + t(loc, "sticker_arena_pack_link", pack=html.escape(pack))) if pack else ""
     stars = int(getattr(settings, "STICKER_GACHA_STARS_PULL", 0) or 0)
     stars_ln = (t(loc, "sticker_arena_stars_line", stars=stars) + "\n") if stars > 0 else ""
     return (
@@ -55,11 +54,11 @@ def _hub_html(char, loc: str = "ru") -> str:
         + t(loc, "sticker_arena_paid_left", n=paid_left, gold=int(settings.STICKER_GACHA_GOLD_PULL))
         + "\n"
         + stars_ln
-        + link
         + "\n\n"
         + sticker_duel_service.profile_sticker_lines_html(char)
-        + "\n\n<i>Случайный стикер из набора в этот чат: <code>/stickercard</code> или <code>/стикер</code> · "
-        "<code>/stickerhelp</code> — как устроены карты, ATK/DEF и стихии.</i>"
+        + "\n\n<i>Случайная карта монстра (этажи 1–20) в чат: <code>/towercard</code>, "
+        "<code>/stickercard</code> или <code>/стикер</code> · "
+        "<code>/stickerhelp</code> — ATK, DEF, редкость и дуэльные стихии.</i>"
     )
 
 
@@ -215,12 +214,12 @@ async def sticker_spin_free(callback: CallbackQuery, session: AsyncSession, stat
             await callback.answer(t(loc, "sticker_combat_busy"), show_alert=True)
             return
         await character_repo.lock_character_row(session, char.id)
-        ok, msg, sid = sticker_duel_service.perform_spin(char, paid=False)
+        ok, msg, sid, src_floor = sticker_duel_service.perform_spin(char, paid=False)
         await session.commit()
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
-        await sticker_duel_service.send_sticker_effect_if_configured(callback.bot, callback.message.chat.id, sid)
+        await sticker_duel_service.send_card_art_after_pull(callback.bot, callback.message.chat.id, sid, src_floor)
         await sticker_duel_service.mirror_sticker_spin_to_gacha_chat(
             callback.bot,
             session,
@@ -271,12 +270,12 @@ async def sticker_spin_paid(callback: CallbackQuery, session: AsyncSession, stat
             await callback.answer(t(loc, "sticker_combat_busy"), show_alert=True)
             return
         await character_repo.lock_character_row(session, char.id)
-        ok, msg, sid = await sticker_duel_service.apply_paid_spin_gold(session, char)
+        ok, msg, sid, src_floor = await sticker_duel_service.apply_paid_spin_gold(session, char)
         await session.commit()
         if not ok:
             await callback.answer(msg, show_alert=True)
             return
-        await sticker_duel_service.send_sticker_effect_if_configured(callback.bot, callback.message.chat.id, sid)
+        await sticker_duel_service.send_card_art_after_pull(callback.bot, callback.message.chat.id, sid, src_floor)
         await sticker_duel_service.mirror_sticker_spin_to_gacha_chat(
             callback.bot,
             session,
@@ -493,7 +492,7 @@ async def cmd_stickerpull(message: Message, session: AsyncSession, state: FSMCon
 
 @router.message(Command("duel"))
 async def cmd_duel(message: Message, session: AsyncSession, state: FSMContext) -> None:
-    """Точка входа в стикер-дуэль (как кнопка «Вызвать на дуэль»)."""
+    """Точка входа в карточную дуэль (как кнопка «Вызвать на дуэль»)."""
     try:
         if message.from_user is None:
             return
@@ -668,7 +667,7 @@ async def sticker_duel_defender_pick(callback: CallbackQuery, session: AsyncSess
             await callback.answer(result_html, show_alert=True)
             return
         hdr = (
-            "⚔️ <b>Стикер-дуэль</b>\n"
+            "⚔️ <b>Карточная дуэль</b>\n"
             f"<i>{html.escape((attacker.display_name or '?').strip() if attacker else '?')}</i> vs "
             f"<i>{html.escape((char.display_name or '?').strip())}</i>"
         )
@@ -679,6 +678,8 @@ async def sticker_duel_defender_pick(callback: CallbackQuery, session: AsyncSess
             result_html=result_html,
             attacker_sticker_id=atk_sid,
             defender_sticker_id=sid,
+            attacker=attacker,
+            defender=char,
         )
         await callback.answer("Бой!")
         await callback.message.answer(result_html, parse_mode=ParseMode.HTML)
@@ -688,7 +689,7 @@ async def sticker_duel_defender_pick(callback: CallbackQuery, session: AsyncSess
                 try:
                     await callback.bot.send_message(
                         int(au.telegram_id),
-                        "⚔️ <b>Результат стикер-дуэли</b>\n" + result_html,
+                        "⚔️ <b>Результат карточной дуэли</b>\n" + result_html,
                         parse_mode=ParseMode.HTML,
                     )
                 except Exception:
@@ -699,57 +700,65 @@ async def sticker_duel_defender_pick(callback: CallbackQuery, session: AsyncSess
 
 
 STICKER_MECHANICS_HTML = (
-    "📖 <b>Стикер-арена: карта в игре и стикер в Telegram</b>\n\n"
-    "<b>1. Две разные вещи</b>\n"
-    "• <b>Стикер из набора</b> (например BashnyaIspytanij) — только картинка в чате: у API есть "
-    "<code>file_id</code>.\n"
-    "• <b>Карта в коллекции башни</b> — запись в мета-прогрессе: короткий <code>id</code> (c1, r1…), "
-    "<b>имя</b>, <b>редкость</b>, <b>стихия</b>, числа <b>ATK</b> и <b>DEF</b>.\n\n"
-    "<b>2. Имя, редкость, стихия</b>\n"
-    "Задаются вручную в <code>game/sticker_pack/catalog.py</code> в каждом <code>StickerDef</code>. "
-    "Telegram сам по себе не передаёт «редкость» или ATK — это игровые поля.\n\n"
-    "<b>3. ATK и DEF</b>\n"
-    "При <b>первом</b> выпадении карты в гаче башни числа случайно берутся из диапазонов для этой "
-    "<b>редкости</b> (common слабее, mythic сильнее).\n\n"
-    "<b>4. Дубликат</b>\n"
-    "Если снова выпала та же внутриигровая карта — к уже собранной прибавляется <b>+2 ATK</b>.\n\n"
-    "<b>5. Связка со стикером Telegram</b>\n"
-    "В каталоге у карты можно указать <code>telegram_file_id</code> — тогда после крутки бот может "
-    "отправить настоящий стикер. Соответствие «какой file_id какой карте» настраивается вручную; "
-    "список стикеров набора смотри: <code>/admin_sticker_set имя_набора</code> (админ).\n\n"
-    "<b>Команда для чата</b>: <code>/stickercard</code> или <code>/стикер</code> — "
-    "<i>случайный стикер из набора</i> для настроения; <b>не начисляет</b> карту в гаче башни."
+    "📖 <b>Карточная арена башни</b>\n\n"
+    "<b>1. Коллекция</b>\n"
+    "Карты — монстры с <b>этажей 1–20</b>. В мета-прогрессе хранятся ключ шаблона, "
+    "<b>имя</b>, <b>редкость</b> (звёздность), <b>стихия для дуэли</b> (огонь / вода / земля), "
+    "<b>ATK</b> и <b>DEF</b> (масштаб от этажа выпадения).\n\n"
+    "<b>2. ATK и DEF</b>\n"
+    "Берутся из каталога монстров башни и умножаются на коэффициент этажа. "
+    "При дубликате той же карты к ATK добавляется <b>+2</b>.\n\n"
+    "<b>3. Дуэль</b>\n"
+    "Игроки выбирают карты из коллекции; победитель считается по стихиям (камень-ножницы-бумага) "
+    "и при ничьей по сумме ATK+DEF.\n\n"
+    "<b>4. Превью в чате</b>\n"
+    "<code>/towercard</code>, <code>/stickercard</code> или <code>/стикер</code> — "
+    "случайная карта с картинкой <i>без</i> записи в альбом.\n\n"
+    "<b>Админ</b>: <code>/admin_sticker_set имя_набора</code> — список стикеров Telegram (если нужен для других целей)."
 )
 
 
-@router.message(Command("stickercard", "sticker_card", "стикер"))
+@router.message(Command("towercard", "stickercard", "sticker_card", "стикер"))
 async def cmd_stickercard(message: Message, session: AsyncSession) -> None:
-    """Случайный стикер из настроенного Telegram-набора (без записи в игровую коллекцию)."""
+    """Случайная карта монстра 1–20 этажа с портретом (без записи в коллекцию)."""
     _ = session
     try:
         if message.bot is None:
             return
-        pack = (settings.STICKER_PACK_TELEGRAM_NAME or "").strip()
-        if not pack:
-            await message.answer("Набор стикеров не настроен (STICKER_PACK_TELEGRAM_NAME).")
-            return
-        st = await message.bot.get_sticker_set(pack)
-        if not st.stickers:
-            await message.answer("В наборе нет стикеров.")
-            return
-        s = random.choice(st.stickers)
-        await message.answer_sticker(s.file_id)
+        fl, spawn = tc.pick_random_spawn_f1_20()
+        sid = spawn.template.key
+        tier = tc.tier_for_spawn(spawn, fl)
+        atk, deff = tc.scaled_atk_def(sid, fl)
+        raw_el = spawn.template.element
+        d_el = tc.duel_element(raw_el)
+        name_ru = spawn.template.name
+        emoji = spawn.template.emoji
+        stars = tc.RARITY_STARS_RU.get(tier, "⭐")
+        vis = APPEARANCE_RU.get(tc.base_template_key(sid), "")
+        vis_html = f"\n<i>{html.escape(vis[:400])}{'…' if len(vis) > 400 else ''}</i>" if vis else ""
+        cap = (
+            f"🎴 <b>{html.escape(emoji)} {html.escape(name_ru)}</b> {stars}\n"
+            f"Этаж: <b>{fl}</b> · дуэльная стихия: <b>{html.escape(d_el)}</b> · в игре: <i>{html.escape(raw_el)}</i>\n"
+            f"ATK <b>{atk}</b> · DEF <b>{deff}</b> <i>(как при первом выпадении с этого этажа)</i>"
+            f"{vis_html}\n\n"
+            "<i>Только превью — в альбом попадает карта из гачи в меню арены.</i>"
+        )
+        p = tc.portrait_path(sid, fl)
+        if p is not None and p.is_file():
+            await message.bot.send_photo(message.chat.id, FSInputFile(p), caption=cap, parse_mode=ParseMode.HTML)
+        else:
+            await message.answer(cap, parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.exception("stickercard")
         await message.answer(
-            f"Не удалось отправить стикер: <code>{html.escape(str(e))}</code>",
+            f"Не удалось отправить карту: <code>{html.escape(str(e))}</code>",
             parse_mode=ParseMode.HTML,
         )
 
 
 @router.message(Command("stickerhelp", "стикер_помощь"))
 async def cmd_stickerhelp(message: Message, session: AsyncSession) -> None:
-    """Кратко: как в игре к стикерам привязаны имя, редкость, ATK/DEF."""
+    """Кратко: карты башни, ATK/DEF, редкость, дуэльные стихии."""
     _ = session
     await message.answer(STICKER_MECHANICS_HTML, parse_mode=ParseMode.HTML)
 

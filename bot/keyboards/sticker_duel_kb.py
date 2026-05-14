@@ -1,4 +1,4 @@
-"""Клавиатуры стикер-арены."""
+"""Клавиатуры карточной арены (меню «Локации»)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.i18n import t
 from config import settings
-from game.sticker_pack.catalog import RARITY_STARS_RU, sticker_def_by_id
+from game.tower_cards import monster_cards as tc
 from services import sticker_duel_service
 
 
@@ -60,9 +60,10 @@ def sticker_pick_keyboard(
     row: list[InlineKeyboardButton] = []
     dc = defender_code.strip().upper()[:16] if defender_code else None
     for sid in sorted(coll.keys()):
-        d = sticker_def_by_id(sid)
-        label = (d.name_ru[:14] + "…") if d and len(d.name_ru) > 15 else (d.name_ru if d else sid)
-        stars = RARITY_STARS_RU.get(d.rarity, "") if d else ""
+        row_d = coll[sid]
+        nm = str(row_d.get("name_ru", sid))
+        label = (nm[:14] + "…") if len(nm) > 15 else nm
+        stars = tc.RARITY_STARS_RU.get(str(row_d.get("rarity", "common")), "")
         if dc:
             cd = f"stk:ac:{dc}:{sid}"[:64]
         else:

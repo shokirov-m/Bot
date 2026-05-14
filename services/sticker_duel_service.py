@@ -1,12 +1,12 @@
 """
-Стикер-гача, коллекция, дуэли: состояние в character.meta_progress['sticker_pack_v1'],
-рейтинг дублей в колонках characters.sticker_duel_*.
+Карточная «арена» (этажи 1–20): гача, альбом, дуэли.
+Состояние: character.meta_progress['tower_cards_v1'].
+Рейтинг дуэлей: колонки characters.sticker_duel_*.
 """
 
 from __future__ import annotations
 
 import html
-import random
 import secrets
 import string
 from datetime import UTC, datetime
@@ -19,23 +19,18 @@ from sqlalchemy.orm.attributes import flag_modified
 from loguru import logger
 
 from aiogram import Bot
+from aiogram.types import FSInputFile
 
 from config import settings
 from db.models.character import Character
 from db.repository import character_repo, sticker_duel_challenge_repo, user_repo
-from game.sticker_pack.catalog import (
-    RARITY_ATK_RANGE,
-    RARITY_DEF_RANGE,
-    RARITY_STARS_RU,
-    RARITY_WEIGHTS,
-    STICKER_PACK_TOTAL,
-    sticker_def_by_id,
-    stickers_by_rarity,
-)
+from game.floors.monster_appearances_ru import APPEARANCE_RU
+from game.sticker_pack.battle import duel_winner_from_scores, resolve_duel_scores
+from game.tower_cards import monster_cards as tc
 from services import character_service
 from services import vip_shop_bonus_service
 
-META_KEY = "sticker_pack_v1"
+META_KEY = "tower_cards_v1"
 MAX_PAID_SPINS_PER_DAY = 20
 MAX_DUELS_PER_DAY = 40
 DUEL_WIN_GOLD = 25
@@ -64,13 +59,15 @@ def _save_slot(character: Character, meta: dict[str, Any], slot: dict[str, Any])
 
 
 def sticker_pack_slot(character: Character) -> dict[str, Any]:
+    """Слот меты (имя функции историческое)."""
     return _slot(dict(character.meta_progress or {}))
 
 
 def collection_map(character: Character) -> dict[str, dict[str, Any]]:
     st = sticker_pack_slot(character)
     raw = st.get("collection")
-    return dict(raw) if isinstance(raw, dict) else {}
+    coll = dict(raw) if isinstance(raw, dict) else {}
+    return tc.filtered_collection(coll)
 
 
 def unique_owned_count(character: Character) -> int:
@@ -124,31 +121,20 @@ def can_buy_paid_spin_gold(character: Character) -> bool:
     return int(character.gold) >= int(settings.STICKER_GACHA_GOLD_PULL)
 
 
-def _roll_rarity() -> str:
-    total = sum(w for _, w in RARITY_WEIGHTS)
-    r = random.randint(1, total)
-    acc = 0
-    for name, w in RARITY_WEIGHTS:
-        acc += w
-        if r <= acc:
-            return name
-    return RARITY_WEIGHTS[-1][0]
-
-
-def _roll_atk_def(rarity: str) -> tuple[int, int]:
-    ar = RARITY_ATK_RANGE[rarity]
-    dr = RARITY_DEF_RANGE[rarity]
-    return random.randint(ar[0], ar[1]), random.randint(dr[0], dr[1])
+def _card_label_html(template_key: str, row: dict[str, Any] | None) -> str:
+    nm = html.escape(str(row.get("name_ru")) if row else tc.display_name(template_key))
+    em = str(row.get("emoji")) if row and row.get("emoji") else tc.emoji_for(template_key)
+    return f"{html.escape(em)} {nm}"
 
 
 def perform_spin(
     character: Character,
     *,
     paid: bool,
-) -> tuple[bool, str, str | None]:
+) -> tuple[bool, str, str | None, int | None]:
     """
-    Одна крутка. paid=True — списать золото (вызывать после проверки can_buy).
-    Возвращает (ok, html_message, sticker_id_or_None).
+    Одна крутка. paid=True — золото списывается в apply_paid_spin_gold.
+    Возвращает (ok, html_message, template_key | None, source_floor | None).
     """
     meta = dict(character.meta_progress or {})
     slot = _slot(meta)
@@ -160,87 +146,102 @@ def perform_spin(
     if not paid:
         cap = free_spin_cap(character)
         if int(g.get("free_used", 0)) >= cap:
-            return False, "Сегодня бесплатные крутки уже использованы. Завтра снова или купи крутку за золото.", None
+            return False, "Сегодня бесплатные крутки уже использованы. Завтра снова или купи крутку за золото.", None, None
     else:
         if int(g.get("paid_used", 0)) >= MAX_PAID_SPINS_PER_DAY:
-            return False, "Достигнут лимит платных круток на сегодня.", None
+            return False, "Достигнут лимит платных круток на сегодня.", None, None
 
-    rarity = _roll_rarity()
-    pool = stickers_by_rarity(rarity)
-    if not pool:
-        return False, "Ошибка каталога редкости.", None
-    picked = random.choice(pool)
-    sid = picked.id
+    src_floor, spawn = tc.pick_random_spawn_f1_20()
+    sid = spawn.template.key
+    tier = tc.tier_for_spawn(spawn, src_floor)
+    atk, deff = tc.scaled_atk_def(sid, src_floor)
+    raw_el = spawn.template.element
+    d_el = tc.duel_element(raw_el)
+    name_ru = spawn.template.name
+    emoji = spawn.template.emoji
 
-    coll = dict(slot.get("collection") or {})
-    dup = sid in coll
+    coll_all = dict(slot.get("collection") or {})
+    dup = sid in coll_all
     if dup:
-        row = dict(coll[sid])
+        row = dict(coll_all[sid])
         row["atk"] = int(row.get("atk", 0)) + 2
-        coll[sid] = row
+        coll_all[sid] = row
         msg_extra = f"<b>Дубликат!</b> +2 ATK → теперь <b>{row['atk']}</b> ATK."
     else:
-        atk, deff = _roll_atk_def(rarity)
-        coll[sid] = {"atk": atk, "def": deff, "element": picked.element}
-        msg_extra = f"Новая карта: <b>{html.escape(picked.name_ru)}</b> ({RARITY_STARS_RU.get(rarity, '')})."
+        coll_all[sid] = {
+            "atk": atk,
+            "def": deff,
+            "element": d_el,
+            "rarity": tier,
+            "name_ru": name_ru,
+            "emoji": emoji,
+            "source_floor": src_floor,
+            "raw_element": raw_el,
+        }
+        stars = tc.RARITY_STARS_RU.get(tier, "⭐")
+        msg_extra = f"Новая карта: <b>{html.escape(name_ru)}</b> {stars}."
 
     if paid:
         g["paid_used"] = int(g.get("paid_used", 0)) + 1
     else:
         g["free_used"] = int(g.get("free_used", 0)) + 1
 
-    slot["collection"] = coll
+    slot["collection"] = coll_all
     slot["gacha"] = g
     _save_slot(character, meta, slot)
 
-    stars = RARITY_STARS_RU.get(rarity, "")
+    stars = tc.RARITY_STARS_RU.get(tier, "⭐")
+    vis = APPEARANCE_RU.get(tc.base_template_key(sid), "")
+    vis_html = f"\n<i>{html.escape(vis[:220])}{'…' if len(vis) > 220 else ''}</i>" if vis else ""
     body = (
-        f"🎴 <b>Выпало:</b> {html.escape(picked.name_ru)} {stars}\n"
-        f"Стихия: <b>{picked.element}</b>\n"
+        f"🎴 <b>Выпало:</b> {html.escape(emoji)} <b>{html.escape(name_ru)}</b> {stars}\n"
+        f"Этаж образца: <b>{src_floor}</b> · стихия (дуэль): <b>{d_el}</b> · было: <i>{html.escape(raw_el)}</i>\n"
+        f"ATK <b>{coll_all[sid]['atk']}</b> · DEF <b>{coll_all[sid]['def']}</b>\n"
         f"{msg_extra}"
+        f"{vis_html}"
     )
-    return True, body, sid
+    return True, body, sid, src_floor
 
 
-def apply_sticker_gacha_paid_spin_slot_only(character: Character) -> tuple[bool, str, str | None]:
+def apply_sticker_gacha_paid_spin_slot_only(character: Character) -> tuple[bool, str, str | None, int | None]:
     """Платная крутка без списания золота (оплата Stars или иной внешний платёж)."""
     if not can_use_paid_spin_slot(character):
-        return False, "Достигнут лимит платных круток на сегодня.", None
+        return False, "Достигнут лимит платных круток на сегодня.", None, None
     return perform_spin(character, paid=True)
 
 
-async def apply_paid_spin_gold(session: AsyncSession, character: Character) -> tuple[bool, str, str | None]:
+async def apply_paid_spin_gold(session: AsyncSession, character: Character) -> tuple[bool, str, str | None, int | None]:
     """Списать золото и выполнить платную крутку."""
     if not can_buy_paid_spin_gold(character):
-        return False, "Нельзя купить крутку (лимит или недостаточно золота).", None
+        return False, "Нельзя купить крутку (лимит или недостаточно золота).", None, None
     cost = int(settings.STICKER_GACHA_GOLD_PULL)
     character.gold = int(character.gold) - cost
-    ok, msg, sid = perform_spin(character, paid=True)
+    ok, msg, sid, fl = perform_spin(character, paid=True)
     if not ok:
         character.gold = int(character.gold) + cost
-        return False, msg, None
+        return False, msg, None, None
     await session.flush()
-    return True, msg, sid
+    return True, msg, sid, fl
 
 
-async def send_sticker_effect_if_configured(bot: Bot, chat_id: int, sticker_id: str | None) -> None:
-    """Опциональный эффект после дропа (file_id в каталоге)."""
+async def send_card_art_after_pull(bot: Bot, chat_id: int, template_key: str | None, source_floor: int | None) -> None:
+    """После крутки — портрет монстра из assets (если файл есть)."""
     if not getattr(settings, "STICKER_SEND_AFTER_PULL", True):
         return
-    if not sticker_id:
+    if not template_key:
         return
-    d = sticker_def_by_id(sticker_id)
-    fid = getattr(d, "telegram_file_id", None) if d else None
-    if not fid:
+    fl = int(source_floor or 10)
+    p = tc.portrait_path(template_key, fl)
+    if p is None or not p.is_file():
         return
     try:
-        await bot.send_sticker(chat_id, fid)
+        await bot.send_photo(chat_id, FSInputFile(p))
     except Exception:
-        logger.debug("send_sticker_effect failed for {}", sticker_id)
+        logger.debug("send_card_art_after_pull failed for {}", template_key)
 
 
 def best_owned_sticker(character: Character) -> tuple[str, dict[str, Any], str] | None:
-    """(sticker_id, row, name_ru) или None."""
+    """(template_key, row, display_name) или None."""
     coll = collection_map(character)
     if not coll:
         return None
@@ -255,23 +256,21 @@ def best_owned_sticker(character: Character) -> tuple[str, dict[str, Any], str] 
             best_id = sid
     if best_id is None:
         return None
-    d = sticker_def_by_id(best_id)
-    name = d.name_ru if d else best_id
+    name = str(coll[best_id].get("name_ru") or tc.display_name(best_id))
     return best_id, dict(coll[best_id]), name
 
 
 def profile_sticker_lines_html(character: Character) -> str:
     own = unique_owned_count(character)
-    total = STICKER_PACK_TOTAL
+    total = tc.TW_POOL_TOTAL
     best = best_owned_sticker(character)
-    lines = [f"🎴 <b>Коллекция стикеров:</b> {own}/{total}"]
+    lines = [f"🎴 <b>Коллекция карточек (этажи 1–20):</b> {own}/{total}"]
     if best:
         sid, row, name = best
-        d = sticker_def_by_id(sid)
-        rarity = d.rarity if d else "common"
-        stars = RARITY_STARS_RU.get(rarity, "⭐")
+        rarity = str(row.get("rarity", "common"))
+        stars = tc.RARITY_STARS_RU.get(rarity, "⭐")
         lines.append(
-            f"🏆 <b>Лучший стикер:</b> {html.escape(name)} {stars} "
+            f"🏆 <b>Сильнейшая карта:</b> {html.escape(name)} {stars} "
             f"(<b>{int(row.get('atk', 0))}</b> ATK / <b>{int(row.get('def', 0))}</b> DEF)",
         )
     return "\n".join(lines)
@@ -280,30 +279,27 @@ def profile_sticker_lines_html(character: Character) -> str:
 def format_collection_screen_html(character: Character) -> str:
     coll = collection_map(character)
     lines = [
-        "📦 <b>Альбом стикеров</b>",
-        f"<i>Собрано уникальных: {len(coll)}/{STICKER_PACK_TOTAL}</i>",
+        "📦 <b>Альбом карточек</b>",
+        f"<i>Собрано уникальных: {len(coll)}/{tc.TW_POOL_TOTAL}</i>",
         "",
     ]
     if not coll:
-        lines.append("<i>Пока пусто — крути гачу в меню Локации.</i>")
+        lines.append("<i>Пока пусто — крути гачу в меню «Локации» → карточная арена.</i>")
         return "\n".join(lines)
-    # по редкости группами
-    by_rare: dict[str, list[tuple[str, dict]]] = {}
+    by_rare: dict[str, list[tuple[str, dict[str, Any]]]] = {}
     for sid, row in sorted(coll.items(), key=lambda x: x[0]):
-        d = sticker_def_by_id(sid)
-        r = d.rarity if d else "common"
+        r = str(row.get("rarity", "common"))
         by_rare.setdefault(r, []).append((sid, row))
-    order = ["mythic", "legendary", "epic", "rare", "uncommon", "common"]
-    for r in order:
+    for r in tc.RARITY_ORDER:
         if r not in by_rare:
             continue
         lines.append(f"<b>{r.upper()}</b>")
         for sid, row in by_rare[r]:
-            d = sticker_def_by_id(sid)
-            nm = html.escape(d.name_ru if d else sid)
+            nm = html.escape(str(row.get("name_ru", tc.display_name(sid))))
+            sf = int(row.get("source_floor", 0) or 0)
             lines.append(
                 f"  · {nm} — ATK {int(row.get('atk', 0))}, DEF {int(row.get('def', 0))}, "
-                f"{html.escape(str(row.get('element', '?')))}",
+                f"дуэль: {html.escape(str(row.get('element', '?')))}, эт.{sf}",
             )
         lines.append("")
     return "\n".join(lines).rstrip()
@@ -334,12 +330,11 @@ async def create_duel_challenge(
     if attacker_sticker_id not in coll_a:
         return False, "У тебя нет этой карты.", None
     if not collection_map(defender):
-        return False, "У соперника ещё нет стикеров для дуэли.", None
+        return False, "У соперника ещё нет карточек для дуэли.", None
     if duels_used_today(attacker) >= MAX_DUELS_PER_DAY:
         return False, "Лимит дуэлей на сегодня.", None
 
     code = _challenge_code()
-    # избегаем коллизии (редко)
     for _ in range(5):
         existing = await sticker_duel_challenge_repo.fetch_challenge(session, code)
         if existing is None:
@@ -411,12 +406,9 @@ async def resolve_duel_by_code(
     )
     outcome = duel_winner_from_scores(sa, sb)
 
-    da = sticker_def_by_id(a_sid)
-    dd = sticker_def_by_id(defender_sticker_id)
-    na = html.escape(da.name_ru if da else a_sid)
-    nd = html.escape(dd.name_ru if dd else defender_sticker_id)
+    na = html.escape(str(ra.get("name_ru", tc.display_name(a_sid))))
+    nd = html.escape(str(rd.get("name_ru", tc.display_name(defender_sticker_id))))
 
-    # дневной счётчик у обоих
     def _bump_duel_day(ch: Character) -> None:
         mp = dict(ch.meta_progress or {})
         st = _slot(mp)
@@ -439,11 +431,9 @@ async def resolve_duel_by_code(
     if outcome == "a":
         win_ch, lose_ch = attacker, defender
         win_name, lose_name = na, nd
-        win_sid, lose_sid = a_sid, defender_sticker_id
     else:
         win_ch, lose_ch = defender, attacker
         win_name, lose_name = nd, na
-        win_sid, lose_sid = defender_sticker_id, a_sid
 
     _apply_elo(win_ch, lose_ch)
 
@@ -503,6 +493,12 @@ async def resolve_opponent_by_game_id(
     return opp, None
 
 
+def _portrait_str(template_key: str, row: dict[str, Any] | None) -> str | None:
+    fl = int((row or {}).get("source_floor") or 10)
+    p = tc.portrait_path(template_key, fl)
+    return str(p) if p is not None and p.is_file() else None
+
+
 async def mirror_sticker_spin_to_gacha_chat(
     bot: Bot,
     session: AsyncSession,
@@ -511,20 +507,22 @@ async def mirror_sticker_spin_to_gacha_chat(
     msg_html: str,
     sticker_id: str | None,
 ) -> None:
-    """Дублировать крутку в канал объявлений гачи (GACHA_BROADCAST_*), если включено в настройках."""
+    """Дублировать крутку в канал объявлений гачи."""
     from services import gacha_broadcast_service
 
     u = await user_repo.get_by_id(session, int(character.user_id))
     who = html.escape((character.display_name or "?").strip() or "?")
     if u is not None and (u.username or "").strip():
         who += f" (@{html.escape((u.username or '').strip())})"
-    d = sticker_def_by_id(sticker_id or "")
-    fid = (d.telegram_file_id if d else None) or ""
+    coll = collection_map(character)
+    row = coll.get(sticker_id or "") if sticker_id else None
+    img = _portrait_str(sticker_id or "", row) if sticker_id else None
     await gacha_broadcast_service.broadcast_sticker_pack_activity(
         bot,
         session,
         html_text=f"🎴 {who}\n\n{msg_html}",
-        sticker_file_ids=(fid,) if fid else (),
+        sticker_file_ids=(),
+        image_paths=(img,) if img else (),
     )
 
 
@@ -536,18 +534,25 @@ async def mirror_sticker_duel_to_gacha_chat(
     result_html: str,
     attacker_sticker_id: str,
     defender_sticker_id: str,
+    attacker: Character | None,
+    defender: Character,
 ) -> None:
-    """Итог дуэли — в тот же канал, что и объявления гачи; стикеры по file_id из каталога."""
+    """Итог дуэли в канал объявлений + портреты карт."""
     from services import gacha_broadcast_service
 
-    fids: list[str] = []
-    for sid in (attacker_sticker_id, defender_sticker_id):
-        dd = sticker_def_by_id(sid)
-        if dd and dd.telegram_file_id:
-            fids.append(dd.telegram_file_id)
+    paths: list[str] = []
+    ac = collection_map(attacker) if attacker else {}
+    dc = collection_map(defender)
+    pa = _portrait_str(attacker_sticker_id, ac.get(attacker_sticker_id))
+    pd = _portrait_str(defender_sticker_id, dc.get(defender_sticker_id))
+    if pa:
+        paths.append(pa)
+    if pd:
+        paths.append(pd)
     await gacha_broadcast_service.broadcast_sticker_pack_activity(
         bot,
         session,
         html_text=header_html + "\n\n" + result_html,
-        sticker_file_ids=tuple(fids),
+        sticker_file_ids=(),
+        image_paths=tuple(paths),
     )
