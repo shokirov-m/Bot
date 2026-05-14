@@ -149,11 +149,7 @@ def format_leaderboard_html(
         tag = tags.get(int(c.id))
         tag_prefix = f"[{html.escape(tag)}] " if tag else ""
         if category == "lvl":
-            extra = (
-                f"Lv.{c.level} · XP {int(c.experience):,}"
-                if locale == "en"
-                else f"Ур.{c.level} · опыт {int(c.experience):,}"
-            )
+            extra = f"Ур.{c.level} · опыт {int(c.experience):,}"
         elif category == "flr":
             best = max(int(c.highest_floor_reached or 0), int(c.floor_number or 0))
             cur = int(c.floor_number or 0)

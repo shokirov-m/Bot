@@ -17,7 +17,7 @@ def settings_screen_keyboard(
     adult_age_declared: bool | None = None,
     adult_content_enabled: bool | None = None,
 ) -> InlineKeyboardMarkup:
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     hide = character is not None and not game_images_enabled(character)
     img_btn = t(loc, "settings_images_enable") if hide else t(loc, "settings_images_disable")
     _ = notify_golden_goblin  # флаг читается в подменю «Уведомления»
@@ -51,12 +51,6 @@ def settings_screen_keyboard(
                 InlineKeyboardButton(
                     text=t(loc, "settings_stat_reset_btn"),
                     callback_data="stg:stat_rst",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=t(loc, "settings_lang_btn"),
-                    callback_data="stg:lang",
                 ),
             ],
             [
@@ -104,7 +98,7 @@ def settings_screen_keyboard(
 
 
 def settings_stat_reset_confirm_keyboard(*, locale: str, gold: int) -> InlineKeyboardMarkup:
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -124,7 +118,7 @@ def settings_stat_reset_confirm_keyboard(*, locale: str, gold: int) -> InlineKey
 
 
 def settings_reset_confirm_keyboard(*, locale: str) -> InlineKeyboardMarkup:
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -144,7 +138,7 @@ def settings_reset_confirm_keyboard(*, locale: str) -> InlineKeyboardMarkup:
 
 
 def settings_cancel_keyboard(*, locale: str) -> InlineKeyboardMarkup:
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -158,7 +152,7 @@ def settings_cancel_keyboard(*, locale: str) -> InlineKeyboardMarkup:
 
 
 def settings_notifications_hub_keyboard(*, locale: str, notify_golden_goblin: bool) -> InlineKeyboardMarkup:
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     goblin_btn = (
         t(loc, "settings_golden_goblin_notify_disable")
         if notify_golden_goblin

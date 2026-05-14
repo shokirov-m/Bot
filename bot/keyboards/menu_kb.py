@@ -67,7 +67,7 @@ def main_menu_keyboard(*, locale: str = "ru", character: Character | None = None
 
     """Главное меню без слэш-команд."""
 
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
 
     allow = (
         unlock_service.available_main_menu_keys(character)
@@ -116,7 +116,7 @@ def main_menu_keyboard(*, locale: str = "ru", character: Character | None = None
 
 def locations_hub_keyboard(*, locale: str = "ru", character: Character | None = None) -> InlineKeyboardMarkup:
     """Арена, Колизей, Мастерская, Магазин, Клан."""
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     if character is not None and not unlock_service.is_unlocked(character, "menu_locations"):
         return InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=t(loc, "portal_back_menu"), callback_data="mnu:hub")]],
@@ -140,6 +140,8 @@ def locations_hub_keyboard(*, locale: str = "ru", character: Character | None = 
         rows.append(row2)
     if "menu_clan" in allow:
         rows.append([InlineKeyboardButton(text="🏰 Клан", callback_data="mnu:clan")])
+    if "menu_sticker" in allow:
+        rows.append([InlineKeyboardButton(text=t(loc, "menu_sticker_btn"), callback_data="mnu:stk")])
     rows.append([InlineKeyboardButton(text=t(loc, "portal_back_menu"), callback_data="mnu:hub")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -160,7 +162,7 @@ def portal_screen_keyboard(
     Заблокированные не показываем — их слишком много при увеличенном пуле.
     Админ: все точки портала видны и доступны для перехода из обработчика (блокировку снимает travel).
     """
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     if portal_admin_unlock:
         available = list(PORTAL_DESTINATION_FLOORS)
     else:

@@ -902,6 +902,65 @@ def patch_sqlite_migrate_female_merc_templates_v1() -> None:
         logger.exception("Патч SQLite (женские наёмницы) не удался: {}", p)
 
 
+def patch_sqlite_sticker_duel_tables() -> None:
+    """Колонки стикер-дуэлей у characters и таблица вызовов."""
+    import sqlite3
+
+    from loguru import logger
+
+    p = resolve_db_path()
+    if not p.exists():
+        return
+    try:
+        con = sqlite3.connect(str(p))
+        try:
+            row = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='characters'",
+            ).fetchone()
+            if row is None:
+                return
+            cols = {r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall()}
+            if "sticker_duel_rating" not in cols:
+                con.execute(
+                    "ALTER TABLE characters ADD COLUMN sticker_duel_rating INTEGER NOT NULL DEFAULT 1000",
+                )
+                con.commit()
+                logger.info("Патч SQLite: sticker_duel_rating")
+            cols = {r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall()}
+            if "sticker_duel_wins" not in cols:
+                con.execute(
+                    "ALTER TABLE characters ADD COLUMN sticker_duel_wins INTEGER NOT NULL DEFAULT 0",
+                )
+                con.commit()
+                logger.info("Патч SQLite: sticker_duel_wins")
+            cols = {r[1] for r in con.execute("PRAGMA table_info(characters)").fetchall()}
+            if "sticker_duel_losses" not in cols:
+                con.execute(
+                    "ALTER TABLE characters ADD COLUMN sticker_duel_losses INTEGER NOT NULL DEFAULT 0",
+                )
+                con.commit()
+                logger.info("Патч SQLite: sticker_duel_losses")
+            con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sticker_duel_challenges (
+                    code TEXT PRIMARY KEY NOT NULL,
+                    attacker_character_id INTEGER NOT NULL,
+                    defender_character_id INTEGER NOT NULL,
+                    attacker_sticker_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """,
+            )
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS ix_characters_sticker_duel_rating ON characters (sticker_duel_rating DESC)",
+            )
+            con.commit()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        logger.exception("Патч SQLite (sticker_duel) не удался: {}", p)
+
+
 def resolve_db_path() -> Path:
     """
     Абсолютный путь к файлу SQLite.
@@ -960,6 +1019,7 @@ def ensure_sqlite_schema_or_migrate() -> None:
     patch_sqlite_workshop_orders_table()
     patch_sqlite_mercenaries_table()
     patch_sqlite_migrate_female_merc_templates_v1()
+    patch_sqlite_sticker_duel_tables()
     had_users = False
     if p.exists():
         try:

@@ -90,6 +90,12 @@ UNLOCKS: tuple[Unlock, ...] = (
         title="Клан",
         hint="Меню → Локации → Клан.",
     ),
+    Unlock(
+        key="menu_sticker",
+        level=10,
+        title="Стикер-арена",
+        hint="Меню → Локации → Стикер-арена.",
+    ),
 )
 
 UNLOCK_BY_KEY: dict[str, Unlock] = {u.key: u for u in UNLOCKS}

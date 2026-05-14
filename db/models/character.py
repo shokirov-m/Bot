@@ -87,6 +87,11 @@ class Character(Base):
     enchant_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     runes_socketed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
+    # Стикер-дуэли: рейтинг и статистика (дублирует часть логики из meta для ТОПа)
+    sticker_duel_rating: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1000")
+    sticker_duel_wins: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    sticker_duel_losses: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
     # Ключи к 100 этажу и прочий прогресс — JSON для гибкости эндгейма
     meta_progress: Mapped[dict[str, Any]] = mapped_column(
         JSON,

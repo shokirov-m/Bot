@@ -1,5 +1,5 @@
 """
-Настройки: смена имени за золото, промокоды, язык, ID, подсказки.
+Настройки: смена имени за золото, промокоды, ID, подсказки.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from aiogram.types import InlineKeyboardButton
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.i18n import get_locale, set_locale, t
+from bot.i18n import get_locale, t
 from bot.keyboards.settings_kb import (
     settings_cancel_keyboard,
     settings_handbook_back_keyboard,
@@ -45,7 +45,7 @@ ADULT_CONSENT_VERSION = 1
 
 
 def _settings_body_html(locale: str) -> str:
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     return (
         f"{t(loc, 'settings_title')}\n"
         f"{LINE_SEP}\n"
@@ -54,12 +54,8 @@ def _settings_body_html(locale: str) -> str:
 
 
 def _settings_notifications_html(locale: str) -> str:
-    loc = locale if locale in ("ru", "en") else "ru"
-    if loc == "en":
-        return (
-            "🔔 <b>Notifications</b>\n\n"
-            "Configure optional alerts. More channels may appear here later.\n"
-        )
+    loc = "ru"
+    _ = locale
     return (
         "🔔 <b>Уведомления</b>\n\n"
         "Настрой опциональные оповещения. Позже сюда можно вынести другие каналы.\n"
@@ -459,37 +455,6 @@ async def stg_referral(callback: CallbackQuery, session: AsyncSession, state: FS
         await callback.answer()
     except Exception:
         logger.exception("stg:refer")
-        await callback.answer("Ошибка.", show_alert=True)
-
-
-@router.callback_query(F.data == "stg:lang")
-async def stg_lang_toggle(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.message is None or callback.from_user is None:
-            await callback.answer()
-            return
-        pair = await _char_gate(session, callback)
-        if pair is None:
-            await callback.answer("Нет героя.", show_alert=True)
-            return
-        user, char = pair
-        cur = get_locale(char, callback.from_user.language_code)
-        nxt = "en" if cur == "ru" else "ru"
-        set_locale(char, nxt)
-        await session.commit()
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=_settings_body_html(nxt),
-            reply_markup=_settings_reply_kb(nxt, char, user),
-            target_message=callback.message,
-            photo_path=menu_settings_photo_path(),
-            character=char,
-        )
-        await callback.answer(t(nxt, "settings_lang_switched", lang=nxt.upper()), show_alert=False)
-    except Exception:
-        logger.exception("stg:lang")
         await callback.answer("Ошибка.", show_alert=True)
 
 

@@ -14,7 +14,7 @@ from game.crafting.workshop_meta import get_workshop_state
 
 def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -> InlineKeyboardMarkup:
     """Подменю «Специализация»: титулы, архетипы, навыки."""
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     rows = [
         [InlineKeyboardButton(text=t(loc, "menu_titles"), callback_data="mnu:ttl")],
     ]
@@ -51,7 +51,7 @@ def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -
 
 def profile_view_keyboard(character: Character | None = None, *, locale: str = "ru") -> InlineKeyboardMarkup:
     """Компактный статус."""
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub"),
@@ -67,7 +67,7 @@ def profile_view_keyboard(character: Character | None = None, *, locale: str = "
 
 def profile_full_stats_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
     """Экран полных характеристик."""
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text="📖 Что дают статы", callback_data="prf:stathelp")],
         [InlineKeyboardButton(text="🔮 Стихии и слабости", callback_data="prf:elements_info")],
@@ -82,7 +82,7 @@ def profile_full_stats_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
 
 def profile_pet_picker_keyboard(owned: list[str], *, locale: str, active_key: str | None) -> InlineKeyboardMarkup:
     """По одному ряду на питомца + назад + меню."""
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     rows: list[list[InlineKeyboardButton]] = []
     for k in owned:
         cap = pets_mod.pet_choice_button_caption(k, locale=loc, is_active=(k == active_key))

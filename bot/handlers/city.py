@@ -39,7 +39,7 @@ router = Router(name="city")
 def _temple_skills_shop_html(character: Character, locale: str) -> str:
     from game.characters import player_skills as psk
 
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     psk.ensure_skill_meta(character)
     hint = psk.skill_shop_summary_html(loc)
     return (

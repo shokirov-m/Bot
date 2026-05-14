@@ -39,16 +39,14 @@ def _stats_text(char, mode: int) -> str:
         )
     else:
         hint = "Свободных очков нет — повышай уровень в бою и квестах (+5 очков за уровень)."
-    arch = arch_manager.get_archetype(getattr(char, "class_key", "") or "")
-    class_block = ""
-    if arch:
-        head = html.escape(arch.full_name)
-        desc_raw = (arch.description_ru or "").strip()
-        if desc_raw:
-            short = desc_raw if len(desc_raw) <= 280 else (desc_raw[:277] + "…")
-            class_block = f"\n\n📜 <b>{head}</b>\n<i>{html.escape(short)}</i>"
-        else:
-            class_block = f"\n\n📜 <b>{head}</b>"
+    arch = arch_manager.get_character_archetype(char)
+    head = html.escape(arch.full_name)
+    desc_raw = (arch.description_ru or "").strip()
+    if desc_raw:
+        short = desc_raw if len(desc_raw) <= 280 else (desc_raw[:277] + "…")
+        class_block = f"\n\n📜 <b>{head}</b>\n<i>{html.escape(short)}</i>"
+    else:
+        class_block = f"\n\n📜 <b>{head}</b>"
     return (
         "📊 <b>Характеристики</b>\n"
         f"{hint}\n\n"

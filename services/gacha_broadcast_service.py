@@ -174,3 +174,52 @@ async def send_tower_community_announcement(
     except Exception:
         logger.warning("tower_announce: не удалось отправить в ЛС telegram_id={}", tg)
 
+
+async def broadcast_sticker_pack_activity(
+    bot: Bot,
+    session: AsyncSession,
+    *,
+    html_text: str,
+    sticker_file_ids: tuple[str, ...] = (),
+) -> None:
+    """
+    Крутка стикер-гачи или итог дуэли — в те же цели, что и объявления гачи башни:
+    сначала GACHA_BROADCAST_CHAT (+ ветка форума), затем chat_id из payload, без ЛС.
+    """
+    if not getattr(settings, "STICKER_MIRROR_TO_GACHA_CHAT", True):
+        return
+    primary = _parse_broadcast_chat_id()
+    row = await _ensure_app_row(session)
+    chat_ids = _chat_ids_from_payload(dict(row.payload or {}))
+    if primary is None and not chat_ids:
+        return
+
+    msg_kw: dict[str, Any] = {"parse_mode": ParseMode.HTML}
+    st_kw: dict[str, Any] = {}
+    thread_id = settings.GACHA_BROADCAST_MESSAGE_THREAD_ID
+    if thread_id is not None:
+        tid = int(thread_id)
+        msg_kw["message_thread_id"] = tid
+        st_kw["message_thread_id"] = tid
+
+    async def _post_to(chat: int | str) -> bool:
+        try:
+            for fid in sticker_file_ids:
+                if not fid:
+                    continue
+                try:
+                    await bot.send_sticker(chat, fid, **st_kw)
+                except Exception:
+                    logger.debug("sticker_broadcast: send_sticker failed chat={}", chat)
+            await bot.send_message(chat, html_text, **msg_kw)
+            return True
+        except Exception:
+            logger.warning("sticker_broadcast: send_message failed chat={}", chat)
+            return False
+
+    if primary is not None and await _post_to(primary):
+        return
+    for ch in chat_ids:
+        if await _post_to(int(ch)):
+            return
+

@@ -140,7 +140,7 @@ def item_kind_label_ru(kind: str | None) -> str:
     if not kind:
         return ""
     k = str(kind).strip().lower()
-    return ITEM_KIND_LABEL_RU.get(k, str(kind))
+    return ITEM_KIND_LABEL_RU.get(k, f"тип «{k}»")
 
 
 _KIND_GEAR_ICON: dict[str, str] = {

@@ -39,6 +39,7 @@ from bot.handlers.gacha_broadcast_groups import router as gacha_broadcast_groups
 from bot.handlers.black_market import router as black_market_router
 from bot.handlers.home import router as home_router
 from bot.handlers.menu import router as menu_router
+from bot.handlers.sticker_duel import router as sticker_duel_router
 from bot.handlers.settings import router as settings_router
 from bot.handlers.combat import router as combat_router
 from bot.handlers.forge import router as forge_router
@@ -140,6 +141,7 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(clans_router)
     dp.include_router(stats_alloc_router)
     dp.include_router(menu_router)
+    dp.include_router(sticker_duel_router)
     dp.include_router(home_router)
     dp.include_router(black_market_router)
     dp.include_router(auction_router)

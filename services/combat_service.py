@@ -33,7 +33,7 @@ from config import settings
 from db.models.character import Character
 from db.models.inventory import InventoryItem
 from db.repository import character_repo, floor_progress_repo, inventory_repo, user_repo
-from game.characters.classes import get_class_or_none
+from game.archetypes import manager as arch_manager
 from game.characters.path_ranks import PATH_RANK_BY_KEY
 from game.characters.player_skills import battle_skills_tuple, ensure_skill_meta
 from game.characters.skills import passive_combat_modifiers_merged, skills_for_class
@@ -873,8 +873,7 @@ async def start_coliseum_combat(
     persist_combat_backup(character, combat_state)
     await session.flush()
 
-    cls = get_class_or_none(character.class_key)
-    class_ru = cls.name_ru if cls else character.class_key
+    class_ru = arch_manager.get_character_archetype(character).name_ru
     text = format_battle_view(combat_state, class_ru)
     text = _low_hp_entry_warning_html(character) + text
     kb = combat_main_keyboard(character)
@@ -1172,8 +1171,7 @@ async def start_combat(
     persist_combat_backup(character, combat_state)
     await session.flush()
 
-    cls = get_class_or_none(character.class_key)
-    class_ru = cls.name_ru if cls else character.class_key
+    class_ru = arch_manager.get_character_archetype(character).name_ru
     if combat_state.get("boss_intro_pending"):
         mname = html.escape(str(monster.get("name") or "Босс"))
         intro = (
@@ -1396,8 +1394,7 @@ async def start_tutorial_combat(
     persist_combat_backup(character, combat_state)
     await session.flush()
 
-    cls = get_class_or_none(character.class_key)
-    class_ru = cls.name_ru if cls else character.class_key
+    class_ru = arch_manager.get_character_archetype(character).name_ru
     text = format_battle_view(combat_state, class_ru)
     text = _low_hp_entry_warning_html(character) + text
     kb = combat_main_keyboard(character)
@@ -2846,8 +2843,7 @@ async def handle_combat_callback(
             combat_idle_service.cancel_combat_idle_timer(uid)
             return
         _rehydrate_skills_and_cooldowns(combat_state, character)
-        cls = get_class_or_none(character.class_key)
-        class_ru = cls.name_ru if cls else character.class_key
+        class_ru = arch_manager.get_character_archetype(character).name_ru
         await _handle_combat_callback_body(
             query=query,
             session=session,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, time
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -246,3 +246,60 @@ async def count_bag_items(session: AsyncSession, character_id: int) -> int:
         ),
     )
     return int(r.scalar_one() or 0)
+
+
+async def list_sticker_duel_leaderboard(
+    session: AsyncSession,
+    *,
+    limit: int = 10,
+) -> list[tuple[int, str, int | None, int, int, int, str | None]]:
+    """
+    ТОП стикер-дуэлянтов: id, display_name, game_id, rating, wins, losses, username.
+    """
+    stmt = (
+        select(
+            Character.id,
+            Character.display_name,
+            Character.game_id,
+            Character.sticker_duel_rating,
+            Character.sticker_duel_wins,
+            Character.sticker_duel_losses,
+            User.username,
+        )
+        .join(User, Character.user_id == User.id)
+        .where(User.is_banned.is_(False))
+        .order_by(
+            Character.sticker_duel_rating.desc(),
+            Character.sticker_duel_wins.desc(),
+            Character.id.asc(),
+        )
+        .limit(int(limit))
+    )
+    rows = (await session.execute(stmt)).all()
+    return [tuple(r) for r in rows]
+
+
+async def sticker_duel_rank_for_character(session: AsyncSession, character: Character) -> int:
+    """Место в рейтинге (1 = лучший)."""
+    r = int(character.sticker_duel_rating)
+    w = int(character.sticker_duel_wins)
+    cid = int(character.id)
+    stmt = (
+        select(func.count())
+        .select_from(Character)
+        .join(User, Character.user_id == User.id)
+        .where(
+            User.is_banned.is_(False),
+            or_(
+                Character.sticker_duel_rating > r,
+                and_(Character.sticker_duel_rating == r, Character.sticker_duel_wins > w),
+                and_(
+                    Character.sticker_duel_rating == r,
+                    Character.sticker_duel_wins == w,
+                    Character.id < cid,
+                ),
+            ),
+        )
+    )
+    n = int((await session.execute(stmt)).scalar_one() or 0)
+    return n + 1

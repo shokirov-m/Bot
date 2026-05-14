@@ -301,63 +301,52 @@ def _fmt_def_bonus(v: float) -> str:
 
 
 def format_pet_passive_plain(passive: dict[str, float | int], *, locale: str) -> str:
-    """Краткое описание пассивки питомца (RU/EN) для UI."""
-    loc = "en" if str(locale).lower().startswith("en") else "ru"
+    """Краткое описание пассивки питомца для UI."""
+    _ = locale
     parts: list[str] = []
     if "def_bonus" in passive:
         v = float(passive["def_bonus"])
         vs = _fmt_def_bonus(v)
-        parts.append(
-            f"+{vs} {'defense in combat' if loc == 'en' else 'к защите в бою'}",
-        )
+        parts.append(f"+{vs} к защите в бою")
     if "crit_bonus" in passive:
         p = round(float(passive["crit_bonus"]) * 100.0, 1)
-        parts.append(
-            f"+{p}% {'crit chance' if loc == 'en' else 'к шансу крита'}",
-        )
+        parts.append(f"+{p}% к шансу крита")
     if "dodge_bonus" in passive:
         p = round(float(passive["dodge_bonus"]) * 100.0, 1)
-        parts.append(
-            f"+{p}% {'dodge' if loc == 'en' else 'к уклонению'}",
-        )
+        parts.append(f"+{p}% к уклонению")
     if "mp_regen_turn" in passive:
         v = int(passive["mp_regen_turn"])
-        parts.append(
-            f"+{v} MP/{'turn' if loc == 'en' else 'ход'}",
-        )
+        parts.append(f"+{v} маны/ход")
     if "mag_bonus_percent" in passive:
         v = int(passive["mag_bonus_percent"])
-        parts.append(
-            f"+{v}% {'magic skills' if loc == 'en' else 'к маг. навыкам'}",
-        )
-    sep = " · " if loc == "en" else " · "
-    return sep.join(parts)
+        parts.append(f"+{v}% к маг. навыкам")
+    return " · ".join(parts)
 
 
 def format_pet_passive_status_compact(passive: dict[str, float | int], *, locale: str) -> str:
     """Одна строка для статуса: «+4% крит, +2 защита»."""
+    _ = locale
     if not passive:
         return ""
-    loc = "en" if str(locale).lower().startswith("en") else "ru"
     parts: list[str] = []
     if "crit_bonus" in passive:
         p = round(float(passive["crit_bonus"]) * 100.0, 1)
         ps = str(int(p)) if abs(p - int(p)) < 1e-9 else str(p)
-        parts.append(f"+{ps}% crit" if loc == "en" else f"+{ps}% крит")
+        parts.append(f"+{ps}% крит")
     if "dodge_bonus" in passive:
         p = round(float(passive["dodge_bonus"]) * 100.0, 1)
         ps = str(int(p)) if abs(p - int(p)) < 1e-9 else str(p)
-        parts.append(f"+{ps}% dodge" if loc == "en" else f"+{ps}% уклон")
+        parts.append(f"+{ps}% уклон")
     if "def_bonus" in passive:
         v = float(passive["def_bonus"])
         vs = _fmt_def_bonus(v)
-        parts.append(f"+{vs} defense" if loc == "en" else f"+{vs} защита")
+        parts.append(f"+{vs} защита")
     if "mp_regen_turn" in passive:
         v = int(passive["mp_regen_turn"])
-        parts.append(f"+{v} MP/turn" if loc == "en" else f"+{v} MP/ход")
+        parts.append(f"+{v} маны/ход")
     if "mag_bonus_percent" in passive:
         v = int(passive["mag_bonus_percent"])
-        parts.append(f"+{v}% magic" if loc == "en" else f"+{v}% маг.")
+        parts.append(f"+{v}% маг.")
     return ", ".join(parts)
 
 
@@ -365,22 +354,16 @@ def format_pet_profile_block_html(character: Character, *, locale: str, compact_
     """
     Блок для статуса / полных характеристик: что дают питомцы и как выбрать активного.
     """
-    loc = "en" if str(locale).lower().startswith("en") else "ru"
+    _ = locale
     own = owned_keys(character)
     if not own:
-        if loc == "en":
-            return (
-                "🐾 <b>Pets</b> — <i>first from the <b>Summoning Temple</b> (floor 3 market) or promos. "
-                "Each has a <b>passive</b> in combat; only <b>one</b> is active. "
-                "Pick in <b>Status</b> (Pet) or on <b>floors 8 and 48</b> when you have more than one.</i>"
-            )
         return (
             "🐾 <b>Питомцы</b> — <i>первого даёт <b>храм призыва</b> на рынке 3-го этажа или промо. "
             "Пассив в бою — один активный. Смена: <b>«Питомец»</b> в статусе или этажи <b>8 и 48</b> (при нескольких питомцах).</i>"
         )
     disp = active_pet_display(character) or "—"
     if compact_status_line:
-        label = "Pet" if loc == "en" else "Питомец"
+        label = "Питомец"
         extras = format_pet_passive_status_compact(pet_passive_delta(character), locale=locale)
         esc_d = html.escape(disp)
         if extras:
@@ -391,15 +374,6 @@ def format_pet_profile_block_html(character: Character, *, locale: str, compact_
     blur = html.escape(d.blurb) if d else ""
     passive = format_pet_passive_plain(pet_passive_delta(character), locale=locale)
     passive_html = html.escape(passive) if passive else ""
-    if loc == "en":
-        switch = "<i>Switch active pet: the <b>Pet</b> button in Status.</i>"
-        body = (
-            f"🐾 Active in combat: {html.escape(disp)}"
-            + (f"\n<i>{blur}</i>" if blur else "")
-            + (f"\nPassive: {passive_html}" if passive_html else "")
-            + f"\n{switch}"
-        )
-        return body
     switch_ru = "<i>Сменить активного: кнопка «Питомец» в статусе.</i>"
     return (
         f"🐾 В бою сейчас: {html.escape(disp)}"
@@ -414,60 +388,52 @@ def format_pet_combat_highlight_line_html(character: Character, *, locale: str) 
     Короткая строка «Питомец: +N% …» для экрана боя (видно без раскрытия пассива).
     Приоритет: маг. %, затем крит/уклонение как проценты.
     """
+    _ = locale
     d = pet_passive_delta(character)
     if not d:
         return ""
-    loc = "en" if str(locale).lower().startswith("en") else "ru"
     mag = int(d.get("mag_bonus_percent") or 0)
     if mag > 0:
-        if loc == "en":
-            return f"🐾 <b>Pet:</b> +{mag}% magic skill damage."
         return f"🐾 <b>Питомец:</b> +{mag}% к урону маг. навыков."
     if "crit_bonus" in d:
         p = round(float(d["crit_bonus"]) * 100.0, 1)
         if p > 0:
-            if loc == "en":
-                return f"🐾 <b>Pet:</b> +{p}% crit chance."
             return f"🐾 <b>Питомец:</b> +{p}% к шансу крита."
     if "dodge_bonus" in d:
         p = round(float(d["dodge_bonus"]) * 100.0, 1)
         if p > 0:
-            if loc == "en":
-                return f"🐾 <b>Pet:</b> +{p}% dodge."
             return f"🐾 <b>Питомец:</b> +{p}% к уклонению."
     if "def_bonus" in d:
         v = float(d["def_bonus"])
         vs = _fmt_def_bonus(v)
-        if loc == "en":
-            return f"🐾 <b>Pet:</b> +{vs} defense in combat."
         return f"🐾 <b>Питомец:</b> +{vs} к защите в бою."
     return ""
 
 
 def format_pet_passive_battle_parens(passive: dict[str, float | int], *, locale: str) -> str:
     """Кратко для строки боя: «Защита +2, Крит +4%» (без HTML)."""
+    _ = locale
     if not passive:
         return ""
-    loc = "en" if str(locale).lower().startswith("en") else "ru"
     parts: list[str] = []
     if "def_bonus" in passive:
         v = float(passive["def_bonus"])
         vs = _fmt_def_bonus(v)
-        parts.append(f"Defense +{vs}" if loc == "en" else f"Защита +{vs}")
+        parts.append(f"Защита +{vs}")
     if "crit_bonus" in passive:
         p = round(float(passive["crit_bonus"]) * 100.0, 1)
         ps = str(int(p)) if abs(p - int(p)) < 1e-9 else str(p)
-        parts.append(f"Crit +{ps}%" if loc == "en" else f"Крит +{ps}%")
+        parts.append(f"Крит +{ps}%")
     if "dodge_bonus" in passive:
         p = round(float(passive["dodge_bonus"]) * 100.0, 1)
         ps = str(int(p)) if abs(p - int(p)) < 1e-9 else str(p)
-        parts.append(f"Dodge +{ps}%" if loc == "en" else f"Уклон +{ps}%")
+        parts.append(f"Уклон +{ps}%")
     if "mp_regen_turn" in passive:
         v = int(passive["mp_regen_turn"])
-        parts.append(f"MP +{v}/turn" if loc == "en" else f"MP +{v}/ход")
+        parts.append(f"Мана +{v}/ход")
     if "mag_bonus_percent" in passive:
         v = int(passive["mag_bonus_percent"])
-        parts.append(f"Magic +{v}%" if loc == "en" else f"Маг. +{v}%")
+        parts.append(f"Маг. +{v}%")
     return ", ".join(parts)
 
 
@@ -485,13 +451,13 @@ def format_pet_battle_line_html(character: Character, *, locale: str) -> str:
 
 def pet_choice_button_caption(key: str, *, locale: str, is_active: bool) -> str:
     """Подпись кнопки выбора питомца (лимит длины для Telegram)."""
+    _ = locale
     d = _all_defs().get(key)
     if d is None:
         return str(key)[:64]
-    loc = "en" if str(locale).lower().startswith("en") else "ru"
     label = f"{d.emoji} {d.name_ru}"
     if is_active:
-        label += " ✓" if loc == "ru" else " ✓"
+        label += " ✓"
     return label[:64]
 
 
@@ -499,7 +465,7 @@ def build_pet_picker_html(character: Character, *, locale: str) -> str:
     """Экран выбора: все открытые питомцы и пассивки."""
     from utils.ui import LINE_SEP
 
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     own = owned_keys(character)
     act = active_pet_key(character)
     lines: list[str] = [
@@ -529,13 +495,7 @@ def build_pet_picker_html(character: Character, *, locale: str) -> str:
 
 def format_city_hub_pets_hint_html(*, locale: str) -> str:
     """Абзац для экрана города про питомцев (без платного призыва)."""
-    loc = "en" if str(locale).lower().startswith("en") else "ru"
-    if loc == "en":
-        return (
-            "🐾 <b>Pets:</b> your first comes from the <b>Summoning Temple</b> on the <b>market</b> (floor 3, one free ritual). "
-            "Each pet adds a <b>passive</b> in combat — <b>only one</b> is active; "
-            "switch the active pet in <b>Status</b> (Pet button)."
-        )
+    _ = locale
     return (
         "🐾 <b>Питомцы:</b> первого даёт <b>храм призыва</b> на <b>рынке</b> 3-го этажа (один бесплатный ритуал). "
         "Пассив в бою — у каждого свой, активен <b>один</b>; смена — в <b>«Статус»</b> (кнопка «Питомец»)."

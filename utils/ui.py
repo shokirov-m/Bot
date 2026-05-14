@@ -164,7 +164,7 @@ def format_inventory_item_html(
     name = html.escape(str(data.get("name", "Предмет")))
     r = str(data.get("rarity") or "common").lower()
     em = RARITY_EMOJI.get(r, "⚪")
-    ru = RARITY_NAME_RU.get(r, html.escape(r))
+    ru = RARITY_NAME_RU.get(r) or f"редкость: {html.escape(r)}"
     gi = gear_icon_for_item_data(data)
     lines.append(f"{em} {gi} <b>{name}</b> · <i>{html.escape(ru)}</i>")
     kind = data.get("kind")

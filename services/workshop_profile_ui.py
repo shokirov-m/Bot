@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 
 from db.models.character import Character
+from game.archetypes import manager as arch_manager
 from game.crafting.recipes_data import (
     PROF_ALCHEMIST,
     PROF_BLACKSMITH,
@@ -25,7 +26,8 @@ _PROF_RU: dict[str, str] = {
 
 def workshop_compact_line(character: Character) -> str:
     """Одна строка для компактного статуса: класс уже есть — добавляем ремесло."""
-    arch = character.class_key or "—"
+    a = arch_manager.get_character_archetype(character)
+    class_disp = f"{a.emoji} {a.name_ru}"
     ws = get_workshop_state(character)
     show = str(ws.get("status_profession") or PROF_BLACKSMITH).lower()
     if show not in _PROF_RU:
@@ -41,7 +43,7 @@ def workshop_compact_line(character: Character) -> str:
         spec_s = f" · спец.: {_PROF_RU[spec]}"
     return (
         f"🔧 Ремесло: <b>{html.escape(lab)}</b> ур.{pl}"
-        f"{html.escape(spec_s)} · класс: <code>{html.escape(str(arch))}</code>"
+        f"{html.escape(spec_s)} · класс: <b>{html.escape(class_disp)}</b>"
     )
 
 

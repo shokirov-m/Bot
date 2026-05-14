@@ -121,8 +121,36 @@ class Settings(BaseSettings):
         ),
     )
 
-
-# Единый экземпляр настроек для импорта из main и сервисов
+    STICKER_GACHA_GOLD_PULL: int = Field(
+        default=100,
+        ge=0,
+        description="Золото за дополнительную крутку стикер-гачи (после бесплатных)",
+    )
+    STICKER_GACHA_STARS_PULL: int = Field(
+        default=0,
+        ge=0,
+        description="Telegram Stars за крутку (0 — кнопка и инвойс отключены)",
+    )
+    STICKER_SEND_AFTER_PULL: bool = Field(
+        default=True,
+        description="Если в каталоге задан telegram_file_id — отправлять sendSticker после дропа",
+    )
+    STICKER_PACK_TELEGRAM_NAME: str = Field(
+        default="BashnyaIspytanij",
+        description="Имя набора без @ для ссылки t.me/addstickers/… (например BashnyaIspytanij)",
+    )
+    STICKER_MIRROR_TO_GACHA_CHAT: bool = Field(
+        default=True,
+        description=(
+            "Дублировать крутки стикер-гачи и итог стикер-дуэли в GACHA_BROADCAST_CHAT "
+            "(и GACHA_BROADCAST_MESSAGE_THREAD_ID), плюс доп. группы из payload — как объявления гачи 6★"
+        ),
+    )
+    STICKER_DUEL_CHALLENGE_TTL_SEC: int = Field(
+        default=600,
+        ge=60,
+        description="Время жизни кода вызова на дуэль, секунды",
+    )
 settings = Settings()
 
 

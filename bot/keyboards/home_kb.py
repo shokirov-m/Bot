@@ -13,7 +13,7 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
     from services import home_service
     from services.rest_service import apply_completed_rest_if_needed, rest_seconds_left
 
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     apply_completed_rest_if_needed(character)
     sec = rest_seconds_left(character)
     rest_txt = t(loc, "profile_rest_btn_wait", sec=sec) if sec > 0 else t(loc, "profile_rest_btn_start")

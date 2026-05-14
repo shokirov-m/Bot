@@ -93,6 +93,35 @@ def _rune_added_damage_log_line(elem_scaled: int, flat_el: int) -> str | None:
     return f"✳ Руны добавили +{tot} урона (стихийный бонус +{elem_scaled}, плоский +{flat_el})."
 
 
+def _maybe_log_rune_element_hidden_by_armor(
+    state: dict[str, Any],
+    logs: list[str],
+    *,
+    elem_bonus_pct: int,
+    scaled_elem: int,
+    flat_el: int,
+) -> None:
+    """
+    Если стихийный бонус есть, а строка «✳ Руны добавили…» не вывелась — пояснить один раз за бой.
+    Причины: (1) после брони дельта «с элементом / без» = 0; (2) дельта есть, но доля в финальном
+    ударе округлилась до 0 и плоского урона рун нет в этом билде.
+    """
+    if state.get("rune_elem_armor_floored_tip"):
+        return
+    if scaled_elem > 0 or flat_el > 0:
+        return
+    rb = int(state.get("weapon_rune_bonus_pct", 0))
+    if elem_bonus_pct <= 0 and rb <= 0:
+        return
+    state["rune_elem_armor_floored_tip"] = True
+    logs.append(
+        "💡 <b>Вклад стихии/рун в этом ударе не показан отдельной строкой</b>: чаще всего "
+        "из‑за <b>очень высокой брони</b> разница «с элементом / без» после вычитания брони "
+        "схлопывается, либо доля в финальном ударе слишком мала и округляется до нуля. "
+        "Проценты рун при этом уже могли заложиться в базу удара."
+    )
+
+
 def combo_break_on_player_hurt(state: dict[str, Any]) -> None:
     """Сброс серии комбо при любом потере HP игроком (не считая добровольные эффекты)."""
     state["combo_streak"] = 0
@@ -539,6 +568,14 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     rline = _rune_added_damage_log_line(scaled_elem, flat_el)
     if rline:
         logs.append(rline)
+    else:
+        _maybe_log_rune_element_hidden_by_armor(
+            state,
+            logs,
+            elem_bonus_pct=elem_bonus,
+            scaled_elem=scaled_elem,
+            flat_el=flat_el,
+        )
 
     # Проклятие (снижает урон игрока)
     pdm = float(state.get("player_damage_mult", 1.0))
@@ -710,9 +747,11 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
 
     mdef = monster_armor_value(state)
 
+    elem_for_tip = 0
     elem_skill = 0
     if sk.kind == "mag":
         mag_elem = combined_player_elemental_damage_percent(state, magic_skill=True)
+        elem_for_tip = mag_elem
         _log_weapon_rune_elemental_once(state, mag_elem, logs)
         base = formulas.magical_damage(
             int(st["int"]),
@@ -724,6 +763,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         base = int(base * formulas.int_skill_mag_extra_scale(int(st["int"])))
     else:
         rb = combined_player_elemental_damage_percent(state, magic_skill=False)
+        elem_for_tip = rb
         _log_weapon_rune_elemental_once(state, rb, logs)
         d_yes, d_ne, _ = formulas.physical_damage_split(
             int(st["str"]),
@@ -773,6 +813,14 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     rline = _rune_added_damage_log_line(scaled_elem, flat_el)
     if rline:
         logs.append(rline)
+    else:
+        _maybe_log_rune_element_hidden_by_armor(
+            state,
+            logs,
+            elem_bonus_pct=elem_for_tip,
+            scaled_elem=scaled_elem,
+            flat_el=flat_el,
+        )
     logs.extend(_rune_status_proc_logs(state))
 
     if sk.effect_key == "burn" and sk.effect_chance > 0 and effects.roll_chance(sk.effect_chance):

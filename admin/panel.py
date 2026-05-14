@@ -10,6 +10,8 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from game.archetypes import manager as arch_manager
+
 
 def format_dashboard_html(stats: dict[str, Any]) -> str:
     top_u = stats.get("top_username")
@@ -98,6 +100,9 @@ def format_admin_player_snapshot_html(
     eq_block = "\n".join(equipped_lines) if equipped_lines else "<i>Ничего не надето.</i>"
     pts = int(unspent_stat_points)
     pts_line = f" · своб. очки стата: <b>{pts}</b> <i>(/stats)</i>"
+    ck = str(class_key or "").strip().lower() or "wanderer"
+    arch = arch_manager.get_archetype(ck) or arch_manager.get_archetype("wanderer")
+    class_disp = html.escape(f"{arch.emoji} {arch.name_ru}")
     activity_block = (
         f"Аккаунт с: <b>{html.escape(account_created_at_utc)}</b> · герой с: <b>{html.escape(hero_created_at_utc)}</b>\n"
         f"Время в игре (оценка): <b>{html.escape(estimated_playtime_ru)}</b>\n"
@@ -121,7 +126,7 @@ def format_admin_player_snapshot_html(
     return (
         f"👤 <b>{html.escape(display_name)}</b>\n"
         f"TG <code>{telegram_id}</code> {un}\n"
-        f"{ban} · ур. <b>{level}</b> · этаж <b>{floor_number}</b> · класс <code>{html.escape(class_key)}</code>{pts_line}\n"
+        f"{ban} · ур. <b>{level}</b> · этаж <b>{floor_number}</b> · класс <b>{class_disp}</b> <code>{html.escape(ck)}</code>{pts_line}\n"
         f"HP <b>{hp_current}</b>/<b>{hp_max}</b> · MP <b>{mp_current}</b>/<b>{mp_max}</b> · 💰 <b>{gold}</b>\n\n"
         f"{extra}"
         f"{activity_block}"

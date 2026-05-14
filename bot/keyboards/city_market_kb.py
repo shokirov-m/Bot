@@ -125,7 +125,7 @@ def profile_passive_pick_keyboard(passives: list[PassiveV2]) -> InlineKeyboardMa
 def profile_skills_main_keyboard(*, locale: str) -> InlineKeyboardMarkup:
     from bot.i18n import t
 
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [

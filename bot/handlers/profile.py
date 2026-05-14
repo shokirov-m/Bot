@@ -10,13 +10,13 @@ from datetime import UTC, datetime
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.i18n import get_locale, set_locale, t
+from bot.i18n import get_locale, t
 from config import settings
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo, user_repo
@@ -98,7 +98,7 @@ def clamp_profile_caption_for_photo(html: str, max_len: int = 1000) -> str:
 
 def build_skills_screen_html(char: Character, *, locale: str) -> str:
     """Экран экипировки трёх боевых навыков + слот пассивки."""
-    loc = locale if locale in ("ru", "en") else "ru"
+    loc = "ru"
     ensure_skill_meta(char)
     slots = equipped_skill_key_slots(char)
     lines = [
@@ -179,6 +179,15 @@ async def _weapon_attack_value(session: AsyncSession, char: Character) -> int:
     return await character_service.equipped_weapon_attack_value(session, char)
 
 
+def _sticker_profile_block(char: Character) -> str:
+    try:
+        from services import sticker_duel_service
+
+        return sticker_duel_service.profile_sticker_lines_html(char)
+    except Exception:
+        return ""
+
+
 def _fmt_stat_plain(base: int, extra: int) -> str:
     b = int(base)
     e = int(extra)
@@ -205,13 +214,9 @@ def _build_profile_text(
     stat_derivatives_block: str = "",
     skill_tree_passives_block: str = "",
 ) -> str:
-    ck = str(char.class_key or "wanderer").lower().strip()
-    arch = arch_manager.get_archetype(ck)
-    if arch:
-        class_title = f"{arch.emoji} {html.escape(arch.name_ru)}"
-    else:
-        class_title = html.escape(ck)
-    loc = locale if locale in ("ru", "en") else "ru"
+    arch = arch_manager.get_character_archetype(char)
+    class_title = f"{arch.emoji} {html.escape(arch.name_ru)}"
+    loc = "ru"
     rank_raw = path_rank_name_ru(char)
     rank_s = html.escape(rank_raw) if rank_raw else "—"
     rank_lore_raw = path_rank_lore(char) if rank_raw else None
@@ -295,6 +300,7 @@ def _build_profile_text(
                 f"💰 Золото: {format_number(int(char.gold))}",
                 "",
                 fame_service.format_fame_html(char),
+                _sticker_profile_block(char),
                 LINE_SEP,
                 render_hp_bar(char.hp_current, char.hp_max, wrap_bar_in_code=False),
                 "",
@@ -385,6 +391,7 @@ def _build_profile_text(
             LINE_SEP,
             f"💰 Золото: {format_number(int(char.gold))}",
             f"⚗️ Рунные камни: {format_number(char.rune_stones)}",
+            _sticker_profile_block(char),
             LINE_SEP,
             f"📜 Класс: {class_title}",
         ]
@@ -1558,33 +1565,3 @@ async def on_profile_pet_menu(callback: CallbackQuery, session: AsyncSession, st
     except Exception:
         logger.exception("prf:pet")
         await callback.answer("Ошибка.", show_alert=True)
-
-
-@router.message(Command("lang"))
-async def cmd_lang(message: Message, session: AsyncSession, command: CommandObject) -> None:
-    """Переключение языка меню: ru | en."""
-    try:
-        if message.from_user is None:
-            return
-        arg = (command.args or "").strip().lower()
-        if arg not in ("ru", "en"):
-            await message.answer(t("ru", "lang_usage"), parse_mode=ParseMode.HTML)
-            return
-        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
-        if user is None or user.is_banned:
-            await message.answer("Нет доступа.")
-            return
-        char = await character_repo.get_by_user_id(session, user.id)
-        if char is None:
-            await message.answer("Сначала /start.")
-            return
-        set_locale(char, arg)
-        await session.commit()
-        await message.answer(
-            t(arg, "lang_set", lang=arg.upper()),
-            parse_mode=ParseMode.HTML,
-            reply_markup=main_menu_keyboard(locale=arg, character=char),
-        )
-    except Exception:
-        logger.exception("cmd_lang")
-        await message.answer("Ошибка.")

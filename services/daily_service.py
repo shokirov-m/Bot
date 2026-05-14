@@ -63,6 +63,7 @@ def record_kill(character: Character) -> None:
 
 def format_daily_box_html(character: Character, *, locale: str, subscribed: bool) -> str:
     """Текст блока ежедневки (HTML)."""
+    _ = locale
     today = _utc_today_iso()
     _, st = _load_state(character)
     kc = st["kc"] if st["kd"] == today else 0
@@ -70,61 +71,32 @@ def format_daily_box_html(character: Character, *, locale: str, subscribed: bool
     streak = int(st["streak"])
     battles_ok = kc >= KILLS_GOAL
     sub_ok = subscribed
-    if str(locale).lower().startswith("en"):
-        battle_suffix = " ✅" if battles_ok else ""
-        bline = f"⚔️ Battles: [ {kc} / {KILLS_GOAL} ]{battle_suffix}"
-        ch_lbl = "Subscribed" if sub_ok else "Not subscribed"
-        ch_suffix = " ✅" if sub_ok else " ❌"
-        ch_line = f"📢 Channel: [ {ch_lbl} ]{ch_suffix}"
-        if claimed:
-            rew = "Claimed ✅"
-        elif battles_ok and sub_ok:
-            rew = "Ready — tap Claim"
-        elif not battles_ok:
-            rew = "In progress"
-        else:
-            rew = "Need channel sub"
-        streak_lbl = f"{streak} day(s)"
-        upd = "⏳ Resets at 00:00 UTC"
-        lines = [
-            "<b>📅 DAILY</b>",
-            "",
-            "Goals:",
-            bline,
-            ch_line,
-            "",
-            "Status:",
-            f"🔥 Win streak: {streak_lbl}",
-            f"🎁 Reward: {rew}",
-            upd,
-        ]
+    battle_suffix = " ✅" if battles_ok else ""
+    bline = f"⚔️ Бои: [ {kc} / {KILLS_GOAL} ]{battle_suffix}"
+    ch_lbl = "Подписан" if sub_ok else "Не подписан"
+    ch_suffix = " ✅" if sub_ok else " ❌"
+    ch_line = f"📢 Канал: [ {ch_lbl} ]{ch_suffix}"
+    if claimed:
+        rew = "Получена ✅"
+    elif battles_ok and sub_ok:
+        rew = "Можно забрать"
+    elif not battles_ok:
+        rew = "В процессе"
     else:
-        battle_suffix = " ✅" if battles_ok else ""
-        bline = f"⚔️ Бои: [ {kc} / {KILLS_GOAL} ]{battle_suffix}"
-        ch_lbl = "Подписан" if sub_ok else "Не подписан"
-        ch_suffix = " ✅" if sub_ok else " ❌"
-        ch_line = f"📢 Канал: [ {ch_lbl} ]{ch_suffix}"
-        if claimed:
-            rew = "Получена ✅"
-        elif battles_ok and sub_ok:
-            rew = "Можно забрать"
-        elif not battles_ok:
-            rew = "В процессе"
-        else:
-            rew = "Нужна подписка"
-        streak_lbl = f"{streak} дн."
-        lines = [
-            "<b>📅 ЕЖЕДНЕВКА</b>",
-            "",
-            "Цели:",
-            bline,
-            ch_line,
-            "",
-            "Статус:",
-            f"🔥 Серия побед: {streak_lbl}",
-            f"🎁 Награда: {rew}",
-            "⏳ Обновление в 00:00 UTC",
-        ]
+        rew = "Нужна подписка"
+    streak_lbl = f"{streak} дн."
+    lines = [
+        "<b>📅 ЕЖЕДНЕВКА</b>",
+        "",
+        "Цели:",
+        bline,
+        ch_line,
+        "",
+        "Статус:",
+        f"🔥 Серия побед: {streak_lbl}",
+        f"🎁 Награда: {rew}",
+        "⏳ Обновление в 00:00 UTC",
+    ]
     return "\n".join(lines)
 
 

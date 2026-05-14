@@ -21,6 +21,7 @@ from bot.keyboards.auction_kb import auction_portraits_keyboard, auction_portrai
 from bot.keyboards.shop_kb import shop_main_keyboard, shop_vip_keyboard
 from bot.utils.game_art import menu_auction_photo_path, menu_shop_photo_path, menu_shop_vip_photo_path
 from bot.utils.game_ui import push_game_ui
+from config import settings
 from db.repository import character_repo, user_repo
 from game.economy import shop as shop_data
 from services import shop_service
@@ -286,8 +287,28 @@ async def pre_checkout_handler(pre_checkout_query: PreCheckoutQuery) -> None:
         # Проверяем формат полезной нагрузки: portrait:<key>:<user_id>
         if payload.startswith("portrait:") or payload.startswith("vipbonus:"):
             await pre_checkout_query.answer(ok=True)
-        else:
-            await pre_checkout_query.answer(ok=False, error_message="Неизвестный товар.")
+            return
+        if payload.startswith("stickerspin:"):
+            parts = payload.split(":")
+            if len(parts) < 2 or not parts[1].isdigit():
+                await pre_checkout_query.answer(ok=False, error_message="Некорректный счёт.")
+                return
+            if int(parts[1]) != pre_checkout_query.from_user.id:
+                await pre_checkout_query.answer(ok=False, error_message="Несовпадение пользователя.")
+                return
+            exp = int(getattr(settings, "STICKER_GACHA_STARS_PULL", 0) or 0)
+            if exp <= 0:
+                await pre_checkout_query.answer(ok=False, error_message="Товар недоступен.")
+                return
+            if (
+                pre_checkout_query.currency != "XTR"
+                or int(pre_checkout_query.total_amount) != exp
+            ):
+                await pre_checkout_query.answer(ok=False, error_message="Неверная сумма.")
+                return
+            await pre_checkout_query.answer(ok=True)
+            return
+        await pre_checkout_query.answer(ok=False, error_message="Неизвестный товар.")
     except Exception:
         logger.exception("pre_checkout")
         await pre_checkout_query.answer(ok=False, error_message="Ошибка на сервере.")
@@ -380,6 +401,61 @@ async def successful_payment_handler(message: Message, session: AsyncSession) ->
                     )
                 except Exception:
                     logger.warning("Stars refund failed for already-owned vip bonus")
+            return
+
+        if payload.startswith("stickerspin:"):
+            parts = payload.split(":")
+            if len(parts) < 2 or not parts[1].isdigit():
+                return
+            expected_uid = int(parts[1])
+            if message.from_user.id != expected_uid:
+                await message.answer("⚠️ Ошибка: несоответствие пользователя.")
+                return
+            exp = int(getattr(settings, "STICKER_GACHA_STARS_PULL", 0) or 0)
+            if exp <= 0 or stars != exp or currency != "XTR":
+                await message.answer("⚠️ Неверная сумма или валюта.")
+                return
+            char = await _load_char(session, message.from_user.id)
+            if char is None:
+                await message.answer("⚠️ Персонаж не найден.")
+                try:
+                    await message.bot.refund_star_payment(
+                        user_id=message.from_user.id,
+                        telegram_payment_charge_id=message.successful_payment.telegram_payment_charge_id,
+                    )
+                except Exception:
+                    logger.warning("Stars refund failed stickerspin no char")
+                return
+            await character_repo.lock_character_row(session, char.id)
+            from services import sticker_duel_service
+
+            ok, result_msg, sid = sticker_duel_service.apply_sticker_gacha_paid_spin_slot_only(char)
+            await session.commit()
+            if not ok:
+                await message.answer(
+                    f"ℹ️ {result_msg}\n<i>Telegram вернёт {stars} ⭐ на счёт.</i>",
+                    parse_mode=ParseMode.HTML,
+                )
+                try:
+                    await message.bot.refund_star_payment(
+                        user_id=message.from_user.id,
+                        telegram_payment_charge_id=message.successful_payment.telegram_payment_charge_id,
+                    )
+                except Exception:
+                    logger.warning("Stars refund failed stickerspin spin fail")
+                return
+            await message.answer(
+                f"✅ Оплата прошла! −{stars} ⭐\n{result_msg}",
+                parse_mode=ParseMode.HTML,
+            )
+            await sticker_duel_service.send_sticker_effect_if_configured(message.bot, message.chat.id, sid)
+            await sticker_duel_service.mirror_sticker_spin_to_gacha_chat(
+                message.bot,
+                session,
+                char,
+                msg_html=result_msg,
+                sticker_id=sid,
+            )
             return
     except Exception:
         logger.exception("successful_payment")
