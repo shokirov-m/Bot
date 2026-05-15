@@ -5,7 +5,7 @@ Skill Tree Definitions for Archetypes 2.0.
 from __future__ import annotations
 from game.archetypes.models import SkillTreeNode
 
-TREES: dict[str, dict[str, SkillTreeNode]] = {
+_BUILTIN_TREES: dict[str, dict[str, SkillTreeNode]] = {
     "warrior": {
         # --- Guardian Branch ---
         "war_g1": SkillTreeNode(
@@ -303,3 +303,23 @@ TREES: dict[str, dict[str, SkillTreeNode]] = {
         ),
     },
 }
+
+
+def _load_trees() -> dict[str, dict[str, SkillTreeNode]]:
+    merged = dict(_BUILTIN_TREES)
+    try:
+        from game.data.catalogs.archetypes_catalog import catalog_trees
+
+        cat = catalog_trees()
+        if cat:
+            for arch, nodes in cat.items():
+                base = dict(merged.get(arch, {}))
+                base.update(nodes)
+                merged[arch] = base
+    except Exception:
+        pass
+    return merged
+
+
+# JSON-каталог перекрывает узлы Python при совпадении ключей архетипа/узла.
+TREES: dict[str, dict[str, SkillTreeNode]] = _load_trees()

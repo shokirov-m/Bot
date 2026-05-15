@@ -65,7 +65,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_sticker_btn": "🎴 Карточная арена",
         "sticker_arena_title": "🎴 <b>Карточная арена</b>",
         "sticker_arena_subtitle": (
-            "<i>Карты монстров этажей 1–20: коллекция, дуэли по стихиям, атака и защита; крутка раз в 12 ч.</i>"
+            "<i>Карты этажей 1–20: коллекция и дуэли. Крутка гачи и превью карты (/towercard или кнопка) "
+            "делят один перерыв <b>12 ч</b> (в альбом попадает только крутка).</i>"
         ),
         "sticker_arena_free_left": "Бесплатных круток сегодня осталось: <b>{n}</b>.",
         "sticker_arena_paid_left": "Платных круток сегодня осталось: <b>{n}</b> (по {gold} 💰).",
@@ -79,6 +80,16 @@ STRINGS: dict[str, dict[str, str]] = {
         "sticker_kb_duel": "⚔️ Вызвать на дуэль",
         "sticker_kb_back_loc": "⬅ В локации",
         "sticker_kb_cancel": "⬅ Отмена",
+        "sticker_kb_preview": "🎴 Превью карты",
+        "sticker_kb_preview_info": "ⓘ Про превью",
+        "sticker_preview_rules_alert": (
+        "Превью не добавляет карту в альбом. С круткой гачи общий перерыв 12 ч. "
+        "Полная карточка уходит в канал объявлений гачи (как крутка), если он настроен."
+        ),
+        "sticker_tc_ok": "Превью отправлено.",
+        "sticker_tc_blocked": "См. сообщение в чате.",
+        "sticker_tc_sent_broadcast": "<i>Полная карточка отправлена в чат объявлений гачи (как при крутке).</i>",
+        "sticker_tc_sent_here": "<i>Чат GACHA_BROADCAST не настроен или зеркало выключено — карточка показана здесь.</i>",
         "sticker_unlock_alert": "Откроется с {level} ур.",
         "sticker_duel_start_prompt": (
             "⚔️ <b>Дуэль</b>\nВыбери карту, затем укажи соперника: "

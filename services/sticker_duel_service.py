@@ -31,6 +31,9 @@ from services import vip_shop_bonus_service
 
 META_KEY = "tower_cards_v1"
 SPIN_COOLDOWN = timedelta(hours=12)
+# Общий таймер: крутка гачи + превью /towercard (и синхронизированный старый ключ last_spin_utc).
+LAST_CARD_REVEAL_UTC_KEY = "last_card_reveal_utc"
+LAST_CARD_REVEAL_LEGACY_KEY = "last_spin_utc"
 MAX_PAID_SPINS_PER_DAY = 20
 MAX_DUELS_PER_DAY = 40
 DUEL_WIN_GOLD = 25
@@ -121,10 +124,10 @@ def can_buy_paid_spin_gold(character: Character) -> bool:
     return int(character.gold) >= int(settings.STICKER_GACHA_GOLD_PULL)
 
 
-def spin_seconds_until_available(character: Character) -> int:
-    """Сколько секунд ждать до следующей крутки гачи; 0 — можно крутить."""
+def card_reveal_seconds_until_available(character: Character) -> int:
+    """Секунды до следующего раскрытия карты: крутка гачи ИЛИ превью /towercard; 0 — можно."""
     st = sticker_pack_slot(character)
-    raw = st.get("last_spin_utc")
+    raw = st.get(LAST_CARD_REVEAL_UTC_KEY) or st.get(LAST_CARD_REVEAL_LEGACY_KEY)
     if not raw:
         return 0
     try:
@@ -139,6 +142,35 @@ def spin_seconds_until_available(character: Character) -> int:
     return max(0, sec)
 
 
+def spin_seconds_until_available(character: Character) -> int:
+    """Совместимость: то же, что card_reveal_seconds_until_available."""
+    return card_reveal_seconds_until_available(character)
+
+
+def card_reveal_cooldown_notice_html(seconds: int) -> str:
+    w = tc.format_wait_hm_ru(seconds)
+    return (
+        f"⏳ <b>Раскрытие карты на перезарядке.</b> Снова можно через <b>{html.escape(w)}</b>.\n"
+        f"<i>Сюда входят: любая крутка в карточной арене и команды "
+        f"<code>/towercard</code>, <code>/stickercard</code>, <code>/стикер</code> "
+        f"или кнопка «Превью» в меню — один общий перерыв 12 ч. В альбом попадает только крутка.</i>"
+    )
+
+
+def _stamp_card_reveal_timestamps(slot: dict[str, Any]) -> None:
+    iso = datetime.now(UTC).replace(microsecond=0).isoformat()
+    slot[LAST_CARD_REVEAL_UTC_KEY] = iso
+    slot[LAST_CARD_REVEAL_LEGACY_KEY] = iso
+
+
+def record_card_reveal(character: Character) -> None:
+    """Зафиксировать раскрытие превью (без крутки гачи). Общий кулдаун с круткой."""
+    meta = dict(character.meta_progress or {})
+    slot = _slot(meta)
+    _stamp_card_reveal_timestamps(slot)
+    _save_slot(character, meta, slot)
+
+
 def _card_label_html(template_key: str, row: dict[str, Any] | None) -> str:
     nm = html.escape(str(row.get("name_ru")) if row else tc.display_name(template_key))
     em = str(row.get("emoji")) if row and row.get("emoji") else tc.emoji_for(template_key)
@@ -151,19 +183,15 @@ def perform_spin(
     paid: bool,
 ) -> tuple[bool, str, str | None, int | None]:
     """
-    Одна крутка. paid=True — золото списывается в apply_paid_spin_gold.
+    Одна крутка гачи. paid=True — золото списывается в apply_paid_spin_gold.
+    Общий кулдаун с превью /towercard (см. card_reveal_seconds_until_available).
     Возвращает (ok, html_message, template_key | None, source_floor | None).
     """
     meta = dict(character.meta_progress or {})
     slot = _slot(meta)
-    wait = spin_seconds_until_available(character)
+    wait = card_reveal_seconds_until_available(character)
     if wait > 0:
-        return (
-            False,
-            f"⏳ Крутка на перезарядке. Снова можно через <b>{html.escape(tc.format_wait_hm_ru(wait))}</b>.",
-            None,
-            None,
-        )
+        return (False, card_reveal_cooldown_notice_html(wait), None, None)
 
     today = _utc_today()
     g = _gacha_sub(slot)
@@ -212,7 +240,7 @@ def perform_spin(
 
     slot["collection"] = coll_all
     slot["gacha"] = g
-    slot["last_spin_utc"] = datetime.now(UTC).replace(microsecond=0).isoformat()
+    _stamp_card_reveal_timestamps(slot)
     _save_slot(character, meta, slot)
 
     card = tc.format_monster_card_spawn_html(
@@ -294,10 +322,11 @@ def profile_sticker_lines_html(character: Character) -> str:
         sid, row, _name = best
         lines.append("")
         lines.append(tc.format_monster_card_from_collection_row(sid, row))
-    wait = spin_seconds_until_available(character)
+    wait = card_reveal_seconds_until_available(character)
     if wait > 0:
         lines.append(
-            f"⏳ <b>До следующей крутки:</b> {html.escape(tc.format_wait_hm_ru(wait))}",
+            f"⏳ <b>До следующего раскрытия карты:</b> {html.escape(tc.format_wait_hm_ru(wait))} "
+            f"<i>(крутка или превью /towercard)</i>",
         )
     return "\n".join(lines)
 

@@ -38,6 +38,10 @@ def sticker_hub_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=t(loc, "sticker_kb_album"), callback_data="stk:alb"),
                 InlineKeyboardButton(text=t(loc, "sticker_kb_top"), callback_data="stk:top"),
             ],
+            [
+                InlineKeyboardButton(text=t(loc, "sticker_kb_preview"), callback_data="stk:tc"),
+                InlineKeyboardButton(text=t(loc, "sticker_kb_preview_info"), callback_data="stk:tc:i"),
+            ],
             [InlineKeyboardButton(text=t(loc, "sticker_kb_duel"), callback_data="stk:duel")],
             [InlineKeyboardButton(text=t(loc, "sticker_kb_back_loc"), callback_data="mnu:loc")],
         ],

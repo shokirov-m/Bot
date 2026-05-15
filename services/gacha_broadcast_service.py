@@ -184,18 +184,19 @@ async def broadcast_sticker_pack_activity(
     html_text: str,
     sticker_file_ids: tuple[str, ...] = (),
     image_paths: tuple[str, ...] = (),
-) -> None:
+) -> bool:
     """
-    Крутка карточной гачи / итог дуэли — в те же цели, что и объявления гачи башни:
+    Крутка карточной гачи / итог дуэли / превью — в те же цели, что и объявления гачи башни:
     сначала GACHA_BROADCAST_CHAT (+ ветка форума), затем chat_id из payload, без ЛС.
+    Возвращает True, если сообщение ушло хотя бы в один чат.
     """
     if not getattr(settings, "STICKER_MIRROR_TO_GACHA_CHAT", True):
-        return
+        return False
     primary = _parse_broadcast_chat_id()
     row = await _ensure_app_row(session)
     chat_ids = _chat_ids_from_payload(dict(row.payload or {}))
     if primary is None and not chat_ids:
-        return
+        return False
 
     msg_kw: dict[str, Any] = {"parse_mode": ParseMode.HTML}
     st_kw: dict[str, Any] = {}
@@ -231,8 +232,8 @@ async def broadcast_sticker_pack_activity(
             return False
 
     if primary is not None and await _post_to(primary):
-        return
+        return True
     for ch in chat_ids:
         if await _post_to(int(ch)):
-            return
-
+            return True
+    return False

@@ -1,7 +1,7 @@
 """
 Карточная арена башни: гача монстров 1–20 этажа, альбом, дуэли, ТОП. Меню Локации → Стикер-арена (mnu:stk).
 Команды: /collection, /stickerpull, /stickerdueltop, /stickerleaderboard, /duel, /duel_accept <код>,
-/towercard и /stickercard (случайная карта-превью в чат, без записи в коллекцию), /stickerhelp.
+/towercard и /stickercard (превью карты в чат — тот же 12 ч кулдаун, что и у крутки; в альбом не пишет), /stickerhelp.
 """
 
 from __future__ import annotations
@@ -55,10 +55,72 @@ def _hub_html(char, loc: str = "ru") -> str:
         + stars_ln
         + "\n\n"
         + sticker_duel_service.profile_sticker_lines_html(char)
-        + "\n\n<i>Случайная карта монстра (этажи 1–20) в чат: <code>/towercard</code>, "
-        "<code>/stickercard</code> или <code>/стикер</code> · "
-        "<code>/stickerhelp</code> — атака, защита, редкость и стихии.</i>"
+        + "\n\n<i>Превью карты (этажи 1–20): <code>/towercard</code>, "
+        "<code>/stickercard</code>, <code>/стикер</code> или кнопка «Превью» — "
+        "<b>тот же 12 ч перерыв</b>, что и у крутки; в альбом только крутка. "
+        "Полная карточка уходит в <b>канал объявлений гачи</b> (как зеркало крутки). "
+        "<code>/stickerhelp</code> — правила.</i>"
     )
+
+
+async def _run_towercard_preview(
+    session: AsyncSession,
+    *,
+    bot,
+    chat_id: int,
+    char: Character,
+    state: FSMContext | None,
+    loc: str,
+) -> tuple[bool, str]:
+    """Превью карты: не в альбом; общий кулдаун с круткой. Текст и картинка — в GACHA_BROADCAST_CHAT, как зеркало гачи."""
+    wait = sticker_duel_service.card_reveal_seconds_until_available(char)
+    if wait > 0:
+        return False, sticker_duel_service.card_reveal_cooldown_notice_html(wait)
+    if state is not None:
+        if await state.get_state() == CombatStates.in_battle.state:
+            return False, f"⚠️ {html.escape(t(loc, 'sticker_combat_busy'))}"
+    await character_repo.lock_character_row(session, char.id)
+    try:
+        fl, spawn = tc.pick_random_spawn_f1_20()
+        sid = spawn.template.key
+        cap = tc.format_monster_card_spawn_html(spawn, fl, description_max_len=360)
+        if len(cap) > 1020:
+            cap = cap[:1000] + "\n…"
+        p = tc.portrait_path(sid, fl)
+        u = await user_repo.get_by_id(session, int(char.user_id))
+        who = html.escape((char.display_name or "?").strip() or "?")
+        if u is not None and (u.username or "").strip():
+            who += f" (@{html.escape((u.username or '').strip())})"
+        header = f"🎴 <b>Превью карты</b> · {who}\n<i>Не в альбом · /towercard</i>\n\n"
+        full = header + cap
+        posted = False
+        if getattr(settings, "STICKER_MIRROR_TO_GACHA_CHAT", True):
+            from services import gacha_broadcast_service
+
+            posted = await gacha_broadcast_service.broadcast_sticker_pack_activity(
+                bot,
+                session,
+                html_text=full,
+                sticker_file_ids=(),
+                image_paths=(str(p),) if p is not None and p.is_file() else (),
+            )
+        if not posted:
+            if p is not None and p.is_file():
+                await bot.send_photo(chat_id, FSInputFile(p), caption=full, parse_mode=ParseMode.HTML)
+            else:
+                await bot.send_message(chat_id, full, parse_mode=ParseMode.HTML)
+        ack = t(loc, "sticker_tc_sent_broadcast") if posted else t(loc, "sticker_tc_sent_here")
+        try:
+            await bot.send_message(chat_id, ack, parse_mode=ParseMode.HTML)
+        except Exception:
+            logger.debug("towercard ack to origin chat failed")
+        sticker_duel_service.record_card_reveal(char)
+        await session.commit()
+        return True, ""
+    except Exception as e:
+        await session.rollback()
+        logger.exception("towercard_preview")
+        return False, f"Не удалось отправить карту: <code>{html.escape(str(e))}</code>"
 
 
 def _parse_sticker_duel_target(message: Message) -> tuple[int | None, str | None, int | None]:
@@ -707,35 +769,97 @@ STICKER_MECHANICS_HTML = (
     "<b>2. Атака и защита</b>\n"
     "Берутся из каталога монстров башни и умножаются на коэффициент этажа. "
     "При дубликате той же карты к атаке добавляется <b>+2</b>.\n\n"
-    "<b>3. Перезарядка крутки</b>\n"
-    "После любой прокрутки гачи следующая доступна не раньше чем через <b>12 часов</b>.\n\n"
+    "<b>3. Перерыв 12 часов</b>\n"
+    "После <b>любой крутки гачи</b> или после <b>превью карты</b> "
+    "(<code>/towercard</code>, <code>/stickercard</code>, <code>/стикер</code>, кнопка «Превью» в меню арены) "
+    "следующее раскрытие карты (снова крутка <i>или</i> превью) доступно не раньше чем через <b>12 часов</b>. "
+    "Так превью не обходит экономику карт.\n\n"
     "<b>4. Дуэль</b>\n"
     "Игроки выбирают карты из коллекции; победитель считается по стихиям (камень-ножницы-бумага) "
     "и при ничьей по сумме атаки и защиты.\n\n"
     "<b>5. Превью в чате</b>\n"
-    "<code>/towercard</code>, <code>/stickercard</code> или <code>/стикер</code> — "
-    "случайная карта с картинкой <i>без</i> записи в альбом.\n\n"
+    "Команды <code>/towercard</code>, <code>/stickercard</code>, <code>/стикер</code> или кнопка "
+    "«Превью карты»: полная карточка уходит в <b>тот же канал</b>, что и зеркало крутки гачи "
+    "(<code>GACHA_BROADCAST_CHAT</code> и доп. чаты из payload), если зеркало включено; иначе превью только в чате, "
+    "где вызвали команду. В альбом карта не попадает. С круткой общий перерыв 12 ч (см. п. 3).\n\n"
     "<b>Админ</b>: <code>/admin_sticker_set имя_набора</code> — список стикеров Telegram (если нужен для других целей)."
 )
 
 
-@router.message(Command("towercard", "stickercard", "sticker_card", "стикер"))
-async def cmd_stickercard(message: Message, session: AsyncSession) -> None:
-    """Случайная карта монстра 1–20 этажа с портретом (без записи в коллекцию)."""
-    _ = session
+@router.callback_query(F.data == "stk:tc:i")
+async def sticker_preview_info_cb(callback: CallbackQuery) -> None:
+    loc = "ru"
     try:
-        if message.bot is None:
+        await callback.answer(t(loc, "sticker_preview_rules_alert"), show_alert=True)
+    except Exception:
+        logger.exception("stk:tc:i")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "stk:tc")
+async def sticker_preview_from_hub(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
             return
-        fl, spawn = tc.pick_random_spawn_f1_20()
-        sid = spawn.template.key
-        cap = tc.format_monster_card_spawn_html(spawn, fl, description_max_len=360)
-        if len(cap) > 1020:
-            cap = cap[:1000] + "\n…"
-        p = tc.portrait_path(sid, fl)
-        if p is not None and p.is_file():
-            await message.bot.send_photo(message.chat.id, FSInputFile(p), caption=cap, parse_mode=ParseMode.HTML)
-        else:
-            await message.answer(cap, parse_mode=ParseMode.HTML)
+        _, char = await _char_or_alert(session, callback)
+        if char is None:
+            await callback.answer()
+            return
+        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+        if not unlock_service.is_unlocked(char, "menu_sticker"):
+            await callback.answer(
+                t(loc, "sticker_unlock_alert", level=unlock_service.UNLOCK_BY_KEY["menu_sticker"].level),
+                show_alert=True,
+            )
+            return
+        ok, err = await _run_towercard_preview(
+            session,
+            bot=callback.bot,
+            chat_id=callback.message.chat.id,
+            char=char,
+            state=state,
+            loc=loc,
+        )
+        if not ok:
+            await callback.message.answer(err, parse_mode=ParseMode.HTML)
+            await callback.answer(t(loc, "sticker_tc_blocked"))
+            return
+        await callback.answer(t(loc, "sticker_tc_ok"))
+    except Exception:
+        logger.exception("stk:tc")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.message(Command("towercard", "stickercard", "sticker_card", "стикер"))
+async def cmd_stickercard(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    """Превью карты: тот же кулдаун, что у крутки; в альбом не пишет."""
+    try:
+        if message.from_user is None or message.bot is None:
+            return
+        user = await user_repo.get_by_telegram_id(session, message.from_user.id)
+        if user is None or user.is_banned:
+            return
+        char = await character_repo.get_by_user_id(session, user.id)
+        if char is None:
+            await message.answer("Сначала /start.")
+            return
+        loc = get_locale(char, message.from_user.language_code)
+        if not unlock_service.is_unlocked(char, "menu_sticker"):
+            await message.answer(
+                t(loc, "sticker_unlock_alert", level=unlock_service.UNLOCK_BY_KEY["menu_sticker"].level),
+            )
+            return
+        ok, err = await _run_towercard_preview(
+            session,
+            bot=message.bot,
+            chat_id=message.chat.id,
+            char=char,
+            state=state,
+            loc=loc,
+        )
+        if not ok:
+            await message.answer(err, parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.exception("stickercard")
         await message.answer(

@@ -45,7 +45,20 @@ HUB_KEY_BY_FLOOR: dict[int, str] = {
     91: "eternis",
 }
 
-_CITY_HUBS: dict[int, CityHubDef] = {
+def _build_city_hubs() -> dict[int, CityHubDef]:
+    try:
+        from game.data.catalogs.cities_catalog import catalog_city_hubs
+
+        cat = catalog_city_hubs()
+        if cat:
+            return cat
+    except Exception:
+        pass
+    return _default_city_hubs()
+
+
+def _default_city_hubs() -> dict[int, CityHubDef]:
+    return {
     3: CityHubDef(
         key="quiet_brook",
         tagline="Первый очаг у подножия — здесь учатся не сдаваться.",
@@ -98,11 +111,32 @@ _CITY_HUBS: dict[int, CityHubDef] = {
         npc_guard_title="командор гарнизона",
         economy_blurb="Крупнейшая лотерея кольца, ростовщики небесных домов и надёжные сейфы для золота.",
     ),
-}
+    }
+
+
+_CITY_HUBS: dict[int, CityHubDef] = _build_city_hubs()
+
+_HUB_KEYS_LOADED = False
+
+
+def _ensure_hub_keys() -> None:
+    global HUB_KEY_BY_FLOOR, _HUB_KEYS_LOADED
+    if _HUB_KEYS_LOADED:
+        return
+    try:
+        from game.data.catalogs.cities_catalog import catalog_hub_key_by_floor
+
+        cat = catalog_hub_key_by_floor()
+        if cat:
+            HUB_KEY_BY_FLOOR = cat
+    except Exception:
+        pass
+    _HUB_KEYS_LOADED = True
 
 
 def hub_key_for_floor(floor_number: int) -> str | None:
     """Стабильный ключ хаба или None."""
+    _ensure_hub_keys()
     return HUB_KEY_BY_FLOOR.get(int(floor_number))
 
 

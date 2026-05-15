@@ -1,0 +1,4 @@
+{
+  "_readme": "Ключи в entries — template_key монстра (пул этажей 1–20). Можно задать базовый ключ (goblin) и отдельно elite_goblin. Поля по желанию: name_ru, emoji, quote_ru, special_ru, combo_ru, description_ru (полная замена текста ОПИСАНИЕ). Пустая строка = не менять.",
+  "entries": {}
+}

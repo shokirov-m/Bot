@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "entries": {
+    "pas_war_tough": {
+      "name_ru": "Закалка",
+      "description_ru": "Увеличивает защиту.",
+      "modifiers": {
+        "def_bonus": 6.0
+      }
+    },
+    "pas_mag_flow": {
+      "name_ru": "Поток маны",
+      "description_ru": "Повышает силу магии на 18%.",
+      "modifiers": {
+        "mag_bonus_percent": 18
+      }
+    },
+    "pas_sct_reflex": {
+      "name_ru": "Рефлексы",
+      "description_ru": "Повышает шанс уклонения на 12%.",
+      "modifiers": {
+        "dodge_bonus": 0.12
+      }
+    },
+    "pas_aco_faith": {
+      "name_ru": "Вера",
+      "description_ru": "Увеличивает регенерацию MP за ход.",
+      "modifiers": {
+        "mp_regen_turn": 6
+      }
+    },
+    "pas_grd_bulwark": {
+      "name_ru": "Бастион",
+      "description_ru": "Большой бонус защиты.",
+      "modifiers": {
+        "def_bonus": 44.0
+      }
+    },
+    "pas_brs_frenzy": {
+      "name_ru": "Боевой транс",
+      "description_ru": "Больше шанса крита.",
+      "modifiers": {
+        "crit_bonus": 0.16
+      }
+    },
+    "pas_pyro_core": {
+      "name_ru": "Огненное ядро",
+      "description_ru": "Сильнее магический урон.",
+      "modifiers": {
+        "mag_bonus_percent": 56
+      }
+    },
+    "pas_cryo_focus": {
+      "name_ru": "Холодный разум",
+      "description_ru": "Мана восстанавливается быстрее.",
+      "modifiers": {
+        "mp_regen_turn": 16
+      }
+    },
+    "pas_ass_precision": {
+      "name_ru": "Точный расчёт",
+      "description_ru": "Крит и уклонение выше.",
+      "modifiers": {
+        "crit_bonus": 0.12,
+        "dodge_bonus": 0.08
+      }
+    },
+    "pas_rng_reflex": {
+      "name_ru": "Следопыт",
+      "description_ru": "Сильный бонус уклонения.",
+      "modifiers": {
+        "dodge_bonus": 0.28
+      }
+    },
+    "pas_pal_oath": {
+      "name_ru": "Клятва",
+      "description_ru": "Защита и вера.",
+      "modifiers": {
+        "def_bonus": 28.0,
+        "mp_regen_turn": 6
+      }
+    },
+    "pas_prp_grace": {
+      "name_ru": "Благодать",
+      "description_ru": "Много регенерации маны.",
+      "modifiers": {
+        "mp_regen_turn": 20,
+        "mag_bonus_percent": 16
+      }
+    },
+    "pas_grd_titan": {
+      "name_ru": "Гроза боссов",
+      "description_ru": "Урон по боссам выше на 20%.",
+      "modifiers": {
+        "boss_dmg_mult": 1.2
+      }
+    },
+    "pas_brs_blood": {
+      "name_ru": "Жажда крови",
+      "description_ru": "+30% шанс кровотечения при ударе.",
+      "modifiers": {
+        "on_hit_bleed_chance": 0.3
+      }
+    },
+    "pas_pyro_burn": {
+      "name_ru": "Полыхание",
+      "description_ru": "+30% шанс поджога при ударе.",
+      "modifiers": {
+        "on_hit_burn_chance": 0.3
+      }
+    },
+    "pas_cryo_freeze": {
+      "name_ru": "Хладнокровие",
+      "description_ru": "+24% шанс заморозить врага при ударе.",
+      "modifiers": {
+        "on_hit_freeze_chance": 0.24
+      }
+    },
+    "pas_ass_mortal": {
+      "name_ru": "Смертельный удар",
+      "description_ru": "+24% шанс отравить врага при ударе.",
+      "modifiers": {
+        "on_hit_poison_chance": 0.24
+      }
+    },
+    "pas_rng_focus": {
+      "name_ru": "Фокус охотника",
+      "description_ru": "Урон по элитам выше на 20%.",
+      "modifiers": {
+        "elite_dmg_mult": 1.2
+      }
+    },
+    "pas_pal_aegis": {
+      "name_ru": "Эгида",
+      "description_ru": "Получаемый урон ниже на 16%.",
+      "modifiers": {
+        "dmg_taken_mult": 0.84
+      }
+    },
+    "pas_prp_blessing": {
+      "name_ru": "Дар",
+      "description_ru": "Восстанавливает 4% HP за ход.",
+      "modifiers": {
+        "hp_regen_pct_turn": 0.04
+      }
+    },
+    "pas_aco_faith_x25": {
+      "name_ru": "Вера",
+      "description_ru": "Увеличивает регенерацию MP за ход.",
+      "modifiers": {
+        "mp_regen_turn": 15.0
+      }
+    },
+    "pas_pal_oath_x25": {
+      "name_ru": "Клятва",
+      "description_ru": "Защита и вера.",
+      "modifiers": {
+        "def_bonus": 70.0,
+        "mp_regen_turn": 15.0
+      }
+    },
+    "pas_pal_aegis_x25": {
+      "name_ru": "Эгида",
+      "description_ru": "Получаемый урон ниже на 25%.",
+      "modifiers": {
+        "dmg_taken_mult": 0.75
+      }
+    },
+    "pas_prp_grace_x25": {
+      "name_ru": "Благодать",
+      "description_ru": "Много регенерации маны.",
+      "modifiers": {
+        "mp_regen_turn": 50.0,
+        "mag_bonus_percent": 40.0
+      }
+    },
+    "pas_prp_blessing_x25": {
+      "name_ru": "Дар",
+      "description_ru": "Восстанавливает 10% HP за ход.",
+      "modifiers": {
+        "hp_regen_pct_turn": 0.1
+      }
+    }
+  }
+}

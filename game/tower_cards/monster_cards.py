@@ -16,6 +16,7 @@ from game.data.monsters import MONSTER_TEMPLATE_META
 from game.floors import floor_data, monster_catalog
 from game.floors.monster_appearances_ru import APPEARANCE_RU, MONSTER_CARD_QUOTE_RU
 from game.floors.monsters import FloorMonsterSpawn, build_spawns_for_floor
+from game.tower_cards.card_catalog import catalog_str, merged_catalog_entry
 from utils.image_assets import monster_image_for_template
 
 RARITY_STARS_RU: dict[str, str] = {
@@ -319,11 +320,19 @@ def format_monster_card_html(
     _ = floor  # этаж влияет на ATK/DEF снаружи; на карте не выводим отдельной строкой
     tk = (template_key or "").strip()
     bk = base_template_key(tk)
+    cat = merged_catalog_entry(tk, bk)
     nm = (name_ru or "").strip() or display_name(tk)
     emo = (emoji or "").strip() or emoji_for(tk)
+    if catalog_str(cat, "name_ru"):
+        nm = catalog_str(cat, "name_ru") or nm
+    if catalog_str(cat, "emoji"):
+        emo = catalog_str(cat, "emoji") or emo
     stars = RARITY_STARS_RU.get(tier, "⭐")
     rare_title = RARITY_CARD_TITLE_RU.get(tier, str(tier).capitalize())
-    desc_src = _merge_description_blurb(blurb, APPEARANCE_RU.get(bk, ""))
+    if catalog_str(cat, "description_ru"):
+        desc_src = catalog_str(cat, "description_ru") or "—"
+    else:
+        desc_src = _merge_description_blurb(blurb, APPEARANCE_RU.get(bk, ""))
     cap_len = 680 if description_max_len is None else min(680, int(description_max_len))
     if len(desc_src) > cap_len:
         desc_src = desc_src[: cap_len - 1] + "…"
@@ -331,9 +340,13 @@ def format_monster_card_html(
     desc_esc = "—" if desc_final == "—" else html.escape(desc_final)
     elem_val = element_line_value_ru(raw_element, duel_element_code)
     elem_pre = element_line_prefix_emoji(raw_element)
-    quote_raw = card_quote_ru(tk)
+    quote_raw = catalog_str(cat, "quote_ru") or card_quote_ru(tk)
     q_display = _format_quote_display(quote_raw)
     pct_s = drop_percent_display(tk)
+    spec = catalog_str(cat, "special_ru")
+    comb = catalog_str(cat, "combo_ru")
+    spec_line = f"✨ <b>ОСОБОЕ:</b> {html.escape(spec)}" if spec else "✨ <b>ОСОБОЕ:</b> Нет"
+    combo_line = f"💫 <b>КОМБО:</b> {html.escape(comb)}" if comb else "💫 <b>КОМБО:</b> Нет"
 
     lines = [
         f"{html.escape(emo)} <b>ИМЯ:</b> {html.escape(nm)}",
@@ -341,8 +354,8 @@ def format_monster_card_html(
         f"⚔️ <b>СИЛА:</b> {int(atk)} ATK",
         f"🛡️ <b>ЗАЩИТА:</b> {int(deff)}",
         f"{elem_pre} <b>СТИХИЯ:</b> {html.escape(elem_val)}",
-        "✨ <b>ОСОБОЕ:</b> Нет",
-        "💫 <b>КОМБО:</b> Нет",
+        spec_line,
+        combo_line,
         f"📖 <b>ОПИСАНИЕ:</b> {desc_esc}",
         f"🎯 <b>ШАНС ВЫПАДЕНИЯ:</b> {html.escape(pct_s)}",
         f"📊 <b>ДУБЛИКАТ:</b> +{DUPLICATE_ATK_BONUS} ATK к силе",

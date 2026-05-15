@@ -261,7 +261,19 @@ def _build_all_fighters() -> tuple[ColiseumFighter, ...]:
     return tuple(out)
 
 
-COLISEUM_FIGHTERS: tuple[ColiseumFighter, ...] = _build_all_fighters()
+def _load_fighters() -> tuple[ColiseumFighter, ...]:
+    try:
+        from game.data.catalogs.coliseum_catalog import catalog_fighters
+
+        cat = catalog_fighters()
+        if cat:
+            return cat
+    except Exception:
+        pass
+    return _build_all_fighters()
+
+
+COLISEUM_FIGHTERS: tuple[ColiseumFighter, ...] = _load_fighters()
 _BY_ID: dict[int, ColiseumFighter] = {f.id: f for f in COLISEUM_FIGHTERS}
 
 

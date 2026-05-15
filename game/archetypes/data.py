@@ -225,3 +225,25 @@ ARCHETYPES: dict[str, Archetype] = {
         requirements={"level": 50, "int": 28, "luck": 18},
     ),
 }
+
+
+def _merge_catalog_data() -> None:
+    global SKILLS, PASSIVES, ARCHETYPES
+    try:
+        from game.data.catalogs import archetypes_catalog as ac
+
+        cs = ac.catalog_skills()
+        cp = ac.catalog_passives()
+        if cs:
+            SKILLS = {**SKILLS, **cs}
+        if cp:
+            PASSIVES = {**PASSIVES, **cp}
+        if cp:
+            ca = ac.catalog_archetypes(PASSIVES)
+            if ca:
+                ARCHETYPES = {**ARCHETYPES, **ca}
+    except Exception:
+        pass
+
+
+_merge_catalog_data()

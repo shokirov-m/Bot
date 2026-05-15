@@ -1,0 +1,385 @@
+{
+  "version": 1,
+  "trees": {
+    "warrior": {
+      "war_g1": {
+        "name_ru": "💪 Крепкая хватка",
+        "description_ru": "База защитной ветки: сила хвата помогает удерживать оружие и щит под ударом.",
+        "node_type": "stat_boost",
+        "value": {
+          "str": 10
+        },
+        "cost_sp": 2,
+        "parent_keys": [],
+        "required_tier": 1
+      },
+      "war_g2": {
+        "name_ru": "🛡️ Стойка защиты",
+        "description_ru": "Пассивно укрепляет позицию: входящий урон по тебе немного снижается (бонус к защите).",
+        "node_type": "passive_bonus",
+        "value": {
+          "def_bonus": 5.0
+        },
+        "cost_sp": 3,
+        "parent_keys": [
+          "war_g1"
+        ],
+        "required_tier": 1
+      },
+      "war_g3": {
+        "name_ru": "🔨 Удар щитом",
+        "description_ru": "Открывает активный навык: удар щитом с шансом оглушить врага.",
+        "node_type": "active_skill",
+        "value": "war_bash",
+        "cost_sp": 4,
+        "parent_keys": [
+          "war_g2"
+        ],
+        "required_tier": 1
+      },
+      "war_g4": {
+        "name_ru": "🦾 Несокрушимость",
+        "description_ru": "Глубокая выдержка: заметно больше снижение входящего урона через защиту.",
+        "node_type": "passive_bonus",
+        "value": {
+          "def_bonus": 15.0
+        },
+        "cost_sp": 5,
+        "parent_keys": [
+          "war_g3"
+        ],
+        "required_tier": 1
+      },
+      "war_b1": {
+        "name_ru": "🔥 Ярость",
+        "description_ru": "Натиск без компромиссов: все физические удары чуть сильнее.",
+        "node_type": "passive_bonus",
+        "value": {
+          "atk_bonus_pct": 5
+        },
+        "cost_sp": 2,
+        "parent_keys": [],
+        "required_tier": 1
+      },
+      "war_b2": {
+        "name_ru": "🪓 Тяжелый удар",
+        "description_ru": "Открывает активный навык: медленный, но жёсткий удар с высоким множителем силы.",
+        "node_type": "active_skill",
+        "value": "war_heavy",
+        "cost_sp": 3,
+        "parent_keys": [
+          "war_b1"
+        ],
+        "required_tier": 1
+      },
+      "war_b3": {
+        "name_ru": "🩸 Жажда крови",
+        "description_ru": "После ранения врага часть нанесённого урона возвращается тебе как HP.",
+        "node_type": "passive_bonus",
+        "value": {
+          "lifesteal_percent": 5
+        },
+        "cost_sp": 4,
+        "parent_keys": [
+          "war_b2"
+        ],
+        "required_tier": 1
+      },
+      "war_b4": {
+        "name_ru": "🌪️ Вихрь стали",
+        "description_ru": "Финал ветки: активный навык с уроном по области (вихрь ударов).",
+        "node_type": "active_skill",
+        "value": "war_whirlwind",
+        "cost_sp": 5,
+        "parent_keys": [
+          "war_b3"
+        ],
+        "required_tier": 1
+      }
+    },
+    "mage": {
+      "mag_e1": {
+        "name_ru": "🔥 Искра",
+        "description_ru": "Первый шаг стихии: все заклинательские атаки немного сильнее.",
+        "node_type": "passive_bonus",
+        "value": {
+          "mag_bonus_percent": 5
+        },
+        "cost_sp": 2,
+        "parent_keys": [],
+        "required_tier": 1
+      },
+      "mag_e2": {
+        "name_ru": "☄️ Огненный шар",
+        "description_ru": "Открывает активный навык: огненный урон и шанс поджога.",
+        "node_type": "active_skill",
+        "value": "mag_fire",
+        "cost_sp": 3,
+        "parent_keys": [
+          "mag_e1"
+        ],
+        "required_tier": 1
+      },
+      "mag_e3": {
+        "name_ru": "❄️ Обледенение",
+        "description_ru": "Ледяная искра в ударе: при автоатаках и умениях иногда накладывает заморозку.",
+        "node_type": "passive_bonus",
+        "value": {
+          "on_hit_freeze_chance": 0.1
+        },
+        "cost_sp": 4,
+        "parent_keys": [
+          "mag_e2"
+        ],
+        "required_tier": 1
+      },
+      "mag_e4": {
+        "name_ru": "🌨️ Ледяная стрела",
+        "description_ru": "Открывает активный навык: ледяной болт с шансом замедлить или затормозить врага.",
+        "node_type": "active_skill",
+        "value": "mag_frost",
+        "cost_sp": 5,
+        "parent_keys": [
+          "mag_e3"
+        ],
+        "required_tier": 1
+      },
+      "mag_a1": {
+        "name_ru": "🧠 Ясный ум",
+        "description_ru": "Чистый запас интеллекта — основа маны и силы заклинаний.",
+        "node_type": "stat_boost",
+        "value": {
+          "int": 10
+        },
+        "cost_sp": 2,
+        "parent_keys": [],
+        "required_tier": 1
+      },
+      "mag_a2": {
+        "name_ru": "🛡️ Энергощит",
+        "description_ru": "Открывает активный навык: временный магический щит, гасящий часть входящего урона.",
+        "node_type": "active_skill",
+        "value": "mag_shield",
+        "cost_sp": 3,
+        "parent_keys": [
+          "mag_a1"
+        ],
+        "required_tier": 1
+      },
+      "mag_a3": {
+        "name_ru": "🔄 Поток маны",
+        "description_ru": "Узел контроля энергии: в начале каждого твоего хода восстанавливается +5 MP (складывается с другими источниками).",
+        "node_type": "passive_bonus",
+        "value": {
+          "mp_regen_turn": 5
+        },
+        "cost_sp": 4,
+        "parent_keys": [
+          "mag_a2"
+        ],
+        "required_tier": 1
+      },
+      "mag_a4": {
+        "name_ru": "🌀 Чароплет",
+        "description_ru": "Ещё один резерв маны: дополнительно +3 MP за ход (итого с «Потоком маны» — +8 MP/ход).",
+        "node_type": "passive_bonus",
+        "value": {
+          "mp_regen_turn": 3
+        },
+        "cost_sp": 5,
+        "parent_keys": [
+          "mag_a3"
+        ],
+        "required_tier": 1
+      }
+    },
+    "scout": {
+      "sct_a1": {
+        "name_ru": "🗡️ Заточка",
+        "description_ru": "Базовая точность клинка: выше шанс нанести критический удар.",
+        "node_type": "passive_bonus",
+        "value": {
+          "crit_bonus": 0.05
+        },
+        "cost_sp": 2,
+        "parent_keys": [],
+        "required_tier": 1
+      },
+      "sct_a2": {
+        "name_ru": "🐍 Яд",
+        "description_ru": "Открывает активный навык: наложение яда с периодическим уроном.",
+        "node_type": "active_skill",
+        "value": "sct_poison",
+        "cost_sp": 3,
+        "parent_keys": [
+          "sct_a1"
+        ],
+        "required_tier": 1
+      },
+      "sct_a3": {
+        "name_ru": "👁️ Слабое место",
+        "description_ru": "Учишься бить туда, где больнее: ещё +5% к шансу крита (в сумме с «Заточкой» — +10%).",
+        "node_type": "passive_bonus",
+        "value": {
+          "crit_bonus": 0.05
+        },
+        "cost_sp": 4,
+        "parent_keys": [
+          "sct_a2"
+        ],
+        "required_tier": 1
+      },
+      "sct_a4": {
+        "name_ru": "💀 Удар в спину",
+        "description_ru": "Открывает доступ к приёму «Точный выстрел» из ветки убийцы: высокий множитель и упор на крит (тот же боевой навык, что у следопыта, но узел из линии скрытности).",
+        "node_type": "active_skill",
+        "value": "sct_shot",
+        "cost_sp": 5,
+        "parent_keys": [
+          "sct_a3"
+        ],
+        "required_tier": 1
+      },
+      "sct_r1": {
+        "name_ru": "👟 Легкость",
+        "description_ru": "Подвижность на дистанции: проще увернуться от выпадов.",
+        "node_type": "passive_bonus",
+        "value": {
+          "dodge_bonus": 0.05
+        },
+        "cost_sp": 2,
+        "parent_keys": [],
+        "required_tier": 1
+      },
+      "sct_r2": {
+        "name_ru": "🏹 Точный выстрел",
+        "description_ru": "Открывает активный навык маршевого следопыта: один мощный выстрел с упором на критический эффект.",
+        "node_type": "active_skill",
+        "value": "sct_shot",
+        "cost_sp": 3,
+        "parent_keys": [
+          "sct_r1"
+        ],
+        "required_tier": 1
+      },
+      "sct_r3": {
+        "name_ru": "🏃 Рефлексы",
+        "description_ru": "Тренировка реакций — заметный прирост ловкости.",
+        "node_type": "stat_boost",
+        "value": {
+          "dex": 10
+        },
+        "cost_sp": 4,
+        "parent_keys": [
+          "sct_r2"
+        ],
+        "required_tier": 1
+      },
+      "sct_r4": {
+        "name_ru": "💨 Увертливость",
+        "description_ru": "Открывает активный навык: резкий рывок в сторону и большой временный бонус к уклонению.",
+        "node_type": "active_skill",
+        "value": "sct_dodge",
+        "cost_sp": 5,
+        "parent_keys": [
+          "sct_r3"
+        ],
+        "required_tier": 1
+      }
+    },
+    "acolyte": {
+      "aco_l1": {
+        "name_ru": "🙏 Молитва",
+        "description_ru": "Тихая поддержка света: каждый ход восстанавливаешь долю от максимального HP.",
+        "node_type": "passive_bonus",
+        "value": {
+          "hp_regen_pct_turn": 0.02
+        },
+        "cost_sp": 2,
+        "parent_keys": [],
+        "required_tier": 1
+      },
+      "aco_l2": {
+        "name_ru": "✨ Исцеление",
+        "description_ru": "Открывает активный навык: разовый мощный отлив HP за ману.",
+        "node_type": "active_skill",
+        "value": "aco_heal",
+        "cost_sp": 3,
+        "parent_keys": [
+          "aco_l1"
+        ],
+        "required_tier": 1
+      },
+      "aco_l3": {
+        "name_ru": "🛡️ Святой щит",
+        "description_ru": "Благословение укрепляет стойкость: немного больше защиты против физических ударов.",
+        "node_type": "passive_bonus",
+        "value": {
+          "def_bonus": 5
+        },
+        "cost_sp": 4,
+        "parent_keys": [
+          "aco_l2"
+        ],
+        "required_tier": 1
+      },
+      "aco_l4": {
+        "name_ru": "🕊️ Благословение",
+        "description_ru": "Открывает активный навык: длительное восстановление HP (HoT) на несколько ходов.",
+        "node_type": "active_skill",
+        "value": "aco_bless",
+        "cost_sp": 5,
+        "parent_keys": [
+          "aco_l3"
+        ],
+        "required_tier": 1
+      },
+      "aco_w1": {
+        "name_ru": "⚖️ Справедливость",
+        "description_ru": "Удача склоняется к тем, кто бьёт по нечести: прирост показателя удачи.",
+        "node_type": "stat_boost",
+        "value": {
+          "luck": 10
+        },
+        "cost_sp": 2,
+        "parent_keys": [],
+        "required_tier": 1
+      },
+      "aco_w2": {
+        "name_ru": "💥 Кара",
+        "description_ru": "Открывает активный навык «Кара» — быстрый магический удар светом по одной цели.",
+        "node_type": "active_skill",
+        "value": "aco_smite",
+        "cost_sp": 3,
+        "parent_keys": [
+          "aco_w1"
+        ],
+        "required_tier": 1
+      },
+      "aco_w3": {
+        "name_ru": "🔥 Гнев",
+        "description_ru": "Свет не только лечит: все магические атаки заметно усилены.",
+        "node_type": "passive_bonus",
+        "value": {
+          "mag_bonus_percent": 10
+        },
+        "cost_sp": 4,
+        "parent_keys": [
+          "aco_w2"
+        ],
+        "required_tier": 1
+      },
+      "aco_w4": {
+        "name_ru": "⚡ Возмездие",
+        "description_ru": "Вершина карательной ветви: тот же активный навык «Кара», но узел отражает гневную школу — выше урон за счёт предыдущих пассивов ветки (один слот в бою, эффект суммируется с маг. бонусами).",
+        "node_type": "active_skill",
+        "value": "aco_smite",
+        "cost_sp": 5,
+        "parent_keys": [
+          "aco_w3"
+        ],
+        "required_tier": 1
+      }
+    }
+  }
+}
