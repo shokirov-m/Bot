@@ -181,7 +181,7 @@ def reward_bonus_multipliers(character: Character) -> tuple[float, float]:
             continue
         gm *= 1.0 + tt.gold_bonus_pct / 100.0
         xm *= 1.0 + tt.xp_bonus_pct / 100.0
-    gb = int(_vsb.gold_bonus_pct(character))
+    gb = int(vip_shop_bonus_service.gold_bonus_pct(character))
     if gb > 0:
         gm *= 1.0 + gb / 100.0
     return gm, xm

@@ -1346,7 +1346,7 @@ async def on_floor_callback(
 
             if event_type == "gold":
                 gold_amount = 20 + floor * 3 + random.randint(0, 20)
-                cs.add_gold(char, gold_amount)
+                character_service.add_gold(char, gold_amount)
                 await session.flush()
                 event_html = (
                     f"💰 <b>Тайник с золотом!</b>\n"
@@ -1378,7 +1378,7 @@ async def on_floor_callback(
                 else:
                     # Благословение странника — немного золота
                     _gold_myst = 8 + floor
-                    cs.add_gold(char, _gold_myst)
+                    character_service.add_gold(char, _gold_myst)
                     event_html = f"🌟 <b>Благословение странника!</b>\nНайдено немного золота (+{_gold_myst}) среди костей путника."
                 await session.flush()
             elif event_type == "crystal":
@@ -1397,7 +1397,7 @@ async def on_floor_callback(
                 _trap_dmg = max(1, int(char.hp_max * random.uniform(0.07, 0.13)))
                 char.hp_current = max(1, int(char.hp_current) - _trap_dmg)
                 _trap_gold = random.randint(5, 12) + floor
-                cs.add_gold(char, _trap_gold)
+                character_service.add_gold(char, _trap_gold)
                 await session.flush()
                 event_html = (
                     f"🪤 <b>Ловушка!</b>\n"
@@ -1460,7 +1460,7 @@ async def on_floor_callback(
                         f"<b>{_iname}</b> добавлен в сумку (ячейка {_free})."
                     )
                 else:
-                    cs.add_gold(char, 15 + floor * 2)
+                    character_service.add_gold(char, 15 + floor * 2)
                     await session.flush()
                     event_html = (
                         "🌟 <b>Редкая находка!</b>\n"

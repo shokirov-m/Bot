@@ -435,7 +435,9 @@ def _apply_weapon_runes_to_state(
     pct = calculate_elemental_bonus(runes_list, mon_el, character.element)
     import services.economy.vip_shop_bonus_service as vip_shop_bonus_service
 
-    combat_state["vip_frostlord_elem_bonus_pct"] = int(_vsb.ice_elemental_bonus_percent(character, runes_list))
+    combat_state["vip_frostlord_elem_bonus_pct"] = int(
+        vip_shop_bonus_service.ice_elemental_bonus_percent(character, runes_list),
+    )
     combat_state["weapon_rune_flat_elemental"] = int(total_weapon_rune_flat_elemental_damage(runes_list))
     loc_rune = get_locale(character, None)
     if pct >= 30:
