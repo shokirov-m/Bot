@@ -15,7 +15,7 @@ from game.balance import (
     MONSTER_DAMAGE_DEALT_MULT,
 )
 from game.characters.skills import SkillDef, passive_combat_modifiers, skills_for_class
-from game.coliseum import coliseum_combat_hooks as coliseum_hooks
+from game.enemies.coliseum import combat_hooks as coliseum_hooks
 from game.combat import companions as companions_mod
 from game.combat import effects, formulas, monster_ai
 from game.combat.monster_abilities import (
@@ -30,7 +30,7 @@ from game.combat.monster_abilities import (
 )
 from game.items.runes import ELEMENTS, RuneData, rune_burn_params_for_rank
 from game.combat import passive_gear
-from game.floors.floor_entry_mods import maybe_lightning_execute_after_monster_damaged
+from game.tower.progression.floor_entry_mods import maybe_lightning_execute_after_monster_damaged
 
 Outcome = Literal["continue", "win", "lose"]
 
@@ -184,6 +184,22 @@ def _mods(state: dict[str, Any]) -> dict[str, Any]:
     return mods
 
 
+def _player_hit_missed(state: dict[str, Any]) -> bool:
+    """Промах по монстру: ЛОВ игрока, дебаффы и уклонение (evasion) цели."""
+    st = _stats(state)
+    mods = _mods(state)
+    aura_miss = float(state.get("player_aura_miss_chance", 0.0))
+    mod_miss = float(mods.get("extra_miss_chance", 0.0))
+    mon_ev = float(_m(state).get("evasion", 0) or 0)
+    ck = str(state.get("class_key") or "wanderer")
+    return formulas.roll_miss_vs_monster(
+        int(st["dex"]),
+        extra_miss_chance=aura_miss + mod_miss,
+        monster_evasion=mon_ev,
+        class_key=ck,
+    )
+
+
 def apply_equipment_on_hit_procs(state: dict[str, Any], mods: dict[str, Any], logs: list[str]) -> None:
     """Проки статусов и оглушения с экипировки после успешного удара по HP монстра."""
     obc = float(mods.get("on_hit_bleed_chance", 0.0))
@@ -202,7 +218,7 @@ def apply_equipment_on_hit_procs(state: dict[str, Any], mods: dict[str, Any], lo
     if opo > 0 and random.random() < opo:
         effects.add_effect("monster", state, "Яд", "poison", 3, {"potency_percent": 4})
         logs.append("☠️ Враг отравлен!")
-    ost = float(mods.get("stun_chance", 0.0))
+    ost = float(mods.get("stun_chance", 0.0)) * 0.42
     if ost > 0 and random.random() < ost:
         state["monster_skip_next"] = True
         logs.append("⭐ Экипировка оглушает — враг может пропустить ход!")
@@ -259,25 +275,40 @@ def apply_elixir_buffs(state: dict[str, Any], dmg: int) -> int:
     return max(1, int(int(dmg) * mult * (1.0 + bonus_pct / 100.0)))
 
 
+def _dot_damage_after_armor(raw: int, armor: int) -> int:
+    """Горение/яд/кровь учитывают броню (как физический урон)."""
+    return max(0, int(raw) - max(0, int(armor)))
+
+
 def apply_dot_damage_player(state: dict[str, Any]) -> list[str]:
     logs: list[str] = []
     pre_hp = int(state["player_hp"])
     mx = int(state["player_hp_max"])
     hp = int(state["player_hp"])
+    try:
+        armor = player_defense_value(state)
+    except (KeyError, TypeError):
+        armor = max(0, int(state.get("player_equipment_defense", 0)))
     new_eff: list[dict[str, Any]] = []
     for e in list(state.get("player_effects", [])):
         if e.get("key") == "burn":
-            dmg = max(1, int(mx * int(e.get("potency_percent", 5)) / 100))
+            raw = max(1, int(mx * int(e.get("potency_percent", 5)) / 100))
+            dmg = _dot_damage_after_armor(raw, armor)
             hp -= dmg
-            logs.append(f"→ 👤 🔥 Поджог: −{dmg} HP")
+            if dmg > 0:
+                logs.append(f"→ 👤 🔥 Поджог: −{dmg} HP")
         elif e.get("key") == "poison":
-            dmg = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
+            raw = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
+            dmg = _dot_damage_after_armor(raw, armor)
             hp -= dmg
-            logs.append(f"→ 👤 💀 Яд: −{dmg} HP")
+            if dmg > 0:
+                logs.append(f"→ 👤 💀 Яд: −{dmg} HP")
         elif e.get("key") == "bleed":
-            dmg = max(1, int(mx * int(e.get("potency_percent", 2)) / 100))
+            raw = max(1, int(mx * int(e.get("potency_percent", 2)) / 100))
+            dmg = _dot_damage_after_armor(raw, armor)
             hp -= dmg
-            logs.append(f"→ 👤 🩸 Кровотечение: −{dmg} HP")
+            if dmg > 0:
+                logs.append(f"→ 👤 🩸 Кровотечение: −{dmg} HP")
         elif e.get("key") == "hot":
             heal = max(1, int(mx * int(e.get("potency_percent", 5)) / 100))
             hp = min(mx, hp + heal)
@@ -299,20 +330,30 @@ def apply_dot_damage_monster(state: dict[str, Any]) -> list[str]:
     hp = int(m["hp"])
     pre_hp = hp
     mx = int(m["max_hp"])
+    try:
+        armor = monster_armor_value(state)
+    except (KeyError, TypeError):
+        armor = max(0, int(m.get("defense", 0)))
     new_eff: list[dict[str, Any]] = []
     for e in list(state.get("monster_effects", [])):
         if e.get("key") == "burn":
-            dmg = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
+            raw = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
+            dmg = _dot_damage_after_armor(raw, armor)
             hp -= dmg
-            logs.append(f"→ 👹 🔥 Враг горит: −{dmg} HP")
+            if dmg > 0:
+                logs.append(f"→ 👹 🔥 Враг горит: −{dmg} HP")
         elif e.get("key") == "bleed":
-            dmg = max(1, int(mx * int(e.get("potency_percent", 4)) / 100))
+            raw = max(1, int(mx * int(e.get("potency_percent", 4)) / 100))
+            dmg = _dot_damage_after_armor(raw, armor)
             hp -= dmg
-            logs.append(f"→ 👹 🩸 Враг истекает кровью: −{dmg} HP")
+            if dmg > 0:
+                logs.append(f"→ 👹 🩸 Враг истекает кровью: −{dmg} HP")
         elif e.get("key") == "poison":
-            dmg = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
+            raw = max(1, int(mx * int(e.get("potency_percent", 3)) / 100))
+            dmg = _dot_damage_after_armor(raw, armor)
             hp -= dmg
-            logs.append(f"→ 👹 ☠️ Яд: −{dmg} HP")
+            if dmg > 0:
+                logs.append(f"→ 👹 ☠️ Яд: −{dmg} HP")
         turns = int(e.get("turns", 0)) - 1
         if turns > 0:
             e["turns"] = turns
@@ -366,6 +407,11 @@ def player_weapon_attack_value(state: dict[str, Any]) -> int:
     return int(state.get("weapon_attack", 3))
 
 
+def weapon_attack_with_rune_flat(state: dict[str, Any]) -> int:
+    """Атака оружия + плоский урон рун (броня врага вычитается из суммы в formulas)."""
+    return player_weapon_attack_value(state) + int(state.get("weapon_rune_flat_elemental", 0))
+
+
 def player_defense_value(state: dict[str, Any]) -> int:
     vit = int(_stats(state)["vit"])
     base = vit // 2
@@ -392,11 +438,20 @@ def monster_armor_value(state: dict[str, Any]) -> int:
     return max(0, base - shred + fort)
 
 
+def monster_same_element_immunity(state: dict[str, Any], *, magic_skill: bool = False) -> bool:
+    """Враг той же стихии, что атака — стихийный урон игрока не проходит."""
+    from game.items.runes import ELEMENTS
+
+    atk_el = player_attack_element_for_matchup(state, magic_skill=magic_skill)
+    mon = str(_m(state).get("element") or "").strip().lower()
+    return bool(atk_el and mon and atk_el in ELEMENTS and atk_el == mon)
+
+
 def elemental_bonus_percent(attacker_element: str | None, defender_element: str | None) -> int:
     """
     Элементальный бонус атаки:
-    +25% если атакуем слабость врага, -15% если атакуем устойчивость,
-    +10% если стихии совпадают (синергия одинаковых стихий).
+    +25% если атакуем слабость врага, -15% если атакуем устойчивость.
+    Совпадение стихий обрабатывается отдельно (полный иммунитет в бою).
     """
     from game.items.runes import ELEMENT_RESISTANCE, ELEMENT_WEAKNESS, ELEMENTS
 
@@ -404,15 +459,12 @@ def elemental_bonus_percent(attacker_element: str | None, defender_element: str 
     d = str(defender_element or "").strip().lower()
     if not a or not d or a not in ELEMENTS or d not in ELEMENTS:
         return 0
-    # Check weakness: defender is weak to attacker's element
+    if a == d:
+        return 0
     if ELEMENT_WEAKNESS.get(d) == a:
         return 25
-    # Check resistance: defender resists attacker's element
     if ELEMENT_RESISTANCE.get(d) == a:
         return -15
-    # Same-element synergy
-    if a == d:
-        return 10
     return 0
 
 
@@ -442,6 +494,8 @@ _ELEMENTAL_DAMAGE_PCT_FLOOR = -50
 
 def combined_player_elemental_damage_percent(state: dict[str, Any], *, magic_skill: bool = False) -> int:
     """weapon_rune_bonus_pct + таблица слабостей для цели текущего боя."""
+    if monster_same_element_immunity(state, magic_skill=magic_skill):
+        return 0
     rb = int(state.get("weapon_rune_bonus_pct", 0))
     mon = str((_m(state)).get("element") or "earth").strip().lower()
     atk_el = player_attack_element_for_matchup(state, magic_skill=magic_skill)
@@ -533,22 +587,38 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     if check_and_consume_monster_shield(state, logs):
         return logs, "continue", 0
 
-    # Проверка промаха (зависит от ЛОВ; extra_miss_chance из ауры и экипировки / мастерства)
-    aura_miss = float(state.get("player_aura_miss_chance", 0.0))
-    mod_miss = float(mods.get("extra_miss_chance", 0.0))
-    if formulas.roll_miss(int(st["dex"]), extra_miss_chance=aura_miss + mod_miss):
+    if _player_hit_missed(state):
         logs.append("💨 Промах! Удар не достиг цели.")
         return logs, "continue", 0
 
+    same_elem = monster_same_element_immunity(state)
     elem_bonus = combined_player_elemental_damage_percent(state)
     _log_weapon_rune_elemental_once(state, elem_bonus, logs)
+    if same_elem and not state.get("_elem_immunity_logged"):
+        logs.append("🛡️ <b>Стихийный иммунитет</b> — враг той же стихии, бонусный стихийный урон не действует.")
+        state["_elem_immunity_logged"] = True
 
+    flat_el = 0 if same_elem else int(state.get("weapon_rune_flat_elemental", 0))
+    wpn_for_split = player_weapon_attack_value(state) if same_elem else weapon_attack_with_rune_flat(state)
+    mdef = monster_armor_value(state)
+    roll = random.uniform(0.85, 1.15)
     d_yes, _d_ne, elem_extra = formulas.physical_damage_split(
         int(st["str"]),
-        player_weapon_attack_value(state),
-        monster_armor_value(state),
+        wpn_for_split,
+        mdef,
         elemental_bonus_percent=elem_bonus,
+        roll=roll,
     )
+    flat_applied = 0
+    if flat_el > 0:
+        d_base, _, _ = formulas.physical_damage_split(
+            int(st["str"]),
+            player_weapon_attack_value(state),
+            mdef,
+            elemental_bonus_percent=elem_bonus,
+            roll=roll,
+        )
+        flat_applied = max(0, d_yes - d_base)
     dmg = d_yes
     crit = formulas.roll_crit(luck, crit_bonus_flat=float(mods.get("crit_bonus", 0.0)))
     if crit:
@@ -559,13 +629,10 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     dmg = _apply_weapon_mastery_to_damage(state, dmg)
     dmg = apply_elixir_buffs(state, dmg)
     dmg = combo_apply_outgoing_damage(state, dmg, logs)
-    before_flat = dmg
-    flat_el = int(state.get("weapon_rune_flat_elemental", 0))
     scaled_elem = (
-        int(round(elem_extra * (before_flat / max(1, d_yes)))) if elem_extra > 0 else 0
+        int(round(elem_extra * (dmg / max(1, d_yes)))) if elem_extra > 0 and d_yes > 0 else 0
     )
-    dmg += flat_el
-    rline = _rune_added_damage_log_line(scaled_elem, flat_el)
+    rline = _rune_added_damage_log_line(scaled_elem, flat_applied)
     if rline:
         logs.append(rline)
     else:
@@ -574,7 +641,7 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
             logs,
             elem_bonus_pct=elem_bonus,
             scaled_elem=scaled_elem,
-            flat_el=flat_el,
+            flat_el=flat_applied,
         )
 
     # Проклятие (снижает урон игрока)
@@ -745,17 +812,28 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     if sk.power == 0:
         return logs, "continue", 0
 
+    if _player_hit_missed(state):
+        logs.append("💨 Промах! Навык не достиг цели.")
+        return logs, "continue", 0
+
     mdef = monster_armor_value(state)
 
     elem_for_tip = 0
     elem_skill = 0
+    same_elem_skill = monster_same_element_immunity(state, magic_skill=(sk.kind == "mag"))
+    if same_elem_skill and not state.get("_elem_immunity_logged"):
+        logs.append("🛡️ <b>Стихийный иммунитет</b> — враг той же стихии, бонусный стихийный урон не действует.")
+        state["_elem_immunity_logged"] = True
+    flat_el = 0 if same_elem_skill else int(state.get("weapon_rune_flat_elemental", 0))
+    flat_applied_skill = 0
     if sk.kind == "mag":
         mag_elem = combined_player_elemental_damage_percent(state, magic_skill=True)
         elem_for_tip = mag_elem
         _log_weapon_rune_elemental_once(state, mag_elem, logs)
+        focus = max(2, player_weapon_attack_value(state) // 2) + flat_el
         base = formulas.magical_damage(
             int(st["int"]),
-            max(2, player_weapon_attack_value(state) // 2),
+            focus,
             mdef,
             mag_bonus_percent=int(mods.get("mag_bonus_percent", 0)),
             elemental_bonus_percent=mag_elem,
@@ -765,21 +843,35 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         rb = combined_player_elemental_damage_percent(state, magic_skill=False)
         elem_for_tip = rb
         _log_weapon_rune_elemental_once(state, rb, logs)
+        phys_roll = random.uniform(0.85, 1.15)
+        wpn_skill = player_weapon_attack_value(state) if same_elem_skill else weapon_attack_with_rune_flat(state)
         d_yes, d_ne, _ = formulas.physical_damage_split(
             int(st["str"]),
-            player_weapon_attack_value(state),
+            wpn_skill,
             mdef,
             elemental_bonus_percent=rb,
+            roll=phys_roll,
         )
+        if flat_el > 0:
+            d_base, _, _ = formulas.physical_damage_split(
+                int(st["str"]),
+                player_weapon_attack_value(state),
+                mdef,
+                elemental_bonus_percent=rb,
+                roll=phys_roll,
+            )
+            flat_applied_skill = max(0, d_yes - d_base)
         t_phys = formulas.int_skill_phys_tuning_multiplier(int(st["int"]))
         base_y = int(d_yes * t_phys)
         base_n = int(d_ne * t_phys)
         if sk.power:
             dmg_y = int(base_y * sk.power)
             dmg_n = int(base_n * sk.power)
+            flat_applied_skill = int(flat_applied_skill * t_phys * sk.power)
         else:
             dmg_y = base_y
             dmg_n = base_n
+            flat_applied_skill = int(flat_applied_skill * t_phys)
         elem_skill = max(0, dmg_y - dmg_n)
         base = base_y
 
@@ -804,13 +896,11 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     dmg = _apply_weapon_mastery_to_damage(state, dmg)
     dmg = apply_elixir_buffs(state, dmg)
     dmg = combo_apply_outgoing_damage(state, dmg, logs)
-    before_flat = dmg
-    flat_el = int(state.get("weapon_rune_flat_elemental", 0))
     scaled_elem = (
-        int(round(elem_skill * (before_flat / max(1, dmg_start)))) if elem_skill > 0 else 0
+        int(round(elem_skill * (dmg / max(1, dmg_start)))) if elem_skill > 0 and dmg_start > 0 else 0
     )
-    dmg += flat_el
-    rline = _rune_added_damage_log_line(scaled_elem, flat_el)
+    flat_applied = flat_applied_skill if sk.kind != "mag" else 0
+    rline = _rune_added_damage_log_line(scaled_elem, flat_applied)
     if rline:
         logs.append(rline)
     else:
@@ -819,7 +909,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
             logs,
             elem_bonus_pct=elem_for_tip,
             scaled_elem=scaled_elem,
-            flat_el=flat_el,
+            flat_el=flat_applied,
         )
     logs.extend(_rune_status_proc_logs(state))
 
@@ -995,7 +1085,14 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
         return logs, "continue"
 
     dodge_flat = float(_mods(state).get("dodge_bonus", 0.0)) + float(state.get("player_temp_dodge", 0.0))
-    if formulas.roll_dodge(int(_stats(state)["dex"]), dodge_bonus_flat=dodge_flat):
+    m_acc = float(m.get("accuracy", 0) or 0)
+    ck_dodge = str(state.get("class_key") or "wanderer")
+    if formulas.roll_dodge_vs_monster(
+        int(_stats(state)["dex"]),
+        dodge_bonus_flat=dodge_flat,
+        monster_accuracy=m_acc,
+        class_key=ck_dodge,
+    ):
         logs.append("🏃 Ты увернулся от атаки!")
         _coliseum_bump_monster_turn(state, logs)
         return logs, "continue"

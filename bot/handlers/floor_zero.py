@@ -26,10 +26,10 @@ from aiogram.types import (
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.utils.game_ui import edit_game_message_content
+from utils.telegram.game_ui import edit_game_message_content
 from db.repository import character_repo, user_repo
 from db.models.character import Character
-from game.floors.floor_zero import (
+from game.tower.mechanics.floor_zero import (
     FLOOR0_CHOICES,
     apply_floor0_passive,
     is_floor0_done,
@@ -419,7 +419,7 @@ async def on_floor0_enter_tower(
         char.hp_current = int(char.hp_max)
         await session.flush()
 
-        from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui
+        from services.progression.floor_service import floor_keyboard_for_character, push_floor_screen_ui
         await push_floor_screen_ui(
             session,
             state,

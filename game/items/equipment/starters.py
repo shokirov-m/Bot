@@ -6,7 +6,7 @@ import copy
 from typing import Any
 
 from game.items.equipment.defaults import apply_item_payload_defaults
-from utils.image_assets import item_gear_png
+from utils.media.image_assets import item_gear_png
 
 
 def starter_bread_payload() -> dict[str, Any]:

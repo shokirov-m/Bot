@@ -24,9 +24,9 @@ from bot.states.combat_states import CombatStates
 from config import is_admin, settings
 from db.models.character import Character
 from db.repository import character_repo, sticker_duel_challenge_repo, user_repo
-from services import arena_service
-from services import sticker_duel_service
-from services import unlock_service
+import services.combat.arena_service as arena_service
+import services.social.sticker_duel_service as sticker_duel_service
+import services.progression.unlock_service as unlock_service
 from game.tower_cards import monster_cards as tc
 
 
@@ -95,7 +95,7 @@ async def _run_towercard_preview(
         full = header + cap
         posted = False
         if getattr(settings, "STICKER_MIRROR_TO_GACHA_CHAT", True):
-            from services import gacha_broadcast_service
+            import services.social.gacha_broadcast_service as gacha_broadcast_service
 
             posted = await gacha_broadcast_service.broadcast_sticker_pack_activity(
                 bot,
@@ -173,8 +173,8 @@ async def sticker_menu_open(callback: CallbackQuery, session: AsyncSession, stat
                 show_alert=True,
             )
             return
-        from bot.utils.game_ui import push_game_ui
-        from bot.utils.game_art import menu_locations_photo_path
+        from utils.telegram.game_ui import push_game_ui
+        from utils.media.game_art import menu_locations_photo_path
 
         await push_game_ui(
             state,
@@ -202,8 +202,8 @@ async def sticker_album_cb(callback: CallbackQuery, session: AsyncSession, state
         if char is None:
             return
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        from bot.utils.game_ui import push_game_ui
-        from bot.utils.game_art import menu_locations_photo_path
+        from utils.telegram.game_ui import push_game_ui
+        from utils.media.game_art import menu_locations_photo_path
 
         await push_game_ui(
             state,
@@ -232,8 +232,8 @@ async def sticker_top_cb(callback: CallbackQuery, session: AsyncSession, state: 
             return
         loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
         text = await _format_sticker_leaderboard_html(session, char, loc)
-        from bot.utils.game_ui import push_game_ui
-        from bot.utils.game_art import menu_locations_photo_path
+        from utils.telegram.game_ui import push_game_ui
+        from utils.media.game_art import menu_locations_photo_path
 
         await push_game_ui(
             state,
@@ -288,8 +288,8 @@ async def sticker_spin_free(callback: CallbackQuery, session: AsyncSession, stat
             msg_html=msg,
             sticker_id=sid,
         )
-        from bot.utils.game_ui import push_game_ui
-        from bot.utils.game_art import menu_locations_photo_path
+        from utils.telegram.game_ui import push_game_ui
+        from utils.media.game_art import menu_locations_photo_path
 
         await push_game_ui(
             state,
@@ -344,8 +344,8 @@ async def sticker_spin_paid(callback: CallbackQuery, session: AsyncSession, stat
             msg_html=msg,
             sticker_id=sid,
         )
-        from bot.utils.game_ui import push_game_ui
-        from bot.utils.game_art import menu_locations_photo_path
+        from utils.telegram.game_ui import push_game_ui
+        from utils.media.game_art import menu_locations_photo_path
 
         await push_game_ui(
             state,
@@ -435,8 +435,8 @@ async def sticker_duel_start(callback: CallbackQuery, session: AsyncSession, sta
             return
         await state.set_state(StickerDuelStates.waiting_opponent_game_id)
         await state.update_data(stk_atk_sid=None)
-        from bot.utils.game_ui import push_game_ui
-        from bot.utils.game_art import menu_locations_photo_path
+        from utils.telegram.game_ui import push_game_ui
+        from utils.media.game_art import menu_locations_photo_path
 
         await push_game_ui(
             state,

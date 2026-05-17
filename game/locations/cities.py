@@ -1,7 +1,7 @@
-"""
+﻿"""
 Города-хабы башни: лор, ключи для квестов/меты, привязка к floor_data.
 
-Источник правды по этажу и имени — `game.floors.floor_data` (CITIES, CityInfo).
+Источник правды по этажу и имени — `game.tower.progression.floor_data` (CITIES, CityInfo).
 Здесь — расширенные тексты и стабильные ключи для цепочек «город → NPC → квесты».
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 import html
 from dataclasses import dataclass
 
-from game.floors import floor_data
-from game.floors.floor_data import CityInfo
+from game.tower.progression import floor_data
+from game.tower.progression.floor_data import CityInfo
 
 
 @dataclass(frozen=True, slots=True)

@@ -40,9 +40,12 @@ from db.repository import admin_log_repo, character_repo, inventory_repo, user_r
 from db.repository import clan_repo, mercenary_repo
 from game.items import equipment as equipment_mod
 from game.characters.path_ranks import path_rank_name_ru
-from services import anticheat_service, arena_service, character_service, title_service
-from services.activity_service import activity_admin_lines, format_dt_utc, format_duration_ru
-from services.admin_promo_service import handle_admin_promo, promo_help_html
+import services.system.anticheat_service as anticheat_service
+import services.combat.arena_service as arena_service
+import services.progression.character_service as character_service
+import services.progression.title_service as title_service
+from services.progression.activity_service import activity_admin_lines, format_dt_utc, format_duration_ru
+from services.system.admin_promo_service import handle_admin_promo, promo_help_html
 
 router = Router(name="admin")
 
@@ -1120,7 +1123,7 @@ async def cb_admin_give_items(callback: CallbackQuery, session: AsyncSession) ->
         if ch is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
-        from services.admin_utils import ensure_admin_resources, give_admin_all_items
+        from services.system.admin_utils import ensure_admin_resources, give_admin_all_items
         await ensure_admin_resources(session, ch)
         added = await give_admin_all_items(session, ch)
         await session.commit()
@@ -1142,7 +1145,7 @@ async def cb_admin_reset_tier2(callback: CallbackQuery, state: FSMContext) -> No
     try:
         await callback.answer("⏳ Запускаю сброс Тир-2 классов…", show_alert=False)
         await callback.message.answer("⏳ <b>Сброс Тир-2 классов запущен.</b> Ожидай результата…", parse_mode=ParseMode.HTML)
-        from services.tier2_migration_service import run_tier2_reset
+        from services.progression.tier2_migration_service import run_tier2_reset
         await run_tier2_reset(callback.bot)
         await callback.message.answer(
             "✅ <b>Сброс завершён.</b>\n"
@@ -1393,7 +1396,7 @@ async def admin_fsm_text(message: Message, session: AsyncSession, state: FSMCont
                 },
             )
             await session.commit()
-            from services import gacha_broadcast_service
+            import services.social.gacha_broadcast_service as gacha_broadcast_service
 
             u = await user_repo.get_by_id(session, int(ch.user_id))
             uname = (u.username or "").strip() if u is not None else ""

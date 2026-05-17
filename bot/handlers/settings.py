@@ -27,16 +27,18 @@ from bot.keyboards.settings_kb import (
 )
 from bot.states.combat_states import CombatStates
 from bot.states.settings_states import SettingsStates
-from bot.utils.game_art import menu_settings_photo_path
-from bot.utils.game_ui import push_game_ui
+from utils.media.game_art import menu_settings_photo_path
+from utils.telegram.game_ui import push_game_ui
 from config import settings
 from db.repository import character_repo, user_repo
-from services import anticheat_service, character_service, stat_bonus_service
-from services import unlock_service
-from services.referral_service import referral_bot_link, resolve_bot_username_for_referral
-from services.settings_service import redeem_promo, try_paid_rename
+import services.system.anticheat_service as anticheat_service
+import services.progression.character_service as character_service
+import services.progression.stat_bonus_service as stat_bonus_service
+import services.progression.unlock_service as unlock_service
+from services.social.referral_service import referral_bot_link, resolve_bot_username_for_referral
+from services.system.settings_service import redeem_promo, try_paid_rename
 from utils.game_images_prefs import set_game_images_hidden, game_images_enabled
-from utils.ui import LINE_SEP
+from utils.telegram.ui import LINE_SEP
 from bot.states.registration_states import RegistrationStates
 
 router = Router(name="settings")
@@ -70,7 +72,8 @@ def _settings_handbook_html() -> str:
         BANK_RATE_PER_HOUR_SEAL,
         BANK_TERM_OPTIONS,
     )
-    from services import golden_goblin_service, home_service
+    import services.progression.golden_goblin_service as golden_goblin_service
+    import services.progression.home_service as home_service
     from game.mercenaries import constants as merc_const
 
     mx = int(settings.MAX_STAMINA)

@@ -10,10 +10,13 @@ from db.models.character import Character
 from game.characters.path_ranks import PATH_RANK_SPECS, path_rank_key_from_battle
 from game.characters.skills import passive_combat_modifiers_merged
 from game.combat import consumables
-from game.floors import long_floor as lf
-from services import character_service, daily_service
-from services.combat_service import _tutorial_monster_wave2
-from services.meta_migration_service import apply_legacy_title_rank_migration
+from game.tower.mechanics import registry as mech
+
+lf = mech.long_floor_mod
+import services.progression.character_service as character_service
+import services.progression.daily_service as daily_service
+from services.combat.combat_service import _tutorial_monster_wave2
+from services.progression.meta_migration_service import apply_legacy_title_rank_migration
 
 
 def test_path_rank_key_from_battle_deterministic() -> None:
@@ -157,7 +160,7 @@ def test_hp_mp_ratio_uses_formula_baseline_when_column_stale() -> None:
     """При устаревшем hp_max в БД доля текущего HP от старого макс. по формуле, не от колонки."""
     from game.characters.classes import get_class_or_none
 
-    from services.character_service import _apply_hp_mp_caps_from_totals, _compute_hp_max
+    from services.progression.character_service import _apply_hp_mp_caps_from_totals, _compute_hp_max
 
     cls = get_class_or_none("warrior")
     assert cls is not None

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Кузница: заточка надетой экипировки в городах-хабах. Колбэки frg:*.
 """
 
@@ -14,8 +14,8 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale
-from bot.utils.game_art import menu_city_photo_path
-from bot.utils.game_ui import edit_game_message_content, push_game_ui
+from utils.media.game_art import menu_city_photo_path
+from utils.telegram.game_ui import edit_game_message_content, push_game_ui
 from bot.keyboards.forge_kb import (
     city_hub_keyboard,
     forge_actions_keyboard,
@@ -29,13 +29,14 @@ from bot.keyboards.forge_kb import (
 )
 from db.repository import character_repo, inventory_repo, user_repo
 from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
-from game.floors import floor_data
+from game.tower.progression import floor_data
 from game.locations import forge as forge_loc
 from game.crafting.recipes_data import forge_recipes_only
-from services import crafting_service, forge_service
-from services.floor_service import format_city_hub_message
+import services.economy.crafting_service as crafting_service
+import services.economy.forge_service as forge_service
+from services.progression.floor_service import format_city_hub_message
 from game.items.equipment.starters import promo_starter_armor_amulet_payloads, starter_pants_payload
-from services import character_service
+import services.progression.character_service as character_service
 from game.items.equipment.defaults import apply_item_payload_defaults
 
 router = Router(name="forge")
@@ -984,7 +985,7 @@ async def forge_quest_open(query: CallbackQuery, session: AsyncSession) -> None:
         if char is None or char.floor_number != floor_key:
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
-        from services import forge_quest_service as fqs
+        import services.progression.forge_quest_service as forge_quest_service
         text = fqs.format_forge_quest_html(char, floor_key)
         state = fqs._get_state(char, floor_key)
         await edit_game_message_content(query.message,
@@ -1010,7 +1011,7 @@ async def forge_quest_start(query: CallbackQuery, session: AsyncSession) -> None
         if char is None or char.floor_number != floor_key:
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
-        from services import forge_quest_service as fqs
+        import services.progression.forge_quest_service as forge_quest_service
         ok = fqs.start_chain(char, floor_key)
         if not ok:
             await query.answer("Цепочка уже начата или недоступна.", show_alert=True)
@@ -1043,7 +1044,7 @@ async def forge_quest_claim_step(query: CallbackQuery, session: AsyncSession) ->
         if char is None or char.floor_number != floor_key:
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
-        from services import forge_quest_service as fqs
+        import services.progression.forge_quest_service as forge_quest_service
         ok, msg = await fqs.claim_step(session, char, floor_key, step)
         if not ok:
             await query.answer(msg[:180], show_alert=True)
@@ -1075,7 +1076,7 @@ async def forge_quest_final(query: CallbackQuery, session: AsyncSession) -> None
         if char is None or char.floor_number != floor_key:
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
-        from services import forge_quest_service as fqs
+        import services.progression.forge_quest_service as forge_quest_service
         ok, msg = await fqs.claim_final_reward(session, char, floor_key)
         if not ok:
             await query.answer(msg[:200], show_alert=True)

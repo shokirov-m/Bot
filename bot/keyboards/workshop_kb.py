@@ -62,7 +62,7 @@ def workshop_prof_hub_keyboard(profession: str, *, repair_floor: int | None = No
 
 def workshop_main_keyboard(locale: str = "ru", *, character: "Character | None" = None) -> InlineKeyboardMarkup:
     _ = locale
-    from services import home_service
+    import services.progression.home_service as home_service
 
     rows: list[list[InlineKeyboardButton]] = [
         [

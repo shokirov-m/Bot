@@ -44,7 +44,7 @@ def test_stat_bonuses_enchant_pure_defense_ring() -> None:
 @pytest.mark.asyncio
 async def test_equipped_gear_stat_bonuses_includes_ring2_and_offhand(monkeypatch: pytest.MonkeyPatch) -> None:
     """Сервис суммирует все надетые строки: второе кольцо и оружие во второй руке не отбрасываются."""
-    from services import stat_bonus_service
+    import services.progression.stat_bonus_service as stat_bonus_service
 
     async def fake_list(_session, _character_id: int):
         return [

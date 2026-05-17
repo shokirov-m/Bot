@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 BLACK_MARKET_PRICE_MULT = 10
-MARKET_MIN_LEVEL = 15
+MARKET_MIN_LEVEL = 1
 MARKET_ENTRY_COST_GOLD = 300
 MARKET_FLOOR = 26
 
@@ -47,10 +47,10 @@ MERC_WORK_LOYALTY_CLAIM = 1
 
 # Опыт наёмников за победу в башне: доля отнимается у героя и копится в merc.extra
 MERC_EXTRA_XP_KEY = "merc_xp"
-# Порог уровня наёмника: множитель к формуле XP героя (чем больше — тем медленнее качаются).
-MERC_XP_LEVEL_NEED_MULT = 2.5
-# Наёмник не выше героя более чем на N уровней (дальше XP копится, уровень не растёт).
-MERC_MAX_LEVELS_ABOVE_HERO = 25
+# XP до уровня — та же кривая, что у героя (experience_needed_for_next_level).
+MERC_XP_LEVEL_NEED_MULT = 1.0
+# Кап уровня наёмника отключён (практически без лимита).
+MERC_MAX_LEVELS_ABOVE_HERO = 9999
 # Прирост карточных статов за уровень (как при генерации лота в mercenary_data).
 MERC_PER_LEVEL_HP = 8
 MERC_PER_LEVEL_ATK = 2

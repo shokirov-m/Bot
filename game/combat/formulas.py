@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 
 from game import balance as _bal
@@ -48,6 +49,135 @@ def roll_dodge(dexterity: int, *, dodge_bonus_flat: float = 0.0) -> bool:
 def roll_miss(dexterity: int, *, extra_miss_chance: float = 0.0) -> bool:
     """Возвращает True, если атака игрока промахнулась."""
     return random.random() < miss_chance_percent(dexterity, extra_miss_chance=extra_miss_chance)
+
+
+_ASSASSIN_CLASS_KEYS = frozenset({"scout", "assassin"})
+
+
+def is_assassin_path_class(class_key: str | None) -> bool:
+    return str(class_key or "").strip().lower() in _ASSASSIN_CLASS_KEYS
+
+
+def min_dexterity_reaching_dodge_cap() -> int:
+    """Минимальная ЛОВ, при которой вклад (d//5)*per достигает шапки уклонения (без gear-бонусов)."""
+    cap = float(_bal.DEX_DODGE_CAP) if _bal.BALANCE_V2_ENABLED else 0.40
+    per = float(_bal.DEX_DODGE_PER_5)
+    chunks = max(0, int(math.ceil(cap / per - 1e-12)))
+    return 5 * chunks
+
+
+def dexterity_overflow_past_dodge_cap(dexterity: int) -> int:
+    """
+    Сколько пунктов ЛОВ «сверх» порога, после которого сырой уклон по ЛОВ не растёт.
+    На пороге возвращает 0; первая лишняя ЛОВ даёт 1.
+    """
+    thr = min_dexterity_reaching_dodge_cap()
+    return max(0, int(dexterity) - thr)
+
+
+def assassin_accuracy_shred(dexterity: int, *, class_key: str | None) -> float:
+    if not is_assassin_path_class(class_key):
+        return 0.0
+    ov = dexterity_overflow_past_dodge_cap(dexterity)
+    raw = ov * float(_bal.ASSASSIN_ACCURACY_SHRED_PER_OVERFLOW_DEX)
+    return min(float(_bal.ASSASSIN_ACCURACY_SHRED_CAP), raw)
+
+
+def assassin_evasion_shred(dexterity: int, *, class_key: str | None) -> float:
+    if not is_assassin_path_class(class_key):
+        return 0.0
+    ov = dexterity_overflow_past_dodge_cap(dexterity)
+    raw = ov * float(_bal.ASSASSIN_EVASION_SHRED_PER_OVERFLOW_DEX)
+    return min(float(_bal.ASSASSIN_EVASION_SHRED_CAP), raw)
+
+
+def effective_monster_accuracy_on_player(
+    monster_accuracy: float,
+    dexterity: int,
+    *,
+    class_key: str | None,
+) -> float:
+    """Точность врага после «пробоя» убийцы (доля 0..1)."""
+    acc = max(0.0, float(monster_accuracy))
+    acc = max(0.0, acc - assassin_accuracy_shred(dexterity, class_key=class_key))
+    return min(float(_bal.MONSTER_ACCURACY_CAP), acc)
+
+
+def effective_dodge_chance_percent(
+    dexterity: int,
+    *,
+    dodge_bonus_flat: float = 0.0,
+    monster_accuracy: float = 0.0,
+    class_key: str | None = None,
+) -> float:
+    """
+    Уклонение игрока после вычета точности монстра (и учёта убийцы).
+    Не выше «сырого» уклонения; не ниже DODGE_EFFECTIVE_MIN.
+    """
+    raw = dodge_chance_percent(dexterity, dodge_bonus_flat=dodge_bonus_flat)
+    acc = effective_monster_accuracy_on_player(monster_accuracy, dexterity, class_key=class_key)
+    eff = raw - acc
+    eff = min(eff, raw)
+    floor_m = float(_bal.DODGE_EFFECTIVE_MIN)
+    if eff < floor_m:
+        eff = min(floor_m, raw)
+    return max(0.0, eff)
+
+
+def roll_dodge_vs_monster(
+    dexterity: int,
+    *,
+    dodge_bonus_flat: float = 0.0,
+    monster_accuracy: float = 0.0,
+    class_key: str | None = None,
+) -> bool:
+    return random.random() < effective_dodge_chance_percent(
+        dexterity,
+        dodge_bonus_flat=dodge_bonus_flat,
+        monster_accuracy=monster_accuracy,
+        class_key=class_key,
+    )
+
+
+def effective_monster_evasion_against_player(
+    monster_evasion: float,
+    dexterity: int,
+    *,
+    class_key: str | None,
+) -> float:
+    ev = max(0.0, float(monster_evasion))
+    ev = max(0.0, ev - assassin_evasion_shred(dexterity, class_key=class_key))
+    return min(float(_bal.MONSTER_EVASION_CAP), ev)
+
+
+def miss_chance_percent_vs_monster(
+    dexterity: int,
+    *,
+    extra_miss_chance: float = 0.0,
+    monster_evasion: float = 0.0,
+    class_key: str | None = None,
+) -> float:
+    """Промах по игроку с учётом уклонения врага (доля 0..1)."""
+    base = miss_chance_percent(dexterity, extra_miss_chance=extra_miss_chance)
+    ev = effective_monster_evasion_against_player(monster_evasion, dexterity, class_key=class_key)
+    # Верхняя граница: не уносим шанс в невозможное; плюс уклонение врага.
+    hi = max(0.92, float(_bal.DEX_MISS_BASE) if _bal.BALANCE_V2_ENABLED else 0.20)
+    return clamp(base + ev, 0.03, hi)
+
+
+def roll_miss_vs_monster(
+    dexterity: int,
+    *,
+    extra_miss_chance: float = 0.0,
+    monster_evasion: float = 0.0,
+    class_key: str | None = None,
+) -> bool:
+    return random.random() < miss_chance_percent_vs_monster(
+        dexterity,
+        extra_miss_chance=extra_miss_chance,
+        monster_evasion=monster_evasion,
+        class_key=class_key,
+    )
 
 
 def int_skill_phys_tuning_multiplier(intelligence: int) -> float:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from services import arena_service
+import services.combat.arena_service as arena_service
 
 
 def test_arena_daily_counter_resets_shape() -> None:

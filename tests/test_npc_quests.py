@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from game.quests.npc_quests import generate_quest_pool, template_by_key, templates_for_floor
+from game.tower.quests.npc_quests import generate_quest_pool, template_by_key, templates_for_floor
 
 
 def test_quest_pool_covers_multiples_of_three() -> None:

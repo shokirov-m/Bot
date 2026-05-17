@@ -9,7 +9,7 @@ from db.models.auction_lot import AuctionLot
 from db.models.character import Character
 from game.items import item_categories
 from game.items.equipment import RARITY_EMOJI, gear_icon_for_item_data
-from utils.ui import LINE_SEP, format_number
+from utils.telegram.ui import LINE_SEP, format_number
 
 
 def auction_vip_portraits_screen_html(character: Character) -> str:
@@ -17,8 +17,8 @@ def auction_vip_portraits_screen_html(character: Character) -> str:
     import html as _html
 
     from game.economy.shop import VIP_STAR_GOODS
-    from services import shop_service
-    from services.home_service import has_portrait_unlock
+    import services.economy.shop_service as shop_service
+    from services.progression.home_service import has_portrait_unlock
 
     lines = [
         "⭐ <b>VIP-магазин — Облики профиля</b>",

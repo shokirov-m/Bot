@@ -28,15 +28,15 @@ from bot.handlers.profile import clamp_profile_caption_for_photo
 from bot.i18n import get_locale, resolve_locale_from_telegram, t
 from bot.keyboards.menu_kb import main_menu_keyboard, main_menu_with_tutorial_hints
 from bot.states.registration_states import RegistrationStates
-from bot.utils.safe_media import safe_answer_photo
+from utils.media.safe_media import safe_answer_photo
 from db.models.user import User
 from db.models.character import Character
 from db.repository import character_repo, user_repo
 from game.characters.classes import get_class_or_none
-from services.character_service import create_character_for_user
-from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
-from services.referral_service import bind_invitee_to_referrer, parse_referrer_telegram_id_from_start_text
-from utils.profile_portraits import (
+from services.progression.character_service import create_character_for_user
+from services.system.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
+from services.social.referral_service import bind_invitee_to_referrer, parse_referrer_telegram_id_from_start_text
+from utils.media.profile_portraits import (
     GENDER_FEMALE,
     portrait_key_from_gender_slot,
     portrait_paths_for_gender_album,

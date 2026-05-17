@@ -12,7 +12,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.black_market_kb import jabs_lots_keyboard, location_back_keyboard, market_hub_keyboard
-from bot.utils.game_ui import push_game_ui
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.mercenaries.market_hub import LOCATIONS, dialog_pool, HUB_MECHANICS_RU
 from game.mercenaries.shadow_market_meta import (
@@ -20,7 +20,9 @@ from game.mercenaries.shadow_market_meta import (
     mark_showcase_lot_purchased,
     market_hub_session_open,
 )
-from services import black_market_quest_service, black_market_service, mercenary_service
+import services.economy.black_market_quest_service as black_market_quest_service
+import services.economy.black_market_service as black_market_service
+import services.social.mercenary_service as mercenary_service
 
 router = Router(name="black_market")
 
@@ -229,7 +231,7 @@ async def bm_location(callback: CallbackQuery, session: AsyncSession, state: FSM
 @router.callback_query(F.data == "bm:back_floor")
 async def bm_back_floor(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
-        from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui
+        from services.progression.floor_service import floor_keyboard_for_character, push_floor_screen_ui
 
         if callback.message is None or callback.bot is None:
             await callback.answer()

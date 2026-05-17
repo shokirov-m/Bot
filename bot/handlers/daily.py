@@ -13,11 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import get_locale, t
 from bot.keyboards.daily_kb import daily_screen_keyboard
-from bot.utils.game_ui import edit_game_message_content
+from utils.telegram.game_ui import edit_game_message_content
 from db.repository import character_repo, user_repo
-from services import daily_service
-from services.daily_service import build_daily_body_html
-from services.subscription_service import subscription_check
+import services.progression.daily_service as daily_service
+from services.progression.daily_service import build_daily_body_html
+from services.social.subscription_service import subscription_check
 
 router = Router(name="daily")
 

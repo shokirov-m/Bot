@@ -1,10 +1,10 @@
-"""Regression: floor-1 city guard quest tier + unified XP curve."""
+﻿"""Regression: floor-1 city guard quest tier + unified XP curve."""
 from __future__ import annotations
 
 from game.balance import PROGRESSION_BASE_EXP, PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2
-from game.floors import floor_data
+from game.tower.progression import floor_data
 from game.quests.city_quests import city_quest_template
-from services.character_service import experience_needed_for_next_level
+from services.progression.character_service import experience_needed_for_next_level
 
 
 def test_floor1_city_quest_not_endgame_values() -> None:

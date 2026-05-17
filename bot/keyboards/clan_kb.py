@@ -6,7 +6,7 @@ from typing import Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from services.clan_service import (
+from services.social.clan_service import (
     BUILDING_DEFS,
     RELIC_DEFS,
     can_manage,
@@ -152,7 +152,7 @@ def clan_salary_amount_keyboard(target_char_id: int) -> InlineKeyboardMarkup:
 def clan_buildings_keyboard(
     payload: dict[str, Any], clan_level: int, role: str
 ) -> InlineKeyboardMarkup:
-    from services.clan_service import _buildings, _has_building, check_and_complete_buildings
+    from services.social.clan_service import _buildings, _has_building, check_and_complete_buildings
     check_and_complete_buildings(payload)
     blds = _buildings(payload)
     rows: list[list[InlineKeyboardButton]] = []
@@ -192,7 +192,7 @@ def clan_building_detail_keyboard(
 def clan_relics_keyboard(
     payload: dict[str, Any], role: str, has_alchemy_lab: bool
 ) -> InlineKeyboardMarkup:
-    from services.clan_service import _relics
+    from services.social.clan_service import _relics
     relics = _relics(payload)
     rows: list[list[InlineKeyboardButton]] = []
     if has_alchemy_lab and can_manage(role):
@@ -218,7 +218,7 @@ def clan_capture_keyboard(
     page: int = 0,
     page_size: int = 12,
 ) -> InlineKeyboardMarkup:
-    from services.clan_service import CAPTURABLE_FLOORS, _floor_capture_active
+    from services.social.clan_service import CAPTURABLE_FLOORS, _floor_capture_active
     from datetime import datetime, UTC
     rows: list[list[InlineKeyboardButton]] = []
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Городская экономика: лотерея, ростовщик, сейф банка.
 Колбэки ecy:* — только на этаже городского хаба.
 """
@@ -16,11 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale
 from bot.keyboards.economy_kb import bank_safe_keyboard, economy_hub_keyboard
 from bot.keyboards.forge_kb import city_hub_keyboard
-from bot.utils.game_ui import push_game_ui
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.economy import sinks as sink_rules
-from game.floors import floor_data
-from services import economy_sink_service
+from game.tower.progression import floor_data
+import services.economy.economy_sink_service as economy_sink_service
 
 router = Router(name="economy_sinks")
 
@@ -90,7 +90,7 @@ async def economy_back_city(query: CallbackQuery, session: AsyncSession, state: 
         if char.floor_number != floor_key:
             await query.answer("Этаж устарел.", show_alert=True)
             return
-        from services.floor_service import format_city_hub_message
+        from services.progression.floor_service import format_city_hub_message
 
         loc = get_locale(char, query.from_user.language_code)
         economy_sink_service.clear_bank_ui_back(char)

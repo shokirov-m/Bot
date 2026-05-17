@@ -6,9 +6,9 @@ import copy
 import random
 from typing import Any
 
-from game.floors.monsters import FloorMonsterSpawn
+from game.enemies.floors.spawns import FloorMonsterSpawn
 from game.items import catalog_loot
-from utils.image_assets import item_gear_png
+from utils.media.image_assets import item_gear_png
 
 
 def _clamp_floor(floor_number: int) -> int:
@@ -73,7 +73,7 @@ def _normal_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     )
     cat = catalog_loot.roll_catalog_item(fl)
     if cat is not None:
-        options = options + ((1.2, cat),)
+        options = options + ((0.42, cat),)
     return _weighted_payload(options)
 
 
@@ -102,7 +102,7 @@ def _elite_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     )
     cat = catalog_loot.roll_catalog_item(fl)
     if cat is not None:
-        elite_options = elite_options + ((1.0, cat),)
+        elite_options = elite_options + ((0.38, cat),)
     return _weighted_payload(elite_options)
 
 
@@ -121,7 +121,7 @@ def _mini_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     )
     cat = catalog_loot.roll_catalog_item(fl)
     if cat is not None:
-        mini_options = mini_options + ((1.2, cat),)
+        mini_options = mini_options + ((0.45, cat),)
     return _weighted_payload(mini_options)
 
 
@@ -140,5 +140,5 @@ def _major_boss_loot(fl: int, spawn: FloorMonsterSpawn) -> dict[str, Any]:
     )
     cat = catalog_loot.roll_catalog_item(fl)
     if cat is not None:
-        major_options = major_options + ((1.5, cat),)
+        major_options = major_options + ((0.52, cat),)
     return _weighted_payload(major_options)

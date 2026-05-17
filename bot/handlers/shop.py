@@ -19,13 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.auction_kb import auction_portraits_keyboard, auction_portraits_screen_html
 from bot.keyboards.shop_kb import shop_main_keyboard, shop_vip_keyboard
-from bot.utils.game_art import menu_auction_photo_path, menu_shop_photo_path, menu_shop_vip_photo_path
-from bot.utils.game_ui import push_game_ui
+from utils.media.game_art import menu_auction_photo_path, menu_shop_photo_path, menu_shop_vip_photo_path
+from utils.telegram.game_ui import push_game_ui
 from config import settings
 from db.repository import character_repo, user_repo
 from game.economy import shop as shop_data
-from services import shop_service
-from utils.ui import LINE_SEP
+import services.economy.shop_service as shop_service
+from utils.telegram.ui import LINE_SEP
 
 router = Router(name="shop")
 
@@ -255,7 +255,7 @@ async def shop_vip_buy(query: CallbackQuery, session: AsyncSession) -> None:
             payload = f"vipbonus:{bid}:{query.from_user.id}"
         else:
             pk = str(good.item_data.get("portrait_key", ""))
-            from services.home_service import has_portrait_unlock
+            from services.progression.home_service import has_portrait_unlock
             if not pk:
                 await query.answer("Товар не поддерживается.", show_alert=True)
                 return
@@ -427,7 +427,7 @@ async def successful_payment_handler(message: Message, session: AsyncSession) ->
                     logger.warning("Stars refund failed stickerspin no char")
                 return
             await character_repo.lock_character_row(session, char.id)
-            from services import sticker_duel_service
+            import services.social.sticker_duel_service as sticker_duel_service
 
             ok, result_msg, sid, src_floor = sticker_duel_service.apply_sticker_gacha_paid_spin_slot_only(char)
             await session.commit()

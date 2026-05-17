@@ -13,11 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from game.data.monsters import MONSTER_TEMPLATE_META
-from game.floors import floor_data, monster_catalog
-from game.floors.monster_appearances_ru import APPEARANCE_RU, MONSTER_CARD_QUOTE_RU
-from game.floors.monsters import FloorMonsterSpawn, build_spawns_for_floor
+from game.tower.progression import floor_data
+import game.enemies.catalog.catalog as monster_catalog
+from game.enemies.appearances_ru import APPEARANCE_RU, MONSTER_CARD_QUOTE_RU
+from game.enemies.floors.spawns import FloorMonsterSpawn, build_spawns_for_floor
 from game.tower_cards.card_catalog import catalog_str, merged_catalog_entry
-from utils.image_assets import monster_image_for_template
+from utils.media.image_assets import monster_image_for_template
 
 RARITY_STARS_RU: dict[str, str] = {
     "common": "⭐",

@@ -35,12 +35,13 @@ from bot.keyboards.auction_kb import (
 )
 from bot.states.auction_states import AuctionCreateStates
 from bot.states.combat_states import CombatStates
-from bot.utils.game_ui import edit_game_message_content, push_game_ui
+from utils.telegram.game_ui import edit_game_message_content, push_game_ui
 from db.repository import auction_repo, character_repo, inventory_repo, user_repo
 from game.economy.market import LOT_DURATION_DAYS, _expires_at_utc
 from game.items import item_categories
-from services import economy_service, home_service
-from utils.ui import format_inventory_item_html, format_number, item_bag_button_label
+import services.economy.economy_service as economy_service
+import services.progression.home_service as home_service
+from utils.telegram.ui import format_inventory_item_html, format_number, item_bag_button_label
 
 router = Router(name="auction")
 
@@ -331,9 +332,9 @@ async def auc_vip_portrait_preview(callback: CallbackQuery, session: AsyncSessio
             await callback.answer("Нет доступа.", show_alert=True)
             return
         from game.economy.shop import vip_good_by_key
-        from services import shop_service
-        from utils.image_assets import tower_bot_root
-        from utils.profile_portraits import portrait_blurb_ru, portrait_path_if_exists, portrait_title_ru
+        import services.economy.shop_service as shop_service
+        from utils.media.image_assets import tower_bot_root
+        from utils.media.profile_portraits import portrait_blurb_ru, portrait_path_if_exists, portrait_title_ru
 
         g = vip_good_by_key(gk)
         if g is None:

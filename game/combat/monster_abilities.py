@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Уникальные способности монстров — применяются автоматически в engine.monster_turn
 на основе template_key монстра.
@@ -24,7 +26,8 @@
   shatter_death     — при смерти наносит урон игроку (базируется на броне монстра)
 """
 
-from __future__ import annotations
+# Глобальный множитель шанса оглушения от монстров.
+MONSTER_STUN_CHANCE_MULT = 0.48
 
 import random
 from typing import Any
@@ -383,7 +386,7 @@ def apply_post_hit_abilities(
         logs.append(f"🩸 Враг поглощает жизнь: +{heal} HP.")
 
     # ── Оглушение (следующее действие игрока пропущено) ─────────────────────
-    if "stun_chance" in ab and random.random() < float(ab["stun_chance"]):
+    if "stun_chance" in ab and random.random() < float(ab["stun_chance"]) * MONSTER_STUN_CHANCE_MULT:
         state["player_skip_next_action"] = True
         logs.append("💫 <b>Оглушение!</b> Твоё следующее действие пропущено.")
 

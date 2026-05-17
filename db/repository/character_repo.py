@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from db.models.character import Character
 from game.economy import stamina as stamina_mod
 from db.models.user import User
-from services.meta_migration_service import apply_legacy_title_rank_migration
+from services.progression.meta_migration_service import apply_legacy_title_rank_migration
 
 
 async def get_by_id(session: AsyncSession, character_id: int) -> Character | None:

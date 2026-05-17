@@ -13,11 +13,12 @@ from bot.keyboards.coliseum_kb import (
     coliseum_fight_confirm_keyboard,
     coliseum_main_keyboard,
 )
-from bot.utils.game_art import coliseum_fighter_photo_path, coliseum_hub_photo_path
-from bot.utils.game_ui import push_game_ui
+from utils.media.game_art import coliseum_fighter_photo_path, coliseum_hub_photo_path
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
-from game.coliseum.coliseum_data import fighter_by_id, scaled_coliseum_atk
-from services import coliseum_service, combat_service
+from game.enemies.coliseum.fighters import fighter_by_id, scaled_coliseum_atk
+import services.combat.coliseum_service as coliseum_service
+import services.combat.combat_service as combat_service
 
 router = Router(name="coliseum")
 

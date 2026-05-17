@@ -141,7 +141,7 @@ async def buy_lot_now(
     free_b = await inventory_repo.first_free_bag_slot(session, int(buyer.id))
     if free_b is None:
         return False, "Освободи хотя бы одну ячейку сумки."
-    from services import character_service
+    import services.progression.character_service as character_service
 
     character_service.add_gold(
         buyer,
@@ -250,7 +250,7 @@ async def accept_direct_offer(
     if free_b is None:
         return False, "Освободи хотя бы одну ячейку сумки."
 
-    from services import character_service
+    import services.progression.character_service as character_service
 
     character_service.add_gold(
         buyer,

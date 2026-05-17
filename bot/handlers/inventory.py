@@ -23,23 +23,25 @@ from bot.keyboards.inventory_kb import (
     item_detail_keyboard,
 )
 from bot.states.combat_states import CombatStates
-from bot.utils.game_ui import push_game_ui
-from bot.utils.game_art import craft_resource_photo_path
-from bot.utils.ui_photos import inventory_menu_photo_path
-from bot.utils.safe_media import normalize_photo_media
+from utils.telegram.game_ui import push_game_ui
+from utils.media.game_art import craft_resource_photo_path
+from utils.media.ui_photos import inventory_menu_photo_path
+from utils.media.safe_media import normalize_photo_media
 from db.repository import character_repo, inventory_repo, user_repo
 from game.items import equipment as equip_meta
 from game.items import item_categories
 from game.items.equipment.defaults import apply_item_payload_defaults
-from services import character_service, shop_service, stat_bonus_service
-from services.workshop_enchant_service import (
+import services.progression.character_service as character_service
+import services.economy.shop_service as shop_service
+import services.progression.stat_bonus_service as stat_bonus_service
+from services.economy.workshop_enchant_service import (
     USE_TAG_ALCHEMY_ENCHANT,
     list_compatible_targets as list_alchemy_enchant_targets,
     try_apply_alchemy_enchant,
 )
-from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
+from services.system.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
 from utils.game_images_prefs import game_images_enabled
-from utils.ui import format_inventory_item_html
+from utils.telegram.ui import format_inventory_item_html
 
 router = Router(name="inventory")
 
@@ -810,7 +812,7 @@ async def inv_equip(callback: CallbackQuery, session: AsyncSession, state: FSMCo
             character=char,
         )
         try:
-            from services import tutorial_service
+            import services.progression.tutorial_service as tutorial_service
 
             tutorial_service.mark_equipped_any(char)
             tutorial_service.advance_step_if_needed(char)

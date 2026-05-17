@@ -1,4 +1,4 @@
-"""
+﻿"""
 Поручения стражи в городах-хабах (3, 31, 61, 91): победы в боях башни.
 """
 
@@ -8,7 +8,7 @@ import html
 from dataclasses import dataclass
 from typing import Any
 
-from game.floors import floor_data
+from game.tower.progression import floor_data
 from game.locations.cities import guard_npc_title_for_floor
 
 

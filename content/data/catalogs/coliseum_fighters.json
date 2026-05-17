@@ -1,0 +1,1302 @@
+{
+  "_readme": "Бойцы колизея 1–50.",
+  "version": 1,
+  "template_key": "coliseum_gladiator",
+  "enemy_atk_mult": 5.0,
+  "element_map": {
+    "fire": "fire",
+    "water": "ice",
+    "ice": "ice",
+    "wind": "lightning",
+    "lightning": "lightning",
+    "poison": "earth",
+    "dark": "dark",
+    "light": "light",
+    "earth": "earth",
+    "none": "earth"
+  },
+  "fighters": [
+    {
+      "id": 1,
+      "name": "Кассий Пепельный",
+      "phrase": "«Кассий не отступит!»",
+      "victory_quote": "Пепел на арене — мой след. Ты прошёл по нему… значит, жар в тебе сильнее.",
+      "hp": 280,
+      "atk": 7,
+      "defense": 0,
+      "exp_reward": 45,
+      "gold_reward": 28,
+      "required_level": 1,
+      "element_tz": "fire",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_1",
+      "portrait": "coliseum/fighters/1.png"
+    },
+    {
+      "id": 2,
+      "name": "Дорн Железный",
+      "phrase": "«Дорн не отступит!»",
+      "victory_quote": "Железо сломалось раньше воли. Признаю — удар был честным.",
+      "hp": 2173,
+      "atk": 23,
+      "defense": 3,
+      "exp_reward": 993,
+      "gold_reward": 248,
+      "required_level": 2,
+      "element_tz": "earth",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_2",
+      "portrait": "coliseum/fighters/2.png"
+    },
+    {
+      "id": 3,
+      "name": "Лира Скорпия",
+      "phrase": "«Лира не отступит!»",
+      "victory_quote": "Жало не успело. Ты быстрее яда — это редкость.",
+      "hp": 4067,
+      "atk": 39,
+      "defense": 7,
+      "exp_reward": 1942,
+      "gold_reward": 468,
+      "required_level": 3,
+      "element_tz": "ice",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_3",
+      "portrait": "coliseum/fighters/3.png"
+    },
+    {
+      "id": 4,
+      "name": "Ганнок Костяной",
+      "phrase": "«Ганнок не отступит!»",
+      "victory_quote": "Кости хрустят не так громко, как твоя победа. Иди дальше.",
+      "hp": 5961,
+      "atk": 55,
+      "defense": 11,
+      "exp_reward": 2891,
+      "gold_reward": 689,
+      "required_level": 4,
+      "element_tz": "lightning",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_4",
+      "portrait": "coliseum/fighters/4.png"
+    },
+    {
+      "id": 5,
+      "name": "Серена Клинок",
+      "phrase": "«Серена не отступит!»",
+      "victory_quote": "Клинок не сказал последнее слово — сказал ты. Так и запомнят зрители.",
+      "hp": 7855,
+      "atk": 71,
+      "defense": 15,
+      "exp_reward": 3840,
+      "gold_reward": 909,
+      "required_level": 5,
+      "element_tz": "dark",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_5",
+      "portrait": "coliseum/fighters/5.png"
+    },
+    {
+      "id": 6,
+      "name": "Ива Теневая",
+      "phrase": "«Ива не отступит!»",
+      "victory_quote": "Тьма отступила… или ты просто умеешь видеть в ней дорогу.",
+      "hp": 9749,
+      "atk": 88,
+      "defense": 19,
+      "exp_reward": 4789,
+      "gold_reward": 1130,
+      "required_level": 6,
+      "element_tz": "light",
+      "is_champion": false,
+      "special": "blind_2",
+      "loot_id": "loot_6",
+      "portrait": "coliseum/fighters/6.png"
+    },
+    {
+      "id": 7,
+      "name": "Торин Молот",
+      "phrase": "«Торин не отступит!»",
+      "victory_quote": "Молот замолчал. Значит, нашёлся кто-то тяжелее удара.",
+      "hp": 11643,
+      "atk": 104,
+      "defense": 23,
+      "exp_reward": 5738,
+      "gold_reward": 1350,
+      "required_level": 7,
+      "element_tz": "water",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_7",
+      "portrait": "coliseum/fighters/7.png"
+    },
+    {
+      "id": 8,
+      "name": "Мира Остроглазая",
+      "phrase": "«Мира не отступит!»",
+      "victory_quote": "Я целилась в промах — промахнулась сама. Острота твоя, не моя.",
+      "hp": 13537,
+      "atk": 120,
+      "defense": 26,
+      "exp_reward": 6687,
+      "gold_reward": 1570,
+      "required_level": 8,
+      "element_tz": "wind",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_8",
+      "portrait": "coliseum/fighters/8.png"
+    },
+    {
+      "id": 9,
+      "name": "Векс Тихий",
+      "phrase": "«Векс не отступит!»",
+      "victory_quote": "Тихий конец — не про меня. Но сегодня арена громче тебя.",
+      "hp": 15431,
+      "atk": 136,
+      "defense": 30,
+      "exp_reward": 7636,
+      "gold_reward": 1791,
+      "required_level": 9,
+      "element_tz": "poison",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_9",
+      "portrait": "coliseum/fighters/9.png"
+    },
+    {
+      "id": 10,
+      "name": "Громовержец Карн",
+      "phrase": "«Я — стена Колизея №10!»",
+      "victory_quote": "Гром обошёл меня стороной… или ты был молнией первой. Чемпион сменился.",
+      "hp": 17324,
+      "atk": 210,
+      "defense": 34,
+      "exp_reward": 8585,
+      "gold_reward": 2011,
+      "required_level": 10,
+      "element_tz": "lightning",
+      "is_champion": true,
+      "special": "none",
+      "loot_id": "loot_10",
+      "portrait": "coliseum/fighters/10.png"
+    },
+    {
+      "id": 11,
+      "name": "Зара Длань",
+      "phrase": "«Зара не отступит!»",
+      "victory_quote": "Страх не подчинился мне — зато подчинился твоему ритму. Длань опущена.",
+      "hp": 19218,
+      "atk": 169,
+      "defense": 38,
+      "exp_reward": 9534,
+      "gold_reward": 2232,
+      "required_level": 11,
+      "element_tz": "fire",
+      "is_champion": false,
+      "special": "fear_30",
+      "loot_id": "loot_11",
+      "portrait": "coliseum/fighters/11.png"
+    },
+    {
+      "id": 12,
+      "name": "Руфус Кольчуга",
+      "phrase": "«Руфус не отступит!»",
+      "victory_quote": "Кольчуга дрогнула. Ржавчина в сердце — нет, в сердце у тебя сталь.",
+      "hp": 21112,
+      "atk": 185,
+      "defense": 42,
+      "exp_reward": 10483,
+      "gold_reward": 2452,
+      "required_level": 12,
+      "element_tz": "earth",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_12",
+      "portrait": "coliseum/fighters/12.png"
+    },
+    {
+      "id": 13,
+      "name": "Найла Пепел",
+      "phrase": "«Найла не отступит!»",
+      "victory_quote": "Пепел оседает на побеждённых. Сегодня он на мне — и это справедливо.",
+      "hp": 23006,
+      "atk": 201,
+      "defense": 46,
+      "exp_reward": 11432,
+      "gold_reward": 2672,
+      "required_level": 13,
+      "element_tz": "ice",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_13",
+      "portrait": "coliseum/fighters/13.png"
+    },
+    {
+      "id": 14,
+      "name": "Орикс Скиталец",
+      "phrase": "«Орикс не отступит!»",
+      "victory_quote": "Скиталец нашёл конец пути. Пусть твой путь будет длиннее моего.",
+      "hp": 24900,
+      "atk": 217,
+      "defense": 49,
+      "exp_reward": 12381,
+      "gold_reward": 2893,
+      "required_level": 14,
+      "element_tz": "lightning",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_14",
+      "portrait": "coliseum/fighters/14.png"
+    },
+    {
+      "id": 15,
+      "name": "Айша Сновидица",
+      "phrase": "«Айша не отступит!»",
+      "victory_quote": "Сон разбился… как иллюзия. Ты разбудил меня ударом — благодарю за ясность.",
+      "hp": 26794,
+      "atk": 234,
+      "defense": 53,
+      "exp_reward": 13330,
+      "gold_reward": 3113,
+      "required_level": 15,
+      "element_tz": "dark",
+      "is_champion": false,
+      "special": "sleep_first",
+      "loot_id": "loot_15",
+      "portrait": "coliseum/fighters/15.png"
+    },
+    {
+      "id": 16,
+      "name": "Петра Каменная",
+      "phrase": "«Петра не отступит!»",
+      "victory_quote": "Камень треснул. Значит, воля в тебе — неослабевающая.",
+      "hp": 28688,
+      "atk": 250,
+      "defense": 57,
+      "exp_reward": 14279,
+      "gold_reward": 3334,
+      "required_level": 16,
+      "element_tz": "light",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_16",
+      "portrait": "coliseum/fighters/16.png"
+    },
+    {
+      "id": 17,
+      "name": "Кай Кольцо",
+      "phrase": "«Кай не отступит!»",
+      "victory_quote": "Кольцо замкнуто не вокруг тебя — вокруг моего поражения. Честная игра.",
+      "hp": 30582,
+      "atk": 266,
+      "defense": 61,
+      "exp_reward": 15228,
+      "gold_reward": 3554,
+      "required_level": 17,
+      "element_tz": "water",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_17",
+      "portrait": "coliseum/fighters/17.png"
+    },
+    {
+      "id": 18,
+      "name": "Селин Лёд",
+      "phrase": "«Селин не отступит!»",
+      "victory_quote": "Лёд растаял от жара боя. Твой жар оказался сильнее мороза.",
+      "hp": 32475,
+      "atk": 460,
+      "defense": 65,
+      "exp_reward": 16177,
+      "gold_reward": 3774,
+      "required_level": 18,
+      "element_tz": "wind",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_18",
+      "portrait": "coliseum/fighters/18.png"
+    },
+    {
+      "id": 19,
+      "name": "Морд Крюк",
+      "phrase": "«Морд не отступит!»",
+      "victory_quote": "Крюк не удержал. У тебя цепь посильнее — из побед.",
+      "hp": 34369,
+      "atk": 299,
+      "defense": 69,
+      "exp_reward": 17126,
+      "gold_reward": 3995,
+      "required_level": 19,
+      "element_tz": "poison",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_19",
+      "portrait": "coliseum/fighters/19.png"
+    },
+    {
+      "id": 20,
+      "name": "Аргус Всевидящий",
+      "phrase": "«Я — стена Колизея №20!»",
+      "victory_quote": "Я видел всё… кроме этой концовки. Всевидящий ослеплён твоей настойчивостью.",
+      "hp": 36263,
+      "atk": 315,
+      "defense": 1272,
+      "exp_reward": 18075,
+      "gold_reward": 4215,
+      "required_level": 20,
+      "element_tz": "none",
+      "is_champion": true,
+      "special": "monster_evasion_30",
+      "loot_id": "loot_20",
+      "portrait": "coliseum/fighters/20.png"
+    },
+    {
+      "id": 21,
+      "name": "Тея Вихрь",
+      "phrase": "«Тея не отступит!»",
+      "victory_quote": "Вихрь утих. Ты оказался центром шторма, а не я.",
+      "hp": 38157,
+      "atk": 331,
+      "defense": 2276,
+      "exp_reward": 19024,
+      "gold_reward": 4436,
+      "required_level": 21,
+      "element_tz": "fire",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_21",
+      "portrait": "coliseum/fighters/21.png"
+    },
+    {
+      "id": 22,
+      "name": "Драско Пламя",
+      "phrase": "«Драско не отступит!»",
+      "victory_quote": "Пламя погасло не от ветра — от твоего натиска. Жги дальше.",
+      "hp": 40051,
+      "atk": 7247,
+      "defense": 80,
+      "exp_reward": 19973,
+      "gold_reward": 4656,
+      "required_level": 22,
+      "element_tz": "earth",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_22",
+      "portrait": "coliseum/fighters/22.png"
+    },
+    {
+      "id": 23,
+      "name": "Ирин Тьма",
+      "phrase": "«Ирин не отступит!»",
+      "victory_quote": "Тьма не забрала тебя — ты вырвал свет из неё. Уважаю.",
+      "hp": 41945,
+      "atk": 363,
+      "defense": 84,
+      "exp_reward": 20922,
+      "gold_reward": 4876,
+      "required_level": 23,
+      "element_tz": "ice",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_23",
+      "portrait": "coliseum/fighters/23.png"
+    },
+    {
+      "id": 24,
+      "name": "Люк Светоносный",
+      "phrase": "«Люк не отступит!»",
+      "victory_quote": "Свет не ослепил — значит, ты смотрел прямо. Редкая для арены черта.",
+      "hp": 43839,
+      "atk": 380,
+      "defense": 5588,
+      "exp_reward": 21871,
+      "gold_reward": 5097,
+      "required_level": 24,
+      "element_tz": "lightning",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_24",
+      "portrait": "coliseum/fighters/24.png"
+    },
+    {
+      "id": 25,
+      "name": "Зефир Ускользающий",
+      "phrase": "«Зефир не отступит!»",
+      "victory_quote": "Ускользнул бы ещё раз… если бы не твоя хватка на долю секунды.",
+      "hp": 45733,
+      "atk": 396,
+      "defense": 5592,
+      "exp_reward": 22820,
+      "gold_reward": 5317,
+      "required_level": 25,
+      "element_tz": "dark",
+      "is_champion": false,
+      "special": "gust_20",
+      "loot_id": "loot_25",
+      "portrait": "coliseum/fighters/25.png"
+    },
+    {
+      "id": 26,
+      "name": "Борн Камень",
+      "phrase": "«Борн не отступит!»",
+      "victory_quote": "Камень крошится. Ты тяжелее гор — подкопайся под следующего.",
+      "hp": 47626,
+      "atk": 412,
+      "defense": 95,
+      "exp_reward": 23769,
+      "gold_reward": 5538,
+      "required_level": 26,
+      "element_tz": "light",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_26",
+      "portrait": "coliseum/fighters/26.png"
+    },
+    {
+      "id": 27,
+      "name": "Сив Коготь",
+      "phrase": "«Сив не отступит!»",
+      "victory_quote": "Коготь сломался о твою защиту… или о твоё упрямство. Оба достойны уважения.",
+      "hp": 49520,
+      "atk": 428,
+      "defense": 99,
+      "exp_reward": 24718,
+      "gold_reward": 5758,
+      "required_level": 27,
+      "element_tz": "water",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_27",
+      "portrait": "coliseum/fighters/27.png"
+    },
+    {
+      "id": 28,
+      "name": "Астра Уголь",
+      "phrase": "«Астра не отступит!»",
+      "victory_quote": "Уголь догорает ровно. Сегодня погас я — осталась жизнь в тебе.",
+      "hp": 51414,
+      "atk": 445,
+      "defense": 103,
+      "exp_reward": 25667,
+      "gold_reward": 5979,
+      "required_level": 28,
+      "element_tz": "wind",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_28",
+      "portrait": "coliseum/fighters/28.png"
+    },
+    {
+      "id": 29,
+      "name": "Аид Некромант",
+      "phrase": "«Аид не отступит!»",
+      "victory_quote": "Барьер пал. Некромантия не спасла — спасать было некого, кроме чести.",
+      "hp": 53308,
+      "atk": 461,
+      "defense": 107,
+      "exp_reward": 26616,
+      "gold_reward": 6199,
+      "required_level": 29,
+      "element_tz": "poison",
+      "is_champion": false,
+      "special": "aid_barrier",
+      "loot_id": "loot_29",
+      "portrait": "coliseum/fighters/29.png"
+    },
+    {
+      "id": 30,
+      "name": "Титан Киран",
+      "phrase": "«Я — стена Колизея №30!»",
+      "victory_quote": "Титан пошатнулся. Земля запомнит твой шаг громче моего.",
+      "hp": 55202,
+      "atk": 477,
+      "defense": 111,
+      "exp_reward": 27565,
+      "gold_reward": 6419,
+      "required_level": 30,
+      "element_tz": "none",
+      "is_champion": true,
+      "special": "none",
+      "loot_id": "loot_30",
+      "portrait": "coliseum/fighters/30.png"
+    },
+    {
+      "id": 31,
+      "name": "Юн Фонарь",
+      "phrase": "«Юн не отступит!»",
+      "victory_quote": "Фонарь погас в шуме трибун — зато зажёгся твой.",
+      "hp": 57096,
+      "atk": 493,
+      "defense": 115,
+      "exp_reward": 28514,
+      "gold_reward": 6640,
+      "required_level": 31,
+      "element_tz": "fire",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_31",
+      "portrait": "coliseum/fighters/31.png"
+    },
+    {
+      "id": 32,
+      "name": "Хель Туман",
+      "phrase": "«Хель не отступит!»",
+      "victory_quote": "Туман рассеялся. Шаг за шагом ты вывел меня из слепоты поражения.",
+      "hp": 58990,
+      "atk": 509,
+      "defense": 118,
+      "exp_reward": 29463,
+      "gold_reward": 6860,
+      "required_level": 32,
+      "element_tz": "earth",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_32",
+      "portrait": "coliseum/fighters/32.png"
+    },
+    {
+      "id": 33,
+      "name": "Мулан Стальная",
+      "phrase": "«Мулан не отступит!»",
+      "victory_quote": "Сталь звенит по-другому, когда её сбивают с ног. Ты сбил ритм — я сдаюсь.",
+      "hp": 60884,
+      "atk": 526,
+      "defense": 122,
+      "exp_reward": 30412,
+      "gold_reward": 7081,
+      "required_level": 33,
+      "element_tz": "ice",
+      "is_champion": false,
+      "special": "mulan_pet",
+      "loot_id": "loot_33",
+      "portrait": "coliseum/fighters/33.png"
+    },
+    {
+      "id": 34,
+      "name": "Рагнар Безликий",
+      "phrase": "«Рагнар не отступит!»",
+      "victory_quote": "Лицо не спасло — узнал арену твоё, не моё. Пусть им запомнят тебя.",
+      "hp": 62777,
+      "atk": 542,
+      "defense": 126,
+      "exp_reward": 31361,
+      "gold_reward": 7301,
+      "required_level": 34,
+      "element_tz": "lightning",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_34",
+      "portrait": "coliseum/fighters/34.png"
+    },
+    {
+      "id": 35,
+      "name": "Элира Шип",
+      "phrase": "«Элира не отступит!»",
+      "victory_quote": "Шип сломался. Боль останется у меня — триумф у тебя.",
+      "hp": 64671,
+      "atk": 558,
+      "defense": 130,
+      "exp_reward": 32310,
+      "gold_reward": 7521,
+      "required_level": 35,
+      "element_tz": "dark",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_35",
+      "portrait": "coliseum/fighters/35.png"
+    },
+    {
+      "id": 36,
+      "name": "Горн Багряный",
+      "phrase": "«Горн не отступит!»",
+      "victory_quote": "Багрянец бледнеет перед твоей победой. Кровь боя — на твоей стороне счёта.",
+      "hp": 66565,
+      "atk": 5174,
+      "defense": 134,
+      "exp_reward": 33259,
+      "gold_reward": 7742,
+      "required_level": 36,
+      "element_tz": "light",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_36",
+      "portrait": "coliseum/fighters/36.png"
+    },
+    {
+      "id": 37,
+      "name": "Сильва Корень",
+      "phrase": "«Сильва не отступит!»",
+      "victory_quote": "Корни не удержали — вырвался ты, как бурей. Лесной дух кланяется.",
+      "hp": 68459,
+      "atk": 5191,
+      "defense": 138,
+      "exp_reward": 34208,
+      "gold_reward": 7962,
+      "required_level": 37,
+      "element_tz": "water",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_37",
+      "portrait": "coliseum/fighters/37.png"
+    },
+    {
+      "id": 38,
+      "name": "Неро Цепь",
+      "phrase": "«Неро не отступит!»",
+      "victory_quote": "Цепь лопнула звеном. Свободен ты — и этим опаснее любого пленника.",
+      "hp": 70353,
+      "atk": 6071,
+      "defense": 141,
+      "exp_reward": 35157,
+      "gold_reward": 8183,
+      "required_level": 38,
+      "element_tz": "wind",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_38",
+      "portrait": "coliseum/fighters/38.png"
+    },
+    {
+      "id": 39,
+      "name": "Сунь Укун Подражатель",
+      "phrase": "«Сунь не отступит!»",
+      "victory_quote": "Ярость утихла… бамбук всё ещё гнётся, но пал под твоей волей.",
+      "hp": 72247,
+      "atk": 6231,
+      "defense": 1451,
+      "exp_reward": 36106,
+      "gold_reward": 8403,
+      "required_level": 39,
+      "element_tz": "poison",
+      "is_champion": false,
+      "special": "wukong_rage",
+      "loot_id": "loot_39",
+      "portrait": "coliseum/fighters/39.png"
+    },
+    {
+      "id": 40,
+      "name": "Валькирия Фрейя",
+      "phrase": "«Я — стена Колизея №40!»",
+      "victory_quote": "Крылья сложены. Валькирия выбирает победителя — сегодня это ты.",
+      "hp": 74141,
+      "atk": 6391,
+      "defense": 1491,
+      "exp_reward": 37055,
+      "gold_reward": 8623,
+      "required_level": 40,
+      "element_tz": "none",
+      "is_champion": true,
+      "special": "none",
+      "loot_id": "loot_40",
+      "portrait": "coliseum/fighters/40.png"
+    },
+    {
+      "id": 41,
+      "name": "Один Странник",
+      "phrase": "«Один не отступит!»",
+      "victory_quote": "Один глаз видел много — но не эту точку. Странник уступает дорогу.",
+      "hp": 76035,
+      "atk": 6551,
+      "defense": 1531,
+      "exp_reward": 38004,
+      "gold_reward": 8844,
+      "required_level": 41,
+      "element_tz": "fire",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_41",
+      "portrait": "coliseum/fighters/41.png"
+    },
+    {
+      "id": 42,
+      "name": "Тор Молотобой",
+      "phrase": "«Тор не отступит!»",
+      "victory_quote": "Молот не пробил твою стойкость. Тор отступает с уважением.",
+      "hp": 77928,
+      "atk": 6721,
+      "defense": 1571,
+      "exp_reward": 38953,
+      "gold_reward": 9064,
+      "required_level": 42,
+      "element_tz": "earth",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_42",
+      "portrait": "coliseum/fighters/42.png"
+    },
+    {
+      "id": 43,
+      "name": "Локи Обманщик",
+      "phrase": "«Локи не отступит!»",
+      "victory_quote": "Обман рассеялся, как дым. Остаётся правда: ты сильнее иллюзий.",
+      "hp": 79822,
+      "atk": 688,
+      "defense": 1611,
+      "exp_reward": 39902,
+      "gold_reward": 9285,
+      "required_level": 43,
+      "element_tz": "ice",
+      "is_champion": false,
+      "special": "loki_illusion",
+      "loot_id": "loot_43",
+      "portrait": "coliseum/fighters/43.png"
+    },
+    {
+      "id": 44,
+      "name": "Йормунганд Колечко",
+      "phrase": "«Йормунганд не отступит!»",
+      "victory_quote": "Кольцо сжалось не вокруг тебя — вокруг моего дыхания. Ты вышел наружу.",
+      "hp": 81716,
+      "atk": 7041,
+      "defense": 1641,
+      "exp_reward": 40851,
+      "gold_reward": 9505,
+      "required_level": 44,
+      "element_tz": "lightning",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_44",
+      "portrait": "coliseum/fighters/44.png"
+    },
+    {
+      "id": 45,
+      "name": "Хель Холод",
+      "phrase": "«Хель не отступит!»",
+      "victory_quote": "Холод не победил жар схватки. Твоё сердце согрело трибуны.",
+      "hp": 1836101,
+      "atk": 7201,
+      "defense": 1681,
+      "exp_reward": 41800,
+      "gold_reward": 9725,
+      "required_level": 45,
+      "element_tz": "dark",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_45",
+      "portrait": "coliseum/fighters/45.png"
+    },
+    {
+      "id": 46,
+      "name": "Бальдур Сияние",
+      "phrase": "«Бальдур не отступит!»",
+      "victory_quote": "Сияние не спасло — ты ударил честнее слепоты славы. Бальдур кивает.",
+      "hp": 185504,
+      "atk": 22737,
+      "defense": 11072,
+      "exp_reward": 42749,
+      "gold_reward": 9946,
+      "required_level": 46,
+      "element_tz": "light",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_46",
+      "portrait": "coliseum/fighters/46.png"
+    },
+    {
+      "id": 47,
+      "name": "Тюр Длань",
+      "phrase": "«Тюр не отступит!»",
+      "victory_quote": "Длань судьбы на этот раз пала на плечо победителю — на твоё.",
+      "hp": 187398,
+      "atk": 177753,
+      "defense": 3576,
+      "exp_reward": 43698,
+      "gold_reward": 10166,
+      "required_level": 47,
+      "element_tz": "water",
+      "is_champion": false,
+      "special": "none",
+      "loot_id": "loot_47",
+      "portrait": "coliseum/fighters/47.png"
+    },
+    {
+      "id": 48,
+      "name": "Фенрир Разрыватель",
+      "phrase": "«Фенрир не отступит!»",
+      "victory_quote": "Клыки не удержали. Зверь внутри согласен: охотник — ты.",
+      "hp": 189292,
+      "atk": 769,
+      "defense": 1080,
+      "exp_reward": 44647,
+      "gold_reward": 10387,
+      "required_level": 48,
+      "element_tz": "wind",
+      "is_champion": false,
+      "special": "fenrir_pet",
+      "loot_id": "loot_48",
+      "portrait": "coliseum/fighters/48.png"
+    },
+    {
+      "id": 49,
+      "name": "Кронос Древний",
+      "phrase": "«Кронос не отступит!»",
+      "victory_quote": "Время остановилось… для меня. Для тебя оно бежит вперёд — беги.",
+      "hp": 91186,
+      "atk": 785,
+      "defense": 1804,
+      "exp_reward": 45596,
+      "gold_reward": 10607,
+      "required_level": 49,
+      "element_tz": "poison",
+      "is_champion": false,
+      "special": "kronos_skip",
+      "loot_id": "loot_49",
+      "portrait": "coliseum/fighters/49.png"
+    },
+    {
+      "id": 50,
+      "name": "Зевс Олимпийский",
+      "phrase": "«Я — стена Колизея №50!»",
+      "victory_quote": "Олимп на миг замолчал. Даже гром уступает тому, кто стоит последним.",
+      "hp": 1000000,
+      "atk": 100002,
+      "defense": 10088,
+      "exp_reward": 46545,
+      "gold_reward": 10828,
+      "required_level": 50,
+      "element_tz": "none",
+      "is_champion": true,
+      "special": "zeus_bolt",
+      "loot_id": "loot_50",
+      "portrait": "coliseum/fighters/50.png"
+    }
+  ],
+  "loot": {
+    "loot_1": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_1",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №1",
+        "vit_flat": 1
+      }
+    },
+    "loot_2": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_2",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №2",
+        "str_flat": 1
+      }
+    },
+    "loot_3": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (3)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 28,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_4": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_4",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №4",
+        "int_flat": 1
+      }
+    },
+    "loot_5": {
+      "kind": "equipment",
+      "item_data": {
+        "name": "Печать Колизея (5)",
+        "kind": "ring",
+        "defense": 18,
+        "hp_bonus": 65,
+        "luck": 1,
+        "summary": "Награда арены за победу над гладиатором №5.",
+        "rarity": "rare"
+      }
+    },
+    "loot_6": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (6)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 28,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_7": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_7",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №7",
+        "str_flat": 2
+      }
+    },
+    "loot_8": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_8",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №8",
+        "dex_flat": 2
+      }
+    },
+    "loot_9": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (9)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 28,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_10": {
+      "kind": "title",
+      "title_key": "coliseum_champion_10"
+    },
+    "loot_11": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_11",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №11",
+        "vit_flat": 3
+      }
+    },
+    "loot_12": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (12)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 29,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_13": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_13",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №13",
+        "dex_flat": 4
+      }
+    },
+    "loot_14": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_14",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №14",
+        "int_flat": 4
+      }
+    },
+    "loot_15": {
+      "kind": "equipment",
+      "item_data": {
+        "name": "Печать Колизея (15)",
+        "kind": "ring",
+        "defense": 38,
+        "hp_bonus": 145,
+        "luck": 2,
+        "summary": "Награда арены за победу над гладиатором №15.",
+        "rarity": "rare"
+      }
+    },
+    "loot_16": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_16",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №16",
+        "vit_flat": 4
+      }
+    },
+    "loot_17": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_17",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №17",
+        "str_flat": 5
+      }
+    },
+    "loot_18": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (18)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 30,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_19": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_19",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №19",
+        "int_flat": 5
+      }
+    },
+    "loot_20": {
+      "kind": "title",
+      "title_key": "coliseum_champion_20"
+    },
+    "loot_21": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (21)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 31,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_22": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_22",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №22",
+        "str_flat": 6
+      }
+    },
+    "loot_23": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_23",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №23",
+        "dex_flat": 6
+      }
+    },
+    "loot_24": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (24)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 32,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_25": {
+      "kind": "equipment",
+      "item_data": {
+        "name": "Печать Колизея (25)",
+        "kind": "ring",
+        "defense": 58,
+        "hp_bonus": 225,
+        "luck": 3,
+        "summary": "Награда арены за победу над гладиатором №25.",
+        "rarity": "rare"
+      }
+    },
+    "loot_26": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_26",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №26",
+        "vit_flat": 7
+      }
+    },
+    "loot_27": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (27)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 34,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_28": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_28",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №28",
+        "dex_flat": 7
+      }
+    },
+    "loot_29": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_29",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №29",
+        "int_flat": 8
+      }
+    },
+    "loot_30": {
+      "kind": "title",
+      "title_key": "coliseum_champion_30"
+    },
+    "loot_31": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_31",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №31",
+        "vit_flat": 8
+      }
+    },
+    "loot_32": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_32",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №32",
+        "str_flat": 8
+      }
+    },
+    "loot_33": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (33)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 37,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_34": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_34",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №34",
+        "int_flat": 9
+      }
+    },
+    "loot_35": {
+      "kind": "equipment",
+      "item_data": {
+        "name": "Печать Колизея (35)",
+        "kind": "ring",
+        "defense": 72,
+        "hp_bonus": 305,
+        "luck": 4,
+        "summary": "Награда арены за победу над гладиатором №35.",
+        "rarity": "epic"
+      }
+    },
+    "loot_36": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (36)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 38,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_37": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_37",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №37",
+        "str_flat": 10
+      }
+    },
+    "loot_38": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_38",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №38",
+        "dex_flat": 10
+      }
+    },
+    "loot_39": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (39)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 40,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_40": {
+      "kind": "title",
+      "title_key": "coliseum_champion_40"
+    },
+    "loot_41": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_41",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №41",
+        "vit_flat": 11
+      }
+    },
+    "loot_42": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (42)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 42,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_43": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_43",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №43",
+        "dex_flat": 11
+      }
+    },
+    "loot_44": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_44",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №44",
+        "int_flat": 11
+      }
+    },
+    "loot_45": {
+      "kind": "equipment",
+      "item_data": {
+        "name": "Печать Колизея (45)",
+        "kind": "ring",
+        "defense": 72,
+        "hp_bonus": 385,
+        "luck": 5,
+        "summary": "Награда арены за победу над гладиатором №45.",
+        "rarity": "epic"
+      }
+    },
+    "loot_46": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_46",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №46",
+        "vit_flat": 12
+      }
+    },
+    "loot_47": {
+      "kind": "skill_meta",
+      "skill_key": "col_skill_47",
+      "skill_payload": {
+        "label_ru": "Урок Колизея №47",
+        "str_flat": 12
+      }
+    },
+    "loot_48": {
+      "kind": "consumable",
+      "item_data": {
+        "name": "Эликсир триумфа (48)",
+        "use_tag": "heal_hp_pct",
+        "use_value": 47,
+        "kind": "consumable",
+        "rarity": "common"
+      }
+    },
+    "loot_49": {
+      "kind": "equipment",
+      "item_data": {
+        "name": "Часы Кроноса",
+        "kind": "ring",
+        "defense": 42,
+        "hp_bonus": 240,
+        "vit": 6,
+        "summary": "Трофей предфинального чемпиона Колизея.",
+        "rarity": "epic"
+      }
+    },
+    "loot_50": {
+      "kind": "title",
+      "title_key": "coliseum_godslayer"
+    }
+  }
+}

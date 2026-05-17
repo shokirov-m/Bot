@@ -43,11 +43,11 @@ from bot.states.clan_states import (
     ClanSettingsStates,
     ClanWarDeclareStates,
 )
-from bot.utils.game_art import menu_clan_photo_path
-from bot.utils.game_ui import push_game_ui
+from utils.media.game_art import menu_clan_photo_path
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, clan_repo, user_repo
-from services import clan_service
-from services.clan_service import (
+import services.social.clan_service as clan_service
+from services.social.clan_service import (
     BUILDING_DEFS,
     RELIC_DEFS,
     _has_building,
@@ -683,7 +683,7 @@ async def cb_clan_levelup_confirm(
         nxt = lv + 1
         req = level_def(nxt)
         payload = _payload(clan)
-        from services.clan_service import _mat as _m, _treasury_gold as _tg
+        from services.social.clan_service import _mat as _m, _treasury_gold as _tg
         mats = _m(payload)
         tg = _tg(payload)
         text = (
@@ -798,7 +798,7 @@ async def cb_clan_building_detail(
         if bstate.get("built"):
             text += "✅ Уже построено."
         elif bstate.get("build_until"):
-            from services.clan_service import _fmt_ts
+            from services.social.clan_service import _fmt_ts
             text += f"🔨 Строится, готово: {_fmt_ts(bstate['build_until'])}"
         elif locked:
             text += f"🔒 Нужен уровень клана {bdef['unlock_level']} (сейчас {lv})."
@@ -913,7 +913,7 @@ def _build_capture_screen(
 async def _show_capture_screen(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession, page: int = 0
 ) -> None:
-    from services.clan_service import (
+    from services.social.clan_service import (
         _captured_floors, _fmt_ts, CAPTURABLE_FLOORS,
         CAPTURE_INCOME_PER_HOUR, CAPTURE_LIMIT_PER_CLAN_LEVEL, _floor_capture_active,
     )
@@ -1430,7 +1430,7 @@ async def cb_clan_pm_detail(callback: CallbackQuery, session: AsyncSession, stat
         if tgt_char:
             tgt_user = await session.get(_User, int(tgt_char.user_id))
         username_str = f"@{tgt_user.username}" if tgt_user and tgt_user.username else "<i>нет</i>"
-        from services.clan_service import _fmt_ts
+        from services.social.clan_service import _fmt_ts
         text = (
             f"👤 <b>{html.escape(tgt_char.display_name if tgt_char else str(target_id))}</b>\n"
             f"Роль: {role_label(m_target.role)}\n"
@@ -1553,7 +1553,7 @@ async def cb_clan_browse_view(callback: CallbackQuery, session: AsyncSession, st
         if clan is None:
             await callback.answer("Клан не найден.", show_alert=True)
             return
-        from services.clan_service import _payload as _p, _mat, _treasury_gold, _treasury_limit, _has_building
+        from services.social.clan_service import _payload as _p, _mat, _treasury_gold, _treasury_limit, _has_building
         payload = _p(clan)
         n = await clan_repo.count_members(session, int(clan.id))
         max_m = max_members_for_level(int(clan.clan_level))

@@ -1,4 +1,4 @@
-"""Поручения стражи в городах-хабах (колбэки cty:*)."""
+﻿"""Поручения стражи в городах-хабах (колбэки cty:*)."""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ from bot.i18n import get_locale
 from bot.keyboards.city_quest_kb import city_quest_hub_only_keyboard, city_quest_offer_keyboard
 from bot.keyboards.forge_kb import city_hub_keyboard
 from bot.states.combat_states import CombatStates
-from bot.utils.game_ui import push_game_ui
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, quest_repo, user_repo
-from game.floors import floor_data
+from game.tower.progression import floor_data
 from game.quests.city_quests import city_quest_template
-from services import city_quest_service
-from services.floor_service import format_city_hub_message
+import services.progression.city_quest_service as city_quest_service
+from services.progression.floor_service import format_city_hub_message
 
 router = Router(name="city_quests")
 

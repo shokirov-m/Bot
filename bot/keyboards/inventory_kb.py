@@ -10,7 +10,7 @@ from game.items import item_categories
 from game.items import equipment as equip_meta
 from game.items.equipment import RARITY_EMOJI, gear_icon_for_item_data
 from game.items.runes import parse_weapon_runes
-from utils.ui import item_bag_button_label
+from utils.telegram.ui import item_bag_button_label
 
 BAG_PAGE_SIZE = 10
 

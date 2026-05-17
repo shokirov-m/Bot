@@ -10,8 +10,8 @@ from db.models.character import Character
 
 
 def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKeyboardMarkup:
-    from services import home_service
-    from services.rest_service import apply_completed_rest_if_needed, rest_seconds_left
+    import services.progression.home_service as home_service
+    from services.progression.rest_service import apply_completed_rest_if_needed, rest_seconds_left
 
     loc = "ru"
     apply_completed_rest_if_needed(character)
@@ -82,7 +82,7 @@ def library_keyboard(*, ready: bool) -> InlineKeyboardMarkup:
 
 
 def wardrobe_keyboard(portrait_keys: list[str], *, current_key: str) -> InlineKeyboardMarkup:
-    from utils.profile_portraits import portrait_label_ru
+    from utils.media.profile_portraits import portrait_label_ru
 
     rows: list[list[InlineKeyboardButton]] = []
     for pk in portrait_keys:
@@ -106,7 +106,7 @@ def wardrobe_keyboard(portrait_keys: list[str], *, current_key: str) -> InlineKe
 
 def buildings_keyboard(character: Character) -> InlineKeyboardMarkup:
     """Вкладка построек: верстак и др. (алхимический стол убран — алхимик в мастерской)."""
-    from services import home_service
+    import services.progression.home_service as home_service
 
     rows: list[list[InlineKeyboardButton]] = []
     if home_service.can_access_workbench(character):
@@ -130,7 +130,7 @@ def workbench_keyboard(*, can_upgrade: bool, back_cb: str = "hom:build") -> Inli
 
 
 def alchemy_keyboard(character: Character) -> InlineKeyboardMarkup:
-    from services import home_service
+    import services.progression.home_service as home_service
 
     rows: list[list[InlineKeyboardButton]] = []
     tier = home_service.alchemy_tier(character)
@@ -169,7 +169,7 @@ def alchemy_keyboard(character: Character) -> InlineKeyboardMarkup:
 
 
 def mine_farm_keyboard(character: Character) -> InlineKeyboardMarkup:
-    from services import home_service
+    import services.progression.home_service as home_service
     rows: list[list[InlineKeyboardButton]] = []
     
     # Кнопка собрать, если шахта куплена

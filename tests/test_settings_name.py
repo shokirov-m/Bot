@@ -1,4 +1,4 @@
-from services.settings_service import normalize_display_name, validate_display_name
+from services.system.settings_service import normalize_display_name, validate_display_name
 
 
 def test_normalize_display_name_collapses_spaces() -> None:

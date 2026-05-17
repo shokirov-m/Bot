@@ -13,11 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale, t
 from bot.keyboards.archetype_kb import archetype_confirm_keyboard, archetype_selection_keyboard
 from bot.keyboards.profile_kb import profile_spec_submenu_keyboard
-from bot.utils.game_ui import push_game_ui
-from bot.utils.ui_photos import specialization_menu_photo_path
+from utils.telegram.game_ui import push_game_ui
+from utils.media.ui_photos import specialization_menu_photo_path
 from db.repository import character_repo, user_repo
 from game.archetypes import manager as arch_manager
-from services import character_service
+import services.progression.character_service as character_service
 
 router = Router(name="archetype_v2")
 

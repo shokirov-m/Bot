@@ -10,7 +10,7 @@ from aiogram.types import ChatMemberUpdated
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services import gacha_broadcast_service
+import services.social.gacha_broadcast_service as gacha_broadcast_service
 
 router = Router(name="gacha_broadcast_groups")
 

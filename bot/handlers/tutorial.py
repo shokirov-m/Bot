@@ -5,7 +5,7 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
-from services import tutorial_service
+import services.progression.tutorial_service as tutorial_service
 
 router = Router(name="tutorial")
 

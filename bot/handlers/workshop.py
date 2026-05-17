@@ -47,24 +47,27 @@ from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
 from game.items import item_categories as inv_cat
 from game.items.craft_resources import RESOURCE_DEFS, total_craft_resource_in_bag
 from game.items.runes import RuneData, ensure_rune_socket_list, extract_rune_from_item
-from services import craft_gacha_service, forge_service, workshop_order_service, workshop_service
-from services import unlock_service
-from services.workshop_enchant_service import (
+import services.economy.craft_gacha_service as craft_gacha_service
+import services.economy.forge_service as forge_service
+import services.economy.workshop_order_service as workshop_order_service
+import services.economy.workshop_service as workshop_service
+import services.progression.unlock_service as unlock_service
+from services.economy.workshop_enchant_service import (
     USE_TAG_ALCHEMY_ENCHANT,
     list_compatible_targets,
     summarize_scroll,
     try_apply_alchemy_enchant,
 )
-from services.workshop_leaderboard_service import cached_leaderboard_html, refresh_leaderboards
+from services.economy.workshop_leaderboard_service import cached_leaderboard_html, refresh_leaderboards
 from db.models.app_global import AppGlobal
 
-from bot.utils.game_art import (
+from utils.media.game_art import (
     craft_resource_photo_path,
     menu_workshop_orders_photo_path,
     menu_workshop_photo_path,
 )
-from bot.utils.game_ui import push_game_ui
-from utils.ui import format_craft_result_effects_block_html
+from utils.telegram.game_ui import push_game_ui
+from utils.telegram.ui import format_craft_result_effects_block_html
 
 router = Router(name="workshop")
 
@@ -707,11 +710,6 @@ async def workshop_claim_all(query: CallbackQuery, session: AsyncSession, state:
     except Exception:
         logger.exception("wsp:claimall")
         await query.answer("Ошибка.", show_alert=True)
-
-
-@router.callback_query(F.data.startswith("wsp:acc:"))
-async def workshop_acc_disabled(query: CallbackQuery) -> None:
-    await query.answer("Ускорение рунным камнем отключено.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("wsp:upg:"))

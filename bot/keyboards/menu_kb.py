@@ -18,8 +18,8 @@ from bot.i18n import t
 from bot.keyboards.tutorial_kb import tutorial_hints_keyboard
 from db.models.character import Character
 from game.characters.classes import all_classes_ordered
-from game.floors.floor_data import PORTAL_DESTINATION_FLOORS
-from services import unlock_service
+from game.tower.progression.floor_data import PORTAL_DESTINATION_FLOORS
+import services.progression.unlock_service as unlock_service
 
 
 

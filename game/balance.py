@@ -57,15 +57,15 @@ MAX_DEATH_GOLD_LOSS = 8_000
 # Шанс дропа предмета: этажи 1-5 / этажи 6+  (+25–27 п.п. к исходным значениям)
 DROP_CHANCE_FLOOR_LOW_MAX = 5
 
-DROP_CHANCE_NORMAL_LOW  = 0.305   # 30.5%
-DROP_CHANCE_ELITE_LOW   = 0.310   # 31.0%
-DROP_CHANCE_MINI_LOW    = 0.340   # 34.0%
-DROP_CHANCE_MAJOR_LOW   = 0.370   # 37.0%
+DROP_CHANCE_NORMAL_LOW  = 0.275   # 30.5%
+DROP_CHANCE_ELITE_LOW   = 0.282   # 31.0%
+DROP_CHANCE_MINI_LOW    = 0.310   # 34.0%
+DROP_CHANCE_MAJOR_LOW   = 0.338   # 37.0%
 
-DROP_CHANCE_NORMAL_HIGH = 0.270   # 27.0%
-DROP_CHANCE_ELITE_HIGH  = 0.285   # 28.5%
-DROP_CHANCE_MINI_HIGH   = 0.315   # 31.5%
-DROP_CHANCE_MAJOR_HIGH  = 0.345   # 34.5%
+DROP_CHANCE_NORMAL_HIGH = 0.245   # 27.0%
+DROP_CHANCE_ELITE_HIGH  = 0.258   # 28.5%
+DROP_CHANCE_MINI_HIGH   = 0.288   # 31.5%
+DROP_CHANCE_MAJOR_HIGH  = 0.315   # 34.5%
 
 # --- Базовые статы монстра (до множителей типа элита/босс) ---
 MONSTER_HP_RAW_BASE = 72
@@ -170,6 +170,27 @@ DEX_DODGE_CAP: float = 0.45
 DEX_DODGE_PER_5: float = 0.01
 DEX_MISS_BASE: float = 0.15
 
+
+# --- Monster accuracy / evasion vs player (fractions 0..1) ---
+MONSTER_ACCURACY_PER_FLOOR_AFTER_5: float = 0.00125
+MONSTER_ACCURACY_ELITE_ADD: float = 0.03
+MONSTER_ACCURACY_MINI_ADD: float = 0.05
+MONSTER_ACCURACY_MAJOR_ADD: float = 0.08
+MONSTER_ACCURACY_CAP: float = 0.26
+
+MONSTER_EVASION_PER_FLOOR_AFTER_5: float = 0.0009
+MONSTER_EVASION_ELITE_ADD: float = 0.02
+MONSTER_EVASION_MINI_ADD: float = 0.035
+MONSTER_EVASION_MAJOR_ADD: float = 0.055
+MONSTER_EVASION_CAP: float = 0.22
+
+DODGE_EFFECTIVE_MIN: float = 0.035
+
+# Assassin path (scout / assassin): dex past dodge soft cap shreds enemy accuracy/evasion.
+ASSASSIN_ACCURACY_SHRED_PER_OVERFLOW_DEX: float = 0.0004
+ASSASSIN_ACCURACY_SHRED_CAP: float = 0.12
+ASSASSIN_EVASION_SHRED_PER_OVERFLOW_DEX: float = 0.0005
+ASSASSIN_EVASION_SHRED_CAP: float = 0.10
 # Выносливость:
 #   - HP на единицу ВЫН (база в формуле макс. HP).
 #   - Долгие статусы: за каждые 10 ВЫН — −5% длительности кровотечения/яда,

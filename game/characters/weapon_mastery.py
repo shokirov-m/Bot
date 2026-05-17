@@ -115,7 +115,7 @@ def mastery_profile_lines(character: Character, weapon_type: str) -> tuple[str, 
     """
     Две строки для полных характеристик: множитель урона и прогресс ударов до следующего порога.
     """
-    from utils.ui import _BAR_LEN, _mono_bar, format_number
+    from utils.telegram.ui import _BAR_LEN, _mono_bar, format_number
 
     data = _load_mastery(character.meta_progress or {})
     h = int(data.get(weapon_type, {}).get("hits", 0))

@@ -1,4 +1,4 @@
-"""Квесты: странник (qst:*), расширенные поручения (qtk:/qcl:), /quests."""
+﻿"""Квесты: странник (qst:*), расширенные поручения (qtk:/qcl:), /quests."""
 
 from __future__ import annotations
 
@@ -17,16 +17,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.quest_kb import quest_back_keyboard, quest_dialog_keyboard
 from bot.states.combat_states import CombatStates
-from bot.utils.game_ui import push_game_ui
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, quest_repo, user_repo
-from game.floors import floor_data
-from game.quests.floor_quests import npc_quest_template
-from game.quests.npc_quests import QuestTemplate, template_by_key, templates_for_floor
-from services import quest_service
-from services import daily_quest_service as dqs
-from services import fame_bonuses as fb
-from services.floor_service import floor_keyboard_for_character, format_floor_message
-from utils.ui import LINE_SEP
+from game.tower.progression import floor_data
+from game.tower.quests.floor_quests import npc_quest_template
+from game.tower.quests.npc_quests import QuestTemplate, template_by_key, templates_for_floor
+import services.progression.quest_service as quest_service
+import services.progression.daily_quest_service as daily_quest_service
+import services.progression.fame_bonuses as fame_bonuses
+import services.progression.wanderer_fame_quest_service as wanderer_fame_quest_service
+from services.progression.floor_service import floor_keyboard_for_character, format_floor_message
+from utils.telegram.ui import LINE_SEP
 
 if TYPE_CHECKING:
     from db.models.character import Character
@@ -320,12 +321,24 @@ async def render_active_quests_overview(
 async def render_daily_quests_hub(char: Character) -> tuple[str, InlineKeyboardMarkup]:
     """Экран ежедневных заданий."""
     text = dqs.format_daily_quests_html(char)
+    wf_block = wfqs.format_chain_summary_html(char)
+    if wf_block:
+        text = f"{text}{wf_block}"
     rows: list[list[InlineKeyboardButton]] = []
 
     # Кнопки «Забрать» для выполненных заданий
     claim_rows = dqs.daily_quest_keyboard_rows(char, int(char.floor_number))
     rows.extend(claim_rows)
 
+    if fb.wanderer_content_unlocked(char) and not wfqs.chain_done(char):
+        rows.append(
+            [InlineKeyboardButton(text="🧙 Особые миссии Странника", callback_data="qd:wchain")],
+        )
+        step = wfqs.current_step(char)
+        if step is not None and step.quest_type == "seal_claim":
+            rows.append(
+                [InlineKeyboardButton(text="🏅 Получить печать странника", callback_data="qd:wseal")],
+            )
     if fb.wanderer_content_unlocked(char) and fb.wanderer_daily_tip_available(char):
         rows.append(
             [InlineKeyboardButton(text="🧙 Совет Странника (раз в сутки)", callback_data="qd:wand")],
@@ -459,6 +472,89 @@ async def on_daily_quest_claim(
                 pass
     except Exception:
         logger.exception("qdcl")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "qd:wchain")
+async def on_wanderer_fame_chain(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if query.message is None or query.from_user is None:
+            await query.answer()
+            return
+        u = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if u is None or u.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, u.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        body = wfqs.format_chain_detail_html(char)
+        rows: list[list[InlineKeyboardButton]] = []
+        step = wfqs.current_step(char)
+        if step is not None and step.quest_type == "seal_claim":
+            rows.append(
+                [InlineKeyboardButton(text="🏅 Получить печать странника", callback_data="qd:wseal")],
+            )
+        rows.append([InlineKeyboardButton(text="⬅ Ежедневные задания", callback_data="qhub:d")])
+        rows.append([InlineKeyboardButton(text="📋 Меню", callback_data="mnu:hub")])
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=body,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            target_message=query.message,
+        )
+        await query.answer()
+    except Exception:
+        logger.exception("qd:wchain")
+        await query.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "qd:wseal")
+async def on_wanderer_fame_seal(
+    query: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        if await state.get_state() == CombatStates.in_battle.state:
+            await query.answer("Сначала заверши бой.", show_alert=True)
+            return
+        if query.message is None or query.from_user is None:
+            await query.answer()
+            return
+        u = await user_repo.get_by_telegram_id(session, query.from_user.id)
+        if u is None or u.is_banned:
+            await query.answer("Нет доступа.", show_alert=True)
+            return
+        char = await character_repo.get_by_user_id(session, u.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        ok, msg = await wfqs.claim_seal(session, char)
+        if not ok:
+            await query.answer(msg[:200], show_alert=True)
+            return
+        await session.commit()
+        text, kb = await render_daily_quests_hub(char)
+        block = f"{msg}\n\n{LINE_SEP}\n{text}"
+        await query.answer("Печать получена!")
+        await push_game_ui(
+            state,
+            query.bot,
+            chat_id=query.message.chat.id,
+            text=block,
+            reply_markup=kb,
+            target_message=query.message,
+        )
+    except Exception:
+        logger.exception("qd:wseal")
         await query.answer("Ошибка.", show_alert=True)
 
 

@@ -82,7 +82,7 @@ async def top_by_gold(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> l
 
 async def top_by_coliseum(session: AsyncSession, *, limit: int = DEFAULT_LIMIT) -> list[Character]:
     """Топ по числу побеждённых бойцов колизея (без JSON-функций SQL — совместимо со всеми SQLite)."""
-    from services import coliseum_service
+    import services.combat.coliseum_service as coliseum_service
 
     # Кэшируем срез, чтобы не тянуть всех персонажей на каждый показ экрана.
     # TTL небольшой: актуальность важнее, но повторы кликов должны быть быстрыми.

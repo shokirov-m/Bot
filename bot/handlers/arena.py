@@ -13,13 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale, t
 from bot.states.arena_states import ArenaChallengeStates, ArenaTurnStates
 from bot.states.combat_states import CombatStates
-from bot.utils.game_art import menu_arena_photo_path
-from bot.utils.game_ui import edit_game_message_content, push_game_ui
+from utils.media.game_art import menu_arena_photo_path
+from utils.telegram.game_ui import edit_game_message_content, push_game_ui
 from config import is_admin as config_is_admin
 from db.models.character import Character
 from db.repository import character_repo, user_repo
-from services import arena_service
-from services.fame_bonuses import max_arena_matches_per_day
+import services.combat.arena_service as arena_service
+from services.progression.fame_bonuses import max_arena_matches_per_day
 
 router = Router(name="arena")
 

@@ -14,13 +14,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.states.combat_states import CombatStates
 from db.repository import character_repo, inventory_repo, user_repo
-from game.floors import forest_beginnings as fb
-from game.floors import rotten_swamps as rs
-from game.floors.monsters import build_spawns_for_floor
+from game.tower.mechanics import registry as mech
+
+fb = mech.forest_beginnings
+rs = mech.rotten_swamps
+from game.enemies.floors.spawns import build_spawns_for_floor
 from game.items import loot as loot_tables
-from services import anticheat_service, character_service
-from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui
-from utils.ui import LINE_SEP
+import services.system.anticheat_service as anticheat_service
+import services.progression.character_service as character_service
+from services.progression.floor_service import floor_keyboard_for_character, push_floor_screen_ui
+from utils.telegram.ui import LINE_SEP
 
 router = Router(name="forest_beginnings")
 

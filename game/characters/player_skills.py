@@ -47,10 +47,6 @@ def _build_skill_by_key() -> dict[str, SkillDef]:
 
 SKILL_BY_KEY: dict[str, SkillDef] = _build_skill_by_key()
 
-# Skills are no longer purchased at the temple — now unlocked via skill tree.
-# Kept as empty dict for API compatibility.
-TEMPLE_SKILL_PRICES_GOLD: dict[str, int] = {}
-
 def ensure_skill_meta(character: Character) -> None:
     """
     Нормализация meta_progress для боевых слотов и пассивки.
@@ -209,15 +205,6 @@ def set_passive_slot(character: Character, passive_key: str | None) -> bool:
         pass
     return True
 
-
-def try_buy_temple_skill(character: Character, skill_key: str) -> tuple[bool, str]:
-    return False, "Навыки теперь открываются автоматически при выборе пути."
-
-def skill_shop_summary_html(locale: str) -> str:
-    return "<i>Выберите путь (Архетип) для получения новых навыков.</i>"
-
-def shop_offer_skill_defs() -> list[Any]:
-    return []
 
 def describe_skill_for_ui(sk: SkillDef, locale: str) -> str:
     return f"MP {sk.mp_cost} · CD {sk.cooldown} · Сила ×{sk.power:.1f}"

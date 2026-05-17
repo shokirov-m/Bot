@@ -12,7 +12,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.handlers.inventory import _inventory_hub_text
-from bot.utils.game_art import (
+from utils.media.game_art import (
     menu_auction_photo_path,
     menu_daily_photo_path,
     menu_leaderboard_photo_path,
@@ -21,7 +21,7 @@ from bot.utils.game_art import (
     menu_quests_photo_path,
     menu_titles_photo_path,
 )
-from bot.utils.ui_photos import inventory_menu_photo_path
+from utils.media.ui_photos import inventory_menu_photo_path
 from bot.handlers.auction import _clear_auction_fsm_only, _shop_intro_html
 from bot.handlers.leaderboard import INTRO_HTML as TOP_INTRO_HTML
 from bot.handlers.profile import build_profile_html_async, clamp_profile_caption_for_photo
@@ -35,19 +35,20 @@ from bot.keyboards.profile_kb import profile_view_keyboard
 from bot.keyboards.title_kb import titles_pick_keyboard
 from bot.states.combat_states import CombatStates
 from bot.i18n import get_locale, t
-from bot.utils.game_ui import push_game_ui
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from config import is_admin
 from bot.handlers.quests import render_quests_hub
-from services import daily_service, title_service
-from services.daily_service import build_daily_body_html
-from game.floors.floor_data import PORTAL_DESTINATION_FLOORS
-from services.floor_service import floor_keyboard_for_character, push_floor_screen_ui, travel_to_floor
-from services.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
-from services.rest_service import apply_completed_rest_if_needed
-from services import unlock_service
+import services.progression.daily_service as daily_service
+import services.progression.title_service as title_service
+from services.progression.daily_service import build_daily_body_html
+from game.tower.progression.floor_data import PORTAL_DESTINATION_FLOORS
+from services.progression.floor_service import floor_keyboard_for_character, push_floor_screen_ui, travel_to_floor
+from services.system.menu_hub_service import format_menu_hub_html, resolve_menu_hub_photo_path
+from services.progression.rest_service import apply_completed_rest_if_needed
+import services.progression.unlock_service as unlock_service
 from utils.game_images_prefs import game_images_enabled
-from utils.profile_portraits import portrait_path_for_character
+from utils.media.profile_portraits import portrait_path_for_character
 
 router = Router(name="menu")
 

@@ -1,4 +1,4 @@
-"""Город (хаб) и кузница: inline-кнопки."""
+﻿"""Город (хаб) и кузница: inline-кнопки."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.city_kb import city_hub_keyboard
 from bot.keyboards.menu_kb import menu_nav_button_row
-from game.floors import floor_data
+from game.tower.progression import floor_data
 from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
 from game.locations import forge as forge_loc
 

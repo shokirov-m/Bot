@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.i18n import t
 from bot.keyboards.menu_kb import menu_nav_button_row
-from services.subscription_service import channel_public_url
+from services.social.subscription_service import channel_public_url
 
 
 def daily_screen_keyboard(*, subscribed: bool, can_claim: bool, locale: str) -> InlineKeyboardMarkup:

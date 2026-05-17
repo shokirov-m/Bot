@@ -16,10 +16,10 @@ from bot.keyboards.leaderboard_kb import (
     leaderboard_categories_keyboard,
     leaderboard_classes_keyboard,
 )
-from bot.utils.game_art import menu_leaderboard_photo_path
-from bot.utils.game_ui import push_game_ui
+from utils.media.game_art import menu_leaderboard_photo_path
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, leaderboard_repo, user_repo
-from services import leaderboard_service
+import services.social.leaderboard_service as leaderboard_service
 from aiogram.fsm.context import FSMContext
 
 router = Router(name="leaderboard")
@@ -109,7 +109,7 @@ async def on_top_category(query: CallbackQuery, session: AsyncSession, state: FS
             from datetime import UTC, datetime, timedelta
 
             from db.models.app_global import AppGlobal
-            from services.workshop_leaderboard_service import cached_leaderboard_html, refresh_leaderboards
+            from services.economy.workshop_leaderboard_service import cached_leaderboard_html, refresh_leaderboards
 
             row = await session.get(AppGlobal, 1)
             payload = dict(row.payload or {}) if row is not None else {}

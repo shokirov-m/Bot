@@ -1,4 +1,4 @@
-from services.arena_service import _arena_power
+from services.combat.arena_service import _arena_power
 
 
 def test_arena_power_numeric() -> None:

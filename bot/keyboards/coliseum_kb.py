@@ -5,8 +5,8 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from db.models.character import Character
-from game.coliseum.coliseum_data import COLISEUM_FIGHTERS
-from services import coliseum_service
+from game.enemies.coliseum.fighters import COLISEUM_FIGHTERS
+import services.combat.coliseum_service as coliseum_service
 
 
 def _batch_range(*, next_id: int | None) -> tuple[int, int]:

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Таверна в городах-хабах (этажи 3, 31, 61, 91): меню, цены (золото). Баффы «пьяного бойца» — позже.
 """
 
@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from game.floors import floor_data
+from game.tower.progression import floor_data
 
 
 @dataclass(frozen=True, slots=True)

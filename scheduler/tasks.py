@@ -98,7 +98,7 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
 
     async def job_arena_season_rollover() -> None:
         try:
-            from services.arena_service import ARENA_SEASON_ID
+            from services.combat.arena_service import ARENA_SEASON_ID
 
             logger.info(
                 "[ARENA] Сезон %s: плановый тик (лиги/MMR в meta; награды сезона — вручную/позже).",
@@ -156,7 +156,7 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
     async def job_workshop_leaderboard() -> None:
         try:
             from db.database import get_session_factory
-            from services.workshop_leaderboard_service import refresh_leaderboards
+            from services.economy.workshop_leaderboard_service import refresh_leaderboards
 
             factory = get_session_factory()
             async with factory() as session:
@@ -188,7 +188,7 @@ def setup_scheduler(scheduler: AsyncIOScheduler, bot: Bot) -> None:
     async def job_black_market_weekly() -> None:
         try:
             from db.database import get_session_factory
-            from services.black_market_service import get_or_roll_showcase
+            from services.economy.black_market_service import get_or_roll_showcase
 
             factory = get_session_factory()
             async with factory() as session:
@@ -242,7 +242,7 @@ async def deliver_rest_completion_notification(
     from bot.i18n import get_locale, t
     from db.database import get_session_factory
     from db.repository import character_repo, user_repo
-    from services.rest_service import apply_completed_rest_if_needed
+    from services.progression.rest_service import apply_completed_rest_if_needed
 
     try:
         factory = get_session_factory()
@@ -305,7 +305,7 @@ async def task_survival_floor_hp_decay(bot: Bot) -> None:
     """HP-урон каждую минуту для игроков на этажах выживания (111-120) без защитного предмета."""
     from db.database import get_session_factory
     from db.models.character import Character
-    from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+    from game.tower.progression.floor_data import get_zone_raw, get_zone_for_floor
 
     # Survival zone: floors 111-120 (frozen_wastes)
     SURVIVAL_FLOOR_FROM = 111
@@ -375,7 +375,7 @@ async def task_daily_reset() -> None:
     Плюс финализация просроченных лотов аукциона.
     """
     from db.database import get_session_factory
-    from services import economy_service
+    import services.economy.economy_service as economy_service
 
     try:
         factory = get_session_factory()
@@ -443,7 +443,7 @@ async def task_bank_interest_tick() -> None:
 async def task_clan_war_expired_tick() -> None:
     """Периодически: завершить гильдийные войны с истёкшим сроком."""
     from db.database import get_session_factory
-    from services import clan_service
+    import services.social.clan_service as clan_service
 
     factory = get_session_factory()
     n = 0
@@ -469,7 +469,7 @@ async def task_leaderboard_update() -> None:
 async def bootstrap_golden_goblin_if_needed(bot: Bot) -> None:
     """При пустом app_global создаёт первую волну золотого гоблина и рассылает анонс."""
     from db.database import get_session_factory
-    from services import golden_goblin_service
+    import services.progression.golden_goblin_service as golden_goblin_service
 
     try:
         factory = get_session_factory()
@@ -520,7 +520,7 @@ async def broadcast_golden_goblin_slain(
 async def task_golden_goblin_tick(bot: Bot) -> None:
     """Каждые 3 часа: новый случайный этаж 5–20 и рассылка."""
     from db.database import get_session_factory
-    from services import golden_goblin_service
+    import services.progression.golden_goblin_service as golden_goblin_service
 
     factory = get_session_factory()
     async with factory() as session:
@@ -536,7 +536,7 @@ async def task_golden_goblin_escape_check(bot: Bot) -> None:
     Если сбежал — рассылает оповещение всем.
     """
     from db.database import get_session_factory
-    from services import golden_goblin_service
+    import services.progression.golden_goblin_service as golden_goblin_service
 
     factory = get_session_factory()
     async with factory() as session:

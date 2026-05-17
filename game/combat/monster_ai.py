@@ -97,13 +97,32 @@ def taunts_for_monster(name: str, template_key: str = "") -> list[str]:
     key = _normalize_template_key(template_key.lower())
     pool: list[str] = []
 
-    if "орк" in low or key == "orc":
+    if "орк" in low or "огр" in low or key == "orc":
         pool.extend(
             [
                 "Слабак идёт на мяснику!",
                 "Твоя броня — смешная!",
             ],
         )
+    if "голем" in low or "golem" in key:
+        pool.extend(
+            [
+                "Камень не чувствует боли — а ты да.",
+                "Треск — мой смех.",
+            ],
+        )
+    if "пияв" in low or "leech" in key:
+        pool.extend(["Кровь — мой налог.", "Рой голоден с утра."])
+    if "скелет" in low or key == "echo":
+        pool.extend(["Кости не устают.", "Война не кончилась для нас."])
+    if "жриц" in low or "weaver" in key or "gloom" in key:
+        pool.extend(["Тьма шьёт твой саван.", "Нити режут свет."])
+    if "король" in low and "паук" in low:
+        pool.extend(["Сеть на весь зал — ты в центре.", "Яд течёт в жилах башни."])
+    if "виверн" in low or "дрейк" in low or "drake" in key:
+        pool.extend(["Небо принадлежит мне.", "Дыхание — минус жизнь."])
+    if "ведьм" in low or "лич" in low or key in ("witch", "salt_lich"):
+        pool.extend(["Проклятие уже на коже.", "Соль и тьма — мой суд."])
     if "лед" in low or "мороз" in low or "снег" in low or "ice" in key or "frost" in key:
         pool.extend(
             [
@@ -394,6 +413,15 @@ def opening_taunt_line(state: dict[str, Any]) -> str:
     """Первая реплика в бою."""
     m = state["monster"]
     tier = int(state.get("boss_defeat_tier", 0) or 0)
+    opener_raw = m.get("catalog_opening_phrase")
+    if opener_raw and str(opener_raw).strip():
+        line = str(opener_raw).strip()
+        base = f"💬 «{line}»"
+        if tier >= 3 and (m.get("is_major_boss") or m.get("is_mini_boss")):
+            return base + f"\n💬 «{random.choice(DEFEAT_CRUSH_TAUNTS)}»"
+        if tier >= 1 and (m.get("is_major_boss") or m.get("is_mini_boss")):
+            return base + f"\n💬 «{random.choice(DEFEAT_SPIKE_TAUNTS)}»"
+        return base
     phrases = m.get("catalog_phrases") or []
     if isinstance(phrases, list) and phrases:
         line = random.choice([str(p) for p in phrases if str(p).strip()])

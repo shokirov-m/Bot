@@ -19,27 +19,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.floor_kb import secret_chest_closed_keyboard, secret_result_keyboard
 from bot.keyboards.forest_kb import forest_mushroom_keyboard, forest_spirit_keyboard
 from bot.states.combat_states import CombatStates
-from bot.utils.game_ui import push_game_ui
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from config import is_admin
 from game.characters import pets as pets_mod
-from game.floors import floor_data
-from game.floors import wandering_npcs as wandering_npcs_mod
-from game.floors import forest_beginnings as fb
-from game.floors import long_floor as long_floor_mod
-from game.floors import room_clear_floor as rc_mod
-from game.floors import room_clear_floor_10 as rc10_mod
-from game.floors import room_clear_floor_24 as rc24_mod
-from game.floors import room_clear_floor_30 as rc30_mod
-from game.floors import room_clear_floor_40 as rc40_mod
-from game.floors import room_clear_floor_26 as rc26_mod
-from game.floors import wave_floor as wv_mod
-from game.floors import wave_floor_27 as wv27_mod
-from game.floors import explore_floor as exp_mod
-from game.floors import explore_floor_4 as exp4_mod
-from game.floors import explore_floor_22 as exp22_mod
-from services import combat_service, golden_goblin_service
-from services.floor_service import (
+from game.tower.progression import floor_data
+import game.tower.progression.wandering_npcs as wandering_npcs_mod
+from game.tower.mechanics import registry as mech
+
+fb = mech.forest_beginnings
+long_floor_mod = mech.long_floor_mod
+rc_mod = mech.room_clear_floor
+rc10_mod = mech.room_clear_floor_10
+rc24_mod = mech.room_clear_floor_24
+rc30_mod = mech.room_clear_floor_30
+rc40_mod = mech.room_clear_floor_40
+rc26_mod = mech.room_clear_floor_26
+wv_mod = mech.wave_floor
+wv27_mod = mech.wave_floor_27
+exp_mod = mech.explore_floor
+exp4_mod = mech.explore_floor_4
+exp22_mod = mech.explore_floor_22
+import services.combat.combat_service as combat_service
+import services.progression.golden_goblin_service as golden_goblin_service
+from services.progression.floor_service import (
     floor_keyboard_for_character,
     get_spawns_for_character_session,
     open_secret_chest,
@@ -48,7 +51,7 @@ from services.floor_service import (
     travel_to_floor,
     try_secret_search,
 )
-from utils.ui import LINE_SEP
+from utils.telegram.ui import LINE_SEP
 
 router = Router(name="floor")
 
@@ -247,7 +250,7 @@ async def on_scrap_merchant_callback(
             return
         from bot.keyboards.scrap_kb import scrap_merchant_keyboard, scrap_ui_back
         from db.repository import inventory_repo
-        from services import scrap_merchant_service
+        import services.economy.scrap_merchant_service as scrap_merchant_service
 
         # Пагинация списка
         pg = m.group(4)
@@ -377,7 +380,7 @@ async def on_floor_callback(
         # Авто-пополнение ресурсов для администратора
         if is_admin(query.from_user.id):
             try:
-                from services.admin_utils import ensure_admin_resources
+                from services.system.admin_utils import ensure_admin_resources
                 await ensure_admin_resources(session, char)
             except Exception:
                 pass
@@ -411,7 +414,7 @@ async def on_floor_callback(
             if info is None:
                 await query.answer("Сейчас здесь никого нет.", show_alert=True)
                 return
-            from services import wandering_npc_quest_service as wnpc_qs
+            import services.progression.wandering_npc_quest_service as wandering_npc_quest_service
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
             text = wnpc_qs.format_npc_quest_screen(char, floor)
             q_state = wnpc_qs.get_quest_for_floor(char, floor)
@@ -452,7 +455,7 @@ async def on_floor_callback(
                 await query.answer()
                 return
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-            from game.quests.story_quests import STORY_QUESTS, get_quest_state, claim_quest_reward, accept_quest
+            from game.tower.quests.story_quests import STORY_QUESTS, get_quest_state, claim_quest_reward, accept_quest
             rows_npc: list[list[InlineKeyboardButton]] = []
             for sq in STORY_QUESTS:
                 st = get_quest_state(char, sq.quest_id)
@@ -519,14 +522,14 @@ async def on_floor_callback(
             if query.message is None:
                 await query.answer()
                 return
-            from services import scrap_merchant_service as _scrap
+            import services.economy.scrap_merchant_service as scrap_merchant_service
 
             if not _scrap.is_scrap_floor(floor):
                 await query.answer(_scrap.scrap_unavailable_message(int(floor)), show_alert=True)
                 return
             from bot.keyboards.scrap_kb import scrap_merchant_keyboard, set_scrap_ui_back
             from db.repository import inventory_repo
-            from services import scrap_merchant_service
+            import services.economy.scrap_merchant_service as scrap_merchant_service
 
             set_scrap_ui_back(char, "floor")
             items = await inventory_repo.list_bag_items(session, char.id)
@@ -560,7 +563,7 @@ async def on_floor_callback(
                 await query.answer("Проход сомкнут. Сначала зачисти этаж.", show_alert=True)
                 return
             from bot.keyboards.black_market_kb import market_hub_keyboard
-            from services import black_market_service
+            import services.economy.black_market_service as black_market_service
 
             ok, msg = await black_market_service.try_pay_entry(session, char)
             if not ok:
@@ -613,7 +616,7 @@ async def on_floor_callback(
             return
 
         if code == "survival_info":
-            from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+            from game.tower.progression.floor_data import get_zone_raw, get_zone_for_floor
             zone_s = get_zone_for_floor(floor)
             zone_raw_s = get_zone_raw(floor)
             debuff_s = zone_raw_s.get("debuff", {})
@@ -635,7 +638,7 @@ async def on_floor_callback(
             return
 
         if code == "faction_choose":
-            from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+            from game.tower.progression.floor_data import get_zone_raw, get_zone_for_floor
             zone_fw = get_zone_for_floor(floor)
             zone_raw_fw = get_zone_raw(floor)
             factions_fw = zone_raw_fw.get("factions", {})
@@ -673,7 +676,7 @@ async def on_floor_callback(
 
         if code.startswith("faction_join:"):
             faction_key = code.split(":", 1)[1]
-            from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+            from game.tower.progression.floor_data import get_zone_raw, get_zone_for_floor
             zone_fw2 = get_zone_for_floor(floor)
             zone_raw_fw2 = get_zone_raw(floor)
             factions_fw2 = zone_raw_fw2.get("factions", {})
@@ -703,7 +706,7 @@ async def on_floor_callback(
 
         if code.startswith("faction_boss:"):
             faction_key_boss = code.split(":", 1)[1]
-            from game.floors.floor_data import get_zone_raw, get_zone_for_floor
+            from game.tower.progression.floor_data import get_zone_raw, get_zone_for_floor
             zone_bw = get_zone_for_floor(floor)
             zone_raw_bw = get_zone_raw(floor)
             factions_bw = zone_raw_bw.get("factions", {})
@@ -723,7 +726,7 @@ async def on_floor_callback(
             if query.message is None:
                 await query.answer()
                 return
-            from game.floors.tower_ascent import tower_next_floor_pending, set_tower_ascent_pending
+            from game.tower.progression.tower_ascent import tower_next_floor_pending, set_tower_ascent_pending
 
             pend = tower_next_floor_pending(char)
             if pend is None:
@@ -1338,7 +1341,7 @@ async def on_floor_callback(
             pct_now = _emod.progress_percent(count_now, target_now)
             boss_hint = f"\n{_boss_name_hint}" if _emod.is_boss_available(_ex) else ""
 
-            from services import character_service as cs
+            import services.progression.character_service as character_service
             import html as _html
 
             if event_type == "gold":
@@ -1434,7 +1437,7 @@ async def on_floor_callback(
             else:  # rare_item
                 from game.items import loot as loot_tables
                 from db.repository import inventory_repo
-                from game.floors.monsters import FloorMonsterSpawn as _FMS
+                from game.enemies.floors.spawns import FloorMonsterSpawn as _FMS
                 import copy
                 # Используем минибосс-спаун для хорошего дропа
                 _mini_spawn = _FMS(
@@ -1510,6 +1513,7 @@ async def on_floor_callback(
                     state=state,
                     character=char,
                     spawn=oc.mimic_combat_spawn,
+                    free_stamina=True,
                 )
                 await query.answer()
                 return
@@ -1629,7 +1633,7 @@ async def wnpc_take_quest(query: CallbackQuery, session: AsyncSession, state: FS
             await query.answer("Нет персонажа.", show_alert=True)
             return
 
-        from services import wandering_npc_quest_service as wnpc_qs
+        import services.progression.wandering_npc_quest_service as wandering_npc_quest_service
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
         ok = wnpc_qs.take_quest(char, floor)
@@ -1673,7 +1677,7 @@ async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession, state: F
             await query.answer("Нет персонажа.", show_alert=True)
             return
 
-        from services import wandering_npc_quest_service as wnpc_qs
+        import services.progression.wandering_npc_quest_service as wandering_npc_quest_service
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
         ok, msg = await wnpc_qs.claim_quest_reward(session, char, floor)
@@ -1724,7 +1728,7 @@ async def story_npc_screen(
             return
 
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-        from game.quests.story_quests import (
+        from game.tower.quests.story_quests import (
             STORY_QUESTS_BY_NPC,
             get_quest_state,
             check_quest_completion,
@@ -1806,7 +1810,7 @@ async def story_quest_accept(
             return
 
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-        from game.quests.story_quests import STORY_QUESTS_BY_ID, accept_quest
+        from game.tower.quests.story_quests import STORY_QUESTS_BY_ID, accept_quest
 
         sq = STORY_QUESTS_BY_ID.get(quest_id)
         if sq is None:
@@ -1861,7 +1865,7 @@ async def story_quest_claim(
             return
 
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-        from game.quests.story_quests import STORY_QUESTS_BY_ID, claim_quest_reward
+        from game.tower.quests.story_quests import STORY_QUESTS_BY_ID, claim_quest_reward
 
         sq = STORY_QUESTS_BY_ID.get(quest_id)
         if sq is None:

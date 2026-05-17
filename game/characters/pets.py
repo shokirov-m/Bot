@@ -463,7 +463,7 @@ def pet_choice_button_caption(key: str, *, locale: str, is_active: bool) -> str:
 
 def build_pet_picker_html(character: Character, *, locale: str) -> str:
     """Экран выбора: все открытые питомцы и пассивки."""
-    from utils.ui import LINE_SEP
+    from utils.telegram.ui import LINE_SEP
 
     loc = "ru"
     own = owned_keys(character)

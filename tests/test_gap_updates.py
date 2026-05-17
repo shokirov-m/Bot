@@ -8,7 +8,7 @@ from game.combat import boss_streak
 from game.combat import engine as combat_engine
 from game.items import enchant as enchant_rules
 from game.locations import tavern as tavern_loc
-from services import forge_service
+import services.economy.forge_service as forge_service
 
 
 class _FakeCharacter:

@@ -7,7 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.i18n import t
 from config import settings
 from game.tower_cards import monster_cards as tc
-from services import sticker_duel_service
+import services.social.sticker_duel_service as sticker_duel_service
 
 
 def sticker_hub_keyboard(*, locale: str = "ru") -> InlineKeyboardMarkup:

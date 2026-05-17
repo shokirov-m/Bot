@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
-from services import title_service
+import services.progression.title_service as title_service
 
 TITLE_KEYS_PAGE_SIZE = 5
 

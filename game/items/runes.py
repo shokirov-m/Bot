@@ -148,7 +148,7 @@ def _same_element_mastery_bonus(runes: list[RuneData]) -> int:
 
 
 def total_weapon_rune_flat_elemental_damage(weapon_runes: Sequence[RuneData]) -> int:
-    """Суммарный плоский стихийный урон с рун оружия (добавляется к удару после брони)."""
+    """Суммарный плоский стихийный урон с рун оружия (учитывается в базе удара до вычета брони)."""
     s = sum(r.flat_elemental_damage for r in weapon_runes)
     return min(120, max(0, int(s)))
 

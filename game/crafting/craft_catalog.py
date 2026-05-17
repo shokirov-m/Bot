@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 
 from game.items.craft_resources import RESOURCE_DEFS
-from utils.ui import format_craft_result_effects_block_html
+from utils.telegram.ui import format_craft_result_effects_block_html
 from game.crafting.recipes_data import (
     PROF_ALCHEMIST,
     PROF_BLACKSMITH,

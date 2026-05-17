@@ -14,8 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.states.combat_states import CombatStates
 from db.repository import character_repo, user_repo
-from services import combat_idle_service, combat_service
-from services.combat_fsm_backup import clear_combat_backup, try_restore_combat_backup
+import services.combat.combat_idle_service as combat_idle_service
+import services.combat.combat_service as combat_service
+from services.combat.combat_fsm_backup import clear_combat_backup, try_restore_combat_backup
 from utils.combat_crash_dump import write_crash_dump
 
 router = Router(name="combat")

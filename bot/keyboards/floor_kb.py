@@ -1,4 +1,4 @@
-"""
+﻿"""
 Inline-клавиатура действий на этаже: класс (11 яр. / 57), монстры, вход в город, навигация по этажам.
 """
 
@@ -9,25 +9,27 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
 from game.characters import pets as pets_mod
-from game.floors import floor_data
-from game.floors import forest_beginnings as forest_beginnings_mod
-from game.floors import long_floor as long_floor_mod
-from game.floors import room_clear_floor as rc_mod
-from game.floors import room_clear_floor_10 as rc10_mod
-from game.floors import rotten_swamps as rotten_swamps_mod
-from game.floors import wave_floor as wv_mod
-from game.floors import wandering_npcs as wandering_npcs_mod
-from game.floors import explore_floor as exp_mod
-from game.floors import explore_floor_4 as exp4_mod
-from game.floors import explore_floor_22 as exp22_mod
-from game.floors import room_clear_floor_24 as rc24_mod
-from game.floors import room_clear_floor_30 as rc30_mod
-from game.floors import room_clear_floor_40 as rc40_mod
-from game.floors import room_clear_floor_26 as rc26_mod
-from game.floors import wave_floor_27 as wv27_mod
-from game.floors.monsters import FloorMonsterSpawn
-from game.floors.tower_ascent import tower_next_floor_pending
-from services.tutorial_battle_service import tutorial_battle_pending
+from game.tower.progression import floor_data
+from game.tower.mechanics import registry as mech
+import game.tower.progression.wandering_npcs as wandering_npcs_mod
+
+forest_beginnings_mod = mech.forest_beginnings
+long_floor_mod = mech.long_floor_mod
+rotten_swamps_mod = mech.rotten_swamps
+rc_mod = mech.room_clear_floor
+rc10_mod = mech.room_clear_floor_10
+rc24_mod = mech.room_clear_floor_24
+rc30_mod = mech.room_clear_floor_30
+rc40_mod = mech.room_clear_floor_40
+rc26_mod = mech.room_clear_floor_26
+wv_mod = mech.wave_floor
+wv27_mod = mech.wave_floor_27
+exp_mod = mech.explore_floor
+exp4_mod = mech.explore_floor_4
+exp22_mod = mech.explore_floor_22
+from game.enemies.floors.spawns import FloorMonsterSpawn
+from game.tower.progression.tower_ascent import tower_next_floor_pending
+from services.combat.tutorial_battle_service import tutorial_battle_pending
 
 
 def _navigation_max_floor(character: Character, nav_ceiling: int | None) -> int:

@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repository import character_repo, user_repo
-from services.activity_service import record_interaction
+from services.progression.activity_service import record_interaction
 
 
 class ActivityMiddleware(BaseMiddleware):

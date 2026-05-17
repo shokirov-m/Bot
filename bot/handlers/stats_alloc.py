@@ -18,10 +18,11 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.menu_kb import menu_nav_button_row
-from bot.utils.game_ui import edit_game_message_content
+from utils.telegram.game_ui import edit_game_message_content
 from db.repository import character_repo, user_repo
 from game.archetypes import manager as arch_manager
-from services import character_service, stat_bonus_service
+import services.progression.character_service as character_service
+import services.progression.stat_bonus_service as stat_bonus_service
 
 router = Router(name="stats_alloc")
 

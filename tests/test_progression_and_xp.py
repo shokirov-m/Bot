@@ -5,8 +5,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from game.balance import PROGRESSION_BASE_EXP, PROGRESSION_XP_NEED_DIVISOR_FROM_LEVEL_2
-from services.character_service import experience_needed_for_next_level, zone_multiplier_for_floor
-from services.character_service import add_experience
+from services.progression.character_service import experience_needed_for_next_level, zone_multiplier_for_floor
+from services.progression.character_service import add_experience
 
 
 def test_zone_multiplier_edges() -> None:

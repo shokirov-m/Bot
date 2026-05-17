@@ -87,6 +87,16 @@ def rarities_for_floor(floor: int) -> list[str]:
 # но с меньшим весом — чтобы не гнать игрока на низкие этажи за «старыми» рессами.
 _CATALOG_RELAXED_FLOOR_WEIGHT = 0.44
 
+# Множитель веса при выборе предмета: реже эпик+ в случайных крутках каталога.
+_RARITY_ROLL_WEIGHT: dict[str, float] = {
+    "common": 1.0,
+    "uncommon": 0.62,
+    "rare": 0.36,
+    "epic": 0.16,
+    "legendary": 0.07,
+    "mythic": 0.035,
+}
+
 
 def roll_catalog_item(floor: int, rarities: list[str] | None = None) -> dict[str, Any] | None:
     """Случайный предмет из каталога для данного этажа.
@@ -113,7 +123,8 @@ def roll_catalog_item(floor: int, rarities: list[str] | None = None) -> dict[str
                     continue
             except (ValueError, TypeError):
                 w = 1.0
-        weighted.append((w, item))
+        rw = float(_RARITY_ROLL_WEIGHT.get(str(item.get("rarity") or "common").lower(), 1.0))
+        weighted.append((w * rw, item))
     if not weighted:
         return None
     items = [it for _, it in weighted]

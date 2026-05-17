@@ -25,11 +25,12 @@ from bot.keyboards.home_kb import (
     workbench_keyboard,
 )
 from bot.i18n import get_locale
-from bot.utils.game_art import menu_home_library_photo_path, menu_home_photo_path, menu_home_wardrobe_photo_path
-from bot.utils.game_ui import push_game_ui, push_game_ui_animation, push_game_ui_video
+from utils.media.game_art import menu_home_library_photo_path, menu_home_photo_path, menu_home_wardrobe_photo_path
+from utils.telegram.game_ui import push_game_ui, push_game_ui_animation, push_game_ui_video
 from db.repository import character_repo, mercenary_repo, user_repo
 from scheduler.tasks import schedule_rest_completion_notification
-from services import home_service, mercenary_service
+import services.progression.home_service as home_service
+import services.social.mercenary_service as mercenary_service
 from game.mercenaries.shadow_market_meta import (
     floor_26_shadow_cleared,
     get_merc_xp_share_percent,
@@ -38,14 +39,15 @@ from game.mercenaries.shadow_market_meta import (
     set_merc_xp_share_percent,
     set_party_merc_ids,
 )
-from services.rest_service import try_begin_or_claim_rest
+from game.core.paths import assets_root, data_root
+from services.progression.rest_service import try_begin_or_claim_rest
 
 router = Router(name="home")
 
-MERC_ROMANCE_DATA_PATH = Path(__file__).resolve().parents[2] / "game" / "data" / "merc_quarters_romance_ru.json"
-MERC_ROMANCE_ASSETS_DIR = Path(__file__).resolve().parents[2] / "game" / "assets" / "home" / "merc_quarters" / "romance"
+MERC_ROMANCE_DATA_PATH = data_root() / "merc_quarters_romance_ru.json"
+MERC_ROMANCE_ASSETS_DIR = assets_root() / "home" / "merc_quarters" / "romance"
 # Портреты наёмников (карточка наёмника + меню «Покои»).
-MERC_PORTRAITS_DIR = Path(__file__).resolve().parents[2] / "game" / "assets" / "home" / "merc_quarters" / "portraits"
+MERC_PORTRAITS_DIR = assets_root() / "home" / "merc_quarters" / "portraits"
 # Следующий индекс варианта по ключу "merc_id:interaction_id" (цикл при «Повторить»).
 MERC_ROM_VARIANT_CYCLE_KEY = "merc_rom_variant_cycle"
 
@@ -54,6 +56,22 @@ _MERC_ROM_INTERACTION_RE = re.compile(r"^hom:merc:rom:(\d+):([a-zA-Z0-9_\-]+)(?:
 
 def _adult_allowed(user) -> bool:
     return bool(getattr(user, "adult_age_declared", None)) is True and bool(getattr(user, "adult_content_enabled", None)) is True
+
+
+def _merc_romance_allowed(user) -> bool:
+    """18+ в покоях: согласие в настройках и контент не запечатан."""
+    from game.mercenaries.adult_content_seal import merc_adult_content_sealed
+
+    return _adult_allowed(user) and not merc_adult_content_sealed()
+
+
+async def _answer_merc_romance_denied(callback: CallbackQuery) -> None:
+    from game.mercenaries.adult_content_seal import merc_adult_content_sealed, merc_adult_seal_alert_text
+
+    if merc_adult_content_sealed():
+        await callback.answer(merc_adult_seal_alert_text(), show_alert=True)
+    else:
+        await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
 
 
 _FEMALE_NAMES = frozenset({"Лира", "Мира", "Сильва", "Найра", "Эйва", "Тесс", "Инга"})
@@ -526,7 +544,7 @@ async def home_wardrobe(callback: CallbackQuery, session: AsyncSession, state: F
         if char is None:
             await callback.answer("Нет персонажа.", show_alert=True)
             return
-        from utils.profile_portraits import META_PORTRAIT_KEY
+        from utils.media.profile_portraits import META_PORTRAIT_KEY
 
         mp = char.meta_progress or {}
         cur = str(mp.get(META_PORTRAIT_KEY) or "")
@@ -741,7 +759,7 @@ async def home_portrait_preview(callback: CallbackQuery, session: AsyncSession, 
         if pk not in home_service.wardrobe_all_selectable_keys(char):
             await callback.answer("Этот облик недоступен.", show_alert=True)
             return
-        from utils.profile_portraits import META_PORTRAIT_KEY, portrait_path_if_exists
+        from utils.media.profile_portraits import META_PORTRAIT_KEY, portrait_path_if_exists
 
         mp = char.meta_progress or {}
         cur = str(mp.get(META_PORTRAIT_KEY) or "")
@@ -780,7 +798,7 @@ async def home_set_portrait(callback: CallbackQuery, session: AsyncSession, stat
         if not ok:
             await callback.answer(msg[:180], show_alert=True)
             return
-        from utils.profile_portraits import META_PORTRAIT_KEY
+        from utils.media.profile_portraits import META_PORTRAIT_KEY
 
         mp = char.meta_progress or {}
         cur = str(mp.get(META_PORTRAIT_KEY) or "")
@@ -1075,7 +1093,7 @@ def _merc_quarters_keyboard(character, mercs: list, *, user=None) -> InlineKeybo
                 callback_data=f"hom:merc:det:{m.id}",
             ),
         ])
-    if user is not None and _adult_allowed(user) and any(_merc_is_female(m) for m in mercs):
+    if user is not None and _merc_romance_allowed(user) and any(_merc_is_female(m) for m in mercs):
         rows.append([InlineKeyboardButton(text="🔥 18+ (наёмницы)", callback_data="hom:merc:rom18")])
     xp = get_merc_xp_share_percent(character)
     rows.append([
@@ -1155,7 +1173,7 @@ def _merc_detail_keyboard(character, m, *, user=None) -> InlineKeyboardMarkup:
     ])
 
     # 18+ взаимодействия (только если включено и наёмница).
-    if user is not None and _adult_allowed(user) and _merc_is_female(m):
+    if user is not None and _merc_romance_allowed(user) and _merc_is_female(m):
         rows.append([InlineKeyboardButton(text="🔥 18+ Взаимодействия", callback_data=f"hom:merc:rom:{m.id}")])
 
     if ph == "running":
@@ -1274,8 +1292,8 @@ async def home_merc_romance_list_hub(callback: CallbackQuery, session: AsyncSess
         if user is None or user.is_banned:
             await callback.answer("Нет доступа.", show_alert=True)
             return
-        if not _adult_allowed(user):
-            await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
+        if not _merc_romance_allowed(user):
+            await _answer_merc_romance_denied(callback)
             return
         mercs = await mercenary_repo.list_for_character(session, char.id)
         females = [m for m in mercs if _merc_is_female(m)]
@@ -1320,8 +1338,8 @@ async def home_merc_romance_menu_from_list(callback: CallbackQuery, session: Asy
         if user is None or user.is_banned:
             await callback.answer("Нет доступа.", show_alert=True)
             return
-        if not _adult_allowed(user):
-            await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
+        if not _merc_romance_allowed(user):
+            await _answer_merc_romance_denied(callback)
             return
         mid = int(callback.data.rsplit(":", 1)[-1])
         m = await mercenary_repo.get_by_id(session, mid)
@@ -1374,8 +1392,8 @@ async def home_merc_romance_menu(callback: CallbackQuery, session: AsyncSession,
         if user is None or user.is_banned:
             await callback.answer("Нет доступа.", show_alert=True)
             return
-        if not _adult_allowed(user):
-            await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
+        if not _merc_romance_allowed(user):
+            await _answer_merc_romance_denied(callback)
             return
         mid = int(callback.data.rsplit(":", 1)[-1])
         m = await mercenary_repo.get_by_id(session, mid)
@@ -1428,8 +1446,8 @@ async def home_merc_romance_interaction(callback: CallbackQuery, session: AsyncS
         if user is None or user.is_banned:
             await callback.answer("Нет доступа.", show_alert=True)
             return
-        if not _adult_allowed(user):
-            await callback.answer("🔞 Включи 18+ в настройках.", show_alert=True)
+        if not _merc_romance_allowed(user):
+            await _answer_merc_romance_denied(callback)
             return
         rm = _MERC_ROM_INTERACTION_RE.match(callback.data)
         if rm is None:

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Торговец: ассортимент расходников за золото + VIP-раздел за Telegram Stars.
 """
 
@@ -8,8 +8,9 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-from game.floors import floor_data
-from utils.image_assets import item_gear_png
+from game.core import paths as content_paths
+from game.tower.progression import floor_data
+from utils.media.image_assets import item_gear_png
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,7 +159,7 @@ VIP_STAR_GOODS: tuple[ShopGood, ...] = (
             "virtual_shop": "vip_star_bonus",
             "vip_bonus_id": "frost_throne_v1",
             "name": "❄️ Владыка морозного трона",
-            "preview_image": "assets/images/shop/vip_frost_lord_throne.png",
+            "preview_image": content_paths.rel_assets("images", "shop", "vip_frost_lord_throne.png"),
         },
     ),
 )

@@ -18,12 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.i18n import get_locale
 from bot.keyboards.menu_kb import main_menu_keyboard
 from bot.keyboards.title_kb import TITLE_KEYS_PAGE_SIZE, titles_pick_keyboard
-from bot.utils.game_art import menu_titles_photo_path
-from bot.utils.game_ui import push_game_ui
+from utils.media.game_art import menu_titles_photo_path
+from utils.telegram.game_ui import push_game_ui
 from db.repository import character_repo, user_repo
 from game.characters.titles import format_title_bonus_line
-from services import title_service
-from utils.ui import LINE_SEP
+import services.progression.title_service as title_service
+from utils.telegram.ui import LINE_SEP
 
 router = Router(name="titles")
 

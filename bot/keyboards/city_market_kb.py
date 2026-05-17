@@ -8,7 +8,6 @@ from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
 from game.characters.player_skills import (
     SKILL_BY_KEY,
-    TEMPLE_SKILL_PRICES_GOLD,
     learned_skill_keys,
     passive_emoji,
     skill_emoji,
@@ -24,7 +23,6 @@ def city_floor3_market_keyboard(floor_number: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="💰 Скупщик", callback_data=f"cty:mkt:{f}:scrap")],
             [InlineKeyboardButton(text="🏦 Банк (сейф)", callback_data=f"ecy:sfv:{f}:mkt")],
             [InlineKeyboardButton(text="⛪ Храм призыва (питомец)", callback_data=f"cty:mkt:{f}:temple")],
-            [InlineKeyboardButton(text="📜 Школа навыков", callback_data=f"cty:mkt:{f}:skills")],
             [InlineKeyboardButton(text="⬅ В город", callback_data=f"cty:mkt:{f}:hub")],
             menu_nav_button_row(),
         ],
@@ -45,40 +43,6 @@ def temple_floor3_keyboard(floor_number: int, *, can_reroll: bool) -> InlineKeyb
             menu_nav_button_row(),
         ],
     )
-
-
-def temple_skills_shop_keyboard(floor_number: int, character: Character) -> InlineKeyboardMarkup:
-    """Покупка навыков за золото (деревня, 3 этаж)."""
-    f = int(floor_number)
-    learned = learned_skill_keys(character)
-    rows: list[list[InlineKeyboardButton]] = []
-    for key in sorted(TEMPLE_SKILL_PRICES_GOLD.keys()):
-        price = TEMPLE_SKILL_PRICES_GOLD[key]
-        sk = SKILL_BY_KEY.get(key)
-        if sk is None:
-            continue
-        name = str(sk.name)[:20]
-        if key in learned:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"✓ {name}",
-                        callback_data=f"cty:skillhave:{f}:{key}",
-                    ),
-                ],
-            )
-        else:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"{name} · {price}💰",
-                        callback_data=f"cty:skillbuy:{f}:{key}",
-                    ),
-                ],
-            )
-    rows.append([InlineKeyboardButton(text="⬅ На рынок", callback_data=f"cty:mkt:{f}:open")])
-    rows.append(menu_nav_button_row())
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def profile_skills_pick_keyboard(*, slot: int, learned_keys: list[str]) -> InlineKeyboardMarkup:

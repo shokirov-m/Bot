@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from utils.image_assets import item_gear_png
+from utils.media.image_assets import item_gear_png
 
 
 def apply_item_payload_defaults(data: dict[str, Any]) -> dict[str, Any]:

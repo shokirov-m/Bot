@@ -33,17 +33,21 @@ from bot.keyboards.profile_kb import (
     profile_view_keyboard,
 )
 from bot.keyboards.tree_kb import skill_tree_keyboard, node_action_keyboard
-from bot.utils.game_ui import push_game_ui
-from bot.utils.ui_photos import specialization_menu_photo_path
-from services import character_service, fame_service, leaderboard_service, stat_bonus_service, title_service
-from services.workshop_profile_ui import workshop_compact_line, workshop_full_stats_block
-from services.rest_service import apply_completed_rest_if_needed
+from utils.telegram.game_ui import push_game_ui
+from utils.media.ui_photos import specialization_menu_photo_path
+import services.progression.character_service as character_service
+import services.progression.fame_service as fame_service
+import services.social.leaderboard_service as leaderboard_service
+import services.progression.stat_bonus_service as stat_bonus_service
+import services.progression.title_service as title_service
+from services.economy.workshop_profile_ui import workshop_compact_line, workshop_full_stats_block
+from services.progression.rest_service import apply_completed_rest_if_needed
 from game.characters import pets as pets_mod
 from game.characters.classes import get_class_or_none
 from game.archetypes import manager as arch_manager
 from game.characters.global_passives import format_unlocked_global_passives_ru, refresh_global_passives
 from game.characters.path_ranks import path_rank_lore, path_rank_name_ru
-from services.character_service import experience_needed_for_next_level
+from services.progression.character_service import experience_needed_for_next_level
 from game.characters.player_skills import (
     SKILL_BY_KEY,
     ensure_skill_meta,
@@ -67,8 +71,8 @@ from game.characters.weapon_mastery import (
 )
 from game.combat import formulas
 from utils.game_images_prefs import game_images_enabled
-from utils.profile_portraits import portrait_path_for_character
-from utils.ui import (
+from utils.media.profile_portraits import portrait_path_for_character
+from utils.telegram.ui import (
     LINE_SEP,
     _BAR_LEN,
     element_profile_line,
@@ -181,7 +185,7 @@ async def _weapon_attack_value(session: AsyncSession, char: Character) -> int:
 
 def _sticker_profile_block(char: Character) -> str:
     try:
-        from services import sticker_duel_service
+        import services.social.sticker_duel_service as sticker_duel_service
 
         return sticker_duel_service.profile_sticker_lines_html(char)
     except Exception:
@@ -529,10 +533,10 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
 
     chance_bonuses = await stat_bonus_service.aggregate_chance_bonuses(session, int(char.id))
     chance_line = stat_bonus_service.format_chance_bonuses_html(chance_bonuses)
-    from services import achievement_service as _achs
+    import services.progression.achievement_service as achievement_service
     ach_line = _achs.format_achievement_bonuses_html(char)
 
-    deriv = stat_bonus_service.format_stat_derived_effects_ru(eff)
+    deriv = stat_bonus_service.format_stat_derived_effects_ru(eff, class_key=str(char.class_key or ""))
     tree_pass_html = arch_manager.format_skill_tree_passives_profile_html_ru(char)
     base = _build_profile_text(
         char,
@@ -618,7 +622,7 @@ async def on_profile_achievements(
         if not char:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        from services import achievement_service
+        import services.progression.achievement_service as achievement_service
 
         achievement_service.check_and_apply_achievements(char)
         await session.flush()
