@@ -416,15 +416,15 @@ async def on_floor_callback(
                 return
             import services.progression.wandering_npc_quest_service as wandering_npc_quest_service
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-            text = wnpc_qs.format_npc_quest_screen(char, floor)
-            q_state = wnpc_qs.get_quest_for_floor(char, floor)
+            text = wandering_npc_quest_service.format_npc_quest_screen(char, floor)
+            q_state = wandering_npc_quest_service.get_quest_for_floor(char, floor)
             rows: list[list[InlineKeyboardButton]] = []
             if q_state is None:
                 rows.append([InlineKeyboardButton(
                     text="📜 Взять задание",
                     callback_data=f"wnpc:take:{floor}",
                 )])
-            elif wnpc_qs.can_claim(char, floor):
+            elif wandering_npc_quest_service.can_claim(char, floor):
                 rows.append([InlineKeyboardButton(
                     text="🎁 Получить награду",
                     callback_data=f"wnpc:claim:{floor}",
@@ -524,8 +524,8 @@ async def on_floor_callback(
                 return
             import services.economy.scrap_merchant_service as scrap_merchant_service
 
-            if not _scrap.is_scrap_floor(floor):
-                await query.answer(_scrap.scrap_unavailable_message(int(floor)), show_alert=True)
+            if not scrap_merchant_service.is_scrap_floor(floor):
+                await query.answer(scrap_merchant_service.scrap_unavailable_message(int(floor)), show_alert=True)
                 return
             from bot.keyboards.scrap_kb import scrap_merchant_keyboard, set_scrap_ui_back
             from db.repository import inventory_repo
@@ -1636,13 +1636,13 @@ async def wnpc_take_quest(query: CallbackQuery, session: AsyncSession, state: FS
         import services.progression.wandering_npc_quest_service as wandering_npc_quest_service
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-        ok = wnpc_qs.take_quest(char, floor)
+        ok = wandering_npc_quest_service.take_quest(char, floor)
         if not ok:
             await query.answer("Задание уже взято или недоступно.", show_alert=True)
             return
 
         await session.flush()
-        text = wnpc_qs.format_npc_quest_screen(char, floor)
+        text = wandering_npc_quest_service.format_npc_quest_screen(char, floor)
         rows = [[InlineKeyboardButton(text="⬅ Назад на этаж", callback_data=f"fl:{floor}:back")]]
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
         await push_game_ui(
@@ -1680,7 +1680,7 @@ async def wnpc_claim_quest(query: CallbackQuery, session: AsyncSession, state: F
         import services.progression.wandering_npc_quest_service as wandering_npc_quest_service
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-        ok, msg = await wnpc_qs.claim_quest_reward(session, char, floor)
+        ok, msg = await wandering_npc_quest_service.claim_quest_reward(session, char, floor)
         if not ok:
             await query.answer(msg[:180], show_alert=True)
             return

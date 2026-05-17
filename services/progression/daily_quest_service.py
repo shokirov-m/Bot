@@ -313,7 +313,7 @@ async def claim_quest(
 
     import services.progression.wanderer_fame_quest_service as wanderer_fame_quest_service
 
-    wf_line = wfqs.on_daily_quest_claimed(character)
+    wf_line = wanderer_fame_quest_service.on_daily_quest_claimed(character)
     wf_html = f"\n{wf_line}" if wf_line else ""
 
     lv_html = character_service.level_up_notice_html(character, lv)

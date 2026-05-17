@@ -119,8 +119,8 @@ async def tavern_buyer_open(query: CallbackQuery, session: AsyncSession, state: 
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         import services.progression.tavern_buyer_service as tavern_buyer_service
-        text = bqs.format_buyer_quest_html(char, floor_key)
-        state = bqs._get_state(char, floor_key)
+        text = tavern_buyer_service.format_buyer_quest_html(char, floor_key)
+        state = tavern_buyer_service._get_state(char, floor_key)
         await push_game_ui(
             state,
             query.bot,
@@ -149,13 +149,13 @@ async def tavern_buyer_start(query: CallbackQuery, session: AsyncSession, state:
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         import services.progression.tavern_buyer_service as tavern_buyer_service
-        ok = bqs.start_chain(char, floor_key)
+        ok = tavern_buyer_service.start_chain(char, floor_key)
         if not ok:
             await query.answer("Цепочка уже начата или недоступна.", show_alert=True)
             return
         await session.flush()
-        text = bqs.format_buyer_quest_html(char, floor_key)
-        state = bqs._get_state(char, floor_key)
+        text = tavern_buyer_service.format_buyer_quest_html(char, floor_key)
+        state = tavern_buyer_service._get_state(char, floor_key)
         await push_game_ui(
             state,
             query.bot,
@@ -186,13 +186,13 @@ async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession, s
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         import services.progression.tavern_buyer_service as tavern_buyer_service
-        ok, msg = await bqs.claim_step(session, char, floor_key, step)
+        ok, msg = await tavern_buyer_service.claim_step(session, char, floor_key, step)
         if not ok:
             await query.answer(msg[:180], show_alert=True)
             return
         # Читаем state ДО commit, пока char не сброшен
-        text = bqs.format_buyer_quest_html(char, floor_key)
-        state = bqs._get_state(char, floor_key)
+        text = tavern_buyer_service.format_buyer_quest_html(char, floor_key)
+        state = tavern_buyer_service._get_state(char, floor_key)
         await session.commit()
         await push_game_ui(
             state,
@@ -321,12 +321,12 @@ async def tavern_buyer_final(query: CallbackQuery, session: AsyncSession) -> Non
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         import services.progression.tavern_buyer_service as tavern_buyer_service
-        ok, msg = await bqs.claim_final_reward(session, char, floor_key)
+        ok, msg = await tavern_buyer_service.claim_final_reward(session, char, floor_key)
         if not ok:
             await query.answer(msg[:200], show_alert=True)
             return
         # Читаем state ДО commit
-        state = bqs._get_state(char, floor_key)
+        state = tavern_buyer_service._get_state(char, floor_key)
         await session.commit()
         await edit_game_message_content(query.message,
             msg,

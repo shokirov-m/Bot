@@ -455,7 +455,7 @@ async def try_donate_gold(
     if actual <= 0:
         return False, f"Казна переполнена ({cur:,}/{limit:,} 💰). Сначала обновите клан или постройте сокровищницу."
     import services.progression.character_service as character_service
-    _csvc.add_gold(
+    character_service.add_gold(
         character,
         -actual,
         spend_for=f"Клан «{clan.name}»: взнос в казну",
@@ -591,7 +591,7 @@ async def claim_salary(session: AsyncSession, character: Character) -> tuple[boo
     payload["salary_pool"] = pool
     import services.progression.character_service as character_service
 
-    _csvc.add_gold(character, amt)
+    character_service.add_gold(character, amt)
     _add_event(payload, f"{html.escape(character.display_name)} забрал ЗП {amt:,} 💰")
     await clan_repo.update_payload(session, clan, payload)
     return True, f"📥 Получено <b>{amt:,}</b> 💰 от клана."

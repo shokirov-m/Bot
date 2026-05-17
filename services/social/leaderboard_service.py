@@ -77,10 +77,10 @@ async def victory_rank_reward_multipliers(
     """
     import services.social.leaderboard_bonuses as leaderboard_bonuses
 
-    ranks = await lbn.per_board_ranks(session, character)
-    gm = lbn.gold_multiplier(ranks)
-    xm = lbn.xp_multiplier(ranks)
-    note_block = lbn.format_active_bonuses_html(ranks)
+    ranks = await leaderboard_bonuses.per_board_ranks(session, character)
+    gm = leaderboard_bonuses.gold_multiplier(ranks)
+    xm = leaderboard_bonuses.xp_multiplier(ranks)
+    note_block = leaderboard_bonuses.format_active_bonuses_html(ranks)
     if not note_block:
         return 1.0, 1.0, ""
     return gm, xm, note_block

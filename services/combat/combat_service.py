@@ -2062,7 +2062,7 @@ async def _victory_sequence(
         character.meta_progress = mp_win
     # Обновляем прогресс ежедневных заданий
     import services.progression.daily_quest_service as daily_quest_service
-    dqs.record_battle_result(
+    daily_quest_service.record_battle_result(
         character,
         is_elite=bool(spawn.is_elite),
         is_mini_boss=bool(spawn.is_mini_boss),
@@ -2071,7 +2071,7 @@ async def _victory_sequence(
     )
     # Обновляем прогресс заданий путников (этажи 1–20)
     import services.progression.wandering_npc_quest_service as wandering_npc_quest_service
-    wnpc_qs.record_battle(
+    wandering_npc_quest_service.record_battle(
         character,
         is_elite=bool(spawn.is_elite),
         is_mini_boss=bool(spawn.is_mini_boss),
@@ -2083,14 +2083,14 @@ async def _victory_sequence(
     import services.progression.tavern_buyer_service as tavern_buyer_service
     from game.quests.forge_quests import HUB_FLOORS as _HUB_FLOORS
     for _hub in _HUB_FLOORS:
-        fqs.record_battle(
+        forge_quest_service.record_battle(
             character, _hub,
             is_elite=bool(spawn.is_elite),
             is_mini_boss=bool(spawn.is_mini_boss),
             is_major_boss=bool(spawn.is_major_boss),
             gold_gained=int(net_gold),
         )
-        bqs.record_battle(
+        tavern_buyer_service.record_battle(
             character, _hub,
             is_elite=bool(spawn.is_elite),
             is_mini_boss=bool(spawn.is_mini_boss),
@@ -2110,8 +2110,11 @@ async def _victory_sequence(
         try:
             import services.social.leaderboard_bonuses as leaderboard_bonuses
 
-            _ranks = await _lbn.per_board_ranks(session, character)
-            _clan_delta = max(_clan_delta, int(round(_clan_delta * _lbn.clan_boss_score_multiplier(_ranks))))
+            _ranks = await leaderboard_bonuses.per_board_ranks(session, character)
+            _clan_delta = max(
+                _clan_delta,
+                int(round(_clan_delta * leaderboard_bonuses.clan_boss_score_multiplier(_ranks))),
+            )
         except Exception:
             pass
     await clan_service.on_monster_win_add_clan_xp(session, character, delta=_clan_delta)
@@ -2136,8 +2139,8 @@ async def _victory_sequence(
         try:
             import services.social.leaderboard_bonuses as leaderboard_bonuses
 
-            _ranks = await _lbn.per_board_ranks(session, character)
-            _mat_chance = min(1.0, _mat_chance * _lbn.material_drop_multiplier(_ranks))
+            _ranks = await leaderboard_bonuses.per_board_ranks(session, character)
+            _mat_chance = min(1.0, _mat_chance * leaderboard_bonuses.material_drop_multiplier(_ranks))
         except Exception:
             pass
         # Определяем тип материала по зоне монстра
@@ -2356,7 +2359,7 @@ async def _victory_sequence(
     quest_suffix = await quest_service.apply_kill_progress(session, character)
     import services.progression.wanderer_fame_quest_service as wanderer_fame_quest_service
 
-    wf_line = wfqs.on_combat_kill(
+    wf_line = wanderer_fame_quest_service.on_combat_kill(
         character,
         is_elite=bool(getattr(spawn, "is_elite", False)),
     )

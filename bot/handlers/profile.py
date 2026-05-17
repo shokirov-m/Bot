@@ -534,7 +534,7 @@ async def build_profile_full_stats_html_async(session: AsyncSession, char: Chara
     chance_bonuses = await stat_bonus_service.aggregate_chance_bonuses(session, int(char.id))
     chance_line = stat_bonus_service.format_chance_bonuses_html(chance_bonuses)
     import services.progression.achievement_service as achievement_service
-    ach_line = _achs.format_achievement_bonuses_html(char)
+    ach_line = achievement_service.format_achievement_bonuses_html(char)
 
     deriv = stat_bonus_service.format_stat_derived_effects_ru(eff, class_key=str(char.class_key or ""))
     tree_pass_html = arch_manager.format_skill_tree_passives_profile_html_ru(char)

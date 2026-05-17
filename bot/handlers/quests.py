@@ -148,9 +148,9 @@ async def render_quest_floor_hub(
                     ),
                 ],
             )
-        _dq = dqs.get_daily_quests(char)
-        _dq_cl = sum(1 for q in _dq if dqs.can_claim(q))
-        _dq_done = sum(1 for q in _dq if dqs.is_done(q))
+        _dq = daily_quest_service.get_daily_quests(char)
+        _dq_cl = sum(1 for q in _dq if daily_quest_service.can_claim(q))
+        _dq_done = sum(1 for q in _dq if daily_quest_service.is_done(q))
         if _dq_cl > 0:
             _dlbl = f"📅 Ежедневные ({_dq_cl} к получению!)"
         elif _dq_done > 0:
@@ -225,9 +225,9 @@ async def render_quest_floor_hub(
         lines.append("<i>Продолжай бой на башне.</i>")
 
     # Кнопка перехода на ежедневные задания
-    _daily_q = dqs.get_daily_quests(char)
-    _daily_claimable = sum(1 for q in _daily_q if dqs.can_claim(q))
-    _daily_done = sum(1 for q in _daily_q if dqs.is_done(q))
+    _daily_q = daily_quest_service.get_daily_quests(char)
+    _daily_claimable = sum(1 for q in _daily_q if daily_quest_service.can_claim(q))
+    _daily_done = sum(1 for q in _daily_q if daily_quest_service.is_done(q))
     if _daily_claimable > 0:
         _daily_lbl = f"📅 Ежедневные ({_daily_claimable} к получению!)"
     elif _daily_done > 0:
@@ -320,30 +320,30 @@ async def render_active_quests_overview(
 
 async def render_daily_quests_hub(char: Character) -> tuple[str, InlineKeyboardMarkup]:
     """Экран ежедневных заданий."""
-    text = dqs.format_daily_quests_html(char)
-    wf_block = wfqs.format_chain_summary_html(char)
+    text = daily_quest_service.format_daily_quests_html(char)
+    wf_block = wanderer_fame_quest_service.format_chain_summary_html(char)
     if wf_block:
         text = f"{text}{wf_block}"
     rows: list[list[InlineKeyboardButton]] = []
 
     # Кнопки «Забрать» для выполненных заданий
-    claim_rows = dqs.daily_quest_keyboard_rows(char, int(char.floor_number))
+    claim_rows = daily_quest_service.daily_quest_keyboard_rows(char, int(char.floor_number))
     rows.extend(claim_rows)
 
-    if fb.wanderer_content_unlocked(char) and not wfqs.chain_done(char):
+    if fame_bonuses.wanderer_content_unlocked(char) and not wanderer_fame_quest_service.chain_done(char):
         rows.append(
             [InlineKeyboardButton(text="🧙 Особые миссии Странника", callback_data="qd:wchain")],
         )
-        step = wfqs.current_step(char)
+        step = wanderer_fame_quest_service.current_step(char)
         if step is not None and step.quest_type == "seal_claim":
             rows.append(
                 [InlineKeyboardButton(text="🏅 Получить печать странника", callback_data="qd:wseal")],
             )
-    if fb.wanderer_content_unlocked(char) and fb.wanderer_daily_tip_available(char):
+    if fame_bonuses.wanderer_content_unlocked(char) and fame_bonuses.wanderer_daily_tip_available(char):
         rows.append(
             [InlineKeyboardButton(text="🧙 Совет Странника (раз в сутки)", callback_data="qd:wand")],
         )
-    if fb.can_show_legendary_2500_quest(char):
+    if fame_bonuses.can_show_legendary_2500_quest(char):
         rows.append(
             [InlineKeyboardButton(text="🌟 Легендарный завет (один раз)", callback_data="qd:leg")],
         )
@@ -442,7 +442,7 @@ async def on_daily_quest_claim(
             await query.answer("Сначала /start.", show_alert=True)
             return
 
-        ok, msg = await dqs.claim_quest(session, char, slot)
+        ok, msg = await daily_quest_service.claim_quest(session, char, slot)
         if not ok:
             await query.answer(msg[:200], show_alert=True)
             return
@@ -493,9 +493,9 @@ async def on_wanderer_fame_chain(
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        body = wfqs.format_chain_detail_html(char)
+        body = wanderer_fame_quest_service.format_chain_detail_html(char)
         rows: list[list[InlineKeyboardButton]] = []
-        step = wfqs.current_step(char)
+        step = wanderer_fame_quest_service.current_step(char)
         if step is not None and step.quest_type == "seal_claim":
             rows.append(
                 [InlineKeyboardButton(text="🏅 Получить печать странника", callback_data="qd:wseal")],
@@ -537,7 +537,7 @@ async def on_wanderer_fame_seal(
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        ok, msg = await wfqs.claim_seal(session, char)
+        ok, msg = await wanderer_fame_quest_service.claim_seal(session, char)
         if not ok:
             await query.answer(msg[:200], show_alert=True)
             return
@@ -579,7 +579,7 @@ async def on_wanderer_tip(
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        ok, msg = fb.claim_wanderer_daily_tip(char)
+        ok, msg = fame_bonuses.claim_wanderer_daily_tip(char)
         if not ok:
             await query.answer(msg[:200], show_alert=True)
             return
@@ -623,7 +623,7 @@ async def on_legendary_2500(
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        ok, msg = await fb.complete_legendary_2500_quest(session, char)
+        ok, msg = await fame_bonuses.complete_legendary_2500_quest(session, char)
         if not ok:
             await query.answer(msg[:200], show_alert=True)
             return

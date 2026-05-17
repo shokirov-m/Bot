@@ -986,8 +986,8 @@ async def forge_quest_open(query: CallbackQuery, session: AsyncSession) -> None:
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         import services.progression.forge_quest_service as forge_quest_service
-        text = fqs.format_forge_quest_html(char, floor_key)
-        state = fqs._get_state(char, floor_key)
+        text = forge_quest_service.format_forge_quest_html(char, floor_key)
+        state = forge_quest_service._get_state(char, floor_key)
         await edit_game_message_content(query.message,
             text,
             reply_markup=forge_quest_keyboard(floor_key, state),
@@ -1012,13 +1012,13 @@ async def forge_quest_start(query: CallbackQuery, session: AsyncSession) -> None
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         import services.progression.forge_quest_service as forge_quest_service
-        ok = fqs.start_chain(char, floor_key)
+        ok = forge_quest_service.start_chain(char, floor_key)
         if not ok:
             await query.answer("Цепочка уже начата или недоступна.", show_alert=True)
             return
         await session.flush()
-        text = fqs.format_forge_quest_html(char, floor_key)
-        state = fqs._get_state(char, floor_key)
+        text = forge_quest_service.format_forge_quest_html(char, floor_key)
+        state = forge_quest_service._get_state(char, floor_key)
         await edit_game_message_content(query.message,
             text,
             reply_markup=forge_quest_keyboard(floor_key, state),
@@ -1045,13 +1045,13 @@ async def forge_quest_claim_step(query: CallbackQuery, session: AsyncSession) ->
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         import services.progression.forge_quest_service as forge_quest_service
-        ok, msg = await fqs.claim_step(session, char, floor_key, step)
+        ok, msg = await forge_quest_service.claim_step(session, char, floor_key, step)
         if not ok:
             await query.answer(msg[:180], show_alert=True)
             return
         # Читаем state ДО commit, пока char не сброшен в сессии
-        text = fqs.format_forge_quest_html(char, floor_key)
-        state = fqs._get_state(char, floor_key)
+        text = forge_quest_service.format_forge_quest_html(char, floor_key)
+        state = forge_quest_service._get_state(char, floor_key)
         await session.commit()
         await edit_game_message_content(query.message,
             f"{text}\n\n{msg}",
@@ -1077,12 +1077,12 @@ async def forge_quest_final(query: CallbackQuery, session: AsyncSession) -> None
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         import services.progression.forge_quest_service as forge_quest_service
-        ok, msg = await fqs.claim_final_reward(session, char, floor_key)
+        ok, msg = await forge_quest_service.claim_final_reward(session, char, floor_key)
         if not ok:
             await query.answer(msg[:200], show_alert=True)
             return
         # Читаем state ДО commit
-        state = fqs._get_state(char, floor_key)
+        state = forge_quest_service._get_state(char, floor_key)
         await session.commit()
         await edit_game_message_content(query.message,
             msg,

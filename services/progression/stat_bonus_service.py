@@ -237,8 +237,8 @@ async def effective_primary_stats(session: AsyncSession, character: Character) -
     try:
         import services.social.leaderboard_bonuses as leaderboard_bonuses
 
-        ranks = await _lbn.per_board_ranks(session, character)
-        m = _lbn.all_stats_multiplier(ranks)
+        ranks = await leaderboard_bonuses.per_board_ranks(session, character)
+        m = leaderboard_bonuses.all_stats_multiplier(ranks)
         if m > 1.0:
             base = {k: int(round(v * m)) for k, v in base.items()}
     except Exception:

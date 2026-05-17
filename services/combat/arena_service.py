@@ -585,7 +585,7 @@ def finish_turn_duel_economy(
         character_service.add_gold(character, gold_delta)
         import services.progression.wanderer_fame_quest_service as wanderer_fame_quest_service
 
-        wf_line = wfqs.on_arena_win(character)
+        wf_line = wanderer_fame_quest_service.on_arena_win(character)
         wf_suffix = f"\n{wf_line}" if wf_line else ""
         report = f"Итог: <b>победа</b>.\nНаграда: <b>+{gold_delta}</b> 💰{wf_suffix}"
     elif outcome == "lose":
