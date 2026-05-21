@@ -361,17 +361,7 @@ def add_experience(character: Character, amount: int) -> int:
         levels += 1
     if levels:
         character.unspent_stat_points = int(character.unspent_stat_points) + 5 * levels
-        # Grant SP starting from lvl 10
-        sp_gained = 0
-        for lv in range(character.level - levels + 1, character.level + 1):
-            if lv >= 10:
-                sp_gained += 1
-        
-        if sp_gained > 0:
-            mp = dict(getattr(character, "meta_progress", None) or {})
-            mp["unspent_sp"] = int(mp.get("unspent_sp", 0)) + sp_gained
-            character.meta_progress = mp
-            
+
     return levels
 
 
@@ -432,12 +422,15 @@ def level_up_notice_html(character: Character, levels_gained: int) -> str:
     """Короткая HTML-строка для экранов награды после повышения уровня."""
     if levels_gained <= 0:
         return ""
-    sp = int((character.meta_progress or {}).get("unspent_sp", 0))
-    sp_line = f"\n✨ Очков навыков: <b>{sp}</b> — в меню персонажа" if character.level >= 10 else ""
+    grimoire_hint = (
+        "\n📖 Новые гримуары — в библиотеке, квестах и «Гримуары» в профиле."
+        if character.level >= 10
+        else ""
+    )
     return (
         f"\n🎉 <b>Уровень +{levels_gained}!</b> Сейчас: <b>{character.level}</b> ур. "
         f"Свободных очков: <b>{int(character.unspent_stat_points)}</b> — /stats"
-        f"{sp_line}"
+        f"{grimoire_hint}"
     )
 
 
@@ -480,16 +473,6 @@ async def admin_grant_character_levels(
 
     character.level = old + d
     character.unspent_stat_points = int(character.unspent_stat_points) + 5 * d
-    # Grant SP for admin levels too
-    sp_gained = 0
-    for lv in range(old + 1, character.level + 1):
-        if lv >= 10:
-            sp_gained += 1
-    if sp_gained > 0:
-        mp = dict(character.meta_progress or {})
-        mp["unspent_sp"] = int(mp.get("unspent_sp", 0)) + sp_gained
-        character.meta_progress = mp
-
     title_service.refresh_unlocks(character)
     await refresh_hp_mp_from_effective(session, character)
     return d, None
@@ -715,7 +698,7 @@ STAT_ALLOC_RESET_DAY_META_KEY = "stat_alloc_reset_utc_day"
 def nominal_primary_stats_tuple(character: Character) -> tuple[int, int, int, int, int]:
     """
     Ожидаемые базовые статы персонажа из класса (без ручного распределения из /stats).
-    После подкласса (57) статы в БД хранятся как база класса ×2.
+    Статы в БД — база выбранного класса (tier‑2 через высший гримуар).
     """
     arch = arch_manager.get_character_archetype(character)
     bs = arch.base_stats

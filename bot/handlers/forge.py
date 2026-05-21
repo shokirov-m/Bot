@@ -99,7 +99,7 @@ async def forge_set_shop_open(query: CallbackQuery, session: AsyncSession, state
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Этаж устарел.", show_alert=True)
             return
         goods = _basic_set_goods()
@@ -141,7 +141,7 @@ async def forge_set_shop_buy(query: CallbackQuery, session: AsyncSession, state:
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Этаж устарел.", show_alert=True)
             return
         goods = {k: (payload, int(price)) for k, payload, price in _basic_set_goods()}
@@ -206,7 +206,7 @@ async def forge_open_main(query: CallbackQuery, session: AsyncSession, state: FS
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже. Обнови /floor.", show_alert=True)
             return
         if not forge_loc.forge_available_on_floor(char.floor_number):
@@ -240,11 +240,11 @@ async def forge_star_merge_menu(query: CallbackQuery, session: AsyncSession, sta
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.forge_available_on_floor(char.floor_number):
             await query.answer("Кузница недоступна.", show_alert=True)
             return
         if not forge_service.star_merge_unlocked_on_floor(int(char.floor_number)):
-            await query.answer("Слияние звёзд откроется в городе с этажа 61.", show_alert=True)
+            await query.answer("Слияние звёзд откроется в городе после 60-го яруса.", show_alert=True)
             return
         rows = await forge_service.list_star_merge_targets(session, char.id)
         if not rows:
@@ -289,7 +289,7 @@ async def forge_star_merge_apply(query: CallbackQuery, session: AsyncSession, st
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.forge_available_on_floor(char.floor_number):
             await query.answer("Кузница недоступна.", show_alert=True)
             return
         ok, lines = await forge_service.try_star_merge(session, char, item_id)
@@ -327,7 +327,7 @@ async def forge_repair_menu(query: CallbackQuery, session: AsyncSession, state: 
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.repair_allowed_on_floor(char.floor_number):
+        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.repair_allowed_on_floor(char.floor_number):
             await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         text = await forge_service.build_repair_message_html(session, char)
@@ -364,7 +364,7 @@ async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession, s
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.repair_allowed_on_floor(char.floor_number):
+        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.repair_allowed_on_floor(char.floor_number):
             await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         ok, lines = await forge_service.try_repair_equipped_slot(session, char, slot)
@@ -404,7 +404,7 @@ async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession, st
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.repair_allowed_on_floor(char.floor_number):
+        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.repair_allowed_on_floor(char.floor_number):
             await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         ok, lines = await forge_service.try_repair_all_equipped(session, char)
@@ -452,7 +452,7 @@ async def _handle_forge_enchant_callback(
     if char is None:
         await query.answer("Нет персонажа.", show_alert=True)
         return
-    if char.floor_number != floor_key:
+    if not floor_data.city_service_floor_ok(char, floor_key):
         await query.answer("Ты не на этом этаже.", show_alert=True)
         return
     if not forge_loc.forge_available_on_floor(char.floor_number):
@@ -539,7 +539,7 @@ async def forge_craft_menu(query: CallbackQuery, session: AsyncSession) -> None:
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         if not forge_loc.forge_available_on_floor(char.floor_number):
@@ -584,7 +584,7 @@ async def forge_craft_run(query: CallbackQuery, session: AsyncSession) -> None:
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         ok, lines = await crafting_service.try_craft(session, char, recipe_id)
@@ -615,7 +615,7 @@ async def forge_brew_elixir(query: CallbackQuery, session: AsyncSession) -> None
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
 
@@ -648,7 +648,7 @@ async def forge_back_city(query: CallbackQuery, session: AsyncSession, state: FS
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Этаж устарел.", show_alert=True)
             return
         if floor_data.get_city_for_floor(char.floor_number) is None:
@@ -779,7 +779,7 @@ async def forge_disassemble_menu(query: CallbackQuery, session: AsyncSession) ->
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.forge_available_on_floor(char.floor_number):
             await query.answer("Здесь нет кузницы.", show_alert=True)
             return
         pairs = await forge_service.list_disassemblable_items(session, char)
@@ -808,7 +808,7 @@ async def forge_disassemble_filter(query: CallbackQuery, session: AsyncSession) 
         rar_code = parts[3]
         knd_code = parts[4]
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         if not forge_loc.forge_available_on_floor(char.floor_number):
@@ -842,7 +842,7 @@ async def forge_disassemble_sweep(query: CallbackQuery, session: AsyncSession) -
         floor_key = int(parts[2])
         max_rar = parts[3]
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         ok, msg = await forge_service.try_sweep_disassemble(session, char, max_rarity=max_rar)
@@ -875,7 +875,7 @@ async def forge_disassemble_apply(query: CallbackQuery, session: AsyncSession) -
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         ok, msg = await forge_service.try_disassemble_bag_item(session, char, item_id)
@@ -899,7 +899,7 @@ async def forge_disassemble_multi_toggle_handler(query: CallbackQuery, session: 
             return
         floor_key = int(query.data.split(":")[2])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.forge_available_on_floor(char.floor_number):
             await query.answer("Недоступно.", show_alert=True)
             return
         await forge_service.forge_disassemble_multi_toggle(session, char)
@@ -922,7 +922,7 @@ async def forge_disassemble_pick_toggle(query: CallbackQuery, session: AsyncSess
         floor_key = int(parts[2])
         item_id = int(parts[3])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.forge_available_on_floor(char.floor_number):
             await query.answer("Недоступно.", show_alert=True)
             return
         if not forge_service.disassemble_multi_mode(char):
@@ -946,7 +946,7 @@ async def forge_disassemble_batch_apply(query: CallbackQuery, session: AsyncSess
             return
         floor_key = int(query.data.split(":")[2])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key or not forge_loc.forge_available_on_floor(char.floor_number):
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.forge_available_on_floor(char.floor_number):
             await query.answer("Недоступно.", show_alert=True)
             return
         ok, msg = await forge_service.try_disassemble_selected_batch(session, char)
@@ -982,7 +982,7 @@ async def forge_quest_open(query: CallbackQuery, session: AsyncSession) -> None:
             return
         floor_key = int(query.data.split(":")[2])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         import services.progression.forge_quest_service as forge_quest_service
@@ -1008,7 +1008,7 @@ async def forge_quest_start(query: CallbackQuery, session: AsyncSession) -> None
             return
         floor_key = int(query.data.split(":")[3])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         import services.progression.forge_quest_service as forge_quest_service
@@ -1041,7 +1041,7 @@ async def forge_quest_claim_step(query: CallbackQuery, session: AsyncSession) ->
         floor_key = int(parts[3])
         step = int(parts[4])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         import services.progression.forge_quest_service as forge_quest_service
@@ -1073,7 +1073,7 @@ async def forge_quest_final(query: CallbackQuery, session: AsyncSession) -> None
             return
         floor_key = int(query.data.split(":")[3])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не на этом этаже.", show_alert=True)
             return
         import services.progression.forge_quest_service as forge_quest_service

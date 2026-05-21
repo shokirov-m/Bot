@@ -194,7 +194,7 @@ def vip_good_by_key(key: str) -> ShopGood | None:
 
 def effective_good_price(base_price: int, floor_number: int) -> int:
     """Цена с наценкой за высоту башни: +1.5% за этаж до 50."""
-    f = max(1, min(135, int(floor_number)))
+    f = max(1, min(99, int(floor_number)))
     mult = 1.0 + min(f, 50) * 0.015
     return max(1, math.ceil(base_price * mult - 1e-9))
 

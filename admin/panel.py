@@ -37,7 +37,7 @@ def format_dashboard_html(stats: dict[str, Any]) -> str:
         f"(<b>{stats.get('econ_safe_user_count', 0)}</b> героев с остатком) · "
         f"должников ростовщику <b>{stats.get('econ_debtor_count', 0)}</b> "
         f"(долг <b>{stats.get('econ_debt_sum', 0):,}</b> 💰)\n"
-        f"<i>QA: этажи 3/31/61/91 — город, «Экономика», стражник, кузница.</i>"
+        f"<i>QA: города 0↔1, 30↔31, 60↔61, 90↔91 — «Экономика», стражник, кузница.</i>"
     )
 
 

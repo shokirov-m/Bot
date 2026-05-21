@@ -1,0 +1,117 @@
+{
+  "entries": [
+    {
+      "id": "elara_herb",
+      "name": "Элара",
+      "emoji": "🌿",
+      "profession": "alchemy",
+      "floor_from": 1,
+      "floor_to": 10,
+      "floors_hub": [
+        5
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Элара ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "elara_herb_fb_herb_bundle",
+          "title": "Сбор трав",
+          "objective": "collect_material",
+          "target": {
+            "id": "forest_moss",
+            "qty": 15
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "nightshade",
+                "qty": 5
+              }
+            ]
+          },
+          "floors": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": "elara_herb_fb_resin_jar",
+          "title": "Смола для настоек",
+          "objective": "collect_material",
+          "target": {
+            "id": "pine_resin",
+            "qty": 12
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "potion_antibleed_2",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            3,
+            4
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    },
+    {
+      "id": "torin_hunt",
+      "name": "Торин",
+      "emoji": "🏹",
+      "profession": "hunting",
+      "floor_from": 1,
+      "floor_to": 10,
+      "floors_hub": [
+        5
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Торин ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "torin_hunt_fb_wolf_pelt",
+          "title": "Шкуры волков",
+          "objective": "collect_material",
+          "target": {
+            "id": "wolf_pelt",
+            "qty": 20
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "garlic_oil",
+                "qty": 3
+              }
+            ]
+          },
+          "floors": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": "torin_hunt_fb_feather_lure",
+          "title": "Перья для приманки",
+          "objective": "collect_material",
+          "target": {
+            "id": "owl_feather",
+            "qty": 18
+          },
+          "rewards": {},
+          "floors": [
+            3,
+            4
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    }
+  ]
+}

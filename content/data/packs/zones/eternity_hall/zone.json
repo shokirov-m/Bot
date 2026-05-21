@@ -1,0 +1,11 @@
+{
+  "key": "eternity_hall",
+  "name": "Зал Вечности",
+  "emoji": "⚡",
+  "floor_from": 81,
+  "floor_to": 99,
+  "description": "Мастера зоны Зал Вечности — поручения и материалы для мастерской.",
+  "floor_type": "normal",
+  "theme": "eternity",
+  "hub_floor": 90
+}

@@ -124,8 +124,8 @@ ACHIEVEMENTS: dict[str, dict[str, Any]] = {
     },
     "tower_legend": {
         "name": "Легенда башни",
-        "desc": "Достичь 135-го этажа — финал башни",
-        "condition": lambda c: int(c.highest_floor_reached or c.floor_number) >= 135,
+        "desc": "Достичь 99-го этажа — вершина известной карты",
+        "condition": lambda c: int(c.highest_floor_reached or c.floor_number) >= 99,
         "reward_stats": {"str": 20, "dex": 20, "int": 20, "vit": 20, "luck": 20},
     },
     "millionaire": {

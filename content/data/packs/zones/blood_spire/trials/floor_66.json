@@ -1,0 +1,19 @@
+{
+  "floor": 66,
+  "trial_type": "rescue",
+  "grounds_count": 15,
+  "hardcore": true,
+  "death_reset": "full_trial",
+  "prisoner_lives": 3,
+  "required_progress_pct": 90,
+  "targets": {
+    "prisoners": 10,
+    "camps": 28,
+    "fights": 120,
+    "elites": 24,
+    "mini_bosses": 3
+  },
+  "wins_per_ground": 4,
+  "grounds_visible_initial": 6,
+  "checkpoint_every_grounds": 3
+}

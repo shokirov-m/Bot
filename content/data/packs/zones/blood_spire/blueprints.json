@@ -1,0 +1,52 @@
+{
+  "entries": {
+    "blueprint_potion_antibleed_2": {
+      "name_ru": "Чертёж: антикровотечение II",
+      "profession": "alchemy",
+      "tier_min": 2,
+      "materials_hint": ["blood_vial", "coagulant"]
+    },
+    "blueprint_potion_bloodshield_3": {
+      "name_ru": "Чертёж: кровавый щит III",
+      "profession": "alchemy",
+      "tier_min": 3,
+      "materials_hint": ["blood_vial", "garlic_oil"]
+    },
+    "blueprint_blade_vampire_2": {
+      "name_ru": "Чертёж: клинок охотника на нежить II",
+      "profession": "smithing",
+      "tier_min": 2,
+      "materials_hint": ["vampire_fang", "dark_steel"]
+    },
+    "blueprint_armor_patch_dark_1": {
+      "name_ru": "Чертёж: тёмная заплатка I",
+      "profession": "smithing",
+      "tier_min": 1,
+      "materials_hint": ["chain_fragment", "dark_steel"]
+    },
+    "blueprint_ring_crimson_2": {
+      "name_ru": "Чертёж: багровое кольцо II",
+      "profession": "jewelry",
+      "tier_min": 2,
+      "materials_hint": ["crimson_gem", "bone_setting"]
+    },
+    "blueprint_amulet_socket_blood_3": {
+      "name_ru": "Чертёж: сокет крови III",
+      "profession": "jewelry",
+      "tier_min": 3,
+      "materials_hint": ["crimson_gem", "blood_vial"]
+    },
+    "blueprint_trap_holy_1": {
+      "name_ru": "Чертёж: святая ловушка I",
+      "profession": "hunting",
+      "tier_min": 1,
+      "materials_hint": ["holy_herb", "bat_wing"]
+    },
+    "blueprint_bait_undead_2": {
+      "name_ru": "Чертёж: приманка нежити II",
+      "profession": "hunting",
+      "tier_min": 2,
+      "materials_hint": ["garlic_oil", "ghoul_hide"]
+    }
+  }
+}

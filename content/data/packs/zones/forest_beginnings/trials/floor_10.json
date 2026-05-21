@@ -1,0 +1,14 @@
+{
+  "floor": 10,
+  "trial_type": "boss_chamber",
+  "boss_key": "boss_ancient_treant",
+  "trial_title_ru": "Тронный зал Древнего Дуба",
+  "hardcore": false,
+  "death_reset": "phase",
+  "required_progress_pct": 85,
+  "boss_retry_cooldown_min_minutes": 15,
+  "boss_retry_cooldown_max_minutes": 18,
+  "floor_stat_mult": 1.0,
+  "stamina_per_venture": 1,
+  "daily_venture_cap": 10
+}

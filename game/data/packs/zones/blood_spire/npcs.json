@@ -1,0 +1,160 @@
+{
+  "entries": [
+    {
+      "id": "morrigan",
+      "name": "Морриган",
+      "emoji": "⚗️",
+      "profession": "alchemy",
+      "floor_from": 61,
+      "floor_to": 70,
+      "floors_hub": [64],
+      "greeting_by_reputation": {
+        "hostile": "{player_name}, не трать моё зелье.",
+        "neutral": "{player_name}, кровь на образце — это хорошо.",
+        "honored": "О, {player_name}, твои реагенты пахнут победой.",
+        "legend": "{player_name}… даже башня шепчет твоё имя."
+      },
+      "class_tone": {
+        "warrior": "коротко",
+        "mage": "ритуально",
+        "rogue": "с иронией",
+        "priest": "с предупреждением"
+      },
+      "quests": [
+        {
+          "id": "mor_blood_vials",
+          "floors": [61, 62, 63],
+          "title": "Сосуды для ритуала",
+          "objective": "collect_material",
+          "target": {"id": "blood_vial", "qty": 12},
+          "rewards": {
+            "materials": [{"id": "nightshade", "qty": 8}],
+            "blueprints": [{"id": "blueprint_potion_antibleed_2", "qty": 1}]
+          }
+        },
+        {
+          "id": "mor_coagulant_chain",
+          "floors": [64, 65, 66],
+          "title": "Цепочка сгустителя",
+          "profession_tier_min": 2,
+          "objective": "collect_material",
+          "target": {"id": "coagulant", "qty": 20},
+          "rewards": {
+            "materials": [{"id": "garlic_oil", "qty": 6}],
+            "blueprints": [{"id": "blueprint_potion_bloodshield_3", "qty": 1}]
+          }
+        }
+      ]
+    },
+    {
+      "id": "vlad_fangs",
+      "name": "Влад Клыков",
+      "emoji": "🔨",
+      "profession": "smithing",
+      "floor_from": 63,
+      "floor_to": 70,
+      "floors_hub": [64],
+      "greeting_by_reputation": {
+        "neutral": "Кузня ждёт, {player_name}.",
+        "honored": "{player_name}, наковальня уже раскалена под тебя."
+      },
+      "quests": [
+        {
+          "id": "vlad_fangs_deliver",
+          "floors": [63, 64, 67],
+          "title": "Клыки для клинка",
+          "objective": "collect_material",
+          "target": {"id": "vampire_fang", "qty": 15},
+          "rewards": {
+            "materials": [{"id": "dark_steel", "qty": 10}],
+            "blueprints": [{"id": "blueprint_blade_vampire_2", "qty": 1}]
+          }
+        },
+        {
+          "id": "vlad_chain_fragments",
+          "floors": [65, 66],
+          "profession_tier_min": 2,
+          "title": "Цепи Шпиля",
+          "target": {"id": "chain_fragment", "qty": 25},
+          "rewards": {
+            "blueprints": [{"id": "blueprint_armor_patch_dark_1", "qty": 1}],
+            "materials": [{"id": "chain_fragment", "qty": 5}]
+          }
+        }
+      ]
+    },
+    {
+      "id": "serena_gems",
+      "name": "Серена",
+      "emoji": "💎",
+      "profession": "jewelry",
+      "floor_from": 64,
+      "floor_to": 70,
+      "floors_hub": [64],
+      "quests": [
+        {
+          "id": "ser_crimson",
+          "floors": [64, 68, 69],
+          "title": "Багровые камни",
+          "profession_tier_min": 2,
+          "target": {"id": "crimson_gem", "qty": 8},
+          "rewards": {
+            "blueprints": [{"id": "blueprint_ring_crimson_2", "qty": 1}],
+            "materials": [{"id": "bone_setting", "qty": 6}]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ignatius_hunt",
+      "name": "Игнатий",
+      "emoji": "🏹",
+      "profession": "hunting",
+      "floor_from": 61,
+      "floor_to": 70,
+      "quests": [
+        {
+          "id": "ign_bat_wings",
+          "floors": [62, 63],
+          "title": "Крылья для приманки",
+          "target": {"id": "bat_wing", "qty": 30},
+          "rewards": {
+            "blueprints": [{"id": "blueprint_bait_undead_2", "qty": 1}],
+            "materials": [{"id": "ghoul_hide", "qty": 12}]
+          }
+        },
+        {
+          "id": "ign_elite_fangs",
+          "floors": [67, 68, 69],
+          "title": "Клыки элиты",
+          "target": {"id": "fang_elite_vampire", "qty": 12},
+          "rewards": {
+            "blueprints": [{"id": "blueprint_trap_holy_1", "qty": 1}],
+            "materials": [{"id": "holy_herb", "qty": 10}]
+          }
+        }
+      ]
+    },
+    {
+      "id": "father_marcus",
+      "name": "Отец Маркус",
+      "emoji": "🌿",
+      "profession": "herbalism",
+      "floor_from": 64,
+      "floor_to": 70,
+      "floors_hub": [64, 65],
+      "quests": [
+        {
+          "id": "marc_herbs",
+          "floors": [64, 65, 66],
+          "title": "Травы лагеря",
+          "target": {"id": "holy_herb", "qty": 24},
+          "rewards": {
+            "materials": [{"id": "bandage_roll", "qty": 20}],
+            "blueprints": []
+          }
+        }
+      ]
+    }
+  ]
+}

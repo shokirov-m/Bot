@@ -1,6 +1,6 @@
 """
 /start: лор башни, пол героя, ник, портрет (3 варианта по полу), создание странника.
-Класс — с 10 ур. у наставника на 11 этаже, подкласс — на 57.
+Класс — с 10 ур. в профиле; специализация — цепочка наставника и высший гримуар.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ async def _answer_with_menu_hub_photo(
 
 
 TOWER_WAKE_LORE = (
-    "🌫️ Ты в <b>башне из 100 этажей</b>: бои, стамина, экипировка, города. "
+    "🌫️ Ты в <b>башне без дна</b>: бои, стамина, экипировка, города. "
     "Смерть на этаже — со штрафом.\n\n"
 )
 
@@ -231,7 +231,7 @@ async def _finish_new_character_registration(
     body = (
         f"⚔️ <b>{html.escape(char.display_name)}</b> {cls.emoji} <b>{cls.name_ru}</b>. "
         f"Старт: этаж <b>1</b>, открыто: <b>{char.highest_floor_reached}</b>.\n"
-        f"<i>С 10 ур. класс у наставника на 11 этаже; подкласс на 57. Учебный бой и звание — с 1 этажа.</i>\n"
+        f"<i>С 10 ур. — путь в «Специализация»; с 50 ур. — цепочка наставника и высший гримуар.</i>\n"
         f"<i>Пассив:</i> {passive}\n"
         f"<i>Навыки:</i> {cls.skill_1}, {cls.skill_2}, {cls.skill_3}\n\n"
         f"{format_menu_hub_html(char, locale=loc)}"
@@ -537,6 +537,6 @@ async def on_gender_stale_callback(callback: CallbackQuery) -> None:
 async def on_outdated_class_callback(callback: CallbackQuery) -> None:
     """Старые сообщения с выбором класса при регистрации."""
     await callback.answer(
-        "Регистрация обновлена: нажми /start — класс с 10 ур. у наставника на 11 этаже.",
+        "Регистрация обновлена: нажми /start — базовый класс с 10 ур. в профиле («Специализация»).",
         show_alert=True,
     )

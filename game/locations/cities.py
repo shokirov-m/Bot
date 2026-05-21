@@ -37,12 +37,12 @@ class CityHubDef:
     """Кратко про лотерею / ростовщика / сейф в этом городе."""
 
 
-# Ключ хаба по этажу (для meta_progress, аналитики, будущих NPC).
+# Якорь города (after_floor) → стабильный ключ хаба.
 HUB_KEY_BY_FLOOR: dict[int, str] = {
-    3: "quiet_brook",
-    31: "ironfall",
-    61: "emberhall",
-    91: "eternis",
+    0: "quiet_brook",
+    30: "ironfall",
+    60: "emberhall",
+    90: "eternis",
 }
 
 def _build_city_hubs() -> dict[int, CityHubDef]:
@@ -59,7 +59,7 @@ def _build_city_hubs() -> dict[int, CityHubDef]:
 
 def _default_city_hubs() -> dict[int, CityHubDef]:
     return {
-    3: CityHubDef(
+    0: CityHubDef(
         key="quiet_brook",
         tagline="Первый очаг у подножия — здесь учатся не сдаваться.",
         welcome_html=(
@@ -72,7 +72,7 @@ def _default_city_hubs() -> dict[int, CityHubDef]:
         npc_guard_title="староста",
         economy_blurb="Местная лотерея скромная; в гильдии банкиров принимают золото в сейф.",
     ),
-    31: CityHubDef(
+    30: CityHubDef(
         key="ironfall",
         tagline="Ледяной форпост средних колец — отсюда видно, кто дойдёт до верхних ярусов.",
         welcome_html=(
@@ -85,7 +85,7 @@ def _default_city_hubs() -> dict[int, CityHubDef]:
         npc_guard_title="капитан стражи",
         economy_blurb="Ростовщики легиона дают короткие займы под процент; лотерея — городская, с крупным фондом.",
     ),
-    61: CityHubDef(
+    60: CityHubDef(
         key="emberhall",
         tagline="Гномьи мастерские и жар плавилен — сердце вулканического кольца.",
         welcome_html=(
@@ -98,7 +98,7 @@ def _default_city_hubs() -> dict[int, CityHubDef]:
         npc_guard_title="инспектор казармы",
         economy_blurb="Банк гильдии кузнецов держит сейфы; аукцион лотов пока вестится объявлениями у таверны.",
     ),
-    91: CityHubDef(
+    90: CityHubDef(
         key="eternis",
         tagline="Последний шик перед Залом Вечности — здесь решается, кто увидит 100-й этаж.",
         welcome_html=(
@@ -134,15 +134,21 @@ def _ensure_hub_keys() -> None:
     _HUB_KEYS_LOADED = True
 
 
-def hub_key_for_floor(floor_number: int) -> str | None:
+def hub_key_for_floor(floor_number: int, *, highest_reached: int | None = None) -> str | None:
     """Стабильный ключ хаба или None."""
+    city = floor_data.get_city_for_floor(floor_number, highest_reached=highest_reached)
+    if city is None:
+        return None
     _ensure_hub_keys()
-    return HUB_KEY_BY_FLOOR.get(int(floor_number))
+    return HUB_KEY_BY_FLOOR.get(int(city.after_floor)) or city.key
 
 
-def get_city_hub_def(floor_number: int) -> CityHubDef | None:
-    """Расширенное описание, если этаж — город-хаб."""
-    return _CITY_HUBS.get(int(floor_number))
+def get_city_hub_def(floor_number: int, *, highest_reached: int | None = None) -> CityHubDef | None:
+    """Расширенное описание доступного города с боевого яруса."""
+    city = floor_data.get_city_for_floor(floor_number, highest_reached=highest_reached)
+    if city is None:
+        return None
+    return _CITY_HUBS.get(int(city.after_floor))
 
 
 def resolve_city(floor_number: int) -> CityInfo | None:
@@ -154,7 +160,7 @@ def format_city_hub_rich_html(city: CityInfo) -> str:
     """
     Полный текст входа в город: тема из floor_data + лор из этого модуля.
     """
-    ext = get_city_hub_def(int(city.floor))
+    ext = get_city_hub_def(int(city.after_floor), highest_reached=city.after_floor + 1)
     base_theme = html.escape(city.theme_ru)
     head = f"{city.emoji} <b>{html.escape(city.name)}</b>\n<i>{base_theme}</i>"
     if ext is None:
@@ -170,9 +176,9 @@ def format_city_hub_rich_html(city: CityInfo) -> str:
     )
 
 
-def guard_npc_title_for_floor(floor_number: int) -> str:
+def guard_npc_title_for_floor(floor_number: int, *, highest_reached: int | None = None) -> str:
     """Как называть NPC поручения в UI (fallback — стражник)."""
-    ext = get_city_hub_def(int(floor_number))
+    ext = get_city_hub_def(int(floor_number), highest_reached=highest_reached)
     if ext is None:
         return "стражник"
     return ext.npc_guard_title

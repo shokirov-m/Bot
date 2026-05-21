@@ -1,7 +1,7 @@
 """
 Сервис цепочки заданий кузнеца.
 
-Состояние: meta_progress['forge_q_{hub}'] например 'forge_q_3':
+Состояние: meta_progress['forge_q_{anchor}'] например 'forge_q_0' (якорь города):
 {
     "step": 1,           # текущий активный шаг (1–3, 4 = все шаги сданы)
     "1_cur": 0,          # прогресс шага 1
@@ -23,7 +23,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.character import Character
 from db.repository import character_repo, inventory_repo
-from game.quests.forge_quests import ForgeQuestChain, ForgeQuestStep, chain_for_hub
+from game.quests.forge_quests import (
+    ForgeQuestChain,
+    ForgeQuestStep,
+    chain_for_hub,
+    normalize_hub_anchor,
+)
 import services.progression.character_service as character_service
 import services.progression.fame_service as fame_service
 
@@ -33,12 +38,15 @@ _KEY_PREFIX = "forge_q_"
 # ── Вспомогательные ───────────────────────────────────────────────────────────
 
 def _meta_key(hub_floor: int) -> str:
-    return f"{_KEY_PREFIX}{hub_floor}"
+    return f"{_KEY_PREFIX}{normalize_hub_anchor(hub_floor)}"
 
 
 def _get_state(character: Character, hub_floor: int) -> dict:
+    anchor = normalize_hub_anchor(hub_floor)
     meta = character.meta_progress or {}
-    raw = meta.get(_meta_key(hub_floor))
+    raw = meta.get(_meta_key(anchor))
+    if raw is None and int(hub_floor) != anchor:
+        raw = meta.get(f"{_KEY_PREFIX}{int(hub_floor)}")
     return dict(raw) if isinstance(raw, dict) else {}
 
 

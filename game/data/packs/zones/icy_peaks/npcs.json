@@ -1,0 +1,124 @@
+{
+  "entries": [
+    {
+      "id": "frost_smith",
+      "name": "Хельга",
+      "emoji": "🔨",
+      "profession": "smithing",
+      "floor_from": 31,
+      "floor_to": 40,
+      "floors_hub": [
+        35
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Хельга ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "frost_smith_ip_ice_shard",
+          "title": "Осколки льда",
+          "objective": "collect_material",
+          "target": {
+            "id": "ice_shard",
+            "qty": 20
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "dark_steel",
+                "qty": 8
+              }
+            ]
+          },
+          "floors": [
+            31,
+            32
+          ]
+        },
+        {
+          "id": "frost_smith_ip_fur_lining",
+          "title": "Мех для доспехов",
+          "objective": "collect_material",
+          "target": {
+            "id": "beast_fur",
+            "qty": 15
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "armor_patch_dark_1",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            33,
+            34
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    },
+    {
+      "id": "peak_ranger",
+      "name": "Сигур",
+      "emoji": "🏹",
+      "profession": "hunting",
+      "floor_from": 31,
+      "floor_to": 40,
+      "floors_hub": [
+        35
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Сигур ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "peak_ranger_ip_yeti_claw",
+          "title": "Когти йети",
+          "objective": "collect_material",
+          "target": {
+            "id": "yeti_claw",
+            "qty": 12
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "bat_wing",
+                "qty": 10
+              }
+            ]
+          },
+          "floors": [
+            31,
+            32
+          ]
+        },
+        {
+          "id": "peak_ranger_ip_frost_feather",
+          "title": "Ледяные перья",
+          "objective": "collect_material",
+          "target": {
+            "id": "frost_feather",
+            "qty": 18
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "garlic_oil",
+                "qty": 2
+              }
+            ]
+          },
+          "floors": [
+            33,
+            34
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    }
+  ]
+}

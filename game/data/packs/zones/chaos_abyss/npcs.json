@@ -1,0 +1,124 @@
+{
+  "entries": [
+    {
+      "id": "chaos_sage",
+      "name": "Оракул разлома",
+      "emoji": "📜",
+      "profession": "jewelry",
+      "floor_from": 71,
+      "floor_to": 80,
+      "floors_hub": [
+        75
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Оракул разлома ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "chaos_sage_ca_rift_shard",
+          "title": "Осколки разлома",
+          "objective": "collect_material",
+          "target": {
+            "id": "rift_shard",
+            "qty": 12
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "crimson_gem",
+                "qty": 5
+              }
+            ]
+          },
+          "floors": [
+            71,
+            72
+          ]
+        },
+        {
+          "id": "chaos_sage_ca_void_ink",
+          "title": "Чернила пустоты",
+          "objective": "collect_material",
+          "target": {
+            "id": "void_ink",
+            "qty": 15
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "ring_crimson_2",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            73,
+            74
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    },
+    {
+      "id": "demon_hunter",
+      "name": "Каз",
+      "emoji": "🏹",
+      "profession": "hunting",
+      "floor_from": 71,
+      "floor_to": 80,
+      "floors_hub": [
+        75
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Каз ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "demon_hunter_ca_demon_horn",
+          "title": "Рога демонов",
+          "objective": "collect_material",
+          "target": {
+            "id": "demon_horn",
+            "qty": 10
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "vampire_fang",
+                "qty": 2
+              }
+            ]
+          },
+          "floors": [
+            71,
+            72
+          ]
+        },
+        {
+          "id": "demon_hunter_ca_chaos_hide",
+          "title": "Шкуры хаоса",
+          "objective": "collect_material",
+          "target": {
+            "id": "chaos_hide",
+            "qty": 18
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "bat_wing",
+                "qty": 15
+              }
+            ]
+          },
+          "floors": [
+            73,
+            74
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    }
+  ]
+}

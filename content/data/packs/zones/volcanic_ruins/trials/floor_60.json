@@ -1,0 +1,14 @@
+{
+  "floor": 60,
+  "trial_type": "boss_chamber",
+  "boss_key": "boss_ember_dragon",
+  "trial_title_ru": "Кузня Пепельного Дракона",
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 89,
+  "boss_retry_cooldown_min_minutes": 17,
+  "boss_retry_cooldown_max_minutes": 20,
+  "floor_stat_mult": 1.15,
+  "stamina_per_venture": 2,
+  "daily_venture_cap": 5
+}

@@ -28,8 +28,8 @@ def economy_hub_intro_html(character: Character) -> str:
     city = floor_data.get_city_for_floor(character.floor_number)
     if city is None:
         return ""
-    ext = city_locations.get_city_hub_def(int(city.floor))
-    ticket = sink_rules.lottery_ticket_cost_gold(int(city.floor))
+    ext = city_locations.get_city_hub_def(int(city.after_floor), highest_reached=int(city.after_floor) + 1)
+    ticket = sink_rules.lottery_ticket_cost_gold(int(city.after_floor))
     debt = sink_rules.moneylender_debt(character)
     bal = sink_rules.bank_safe_balance(character)
     cap = sink_rules.bank_safe_capacity(character)

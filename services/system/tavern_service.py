@@ -30,7 +30,7 @@ def _lodging_city_key(character: Character) -> str:
     city = floor_data.get_city_for_floor(int(character.floor_number))
     if city is None:
         return "unknown"
-    return str(int(city.floor))
+    return str(int(city.after_floor))
 
 
 def _lodging_uses_today_for_city(character: Character, city_key: str) -> int:
@@ -109,7 +109,7 @@ async def try_buy_offer(
     Провал — (False, plain text для alert).
     """
     if not tavern_loc.tavern_available_on_floor(character.floor_number):
-        return False, "Таверна только в городах на этажах 31, 61 и 91."
+        return False, "Таверна доступна только в открытом городе-хабе (кнопка «Город» на этаже)."
 
     offer = tavern_loc.offer_by_key(offer_key, floor_number=int(character.floor_number))
     if offer is None:

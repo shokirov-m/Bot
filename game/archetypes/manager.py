@@ -79,6 +79,11 @@ def can_unlock_archetype(character: Character, arch_key: str) -> tuple[bool, str
     if not arch:
         return False, "Неизвестный архетип."
 
+    if arch_key == "necromancer":
+        from game.necromancer.service import can_purchase_necromancer
+
+        return can_purchase_necromancer(character)
+
     current_key = str(character.class_key or "wanderer").lower()
     current = ARCHETYPES.get(current_key, ARCHETYPES["wanderer"])
     if arch.tier <= current.tier and arch.key != current.key:
@@ -101,36 +106,6 @@ def can_unlock_archetype(character: Character, arch_key: str) -> tuple[bool, str
             
     return True, "Условия выполнены."
 
-# --- Skill Tree Logic ---
-
-def get_character_sp(character: Character) -> int:
-    """Returns unspent Skill Points from meta_progress."""
-    return int((character.meta_progress or {}).get("unspent_sp", 0))
-
-
-def sync_unspent_sp_with_tree(character: Character) -> None:
-    """
-    Привести свободные SP в соответствие: (уровень − 9) минус сумма cost_sp изученных узлов.
-    Вызывать при открытии древа после смены стоимостей узлов или для починки рассинхрона.
-    """
-    if int(character.level or 0) < 10:
-        return
-    expected = max(0, int(character.level) - 9)
-    tree = get_character_tree(character)
-    if not tree:
-        return
-    unlocked = get_unlocked_node_keys(character)
-    spent = sum(tree[k].cost_sp for k in unlocked if k in tree)
-    new_unspent = max(0, expected - spent)
-    mp = dict(character.meta_progress or {})
-    if int(mp.get("unspent_sp", 0)) != new_unspent:
-        mp["unspent_sp"] = new_unspent
-        character.meta_progress = mp
-
-def get_unlocked_node_keys(character: Character) -> set[str]:
-    """Returns set of unlocked tree node keys."""
-    return set((character.meta_progress or {}).get("unlocked_nodes", []))
-
 def get_character_tree(character: Character) -> dict[str, SkillTreeNode]:
     """Древо SP: у tier‑2 классов используется дерево родительского tier‑1 (ключи узлов те же)."""
     arch_key = str(character.class_key or "wanderer").lower()
@@ -145,35 +120,22 @@ def get_character_tree(character: Character) -> dict[str, SkillTreeNode]:
     return {}
 
 def get_unlocked_skills(character: Character) -> list[SkillV2]:
-    """Returns list of active skills unlocked in the tree."""
+    """Активные навыки: база архетипа + изученные гримуары."""
+    from game.archetypes.grimoires import get_unlocked_skill_keys_from_grimoires
+
     arch = get_character_archetype(character)
     res: list[SkillV2] = [SKILLS[sk_key] for sk_key in arch.skills if sk_key in SKILLS]
-    tree = get_character_tree(character)
-    unlocked = get_unlocked_node_keys(character)
-
-    for node_key in unlocked:
-        node = tree.get(node_key)
-        if node and node.node_type == "active_skill":
-            sk = SKILLS.get(str(node.value))
-            if sk and all(existing.key != sk.key for existing in res):
-                res.append(sk)
+    for sk_key in get_unlocked_skill_keys_from_grimoires(character):
+        sk = SKILLS.get(sk_key)
+        if sk and all(existing.key != sk.key for existing in res):
+            res.append(sk)
     return res
 
 def get_tree_bonuses(character: Character) -> dict[str, float | int]:
-    """Calculates total bonuses from unlocked nodes in the tree."""
-    tree = get_character_tree(character)
-    unlocked = get_unlocked_node_keys(character)
-    merged: dict[str, float | int] = {}
-    
-    for node_key in unlocked:
-        node = tree.get(node_key)
-        if not node: continue
-        
-        if node.node_type in ("passive_bonus", "stat_boost") and isinstance(node.value, dict):
-            for k, v in node.value.items():
-                merged[k] = merged.get(k, 0) + v
-                
-    return merged
+    """Бонусы из изученных гримуаров (бывшие узлы древа SP)."""
+    from game.archetypes.grimoires import get_grimoire_combat_bonuses
+
+    return get_grimoire_combat_bonuses(character)
 
 
 def format_skill_tree_node_effect_ru(node: SkillTreeNode) -> str:
@@ -284,84 +246,7 @@ def format_skill_tree_node_effect_ru(node: SkillTreeNode) -> str:
 
 
 def format_skill_tree_passives_profile_html_ru(character: Character) -> str:
-    """HTML-фрагмент для экрана полных характеристик: пассивные и стат-буст узлы древа SP."""
-    tree = get_character_tree(character)
-    if not tree:
-        return ""
-    unlocked = get_unlocked_node_keys(character)
-    chunks: list[str] = []
-    for node_key in sorted(unlocked):
-        node = tree.get(node_key)
-        if not node or node.node_type not in ("passive_bonus", "stat_boost"):
-            continue
-        fx = format_skill_tree_node_effect_ru(node).strip()
-        if not fx:
-            continue
-        nm = html.escape(node.name_ru)
-        desc_raw = (node.description_ru or "").strip()
-        if desc_raw:
-            head = f"<b>{nm}</b> — <i>{html.escape(desc_raw)}</i>"
-        else:
-            head = f"<b>{nm}</b>"
-        sublines = [" " + html.escape(ln.strip()) for ln in fx.split("\n") if ln.strip()]
-        if not sublines:
-            continue
-        chunks.append(head + "\n" + "\n".join(sublines))
-    return "\n\n".join(chunks)
+    """HTML-фрагмент: пассивные бонусы из изученных гримуаров."""
+    from game.archetypes.grimoires import format_grimoires_profile_html_ru
 
-
-def try_unlock_node(character: Character, node_key: str, *, admin_bypass: bool = False) -> tuple[bool, str]:
-    """Списывает cost_sp узла и открывает узел."""
-    tree = get_character_tree(character)
-    node = tree.get(node_key)
-    if not node:
-        return False, "Узел не найден."
-        
-    unlocked = get_unlocked_node_keys(character)
-    if node_key in unlocked:
-        return False, "Узел уже изучен."
-        
-    sp = get_character_sp(character)
-    if not admin_bypass and sp < node.cost_sp:
-        return False, f"Недостаточно очков навыков (нужно {node.cost_sp})."
-        
-    # Check parents
-    if not admin_bypass:
-        for p_key in node.parent_keys:
-            if p_key not in unlocked:
-                return False, f"Сначала нужно изучить: {tree[p_key].name_ru}."
-            
-    # Success
-    mp = dict(character.meta_progress or {})
-    mp["unspent_sp"] = max(0, sp - node.cost_sp) if not admin_bypass else sp
-    node_list = list(unlocked)
-    node_list.append(node_key)
-    mp["unlocked_nodes"] = node_list
-    character.meta_progress = mp
-    flag_modified(character, "meta_progress")
-
-    return True, f"Изучено: {node.name_ru}!"
-
-
-def skill_tree_fully_unlocked(character: Character) -> bool:
-    tree = get_character_tree(character)
-    if not tree:
-        return False
-    unlocked = get_unlocked_node_keys(character)
-    return all(k in unlocked for k in tree)
-
-
-def consume_one_unspent_sp(character: Character) -> tuple[bool, str]:
-    """Списать 1 SP при полностью открытом древе (пост-кап)."""
-    if int(character.level or 0) < 10:
-        return False, "Доступно с 10 уровня."
-    if not skill_tree_fully_unlocked(character):
-        return False, "Сначала открой все узлы древа."
-    sp = get_character_sp(character)
-    if sp < 1:
-        return False, "Нет свободных SP."
-    mp = dict(character.meta_progress or {})
-    mp["unspent_sp"] = sp - 1
-    character.meta_progress = mp
-    flag_modified(character, "meta_progress")
-    return True, "ok"
+    return format_grimoires_profile_html_ru(character)

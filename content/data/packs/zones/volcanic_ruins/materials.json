@@ -1,0 +1,36 @@
+{
+  "entries": {
+    "obsidian_shard": {
+      "name_ru": "Обсидиан",
+      "rarity": "uncommon",
+      "profession": "smithing",
+      "tags": [
+        "volcano"
+      ]
+    },
+    "slag_brick": {
+      "name_ru": "Шлак",
+      "rarity": "common",
+      "profession": "smithing",
+      "tags": [
+        "volcano"
+      ]
+    },
+    "ember_salt": {
+      "name_ru": "Соль пепла",
+      "rarity": "common",
+      "profession": "alchemy",
+      "tags": [
+        "volcano"
+      ]
+    },
+    "magma_resin": {
+      "name_ru": "Смола магмы",
+      "rarity": "rare",
+      "profession": "alchemy",
+      "tags": [
+        "volcano"
+      ]
+    }
+  }
+}

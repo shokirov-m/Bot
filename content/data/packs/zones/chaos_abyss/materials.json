@@ -1,0 +1,36 @@
+{
+  "entries": {
+    "rift_shard": {
+      "name_ru": "Осколок разлома",
+      "rarity": "epic",
+      "profession": "jewelry",
+      "tags": [
+        "chaos"
+      ]
+    },
+    "void_ink": {
+      "name_ru": "Чернила пустоты",
+      "rarity": "rare",
+      "profession": "jewelry",
+      "tags": [
+        "chaos"
+      ]
+    },
+    "demon_horn": {
+      "name_ru": "Рог демона",
+      "rarity": "rare",
+      "profession": "hunting",
+      "tags": [
+        "chaos"
+      ]
+    },
+    "chaos_hide": {
+      "name_ru": "Шкура хаоса",
+      "rarity": "uncommon",
+      "profession": "hunting",
+      "tags": [
+        "chaos"
+      ]
+    }
+  }
+}

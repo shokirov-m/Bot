@@ -50,11 +50,10 @@ SKILL_BY_KEY: dict[str, SkillDef] = _build_skill_by_key()
 def ensure_skill_meta(character: Character) -> None:
     """
     Нормализация meta_progress для боевых слотов и пассивки.
-
-    Исторически это место было заглушкой после перехода на дерево навыков.
-    Но meta может быть битой/устаревшей из миграций, из-за чего UI/бой
-    получают пустые или несуществующие ключи.
     """
+    from game.archetypes.grimoires import migrate_tree_to_grimoires
+
+    migrate_tree_to_grimoires(character)
     meta = dict(character.meta_progress or {})
 
     unlocked = [sk.key for sk in arch_manager.get_unlocked_skills(character)]
@@ -92,8 +91,11 @@ def ensure_skill_meta(character: Character) -> None:
     meta["equipped_skill_keys"] = eq_norm
 
     # --- passive slot ---
+    from game.archetypes.grimoires import passive_grimoires_as_passives
+
     arch = arch_manager.get_character_archetype(character)
     available_passives = {p.key for p in getattr(arch, "passives", [])}
+    available_passives |= {p.key for p in passive_grimoires_as_passives(character)}
     pk = str(meta.get("equipped_passive_key") or "").strip()
     if pk and pk not in available_passives:
         pk = ""
@@ -177,9 +179,11 @@ def set_equipped_slot(character: Character, slot_index: int, skill_key: str | No
     return True
 
 def learned_passives(character: Character) -> list[PassiveV2]:
-    """Все пассивки персонажа (из архетипа)."""
+    """Пассивки архетипа + из гримуаров."""
+    from game.archetypes.grimoires import passive_grimoires_as_passives
+
     arch = arch_manager.get_character_archetype(character)
-    return list(arch.passives)
+    return list(arch.passives) + passive_grimoires_as_passives(character)
 
 
 def equipped_passive_key(character: Character) -> str | None:
@@ -190,8 +194,11 @@ def equipped_passive_key(character: Character) -> str | None:
 
 def set_passive_slot(character: Character, passive_key: str | None) -> bool:
     """Экипировать пассивку в отдельный слот. None — снять."""
+    from game.archetypes.grimoires import passive_grimoires_as_passives
+
     arch = arch_manager.get_character_archetype(character)
     available_keys = {p.key for p in arch.passives}
+    available_keys |= {p.key for p in passive_grimoires_as_passives(character)}
     if passive_key and passive_key not in available_keys:
         return False
     meta = dict(character.meta_progress or {})

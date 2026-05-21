@@ -103,7 +103,7 @@ def mini_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterT
         "icy_peaks": "mini_frost_troll",
         "desert_oblivion": "mini_sand_titan",
         "volcanic_ruins": "mini_magma_lord",
-        "sky_citadel": "mini_storm_herald",
+        "blood_spire": "mini_blood_barons",
         "chaos_abyss": "mini_chaos_knight",
         "eternity_hall": "mini_time_judge",
         floor_data.ZONE_FINAL_KEY: "tower_warden",
@@ -113,9 +113,6 @@ def mini_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterT
 
 def major_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> MonsterTemplate:
     """Сильный босс на каждом 10-м этаже."""
-    # Для этажа 135 — финальный страж
-    if floor_number >= 135:
-        return _template("boss_tower_core")
     table: dict[str, str] = {
         "forest_beginnings": "boss_ancient_treant",
         "rotten_swamps": "boss_slime_king",
@@ -123,12 +120,9 @@ def major_boss_for_zone(zone: floor_data.ZoneInfo, floor_number: int) -> Monster
         "icy_peaks": "boss_glacier_king",
         "desert_oblivion": "boss_time_scarab",
         "volcanic_ruins": "boss_ember_dragon",
-        "sky_citadel": "boss_sky_tyrant",
+        "blood_spire": "boss_blood_prince",
         "chaos_abyss": "boss_chaos_avatar",
         "eternity_hall": "boss_eternity_judge",
-        "jade_labyrinth": "boss_eternity_judge",
-        "frozen_wastes": "boss_chaos_avatar",
-        "faction_war_plains": "boss_eternity_judge",
     }
     return _template(table.get(zone.key, table["forest_beginnings"]))
 
@@ -141,19 +135,6 @@ def build_spawns_for_floor(floor_number: int) -> list[FloorMonsterSpawn]:
     # Этаж 1 — только город-хаб: боёв на карте нет (монстры, тайник, привал — убраны с экрана).
     if int(floor_number) == 1:
         return []
-    if floor_number >= 135:
-        zone = floor_data.ZONE_FINAL
-        bb = major_boss_for_zone(zone, floor_number)
-        return [
-            FloorMonsterSpawn(
-                slot_code="b",
-                template=bb,
-                is_elite=False,
-                is_mini_boss=False,
-                is_major_boss=True,
-            ),
-        ]
-
     zone = floor_data.get_zone_for_floor(floor_number)
     pool = _pool(zone.key)
     picks = _pick_indices(floor_number, 6, len(pool))

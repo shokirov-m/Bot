@@ -1,7 +1,7 @@
 """
 Цепочки заданий от кузнеца в городских хабах.
 
-Каждый хаб (этажи 3, 31, 61, 91) даёт свою цепочку из 3 шагов.
+Каждый хаб (якоря 0, 30, 60, 90 — между ярусами) даёт свою цепочку из 3 шагов.
 В конце — редкий/эпический предмет (редкость повышена на 1 ранг).
 Награды за шаги увеличены в 3 раза.
 
@@ -305,20 +305,28 @@ _CHAIN_91 = ForgeQuestChain(
 
 # ── Словарь цепочек по этажу хаба ─────────────────────────────────────────────
 _CHAINS: dict[int, ForgeQuestChain] = {
-    3: _CHAIN_3,
-    31: _CHAIN_31,
-    61: _CHAIN_61,
-    91: _CHAIN_91,
+    0: _CHAIN_3,
+    30: _CHAIN_31,
+    60: _CHAIN_61,
+    90: _CHAIN_91,
 }
 
-HUB_FLOORS: tuple[int, ...] = (3, 31, 61, 91)
+HUB_FLOORS: tuple[int, ...] = (0, 30, 60, 90)
+# Старые callback/мета могли хранить боевые номера — нормализуем при чтении.
+_LEGACY_HUB_ANCHOR: dict[int, int] = {3: 0, 31: 30, 61: 60, 91: 90}
+
+
+def normalize_hub_anchor(hub_floor: int) -> int:
+    k = int(hub_floor)
+    return _LEGACY_HUB_ANCHOR.get(k, k)
 
 
 def chain_for_hub(hub_floor: int) -> ForgeQuestChain | None:
-    return _CHAINS.get(hub_floor)
+    return _CHAINS.get(normalize_hub_anchor(hub_floor))
 
 
 def hub_floor_for_character_floor(floor: int) -> int | None:
-    if floor in HUB_FLOORS:
-        return floor
+    anchor = normalize_hub_anchor(int(floor))
+    if anchor in HUB_FLOORS:
+        return anchor
     return None

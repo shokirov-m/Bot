@@ -1,0 +1,14 @@
+{
+  "floor": 40,
+  "trial_type": "boss_chamber",
+  "boss_key": "boss_glacier_king",
+  "trial_title_ru": "Ледник Ледяного Короля",
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 88,
+  "boss_retry_cooldown_min_minutes": 16,
+  "boss_retry_cooldown_max_minutes": 20,
+  "floor_stat_mult": 1.06,
+  "stamina_per_venture": 2,
+  "daily_venture_cap": 7
+}

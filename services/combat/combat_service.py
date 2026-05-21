@@ -96,10 +96,12 @@ explore_floor_4_mod = mech.explore_floor_4
 explore_floor_22_mod = mech.explore_floor_22
 from utils.media.image_assets import combat_monster_portrait_path
 from game.enemies.scaling import (
+    apply_floor_difficulty_tiers,
     compute_formula_stat_bundle,
     monster_accuracy_evasion_for_spawn,
     monster_strike_ailment,
 )
+from game.tower.combat import boss_retry_cooldown as boss_retry_mod
 from game.enemies.floors.spawns import FloorMonsterSpawn, MonsterTemplate, build_spawns_for_floor
 from game.economy import sinks as sink_rules
 from game.tower.progression.rewards import experience_reward, gold_reward, roll_item_drop, roll_rune_stone
@@ -375,6 +377,22 @@ def _monster_stat_bundle(
     else:
         bundle = compute_formula_stat_bundle(floor_number, spawn)
         monster_catalog_mod.apply_combat_overlay(bundle, spawn, int(floor_number), cat)
+    hp, atk, dfn = apply_floor_difficulty_tiers(
+        int(bundle["hp"]),
+        int(bundle["atk"]),
+        int(bundle.get("defense", 0)),
+        int(floor_number),
+    )
+    bundle["hp"] = hp
+    bundle["max_hp"] = hp
+    bundle["atk"] = atk
+    bundle["defense"] = dfn
+    if spawn.is_major_boss and int(floor_number) >= 50:
+        bundle["hp"] = max(1, int(bundle["hp"] * 1.35))
+        bundle["max_hp"] = bundle["hp"]
+        bundle["atk"] = max(1, int(bundle["atk"] * 1.25))
+        bundle["defense"] = max(0, int(bundle["defense"] * 1.2))
+    boss_retry_mod.apply_trial_floor_stat_mult(bundle, int(floor_number))
     return bundle
 
 
@@ -577,6 +595,9 @@ def _build_combat_dict(
     ensure_skill_meta(character)
     state["combat_skills"] = battle_skills_tuple(character)
     effects.init_effects(state)
+    from game.combat import boss_uniques as boss_uniques_mod
+
+    boss_uniques_mod.init_boss_unique_state(state)
     loc_battle = get_locale(character, None)
     pet_base = pets_mod.format_pet_battle_line_html(character, locale=loc_battle)
     state["pet_line_html"] = pet_base or ""
@@ -668,6 +689,12 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     buff_line = ""
     if buff_parts:
         buff_line = "Баффы: " + " | ".join(buff_parts) + "\n"
+
+    from game.combat import boss_uniques as boss_uniques_mod
+
+    mech_line = boss_uniques_mod.opening_mechanic_line(state)
+    if mech_line:
+        buff_line = buff_line + mech_line + "\n"
 
     taunt_raw = str(state.get("battle_taunt_html") or "").strip()
 
@@ -1018,7 +1045,21 @@ async def start_combat(
     """
     from config import is_admin as _is_admin
     _admin_bypass = _is_admin(query.from_user.id if query.from_user else None)
-    if not free_stamina and not _admin_bypass:
+    import game.tower.trials.floor_trial as floor_trial_mod
+    import game.tower.trials.venture as trial_venture_mod
+
+    _trial_fight = (
+        floor_trial_mod.is_trial_slot(spawn.slot_code)
+        and floor_trial_mod.is_trial_scenario_active(character)
+    )
+    _stamina_cost = 1
+    if _trial_fight and not free_stamina and not _admin_bypass:
+        _stamina_cost = trial_venture_mod.stamina_cost_for_trial_fight(character)
+        ok, msg = trial_venture_mod.check_can_fight(character)
+        if not ok:
+            await query.answer(msg, show_alert=True)
+            return False
+    elif not free_stamina and not _admin_bypass:
         if not can_start_combat(character, settings.MAX_STAMINA):
             await query.answer("Недостаточно стамины (нужна 1).", show_alert=True)
             return False
@@ -1033,16 +1074,29 @@ async def start_combat(
         )
         return False
 
+    ok_boss, boss_msg = boss_retry_mod.check_can_fight_major_boss(character, spawn)
+    if not ok_boss:
+        await query.answer(boss_msg, show_alert=True)
+        return False
+
     current_state = await state.get_state()
     if current_state == CombatStates.in_battle.state:
         await query.answer("Ты уже в бою.", show_alert=True)
         return False
 
     if not free_stamina and not _admin_bypass:
-        spent = await spend_stamina(session, int(character.id))
+        from game.economy.stamina import spend_stamina, spend_stamina_amount
+
+        if _trial_fight and _stamina_cost > 1:
+            spent = await spend_stamina_amount(session, int(character.id), _stamina_cost)
+        else:
+            spent = await spend_stamina(session, int(character.id))
         if not spent:
             await query.answer("Не удалось списать стамину. Попробуй ещё раз.", show_alert=True)
             return False
+        if _trial_fight:
+            trial_venture_mod.record_venture(character)
+            await session.flush()
     await session.refresh(character)
     if pets_mod.repair_pet_meta_if_needed(character):
         await session.flush()
@@ -1494,6 +1548,7 @@ async def _apply_tower_progress_after_victory(
 
     if spawn.is_major_boss:
         row.boss_defeated = True
+        boss_retry_mod.set_retry_cooldown_after_victory(character, cur)
     if spawn.is_mini_boss:
         row.mini_boss_defeated = True
 
@@ -1531,19 +1586,30 @@ async def _apply_tower_progress_after_victory(
     # и следующий callback увидели актуальный slots_cleared.
     await session.flush()
 
+    import game.tower.trials.floor_trial as floor_trial_mod
+
     all_spawns = long_floor_mod.spawns_for_tower_progress(character, cur)
-    needed = {s.slot_code for s in all_spawns}
-    # needed.issubset(cleared) == True только когда ВСЕ нужные слоты зачищены.
-    if not needed.issubset(set(cleared)):
-        return ""
+    cleared_set = set(cleared)
+    if floor_trial_mod.is_trial_scenario_active(character) and int(character.floor_number) == cur:
+        if not floor_trial_mod.trial_ready_for_ascent(character, cleared_set):
+            return ""
+    else:
+        needed = {s.slot_code for s in all_spawns}
+        if not needed.issubset(cleared_set):
+            return ""
 
     if cur == 26:
         from game.mercenaries.shadow_market_meta import mark_floor_26_shadow_cleared
 
         mark_floor_26_shadow_cleared(character)
 
-    if cur >= 135:
-        character.highest_floor_reached = max(int(character.highest_floor_reached), 135)
+    from game.tower.progression import floor_data as _fd
+
+    if cur >= _fd.KNOWN_MAX_FLOOR:
+        character.highest_floor_reached = max(
+            int(character.highest_floor_reached),
+            _fd.KNOWN_MAX_FLOOR,
+        )
         extra["slots_cleared"] = []
         row.extra = extra
         return "\n👁️ <b>Вершина башни:</b> страж повержен."
@@ -1566,7 +1632,7 @@ async def _apply_tower_progress_after_victory(
     room_next = floor_data.epithet_for_floor(zone_next, nxt)
     return (
         f"\n🪜 <b>Этаж зачищен!</b>\n"
-        f"Поднимись на <b>{nxt}</b> / 135 — <i>{html.escape(room_next)}</i> "
+        f"Поднимись на <b>{nxt}</b> — <i>{html.escape(room_next)}</i> "
         f"(кнопка «Следующий этаж» или ⬆️ Выше).\n"
         f"<i>{html.escape(zone_next.description)}</i>"
     )
@@ -2078,6 +2144,15 @@ async def _victory_sequence(
         is_major_boss=bool(spawn.is_major_boss),
         gold_gained=int(net_gold),
     )
+    import services.progression.pack_npc_quest_service as pack_npc_quest_service
+
+    _pack_mat_drop = pack_npc_quest_service.maybe_drop_material_on_victory(
+        character,
+        int(character.floor_number),
+    )
+    _pack_mat_note = ""
+    if _pack_mat_drop:
+        _pack_mat_note = f"\n📦 <b>Материал Шпиля:</b> {html.escape(_pack_mat_drop)}"
     # Обновляем прогресс цепочек кузнеца и скупщика (по всем хабам)
     import services.progression.forge_quest_service as forge_quest_service
     import services.progression.tavern_buyer_service as tavern_buyer_service
@@ -2356,7 +2431,14 @@ async def _victory_sequence(
             long_floor_mod.mark_completed(character)
         else:
             long_floor_mod.advance_phase_after_wave(character, spawn.slot_code)
+    import game.tower.trials.floor_trial as floor_trial_mod
+
+    _trial_note = ""
+    if floor_trial_mod.is_trial_slot(spawn.slot_code):
+        _trial_note = floor_trial_mod.record_victory(character, spawn.slot_code, spawn=spawn)
     quest_suffix = await quest_service.apply_kill_progress(session, character)
+    if _trial_note:
+        quest_suffix += _trial_note
     import services.progression.wanderer_fame_quest_service as wanderer_fame_quest_service
 
     wf_line = wanderer_fame_quest_service.on_combat_kill(
@@ -2365,6 +2447,12 @@ async def _victory_sequence(
     )
     if wf_line:
         quest_suffix += f"\n{wf_line}"
+    import services.progression.class_mentor_quest_service as mentor_quest_mod
+
+    mentor_quest_mod.record_battle_win(
+        character,
+        was_elite=bool(getattr(spawn, "is_elite", False)),
+    )
     npc_done = await quest_service.update_kill_progress_from_spawn(session, character.id, spawn)
     if npc_done:
         quest_suffix += (
@@ -2447,6 +2535,7 @@ async def _victory_sequence(
                 + pioneer_suffix
                 + gg_kill_note
                 + _mat_note
+                + _pack_mat_note
                 + durability_note
             )
             gg_body = (
@@ -2504,6 +2593,7 @@ async def _victory_sequence(
                         + pioneer_suffix
                         + gg_kill_note
                         + _mat_note
+                        + _pack_mat_note
                         + durability_note
                     )
                 gold_line = f"💰 +{net_gold} золота"
@@ -2570,6 +2660,12 @@ def _spawn_from_state(character: Character, combat_state: dict[str, Any]) -> Flo
         found_lf = long_floor_mod.spawn_by_slot(slot)
         if found_lf is not None:
             return found_lf
+    import game.tower.trials.floor_trial as floor_trial_mod
+
+    if floor_trial_mod.is_trial_slot(slot):
+        found_ft = floor_trial_mod.spawn_by_slot(character, slot)
+        if found_ft is not None:
+            return found_ft
     battle_floor = int(combat_state.get("floor", character.floor_number))
     # Room-clear floor 5 (rc_r0…rc_r4, rc_boss)
     if slot in room_clear_mod.ROOM_CLEAR_ALL_SLOTS:
@@ -2767,9 +2863,16 @@ async def _defeat_sequence(
         dqr = str((combat_state.get("monster") or {}).get("catalog_defeat_phrase") or "").strip()
         if dqr:
             defeat_tail = f"\n💬 <i>{html.escape(dqr)}</i>"
+    import game.tower.trials.floor_trial as floor_trial_mod
+
+    _trial_death = floor_trial_mod.apply_death_penalty(character)
+    trial_block = ""
+    if _trial_death:
+        trial_block = f"\n⚔️ <b>Испытание:</b>\n{_trial_death}\n"
     text = (
         f"{head}"
-        "💀 Ты пал… Сброс на начало текущего этажа.\n"
+        "💀 Ты пал…\n"
+        f"{trial_block}"
         f"{gold_line}"
         f"{enchant_msg}"
         f"{dur_note}"

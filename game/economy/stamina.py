@@ -77,6 +77,17 @@ async def regen_stamina_all(session: AsyncSession) -> int:
     return int(res.rowcount or 0)
 
 
+async def spend_stamina_amount(session: AsyncSession, character_id: int, amount: int) -> bool:
+    """Списать amount стамины (по 1 за тик). False если не хватило."""
+    n = max(0, int(amount))
+    if n == 0:
+        return True
+    for _ in range(n):
+        if not await spend_stamina(session, character_id):
+            return False
+    return True
+
+
 async def spend_stamina(session: AsyncSession, character_id: int) -> bool:
     """
     Списать 1 стамину атомарно (UPDATE … WHERE stamina > 0).

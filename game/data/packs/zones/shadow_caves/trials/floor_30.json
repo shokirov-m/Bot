@@ -1,0 +1,14 @@
+{
+  "floor": 30,
+  "trial_type": "boss_chamber",
+  "boss_key": "boss_night_stalker",
+  "trial_title_ru": "Суд Ночного Сталкера",
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 87,
+  "boss_retry_cooldown_min_minutes": 16,
+  "boss_retry_cooldown_max_minutes": 20,
+  "floor_stat_mult": 1.05,
+  "stamina_per_venture": 1,
+  "daily_venture_cap": 8
+}

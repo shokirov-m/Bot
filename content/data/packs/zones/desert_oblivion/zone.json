@@ -1,0 +1,11 @@
+{
+  "key": "desert_oblivion",
+  "name": "Пустыня Забвения",
+  "emoji": "🏜️",
+  "floor_from": 41,
+  "floor_to": 50,
+  "description": "Мастера зоны Пустыня Забвения — поручения и материалы для мастерской.",
+  "floor_type": "normal",
+  "theme": "desert",
+  "hub_floor": 45
+}

@@ -1,0 +1,11 @@
+{
+  "key": "rotten_swamps",
+  "name": "Гнилые Болота",
+  "emoji": "🌿",
+  "floor_from": 11,
+  "floor_to": 20,
+  "description": "Мастера зоны Гнилые Болота — поручения и материалы для мастерской.",
+  "floor_type": "normal",
+  "theme": "swamp",
+  "hub_floor": 15
+}

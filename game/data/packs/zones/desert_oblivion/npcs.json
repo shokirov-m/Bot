@@ -1,0 +1,124 @@
+{
+  "entries": [
+    {
+      "id": "nomad_alch",
+      "name": "Зафир",
+      "emoji": "⚗️",
+      "profession": "alchemy",
+      "floor_from": 41,
+      "floor_to": 50,
+      "floors_hub": [
+        45
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Зафир ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "nomad_alch_do_sand_glass",
+          "title": "Песчаные реагенты",
+          "objective": "collect_material",
+          "target": {
+            "id": "sand_glass",
+            "qty": 18
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "nightshade",
+                "qty": 6
+              }
+            ]
+          },
+          "floors": [
+            41,
+            42
+          ]
+        },
+        {
+          "id": "nomad_alch_do_sun_herb",
+          "title": "Солнечные травы",
+          "objective": "collect_material",
+          "target": {
+            "id": "sun_herb",
+            "qty": 14
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "potion_antibleed_2",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            43,
+            44
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    },
+    {
+      "id": "dune_jewel",
+      "name": "Лейла",
+      "emoji": "💎",
+      "profession": "jewelry",
+      "floor_from": 41,
+      "floor_to": 50,
+      "floors_hub": [
+        45
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Лейла ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "dune_jewel_do_amber_chip",
+          "title": "Янтарные осколки",
+          "objective": "collect_material",
+          "target": {
+            "id": "amber_chip",
+            "qty": 10
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "crimson_gem",
+                "qty": 3
+              }
+            ]
+          },
+          "floors": [
+            41,
+            42
+          ]
+        },
+        {
+          "id": "dune_jewel_do_scarab_shell",
+          "title": "Панцири скарабеев",
+          "objective": "collect_material",
+          "target": {
+            "id": "scarab_shell",
+            "qty": 16
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "bone_setting",
+                "qty": 5
+              }
+            ]
+          },
+          "floors": [
+            43,
+            44
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    }
+  ]
+}

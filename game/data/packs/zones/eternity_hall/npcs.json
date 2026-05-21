@@ -1,0 +1,124 @@
+{
+  "entries": [
+    {
+      "id": "archivist",
+      "name": "Архивариус",
+      "emoji": "📚",
+      "profession": "jewelry",
+      "floor_from": 81,
+      "floor_to": 99,
+      "floors_hub": [
+        90
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Архивариус ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "archivist_eh_star_dust",
+          "title": "Звёздная пыль",
+          "objective": "collect_material",
+          "target": {
+            "id": "star_dust",
+            "qty": 10
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "crimson_gem",
+                "qty": 6
+              }
+            ]
+          },
+          "floors": [
+            81,
+            82
+          ]
+        },
+        {
+          "id": "archivist_eh_eternal_gem",
+          "title": "Вечные кристаллы",
+          "objective": "collect_material",
+          "target": {
+            "id": "eternal_gem",
+            "qty": 6
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "ring_crimson_2",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            83,
+            84
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    },
+    {
+      "id": "void_knight",
+      "name": "Сераф",
+      "emoji": "⚔️",
+      "profession": "smithing",
+      "floor_from": 81,
+      "floor_to": 99,
+      "floors_hub": [
+        90
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Сераф ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "void_knight_eh_void_plate",
+          "title": "Листы пустоты",
+          "objective": "collect_material",
+          "target": {
+            "id": "void_plate",
+            "qty": 14
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "dark_steel",
+                "qty": 15
+              }
+            ]
+          },
+          "floors": [
+            81,
+            82
+          ]
+        },
+        {
+          "id": "void_knight_eh_light_chain",
+          "title": "Светлые звенья",
+          "objective": "collect_material",
+          "target": {
+            "id": "light_chain",
+            "qty": 20
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "chain_fragment",
+                "qty": 12
+              }
+            ]
+          },
+          "floors": [
+            83,
+            84
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    }
+  ]
+}

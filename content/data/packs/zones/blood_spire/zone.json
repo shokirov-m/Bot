@@ -1,0 +1,12 @@
+{
+  "key": "blood_spire",
+  "name": "Кровавый Шпиль",
+  "emoji": "🦇",
+  "floor_from": 61,
+  "floor_to": 70,
+  "description": "Десять ярусов вампирской саги: охота, захват, оборона и ритуалы крови. Смерть сбрасывает фазу испытания.",
+  "floor_type": "trial_hardcore",
+  "theme": "vampire",
+  "hub_floor": 64,
+  "city_anchor": 60
+}

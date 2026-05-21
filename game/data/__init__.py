@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from game.data import balance, classes, floors, monsters
+from game.data import balance, floors, monsters
 
-__all__ = ["balance", "classes", "floors", "monsters"]
+__all__ = ["balance", "floors", "monsters"]

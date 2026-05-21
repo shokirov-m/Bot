@@ -66,6 +66,41 @@ SKILLS: dict[str, SkillV2] = {
     "pal_guard": SkillV2("pal_guard", "Обет защиты", "Защитная молитва.", 30, 4, 0.0, "mag", effect_key="block_next", effect_chance=1.0),
     "prp_radiance": SkillV2("prp_radiance", "Сияние", "Исцеляет раны.", 34, 3, 0.0, "mag", effect_key="heal", effect_chance=1.0),
     "prp_hymn": SkillV2("prp_hymn", "Гимн стойкости", "Долгое восстановление.", 38, 5, 0.0, "mag", effect_key="hot", effect_chance=1.0),
+
+    # --- Necromancer (Tier 3 prestige) ---
+    "nec_bolt": SkillV2(
+        "nec_bolt",
+        "Плеть душ",
+        "Тёмная магия по врагу.",
+        18,
+        0,
+        2.0,
+        "mag",
+        effect_key="poison",
+        effect_chance=0.35,
+    ),
+    "nec_wither": SkillV2(
+        "nec_wither",
+        "Увядание",
+        "Ослабляет исходящий урон врага.",
+        24,
+        3,
+        1.4,
+        "mag",
+        effect_key="slow",
+        effect_chance=0.5,
+    ),
+    "nec_aura": SkillV2(
+        "nec_aura",
+        "Аура упадка",
+        "Кратко усиливает удары нежити в отряде.",
+        28,
+        5,
+        0.0,
+        "mag",
+        effect_key="fortify",
+        effect_chance=1.0,
+    ),
 }
 
 PASSIVES: dict[str, PassiveV2] = {
@@ -108,6 +143,18 @@ PASSIVES: dict[str, PassiveV2] = {
         "Дар",
         "Восстанавливает 10% HP за ход.",
         {"hp_regen_pct_turn": 0.04 * 2.5},
+    ),
+    "pas_nec_command": PassiveV2(
+        "pas_nec_command",
+        "Повелитель мёртвых",
+        "Нежить бьёт сильнее; личные удары слабее.",
+        {"atk_bonus_pct": -30, "mag_bonus_percent": 12, "companion_atk_pct": 20},
+    ),
+    "pas_nec_undying": PassiveV2(
+        "pas_nec_undying",
+        "Несгибаемая воля",
+        "Больше регенерации маны.",
+        {"mp_regen_turn": 10},
     ),
 }
 
@@ -223,6 +270,19 @@ ARCHETYPES: dict[str, Archetype] = {
         passives=(PASSIVES["pas_aco_faith_x25"], PASSIVES["pas_prp_grace_x25"], PASSIVES["pas_prp_blessing_x25"]),
         skills=("prp_radiance", "prp_hymn", "aco_smite_x25"),
         requirements={"level": 50, "int": 28, "luck": 18},
+    ),
+    "necromancer": Archetype(
+        "necromancer",
+        "Некромант",
+        "💀",
+        3,
+        "Повелитель нежити. В бой — скелеты, не наёмники.",
+        base_stats={"int": 44, "vit": 28, "dex": 12, "str": 10, "luck": 16},
+        hp_multiplier=1.12,
+        mp_multiplier=1.58,
+        passives=(PASSIVES["pas_nec_command"], PASSIVES["pas_nec_undying"]),
+        skills=("nec_bolt", "nec_wither", "nec_aura"),
+        requirements={"level": 60},
     ),
 }
 

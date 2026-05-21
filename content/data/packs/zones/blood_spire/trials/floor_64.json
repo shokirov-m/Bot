@@ -1,0 +1,24 @@
+{
+  "floor": 64,
+  "trial_type": "defense",
+  "defense_mode": "hub",
+  "hub": true,
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 90,
+  "grounds_count": 3,
+  "grounds_visible_initial": 3,
+  "wins_per_ground": 5,
+  "waves_total": 14,
+  "waves_loss_on_death": 2,
+  "checkpoint_every_waves": 4,
+  "checkpoint_every_grounds": 3,
+  "targets": {
+    "waves": 14,
+    "fights": 150,
+    "elites": 30,
+    "npc_quests_min": 8
+  },
+  "hub_title_ru": "Лагерь повстанцев",
+  "hub_blurb_ru": "Отбей 14 волн, зачисти 3 периметра (по 5 боёв), затем босс. Смерть: −2 волны и сброс периметра."
+}

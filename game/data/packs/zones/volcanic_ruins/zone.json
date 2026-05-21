@@ -1,0 +1,11 @@
+{
+  "key": "volcanic_ruins",
+  "name": "Вулканические Руины",
+  "emoji": "🌋",
+  "floor_from": 51,
+  "floor_to": 60,
+  "description": "Мастера зоны Вулканические Руины — поручения и материалы для мастерской.",
+  "floor_type": "normal",
+  "theme": "volcano",
+  "hub_floor": 55
+}

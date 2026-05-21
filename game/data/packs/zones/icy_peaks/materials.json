@@ -1,0 +1,36 @@
+{
+  "entries": {
+    "ice_shard": {
+      "name_ru": "Осколок льда",
+      "rarity": "common",
+      "profession": "smithing",
+      "tags": [
+        "ice"
+      ]
+    },
+    "beast_fur": {
+      "name_ru": "Звериный мех",
+      "rarity": "uncommon",
+      "profession": "smithing",
+      "tags": [
+        "ice"
+      ]
+    },
+    "yeti_claw": {
+      "name_ru": "Коготь йети",
+      "rarity": "rare",
+      "profession": "hunting",
+      "tags": [
+        "ice"
+      ]
+    },
+    "frost_feather": {
+      "name_ru": "Ледяное перо",
+      "rarity": "common",
+      "profession": "hunting",
+      "tags": [
+        "ice"
+      ]
+    }
+  }
+}

@@ -302,6 +302,43 @@ _BUILTIN_TREES: dict[str, dict[str, SkillTreeNode]] = {
             parent_keys=("aco_w3",),
         ),
     },
+    "necromancer": {
+        "nec_n1": SkillTreeNode(
+            "nec_n1",
+            "💀 Костяной резонанс",
+            "Сила нежити в отряде растёт.",
+            "passive_bonus",
+            {"companion_atk_pct": 8},
+            cost_sp=2,
+        ),
+        "nec_n2": SkillTreeNode(
+            "nec_n2",
+            "🛡️ Страж склепа",
+            "Укрепляет призванных танков.",
+            "stat_boost",
+            {"vit": 8},
+            cost_sp=3,
+            parent_keys=("nec_n1",),
+        ),
+        "nec_n3": SkillTreeNode(
+            "nec_n3",
+            "🔮 Пепельный культ",
+            "Открывает пепельного культиста в ковчеге.",
+            "passive_bonus",
+            {"mag_bonus_percent": 10},
+            cost_sp=4,
+            parent_keys=("nec_n2",),
+        ),
+        "nec_n4": SkillTreeNode(
+            "nec_n4",
+            "⚡ Плеть душ",
+            "Усиленная тёмная магия.",
+            "active_skill",
+            "nec_bolt",
+            cost_sp=5,
+            parent_keys=("nec_n3",),
+        ),
+    },
 }
 
 

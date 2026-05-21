@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from game.tower.progression import floor_data
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
@@ -88,7 +89,7 @@ async def shop_open(query: CallbackQuery, session: AsyncSession, state: FSMConte
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не здесь. Обнови /floor.", show_alert=True)
             return
         if origin not in ("h", "u", "a") and not shop_data.shop_available_on_floor(char.floor_number):
@@ -140,7 +141,7 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession, state: FSMContex
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Этаж устарел.", show_alert=True)
             return
 

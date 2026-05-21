@@ -100,13 +100,19 @@ async def on_archetype_list(callback: CallbackQuery, session: AsyncSession, stat
         if current.tier >= 2:
             await callback.answer("Специализация уже выбрана.", show_alert=True)
             return
-        target_tier = 1 if current.tier <= 0 else 2
-        required_level = 10 if target_tier == 1 else 50
+        if current.tier >= 1:
+            await callback.answer(
+                "Специализацию (tier‑2) открывают через цепочку наставника и высший гримуар.",
+                show_alert=True,
+            )
+            return
+        target_tier = 1
+        required_level = 10
         if char.level < required_level:
             await callback.answer(f"Нужен {required_level} уровень для выбора пути.", show_alert=True)
             return
 
-        title = "Выбор пути" if target_tier == 1 else "Выбор специализации"
+        title = "Выбор пути"
         text = (
             f"🌟 <b>{title}</b>\n\n"
             f"Вы достигли {required_level} уровня и можете выбрать следующий этап развития. "
@@ -203,9 +209,9 @@ async def on_archetype_confirm(callback: CallbackQuery, session: AsyncSession, s
         # Perform the change
         char.class_key = arch.key
         mp = dict(char.meta_progress or {})
-        mp["unlocked_nodes"] = []
+        mp.pop("unlocked_nodes", None)
+        mp.pop("unspent_sp", None)
         mp["equipped_skill_keys"] = []
-        mp["unspent_sp"] = max(0, int(char.level) - 9)
         char.meta_progress = mp
         # Refresh HP/MP and restore
         char.hp_max = character_service._compute_hp_max(char.stat_vitality, char.stat_strength, arch)
@@ -222,7 +228,7 @@ async def on_archetype_confirm(callback: CallbackQuery, session: AsyncSession, s
             chat_id=callback.message.chat.id,
             text=(
                 f"🎉 Поздравляем! Вы теперь <b>{arch.name_ru}</b>!\n\n"
-                "Характеристики обновлены, дерево навыков сброшено под новый путь, новые навыки доступны в бою."
+                "Характеристики обновлены. Навыки из гримуаров — в «Гримуары» и «Экипировать навыки»."
             ),
             reply_markup=profile_spec_submenu_keyboard(char, locale=loc),
             target_message=callback.message,

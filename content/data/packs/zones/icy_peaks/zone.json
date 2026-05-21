@@ -1,0 +1,11 @@
+{
+  "key": "icy_peaks",
+  "name": "Ледяные Пики",
+  "emoji": "❄️",
+  "floor_from": 31,
+  "floor_to": 40,
+  "description": "Мастера зоны Ледяные Пики — поручения и материалы для мастерской.",
+  "floor_type": "normal",
+  "theme": "ice",
+  "hub_floor": 35
+}

@@ -10,6 +10,8 @@ from db.models.character import Character
 from game.archetypes import manager as arch_manager
 from game.characters import pets as pets_mod
 from game.crafting.workshop_meta import get_workshop_state
+from game.necromancer.service import is_necromancer
+from bot.keyboards.necromancer_kb import necromancer_spec_extra_row
 
 
 def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -> InlineKeyboardMarkup:
@@ -24,7 +26,13 @@ def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -
     if arch.tier <= 0 and character.level >= 10:
         rows.append([InlineKeyboardButton(text="🌟 Выбрать путь", callback_data="prf:arch_pick")])
     elif arch.tier == 1 and character.level >= 50:
-        rows.append([InlineKeyboardButton(text="🌟 Выбрать специализацию", callback_data="prf:arch_pick")])
+        rows.append(
+            [InlineKeyboardButton(text="🎓 Цепочка наставника", callback_data="prf:mentor")],
+        )
+
+    necro_row = necromancer_spec_extra_row(character)
+    if necro_row:
+        rows.append(necro_row)
 
     ws = get_workshop_state(character)
     if not ws.get("spec_locked"):
@@ -41,7 +49,7 @@ def profile_spec_submenu_keyboard(character: Character, *, locale: str = "ru") -
     )
 
     rows.extend([
-        [InlineKeyboardButton(text="🌳 Древо навыков", callback_data="prf:skills")],
+        [InlineKeyboardButton(text="📖 Гримуары", callback_data="prf:grimoires")],
         [InlineKeyboardButton(text="⚔️ Экипировать навыки", callback_data="prf:skills_equip")],
         [InlineKeyboardButton(text=t(loc, "profile_back_compact"), callback_data="prf:back")],
         menu_nav_button_row(),

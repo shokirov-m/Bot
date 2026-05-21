@@ -1,0 +1,19 @@
+{
+  "floor": 68,
+  "trial_type": "search",
+  "grounds_count": 16,
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 90,
+  "targets": {
+    "clues": 42,
+    "ritual_steps": 7,
+    "fights": 100,
+    "elites": 20,
+    "named": 10
+  },
+  "boss_key": "judge_noct",
+  "wins_per_ground": 4,
+  "grounds_visible_initial": 6,
+  "checkpoint_every_grounds": 3
+}

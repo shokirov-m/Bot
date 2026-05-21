@@ -1,5 +1,5 @@
 ﻿"""
-Inline-клавиатура действий на этаже: класс (11 яр. / 57), монстры, вход в город, навигация по этажам.
+Inline-клавиатура действий на этаже: монстры, город-хаб, навигация по этажам.
 """
 
 from __future__ import annotations
@@ -43,6 +43,51 @@ def _cb(floor_number: int, code: str) -> str:
     return f"fl:{floor_number}:{code}"
 
 
+def _append_city_hub_row(
+    rows: list[list[InlineKeyboardButton]],
+    character: Character,
+    floor_number: int,
+) -> None:
+    """Кнопка безопасного города между ярусами (не на боевом номере)."""
+    lbl = floor_data.city_button_label(
+        int(floor_number),
+        highest_reached=int(character.highest_floor_reached),
+    )
+    if not lbl:
+        return
+    if len(lbl) > 36:
+        lbl = lbl[:33] + "…"
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=lbl,
+                callback_data=_cb(floor_number, "city"),
+            ),
+        ],
+    )
+    _append_grimoire_library_row(rows, character, floor_number)
+
+
+def _append_grimoire_library_row(
+    rows: list[list[InlineKeyboardButton]],
+    character: Character,
+    floor_number: int,
+) -> None:
+    """Библиотека гримуаров между 18↔19 ярусами."""
+    from game.locations import grimoire_library as lib
+
+    if not lib.library_floor_ok(character, int(floor_number)):
+        return
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="📚 Библиотека (18→19)",
+                callback_data=f"lib:open:{int(floor_number)}",
+            ),
+        ],
+    )
+
+
 def _append_tower_field_repair_row(rows: list[list[InlineKeyboardButton]], floor_number: int) -> None:
     """Починка за золото с карты этажа (как в городской кузнице), на сценарных этажах."""
     from game.locations import forge as forge_loc
@@ -78,11 +123,6 @@ def _pet_rows(character: Character, floor_number: int) -> list[list[InlineKeyboa
     return rows
 
 
-def _class_arc_rows(character: Character) -> list[list[InlineKeyboardButton]]:
-    """Классовая ветка наставника снята — архетипы в статусе / меню."""
-    return []
-
-
 def floor_screen_keyboard(
     character: Character,
     spawns: list[FloorMonsterSpawn],
@@ -95,8 +135,6 @@ def floor_screen_keyboard(
     highest = _navigation_max_floor(character, nav_ceiling)
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
-
-    rows.extend(_class_arc_rows(character))
 
     if tutorial_battle_pending(character) and floor_number == 2:
         rows.append(
@@ -151,36 +189,6 @@ def floor_screen_keyboard(
             ],
         )
 
-    # Survival floor button (frozen_wastes, floors 111-120)
-    if floor_data.get_zone_floor_type(floor_number) == "survival":
-        mp_s = dict(character.meta_progress or {})
-        zone_s = floor_data.get_zone_for_floor(floor_number)
-        has_prot_s = bool(mp_s.get(f"survival_prot_{zone_s.key}"))
-        surv_lbl = "🛡️ Защита от холода ✅" if has_prot_s else "🥶 ⚠️ Нет защиты (инфо)"
-        rows.append([InlineKeyboardButton(text=surv_lbl, callback_data=_cb(floor_number, "survival_info"))])
-
-    # Faction war floor button (faction_war_plains, floors 121-134)
-    if floor_data.get_zone_floor_type(floor_number) == "faction_war":
-        mp_fw = dict(character.meta_progress or {})
-        zone_fw = floor_data.get_zone_for_floor(floor_number)
-        chosen_fw = mp_fw.get(f"faction_choice_{zone_fw.key}")
-        zone_raw_fw = floor_data.get_zone_raw(floor_number)
-        req_fw = int(zone_raw_fw.get("reputation_required", 1000))
-        factions_fw = zone_raw_fw.get("factions", {})
-        if chosen_fw and chosen_fw in factions_fw:
-            fac_fw = factions_fw[chosen_fw]
-            rep_fw = int(mp_fw.get(f"faction_rep_{zone_fw.key}", {}).get(chosen_fw, 0))
-            if rep_fw >= req_fw:
-                rows.append([InlineKeyboardButton(
-                    text=f"⚔️ Вызвать Генерала {fac_fw['emoji']}",
-                    callback_data=_cb(floor_number, f"faction_boss:{chosen_fw}"),
-                )])
-        else:
-            rows.append([InlineKeyboardButton(
-                text="⚔️ Выбрать фракцию",
-                callback_data=_cb(floor_number, "faction_choose"),
-            )])
-
     wnpc = None if floor_number == 1 else wandering_npcs_mod.wandering_npc_for_floor(
         int(character.id),
         floor_number,
@@ -198,6 +206,20 @@ def floor_screen_keyboard(
             ],
         )
 
+    import services.progression.pack_npc_quest_service as _pqn_svc
+
+    zone_fl = floor_data.get_zone_for_floor(int(floor_number))
+    if _pqn_svc.list_npcs_on_floor(int(floor_number)):
+        hub_lbl = f"{zone_fl.emoji} Мастера зоны"[:36]
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=hub_lbl,
+                    callback_data=f"pqn:hub:{int(floor_number)}",
+                ),
+            ],
+        )
+
     buffer: list[InlineKeyboardButton] = []
 
     def flush() -> None:
@@ -205,6 +227,8 @@ def floor_screen_keyboard(
         if buffer:
             rows.append(buffer)
             buffer = []
+
+    from game.tower.combat import boss_retry_cooldown as boss_retry_mod
 
     if not (tutorial_battle_pending(character) and floor_number == 2):
         for sp in spawns:
@@ -218,6 +242,10 @@ def floor_screen_keyboard(
                 base = rotten_swamps_mod.mystery_spawn_label()
             if sp.slot_code in beaten:
                 suffix = " ✅"
+                if sp.is_major_boss:
+                    cd_left = boss_retry_mod.retry_seconds_left(character, floor_number)
+                    if cd_left > 0:
+                        suffix = f" ⏳{cd_left // 60}м"
                 avail = 36 - len(suffix)
                 if len(base) > avail:
                     base = base[: avail - 1] + "…"
@@ -254,15 +282,7 @@ def floor_screen_keyboard(
             ],
         )
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="🏙️ Город",
-                    callback_data=_cb(floor_number, "city"),
-                ),
-            ],
-        )
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -274,7 +294,7 @@ def floor_screen_keyboard(
     if nav:
         rows.append(nav)
 
-    if floor_data.has_quest_npc(floor_number) and floor_number != 3:
+    if floor_data.has_quest_npc(floor_number):
         rows.append(
             [
                 InlineKeyboardButton(
@@ -294,8 +314,6 @@ def long_floor_screen_keyboard(character: Character, *, nav_ceiling: int | None 
     highest = _navigation_max_floor(character, nav_ceiling)
     ph = long_floor_mod.current_phase(character)
     rows: list[list[InlineKeyboardButton]] = []
-
-    rows.extend(_class_arc_rows(character))
 
     if tutorial_battle_pending(character) and floor_number == 2:
         rows.append(
@@ -415,15 +433,7 @@ def long_floor_screen_keyboard(character: Character, *, nav_ceiling: int | None 
             ],
         )
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text="🏙️ Город",
-                    callback_data=_cb(floor_number, "city"),
-                ),
-            ],
-        )
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -435,7 +445,7 @@ def long_floor_screen_keyboard(character: Character, *, nav_ceiling: int | None 
     if nav:
         rows.append(nav)
 
-    if floor_data.has_quest_npc(floor_number) and floor_number != 3:
+    if floor_data.has_quest_npc(floor_number):
         rows.append(
             [
                 InlineKeyboardButton(
@@ -461,7 +471,6 @@ def room_clear_floor_keyboard(
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     # Кнопки комнат — последовательная блокировка
@@ -495,8 +504,7 @@ def room_clear_floor_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -523,7 +531,6 @@ def wave_floor_screen_keyboard(
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     # Шкала пройденных волн
@@ -556,8 +563,7 @@ def wave_floor_screen_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -584,7 +590,6 @@ def room_clear_floor_10_keyboard(
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     room_names = ["Склеп", "Тёмный коридор", "Лаборатория", "Тронный зал", "Покои Лорда"]
@@ -617,8 +622,7 @@ def room_clear_floor_10_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -646,7 +650,6 @@ def explore_floor_4_keyboard(
     beaten = frozenset(str(x) for x in _extra.get("slots_cleared") or [])
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     count = exp4_mod.get_explore_count(_extra)
@@ -671,8 +674,7 @@ def explore_floor_4_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -728,7 +730,6 @@ def explore_floor_keyboard(
     beaten = frozenset(str(x) for x in _extra.get("slots_cleared") or [])
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     count = exp_mod.get_explore_count(_extra)
@@ -755,8 +756,7 @@ def explore_floor_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -814,7 +814,6 @@ def explore_floor_22_keyboard(
     beaten = frozenset(str(x) for x in _extra.get("slots_cleared") or [])
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     count = exp22_mod.get_explore_count(_extra)
@@ -839,8 +838,7 @@ def explore_floor_22_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -895,7 +893,6 @@ def room_clear_floor_24_keyboard(
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     room_names = ["Вход в пещеру", "Туннель эха", "Кристальный грот", "Пропасть гарпий", "Алтарь тьмы"]
@@ -924,8 +921,7 @@ def room_clear_floor_24_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -952,7 +948,6 @@ def room_clear_floor_30_keyboard(
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     room_names = [
@@ -987,8 +982,7 @@ def room_clear_floor_30_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -1015,7 +1009,6 @@ def room_clear_floor_40_keyboard(
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     room_names = [
@@ -1050,8 +1043,7 @@ def room_clear_floor_40_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -1078,7 +1070,6 @@ def room_clear_floor_26_keyboard(
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     room_names = ["Порог шёпота", "Зеркальный коридор", "Зал кандалов", "Площадь сомнений", "Переход"]
@@ -1107,8 +1098,7 @@ def room_clear_floor_26_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -1133,7 +1123,6 @@ def room_clear_floor_26_cleared_keyboard(
     highest = _navigation_max_floor(character, nav_ceiling)
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     rows.append(
@@ -1146,8 +1135,7 @@ def room_clear_floor_26_cleared_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:
@@ -1174,7 +1162,6 @@ def wave_floor_27_keyboard(
     beaten = defeated_slots if defeated_slots is not None else frozenset()
     rows: list[list[InlineKeyboardButton]] = []
 
-    rows.extend(_class_arc_rows(character))
     rows.extend(_pet_rows(character, floor_number))
 
     wave_labels = {
@@ -1204,8 +1191,7 @@ def wave_floor_27_keyboard(
 
     _append_tower_field_repair_row(rows, floor_number)
 
-    if floor_data.get_city_for_floor(floor_number):
-        rows.append([InlineKeyboardButton(text="🏙️ Город", callback_data=_cb(floor_number, "city"))])
+    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:

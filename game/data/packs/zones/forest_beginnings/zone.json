@@ -1,0 +1,11 @@
+{
+  "key": "forest_beginnings",
+  "name": "Лес Начал",
+  "emoji": "🌲",
+  "floor_from": 1,
+  "floor_to": 10,
+  "description": "Мастера зоны Лес Начал — поручения и материалы для мастерской.",
+  "floor_type": "normal",
+  "theme": "forest",
+  "hub_floor": 5
+}

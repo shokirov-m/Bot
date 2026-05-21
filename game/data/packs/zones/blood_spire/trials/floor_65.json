@@ -1,0 +1,18 @@
+{
+  "floor": 65,
+  "trial_type": "escort",
+  "grounds_count": 18,
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 88,
+  "targets": {
+    "route_points": 12,
+    "ambushes": 48,
+    "fights": 140,
+    "elites": 26,
+    "mini_bosses": 2
+  },
+  "wins_per_ground": 4,
+  "grounds_visible_initial": 6,
+  "checkpoint_every_grounds": 3
+}

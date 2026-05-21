@@ -2,14 +2,14 @@
   "_readme": "Города-хабы.",
   "version": 1,
   "hub_key_by_floor": {
-    "3": "quiet_brook",
-    "31": "ironfall",
-    "61": "emberhall",
-    "91": "eternis"
+    "0": "quiet_brook",
+    "30": "ironfall",
+    "60": "emberhall",
+    "90": "eternis"
   },
   "hubs": [
     {
-      "floor": 3,
+      "floor": 0,
       "key": "quiet_brook",
       "name": "quiet_brook",
       "emoji": "🏘️",
@@ -25,7 +25,7 @@
       }
     },
     {
-      "floor": 31,
+      "floor": 30,
       "key": "ironfall",
       "name": "Айронфолл",
       "emoji": "🏙️",
@@ -41,7 +41,7 @@
       }
     },
     {
-      "floor": 61,
+      "floor": 60,
       "key": "emberhall",
       "name": "Эмберхолл",
       "emoji": "🏙️",
@@ -72,7 +72,7 @@
       }
     },
     {
-      "floor": 91,
+      "floor": 90,
       "key": "eternis",
       "name": "Этернис",
       "emoji": "🏙️",
@@ -98,38 +98,31 @@
   ],
   "all_city_floors": [
     {
-      "floor": 1,
+      "floor": 0,
       "name": "Тихий Ручей",
       "emoji": "🏘️",
-      "theme_ru": "Деревня новичков у подножия башни — тёплый очаг и простые советы",
-      "hub_key": null
+      "theme_ru": "Деревня между подножием и 1-м ярусом — безопасный очаг",
+      "hub_key": "quiet_brook"
     },
     {
-      "floor": 21,
-      "name": "Свод союза",
-      "emoji": "🏙",
-      "theme_ru": "Город игроков: общий хаб, ремесло и заказы мастерских.",
-      "hub_key": null
-    },
-    {
-      "floor": 31,
+      "floor": 30,
       "name": "Айронфолл",
       "emoji": "🏙️",
-      "theme_ru": "Ледяное средневековье, викинги",
+      "theme_ru": "Ледяной форпост между 30 и 31 — викинги и кузни",
       "hub_key": "ironfall"
     },
     {
-      "floor": 61,
+      "floor": 60,
       "name": "Эмберхолл",
       "emoji": "🏙️",
-      "theme_ru": "Вулканический промышленный город гномов",
+      "theme_ru": "Последний огонь между 60 и Кровавым Шпилем",
       "hub_key": "emberhall"
     },
     {
-      "floor": 91,
+      "floor": 90,
       "name": "Этернис",
       "emoji": "🏙️",
-      "theme_ru": "Небесный эндгейм-хаб",
+      "theme_ru": "Город между 90 и порогом Зала Вечности",
       "hub_key": "eternis"
     }
   ]

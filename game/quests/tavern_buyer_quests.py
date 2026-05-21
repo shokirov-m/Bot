@@ -288,12 +288,19 @@ _CHAIN_91 = BuyerQuestChain(
 )
 
 _CHAINS: dict[int, BuyerQuestChain] = {
-    3: _CHAIN_3,
-    31: _CHAIN_31,
-    61: _CHAIN_61,
-    91: _CHAIN_91,
+    0: _CHAIN_3,
+    30: _CHAIN_31,
+    60: _CHAIN_61,
+    90: _CHAIN_91,
 }
+
+_LEGACY_HUB_ANCHOR: dict[int, int] = {3: 0, 31: 30, 61: 60, 91: 90}
+
+
+def normalize_hub_anchor(hub_floor: int) -> int:
+    k = int(hub_floor)
+    return _LEGACY_HUB_ANCHOR.get(k, k)
 
 
 def chain_for_hub(hub_floor: int) -> BuyerQuestChain | None:
-    return _CHAINS.get(hub_floor)
+    return _CHAINS.get(normalize_hub_anchor(hub_floor))

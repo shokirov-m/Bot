@@ -30,21 +30,23 @@ def _final_shop_gold_price(character: Character, base_price: int, fl: int) -> in
 
 
 def format_shop_welcome_html(character: Character, *, from_city: bool) -> str:
+    from game.tower.progression import floor_data
+
     fln = int(character.floor_number)
+    city = floor_data.get_city_for_floor(fln, highest_reached=int(character.highest_floor_reached))
+    quiet_brook = city is not None and int(city.after_floor) == 0
     if from_city:
         place = "в городе"
-    elif fln == 3:
-        place = "на <b>3 этаже</b> (лавка нижнего яруса)"
     else:
         place = "у придорожного лотка"
     if from_city:
-        if fln == 3:
-            where_ru = "ты у лотка на <b>рынке</b> деревни"
+        if quiet_brook:
+            where_ru = "ты у лотка на <b>рынке</b> «Тихий Ручей»"
         else:
             where_ru = "ты открыл лавку <b>из города</b>"
     else:
         where_ru = "ты у торговца <b>на боевом этаже</b>"
-    shop_title = "🏛️ <b>Рынок — лавка</b>" if (from_city and fln == 3) else "🏪 <b>Лавка торговца</b>"
+    shop_title = "🏛️ <b>Рынок — лавка</b>" if (from_city and quiet_brook) else "🏪 <b>Лавка торговца</b>"
     lines = [
         f"{shop_title} {place}",
         f"<i>Ассортимент и наценка по этажу героя: <b>{fln}</b>. Сейчас {where_ru}.</i>",

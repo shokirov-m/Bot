@@ -1,0 +1,36 @@
+{
+  "entries": {
+    "swamp_slime": {
+      "name_ru": "Болотная слизь",
+      "rarity": "common",
+      "profession": "alchemy",
+      "tags": [
+        "swamp"
+      ]
+    },
+    "toxin_vial": {
+      "name_ru": "Сосуд яда",
+      "rarity": "uncommon",
+      "profession": "alchemy",
+      "tags": [
+        "swamp"
+      ]
+    },
+    "leech_sac": {
+      "name_ru": "Мешок пиявок",
+      "rarity": "common",
+      "profession": "hunting",
+      "tags": [
+        "swamp"
+      ]
+    },
+    "bog_fang": {
+      "name_ru": "Клык болотника",
+      "rarity": "rare",
+      "profession": "hunting",
+      "tags": [
+        "swamp"
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "key": "chaos_abyss",
+  "name": "Бездна Хаоса",
+  "emoji": "🌀",
+  "floor_from": 71,
+  "floor_to": 80,
+  "description": "Мастера зоны Бездна Хаоса — поручения и материалы для мастерской.",
+  "floor_type": "normal",
+  "theme": "chaos",
+  "hub_floor": 75
+}

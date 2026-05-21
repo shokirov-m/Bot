@@ -8,10 +8,10 @@ from services.progression.character_service import experience_needed_for_next_le
 
 
 def test_floor1_city_quest_not_endgame_values() -> None:
-    assert floor_data.get_city_for_floor(1) is not None
+    assert floor_data.get_city_for_floor(1, highest_reached=2) is not None
     tpl = city_quest_template(1)
     assert tpl is not None
-    assert tpl.quest_key == "city_task_1"
+    assert tpl.quest_key == "city_task_0"
     assert tpl.kills_needed == 1
     assert tpl.reward_gold <= 50
     assert tpl.reward_xp <= 50

@@ -1,0 +1,11 @@
+{
+  "key": "shadow_caves",
+  "name": "Пещеры Теней",
+  "emoji": "🕳️",
+  "floor_from": 21,
+  "floor_to": 30,
+  "description": "Мастера зоны Пещеры Теней — поручения и материалы для мастерской.",
+  "floor_type": "normal",
+  "theme": "shadow",
+  "hub_floor": 25
+}

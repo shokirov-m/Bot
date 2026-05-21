@@ -86,6 +86,11 @@ from utils.telegram.ui import LINE_SEP, LINE_SEP_CITY
 
 def get_spawns_for_character(character: Character) -> list[FloorMonsterSpawn]:
     """Варианты врагов на текущем этаже персонажа."""
+    import game.tower.trials.floor_trial as floor_trial_mod
+
+    if floor_trial_mod.is_trial_scenario_active(character):
+        floor_trial_mod.ensure_started(character)
+        return floor_trial_mod.build_trial_spawns(character)
     return build_spawns_for_floor(character.floor_number)
 
 
@@ -109,7 +114,7 @@ def floor_navigation_ceiling_for_user(character: Character, telegram_user_id: in
     """
     if telegram_user_id is None:
         return None
-    return 135 if config_is_admin(telegram_user_id) else None
+    return floor_data.KNOWN_MAX_FLOOR if config_is_admin(telegram_user_id) else None
 
 
 async def defeated_slot_codes_for_floor(
@@ -133,11 +138,23 @@ async def floor_keyboard_for_character(
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа с отметками ✅ у побеждённых целей."""
     n = int(character.floor_number)
-    # Город на 1 этаже не даёт боя — следующий ярус доступен без зачистки (кнопка «Выше»).
+    # Стартовый ярус: открыть 2-й этаж после первого визита (город — между 0↔1, не на этаже).
     if n == 1 and int(character.highest_floor_reached) < 2:
         character.highest_floor_reached = 2
         await session.flush()
     nav_ceiling = floor_navigation_ceiling_for_user(character, telegram_user_id)
+
+    import game.tower.trials.floor_trial as floor_trial_mod
+    from bot.keyboards.trial_floor_kb import trial_floor_screen_keyboard
+
+    floor_trial_mod.ensure_started(character)
+    if floor_trial_mod.is_trial_scenario_active(character):
+        defeated = await defeated_slot_codes_for_floor(session, character.id, n)
+        return trial_floor_screen_keyboard(
+            character,
+            defeated_slots=defeated,
+            nav_ceiling=nav_ceiling,
+        )
 
     # Этаж 4 — исследование леса
     if exp4_mod.is_explore_floor_4(n):
@@ -214,12 +231,16 @@ async def floor_keyboard_for_character(
 def format_city_hub_message(character: Character) -> str:
     """Текст входа в город (кнопка «Город» на этаже)."""
     n = character.floor_number
-    city = floor_data.get_city_for_floor(n)
+    city = floor_data.get_city_for_floor(
+        int(n),
+        highest_reached=int(character.highest_floor_reached),
+    )
     if city is None:
         return ""
     rich = city_locations.format_city_hub_rich_html(city)
+    gap = f"<i>Безопасная зона между {city.after_floor} и {city.after_floor + 1} ярусом.</i>"
     loc = get_locale(character, None)
-    if int(n) == 1:
+    if city and int(city.after_floor) == 0:
         hub = (
             "🛠️ <b>Сервисы:</b> кузница, таверна, <b>рынок</b> (лавка, скупщик, сейф банка, храм призыва питомца), "
             "NPC с лёгкими поручениями и стражник."
@@ -228,14 +249,14 @@ def format_city_hub_message(character: Character) -> str:
             "🐾 <b>Питомцы:</b> на этом ярусе первый дар — в <b>храме призыва</b> на рынке "
             "(один ритуал и до трёх перебросов)."
         )
-        return f"{rich}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
+        return f"{rich}\n{gap}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
     hub = (
         "🛠️ <b>Сервисы:</b> кузница, таверна, лавка, поручение стражи, "
         "раздел <b>«Экономика»</b> (лотерея, ростовщик, сейф банка). "
         "Квесты странника — на боевых этажах (кнопка «К этажу»)."
     )
     pet_hint = pets_mod.format_city_hub_pets_hint_html(locale=loc)
-    return f"{rich}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
+    return f"{rich}\n{gap}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
 
 
 def _format_floor1_city_only(character: Character) -> str:
@@ -249,7 +270,7 @@ def _format_floor1_city_only(character: Character) -> str:
         lines.append(
             "🌑 <b>[НОЧЬ UTC]</b> <i>На боевых ярусах враги сильнее; здесь — безопасная зона.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  {zone.emoji} <b>{html.escape(zone.name)}</b>")
+    lines.append(f"{floor_data.format_floor_label(n)}  {zone.emoji} <b>{html.escape(zone.name)}</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if city:
         lines.append(
@@ -276,7 +297,7 @@ def _format_explore_floor_4_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  🌿 <b>Лес Начал</b>")
+    lines.append(f"{floor_data.format_floor_label(n)}  🌿 <b>Лес Начал</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
         "<i>Густой лес хранит тайны. Исследуй чащу, находи добычу и сразись "
@@ -301,7 +322,7 @@ def _format_explore_floor_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  🗻 <b>Пещера Первородных</b>")
+    lines.append(f"{floor_data.format_floor_label(n)}  🗻 <b>Пещера Первородных</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
         "<i>Тёмная пещера скрывает множество тайн. Исследуй каждый угол, "
@@ -326,7 +347,7 @@ def _format_explore_floor_22_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  🕳️ <b>Пещеры Теней</b>")
+    lines.append(f"{floor_data.format_floor_label(n)}  🕳️ <b>Пещеры Теней</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
         "<i>Тьма здесь живая. Каждый шаг — риск. Исследуй пещеру, "
@@ -344,8 +365,6 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
     """Текстовое описание текущего этажа (HTML) — коротко, без воды."""
     long_floor_mod.ensure_long_floor_started(character)
     n = character.floor_number
-    if int(n) == 1 and not long_floor_mod.is_long_floor_active(character):
-        return _format_floor1_city_only(character)
     # Этаж 4 — специальный экран исследования леса
     if exp4_mod.is_explore_floor_4(int(n)):
         return _format_explore_floor_4_message(character)
@@ -365,12 +384,22 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>. Играй с оглядкой.</i>",
         )
-    lines.append(f"🗼 <b>ЭТАЖ {n}</b> / 135  {zone.emoji} <b>{html.escape(zone.name)}</b>")
+    lines.append(f"{floor_data.format_floor_label(n)}  {zone.emoji} <b>{html.escape(zone.name)}</b>")
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if not long_floor_mod.is_long_floor_active(character):
         zd = zone.description
         short = zd if len(zd) <= 80 else zd[:77] + "…"
         lines.append(f"<i>{html.escape(short)}</i>")
+    import game.tower.trials.floor_trial as floor_trial_mod
+
+    if floor_trial_mod.is_trial_scenario_active(character):
+        lines.append(floor_trial_mod.format_banner_html(character))
+        from game.tower.trials.pack_config import get_trial_config
+
+        tcfg = get_trial_config(int(n))
+        blurb = str(tcfg.get("hub_blurb_ru") or "").strip()
+        if blurb:
+            lines.append(f"<i>{html.escape(blurb)}</i>")
 
     if long_floor_mod.is_long_floor_active(character):
         lines.append(long_floor_mod.format_long_floor_banner_html())
@@ -379,7 +408,9 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(rc_mod.format_room_clear_banner_html(_ds))
 
-    if rc10_mod.is_room_clear_floor_10(int(n)):
+    if rc10_mod.is_room_clear_floor_10(int(n)) and not floor_trial_mod.is_trial_scenario_active(
+        character,
+    ):
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(rc10_mod.format_room_clear_banner_html(_ds))
 
@@ -387,7 +418,9 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(rc24_mod.format_room_clear_banner_html(_ds))
 
-    if rc30_mod.is_room_clear_floor_30(int(n)):
+    if rc30_mod.is_room_clear_floor_30(int(n)) and not floor_trial_mod.is_trial_scenario_active(
+        character,
+    ):
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(rc30_mod.format_room_clear_banner_html(_ds))
 
@@ -402,7 +435,9 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         else:
             lines.append(rc26_mod.format_room_clear_banner_html(_ds))
 
-    if rc40_mod.is_room_clear_floor_40(int(n)):
+    if rc40_mod.is_room_clear_floor_40(int(n)) and not floor_trial_mod.is_trial_scenario_active(
+        character,
+    ):
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(rc40_mod.format_room_clear_banner_html(_ds))
 
@@ -462,53 +497,6 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
     except Exception:
         pass
 
-    # Survival floor banner (frozen_wastes, floors 111-120)
-    floor_type = floor_data.get_zone_floor_type(n)
-    if floor_type == "survival":
-        zone_raw = floor_data.get_zone_raw(n)
-        debuff = zone_raw.get("debuff", {})
-        prot_name = debuff.get("protection_item_name", "защитный предмет")
-        hp_loss = debuff.get("hp_per_min", 50)
-        mp = dict(character.meta_progress or {})
-        has_protection = bool(mp.get(f"survival_prot_{zone.key}"))
-        if has_protection:
-            lines.append(f"🧊 <b>Выживание:</b> защита активна ✅ (−{hp_loss} HP/мин без неё).")
-        else:
-            lines.append(
-                f"🥶 <b>⚠️ ВЫЖИВАНИЕ:</b> каждую минуту −{hp_loss} HP от холода! "
-                f"Скрафти <b>{html.escape(prot_name)}</b> у алхимика, чтобы защититься."
-            )
-
-    # Faction war floor banner (faction_war_plains, floors 121-134)
-    if floor_type == "faction_war":
-        zone_raw = floor_data.get_zone_raw(n)
-        factions = zone_raw.get("factions", {})
-        req = zone_raw.get("reputation_required", 1000)
-        mp = dict(character.meta_progress or {})
-        chosen = mp.get(f"faction_choice_{zone.key}")
-        rep_data = mp.get(f"faction_rep_{zone.key}", {})
-        if chosen and chosen in factions:
-            fac = factions[chosen]
-            rep = int(rep_data.get(chosen, 0))
-            enemy_fac = factions.get(fac.get("enemy_key", ""), {})
-            enemy_name = enemy_fac.get("name", "враг")
-            if rep >= req:
-                lines.append(
-                    f"⚔️ <b>Война Фракций</b> — {fac['emoji']} {fac['name']}: "
-                    f"репутация <b>{rep}/{req}</b> ✅ Генерал доступен! (босс-кнопка)"
-                )
-            else:
-                lines.append(
-                    f"⚔️ <b>Война Фракций</b> — {fac['emoji']} {fac['name']}: "
-                    f"репутация <b>{rep}/{req}</b> · убивай {html.escape(enemy_name)}."
-                )
-        else:
-            fac_list = " / ".join(f"{v['emoji']} {v['name']}" for v in factions.values())
-            lines.append(
-                f"⚔️ <b>Война Фракций:</b> выбери сторону — {fac_list}. "
-                f"(кнопка «Выбрать фракцию»)"
-            )
-
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi}")
 
@@ -525,20 +513,6 @@ def format_floor_message_photo_caption(character: Character) -> str:
     """
     long_floor_mod.ensure_long_floor_started(character)
     n = character.floor_number
-    if int(n) == 1 and not long_floor_mod.is_long_floor_active(character):
-        zone = floor_data.get_zone_for_floor(n)
-        room = floor_data.epithet_for_floor(zone, n)
-        city = floor_data.get_city_for_floor(n)
-        pend = tower_next_floor_pending(character)
-        bits = [
-            f"{zone.emoji} <b>{html.escape(zone.name)}</b> · <b>1</b>/135",
-            f"📍 <i>{html.escape(room)}</i>",
-            f"{city.emoji} <b>{html.escape(city.name)}</b> — мирный хаб, рынок в городе",
-            "Без боёв на карте · тайник и привал — со 2-го",
-        ]
-        if pend is not None:
-            bits.append(f"✅ Подъём на <b>{pend}</b>")
-        return "\n".join(bits)
     # Этаж 8 — исследование
     if exp_mod.is_explore_floor(int(n)):
         zone = floor_data.get_zone_for_floor(n)
@@ -600,7 +574,14 @@ def format_floor_message_photo_caption(character: Character) -> str:
         b = wv_mod.format_wave_floor_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
     if city:
-        lines.append(f"{city.emoji} <b>{html.escape(city.name)}</b> — город")
+        gap = f"{city.after_floor}→{city.after_floor + 1}"
+        lines.append(
+            f"{city.emoji} <b>{html.escape(city.name)}</b> — безопасная зона <i>({gap})</i>",
+        )
+    from game.locations import grimoire_library as _lib
+
+    if _lib.library_unlocked(character) and _lib.library_visible_on_floor(n):
+        lines.append("📚 <b>Библиотека</b> — книги навыков (10–100k 💰, один раз)")
     tags: list[str] = []
     if floor_data.is_mini_boss_floor(n):
         tags.append("⚔️ Мини-босс")
@@ -882,7 +863,7 @@ async def travel_to_floor(
 ) -> tuple[bool, str | None]:
     """Перейти на целевой этаж. Обычно 1..highest_floor_reached; админ — до 135 с автоподъёмом highest."""
 
-    tower_top = 135
+    tower_top = floor_data.KNOWN_MAX_FLOOR
     old_floor = int(character.floor_number)
 
     if admin_floor_bypass:

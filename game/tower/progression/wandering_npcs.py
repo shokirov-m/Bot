@@ -9,7 +9,7 @@ WANDERING_NPC_ROLL_THRESHOLD = 32  # ~32% «встреча есть»
 
 # Этажи, где действует система.
 WANDERING_NPC_FLOOR_MIN = 1
-WANDERING_NPC_FLOOR_MAX = 135
+WANDERING_NPC_FLOOR_MAX = 99
 
 _POOL: tuple[dict[str, str], ...] = (
     {

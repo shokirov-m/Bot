@@ -1,0 +1,18 @@
+{
+  "floor": 69,
+  "trial_type": "capture",
+  "grounds_count": 10,
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 94,
+  "targets": {
+    "nodes": 10,
+    "fights": 140,
+    "elites": 32,
+    "mini_bosses": 4
+  },
+  "boss_key": "boss_spire_warden",
+  "wins_per_ground": 4,
+  "grounds_visible_initial": 6,
+  "checkpoint_every_grounds": 3
+}

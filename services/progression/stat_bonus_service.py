@@ -134,7 +134,7 @@ def active_title_stat_bonuses(character: Character) -> dict[str, int]:
 
 
 async def extra_stat_bonuses(session: AsyncSession, character: Character) -> tuple[dict[str, int], dict[str, int]]:
-    """(сумма с экипировки, сумма с активного титула + древо навыков архетипа)."""
+    """(сумма с экипировки, сумма с активного титула + бонусы из гримуаров)."""
     gear = await equipped_gear_stat_bonuses(session, character.id)
     title_b = active_title_stat_bonuses(character)
     tree_b_raw = arch_manager.get_tree_bonuses(character)

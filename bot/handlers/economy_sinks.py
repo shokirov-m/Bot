@@ -55,7 +55,7 @@ async def economy_open_hub(query: CallbackQuery, session: AsyncSession, state: F
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or floor_data.get_city_for_floor(char.floor_number) is None:
+        if not floor_data.city_service_floor_ok(char, floor_key) or floor_data.get_city_for_floor(char.floor_number) is None:
             await query.answer("Город недоступен здесь. Обнови этаж.", show_alert=True)
             return
         economy_sink_service.clear_bank_ui_back(char)
@@ -87,7 +87,7 @@ async def economy_back_city(query: CallbackQuery, session: AsyncSession, state: 
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Этаж устарел.", show_alert=True)
             return
         from services.progression.floor_service import format_city_hub_message
@@ -233,7 +233,7 @@ async def economy_safe_view(query: CallbackQuery, session: AsyncSession, state: 
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key or floor_data.get_city_for_floor(char.floor_number) is None:
+        if not floor_data.city_service_floor_ok(char, floor_key) or floor_data.get_city_for_floor(char.floor_number) is None:
             await query.answer("Город недоступен здесь. Обнови этаж.", show_alert=True)
             return
         if len(parts) > 3 and parts[3] == "mkt":

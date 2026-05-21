@@ -587,6 +587,11 @@ def player_attack(state: dict[str, Any]) -> tuple[list[str], Outcome, int]:
     if check_and_consume_monster_shield(state, logs):
         return logs, "continue", 0
 
+    from game.combat import boss_uniques as boss_uniques_mod
+
+    if boss_uniques_mod.monster_evades_player_attack(state, logs):
+        return logs, "continue", 0
+
     if _player_hit_missed(state):
         logs.append("💨 Промах! Удар не достиг цели.")
         return logs, "continue", 0
@@ -710,6 +715,11 @@ def player_skill_blocked_reason(state: dict[str, Any], index: int) -> str | None
     Проверка до расхода хода: пустой слот, перезарядка или нехватка MP.
     Оглушение обрабатывается отдельно в player_skill (тратит ход).
     """
+    from game.combat import boss_uniques as boss_uniques_mod
+
+    if boss_uniques_mod.player_skill_silenced(state):
+        left = int(state.get("player_skill_silence_turns") or 0)
+        return f"🔇 Безмолвие босса — навыки недоступны ({left} х.)."
     skill_src = str(state.get("combat_skill_class_key") or state.get("class_key") or "wanderer")
     skills: tuple[SkillDef, SkillDef, SkillDef] = state.get("combat_skills") or skills_for_class(skill_src)
     if index < 0 or index > 2:
@@ -751,6 +761,12 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     skill_src = str(state.get("combat_skill_class_key") or state.get("class_key") or "wanderer")
     skills: tuple[SkillDef, SkillDef, SkillDef] = state.get("combat_skills") or skills_for_class(skill_src)
     sk: SkillDef = skills[index]
+
+    from game.combat import boss_uniques as boss_uniques_mod
+
+    if sk.effect_key not in ("heal", "block_next", "dodge_buff", "shield", "fortify", "cleanse"):
+        if boss_uniques_mod.monster_evades_player_attack(state, logs):
+            return logs, "continue", 0
 
     mp = int(state["player_mp"])
     cost = sk.mp_cost
@@ -1070,6 +1086,14 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     logs.extend(monster_ai.update_monster_mode(state))
     logs.extend(monster_ai.sync_boss_phase(state))
 
+    from game.combat import boss_uniques as boss_uniques_mod
+
+    if boss_uniques_mod.on_monster_turn_start(state, logs):
+        _coliseum_bump_monster_turn(state, logs)
+        if int(state.get("player_hp", 0)) <= 0:
+            return logs, "lose"
+        return logs, "continue"
+
     # ── Эффекты этажа (Ауры 21-30) ──
     logs.extend(apply_floor_aura_effects(state))
 
@@ -1179,6 +1203,9 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     dtm = float(_mods(state).get("dmg_taken_mult", 1.0))
     if dtm < 0.999:
         dmg = max(1, int(round(dmg * dtm)))
+    vuln = float(state.get("player_boss_vuln_mult", 1.0))
+    if vuln > 1.001:
+        dmg = max(1, int(round(dmg * vuln)))
     extra_mult = float(m.get("strike_ailment_mult") or 0.0)
     if extra_mult > 0:
         extra = max(0, int(base * extra_mult))
@@ -1227,6 +1254,7 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             post_logs: list[str] = []
             apply_post_hit_abilities(state, dmg, post_logs)
             logs.extend(post_logs)
+            boss_uniques_mod.apply_post_hit_debuffs(state, dmg, logs)
 
     _coliseum_bump_monster_turn(state, logs)
 
@@ -1240,6 +1268,9 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
             dmg2 = max(1, int(round(dmg2 * ftkm)))
         if dtm < 0.999:
             dmg2 = max(1, int(round(dmg2 * dtm)))
+        vuln2 = float(state.get("player_boss_vuln_mult", 1.0))
+        if vuln2 > 1.001:
+            dmg2 = max(1, int(round(dmg2 * vuln2)))
         dmg2 = _apply_elemental_resist_to_incoming_damage(state, m, dmg2, logs)
         blk_p2 = float(_mods(state).get("block_chance", 0.0))
         if blk_p2 > 0.0 and dmg2 > 0 and random.random() < min(0.85, blk_p2):
@@ -1313,5 +1344,9 @@ def end_round_tick(state: dict[str, Any]) -> list[str]:
         if int(state["player_curse_turns"]) <= 0:
             state["player_damage_mult"] = 1.0
             logs.append("🌑 Проклятие спало.")
+
+    from game.combat import boss_uniques as boss_uniques_mod
+
+    boss_uniques_mod.tick_round_debuffs(state, logs)
 
     return logs

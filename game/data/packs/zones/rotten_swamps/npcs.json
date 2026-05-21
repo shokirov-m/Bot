@@ -1,0 +1,124 @@
+{
+  "entries": [
+    {
+      "id": "mire_witch",
+      "name": "Болотница",
+      "emoji": "🧪",
+      "profession": "alchemy",
+      "floor_from": 11,
+      "floor_to": 20,
+      "floors_hub": [
+        15
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Болотница ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "mire_witch_sw_mire_slime",
+          "title": "Слизь болота",
+          "objective": "collect_material",
+          "target": {
+            "id": "swamp_slime",
+            "qty": 14
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "coagulant",
+                "qty": 6
+              }
+            ]
+          },
+          "floors": [
+            11,
+            12
+          ]
+        },
+        {
+          "id": "mire_witch_sw_toxin_vial",
+          "title": "Сосуды яда",
+          "objective": "collect_material",
+          "target": {
+            "id": "toxin_vial",
+            "qty": 10
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "potion_bloodshield_3",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            13,
+            14
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    },
+    {
+      "id": "reed_trapper",
+      "name": "Кузьма",
+      "emoji": "🪤",
+      "profession": "hunting",
+      "floor_from": 11,
+      "floor_to": 20,
+      "floors_hub": [
+        15
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Кузьма ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "reed_trapper_sw_leech_sack",
+          "title": "Мешок пиявок",
+          "objective": "collect_material",
+          "target": {
+            "id": "leech_sac",
+            "qty": 25
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "garlic_oil",
+                "qty": 4
+              }
+            ]
+          },
+          "floors": [
+            11,
+            12
+          ]
+        },
+        {
+          "id": "reed_trapper_sw_bog_fang",
+          "title": "Клыки болотника",
+          "objective": "collect_material",
+          "target": {
+            "id": "bog_fang",
+            "qty": 12
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "chain_fragment",
+                "qty": 3
+              }
+            ]
+          },
+          "floors": [
+            13,
+            14
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    }
+  ]
+}

@@ -34,7 +34,7 @@ def _forge_star_merge_row_visible(floor_number: int) -> bool:
     if not forge_loc.forge_available_on_floor(floor_number):
         return False
     c = floor_data.get_city_for_floor(int(floor_number))
-    return c is not None and int(c.floor) >= 61
+    return c is not None and int(c.after_floor) >= 60
 
 
 def forge_star_merge_pick_keyboard(floor_number: int, items: list[tuple[int, str]]) -> InlineKeyboardMarkup:

@@ -1,0 +1,36 @@
+{
+  "entries": {
+    "forest_moss": {
+      "name_ru": "Мох леса",
+      "rarity": "common",
+      "profession": "alchemy",
+      "tags": [
+        "forest"
+      ]
+    },
+    "pine_resin": {
+      "name_ru": "Смола сосны",
+      "rarity": "common",
+      "profession": "alchemy",
+      "tags": [
+        "forest"
+      ]
+    },
+    "wolf_pelt": {
+      "name_ru": "Шкура волка",
+      "rarity": "uncommon",
+      "profession": "hunting",
+      "tags": [
+        "forest"
+      ]
+    },
+    "owl_feather": {
+      "name_ru": "Перо совы",
+      "rarity": "common",
+      "profession": "hunting",
+      "tags": [
+        "forest"
+      ]
+    }
+  }
+}

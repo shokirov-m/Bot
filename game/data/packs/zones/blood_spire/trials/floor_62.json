@@ -1,0 +1,21 @@
+{
+  "floor": 62,
+  "trial_type": "hunt",
+  "grounds_count": 16,
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 90,
+  "stamina_per_venture": 2,
+  "daily_venture_cap": 5,
+  "targets": {
+    "contracts": 7,
+    "fights": 110,
+    "elites": 22,
+    "trophies": 45,
+    "mini_bosses": 2
+  },
+  "boss_key": "mini_blood_barons",
+  "wins_per_ground": 4,
+  "grounds_visible_initial": 6,
+  "checkpoint_every_grounds": 3
+}

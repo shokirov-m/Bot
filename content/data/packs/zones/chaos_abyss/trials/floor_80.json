@@ -1,0 +1,14 @@
+{
+  "floor": 80,
+  "trial_type": "boss_chamber",
+  "boss_key": "boss_chaos_avatar",
+  "trial_title_ru": "Аватар Хаоса",
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 90,
+  "boss_retry_cooldown_min_minutes": 18,
+  "boss_retry_cooldown_max_minutes": 20,
+  "floor_stat_mult": 1.18,
+  "stamina_per_venture": 2,
+  "daily_venture_cap": 4
+}

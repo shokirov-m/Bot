@@ -1,0 +1,20 @@
+{
+  "entries": {
+    "void_dust": {
+      "name_ru": "Пыль бездны",
+      "rarity": "uncommon",
+      "profession": "jewelry",
+      "tags": [
+        "shadow"
+      ]
+    },
+    "bone_setting": {
+      "name_ru": "Костяная оправа",
+      "rarity": "common",
+      "profession": "jewelry",
+      "tags": [
+        "shadow"
+      ]
+    }
+  }
+}

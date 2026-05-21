@@ -1,5 +1,5 @@
 """
-Скупщик на 3 этаже: выкуп предметов из сумки за золото (доля от «оценки»).
+Скупщик на рынке «Тихий Ручей» (якорь города 0): выкуп предметов из сумки за золото.
 """
 
 from __future__ import annotations
@@ -14,8 +14,7 @@ from db.models.inventory import InventoryItem
 from db.repository import inventory_repo
 import services.progression.character_service as character_service
 
-SCRAP_FLOOR = 3  # legacy: первый город-хаб
-SCRAP_FLOORS: tuple[int, ...] = (3, 31, 61, 91)
+QUIET_BROOK_ANCHOR = 0
 RARITY_MULT: dict[str, float] = {
     "common": 1.0,
     "uncommon": 1.15,
@@ -43,7 +42,11 @@ def scrap_gold_for_item_data(data: dict[str, Any]) -> int:
 
 
 def is_scrap_floor(floor_number: int) -> bool:
-    return int(floor_number) in SCRAP_FLOORS
+    """Скупщик на рынке первого хаба (доступен с боевого яруса, где открыт город 0)."""
+    from game.tower.progression import floor_data
+
+    city = floor_data.get_city_for_floor(int(floor_number))
+    return city is not None and int(city.after_floor) == QUIET_BROOK_ANCHOR
 
 
 def scrap_unavailable_message(_floor_number: int) -> str:

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from game.tower.progression import floor_data
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
@@ -39,7 +40,7 @@ async def tavern_open(query: CallbackQuery, session: AsyncSession, state: FSMCon
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не в этом городе. Обнови /floor.", show_alert=True)
             return
         if not tavern_loc.tavern_available_on_floor(char.floor_number):
@@ -78,7 +79,7 @@ async def tavern_buy(query: CallbackQuery, session: AsyncSession, state: FSMCont
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if char.floor_number != floor_key:
+        if not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Этаж устарел.", show_alert=True)
             return
 
@@ -115,7 +116,7 @@ async def tavern_buyer_open(query: CallbackQuery, session: AsyncSession, state: 
             return
         floor_key = int(query.data.split(":")[2])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         import services.progression.tavern_buyer_service as tavern_buyer_service
@@ -145,7 +146,7 @@ async def tavern_buyer_start(query: CallbackQuery, session: AsyncSession, state:
             return
         floor_key = int(query.data.split(":")[3])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         import services.progression.tavern_buyer_service as tavern_buyer_service
@@ -182,7 +183,7 @@ async def tavern_buyer_claim_step(query: CallbackQuery, session: AsyncSession, s
         floor_key = int(parts[3])
         step = int(parts[4])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         import services.progression.tavern_buyer_service as tavern_buyer_service
@@ -241,7 +242,7 @@ async def tavern_daily_open(query: CallbackQuery, session: AsyncSession, state: 
             return
         floor_key = int(query.data.split(":")[2])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         if not tavern_loc.tavern_available_on_floor(char.floor_number):
@@ -269,7 +270,7 @@ async def tavern_daily_buy_blueprint(query: CallbackQuery, session: AsyncSession
         floor_key = int(parts[3])
         recipe_id = parts[4]
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         ok, msg = await tavern_service.try_buy_daily_blueprint(session, char, recipe_id)
@@ -294,7 +295,7 @@ async def tavern_daily_buy_gear(query: CallbackQuery, session: AsyncSession) -> 
         floor_key = int(parts[3])
         gear_key = parts[4]
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         ok, msg = await tavern_service.try_buy_daily_gear(session, char, gear_key)
@@ -317,7 +318,7 @@ async def tavern_buyer_final(query: CallbackQuery, session: AsyncSession) -> Non
             return
         floor_key = int(query.data.split(":")[3])
         char = await _load_char(session, query.from_user.id)
-        if char is None or char.floor_number != floor_key:
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key):
             await query.answer("Ты не в этом городе.", show_alert=True)
             return
         import services.progression.tavern_buyer_service as tavern_buyer_service

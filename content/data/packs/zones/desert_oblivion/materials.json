@@ -1,0 +1,36 @@
+{
+  "entries": {
+    "sand_glass": {
+      "name_ru": "Песчаный реагент",
+      "rarity": "common",
+      "profession": "alchemy",
+      "tags": [
+        "desert"
+      ]
+    },
+    "sun_herb": {
+      "name_ru": "Солнечная трава",
+      "rarity": "uncommon",
+      "profession": "alchemy",
+      "tags": [
+        "desert"
+      ]
+    },
+    "amber_chip": {
+      "name_ru": "Янтарь",
+      "rarity": "rare",
+      "profession": "jewelry",
+      "tags": [
+        "desert"
+      ]
+    },
+    "scarab_shell": {
+      "name_ru": "Панцирь скарабея",
+      "rarity": "common",
+      "profession": "jewelry",
+      "tags": [
+        "desert"
+      ]
+    }
+  }
+}

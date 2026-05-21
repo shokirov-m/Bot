@@ -1,6 +1,6 @@
 ﻿"""
-Зоны, финал, города-хабы — сырые dict для game/tower/progression/floor_data.py.
-Эпитеты и функции этажей остаются в floor_data.
+Зоны и города-хабы — сырые dict для game/tower/progression/floor_data.py.
+Высота башни неизвестна (этажи 101+ сняты до отдельной переработки).
 """
 
 from __future__ import annotations
@@ -60,12 +60,16 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "description": "Лава, огненные элементали и драконьи тени.",
     },
     {
-        "key": "sky_citadel",
-        "name": "Небесная Крепость",
-        "emoji": "☁️",
+        "key": "blood_spire",
+        "name": "Кровавый Шпиль",
+        "emoji": "🦇",
         "floor_from": 61,
         "floor_to": 70,
-        "description": "Вихри, грифоны и падшие ангелы хаоса.",
+        "description": (
+            "Десять ярусов вампирской саги — испытания, охота, захват и оборона. "
+            "Контент: content/data/packs/zones/blood_spire/"
+        ),
+        "floor_type": "trial_hardcore",
     },
     {
         "key": "chaos_abyss",
@@ -81,107 +85,41 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "⚡",
         "floor_from": 81,
         "floor_to": 99,
-        "description": "Архидемоны и стражи вечности.",
+        "description": "Архидемоны и стражи вечности. Вершина известной карты — дальше туман.",
     },
 )
 
+# Финал башни (135) и этажи 101+ отключены — см. packs/registry.json
+ZONE_FINAL_RAW: dict[str, Any] | None = None
 
-# Тип этажа: "normal" | "survival" | "faction_war"
-# survival: глобальный дебафф — нужен защитный предмет
-# faction_war: война фракций — 1000 репутации для вызова босса
-
-ZONES_RAW = ZONES_RAW + (
-    {
-        "key": "jade_labyrinth",
-        "name": "Нефритовый Лабиринт",
-        "emoji": "💚",
-        "floor_from": 101,
-        "floor_to": 110,
-        "description": "Запутанные залы нефритового храма. Слепые стражи и ловушки древних мудрецов.",
-        "floor_type": "normal",
-    },
-    {
-        "key": "frozen_wastes",
-        "name": "Морозные Пустоши",
-        "emoji": "🥶",
-        "floor_from": 111,
-        "floor_to": 120,
-        "description": (
-            "Выживание: смертельный холод отнимает HP каждую минуту. "
-            "Для защиты нужен Амулет Тепла (алхимик в Городе Новичков)."
-        ),
-        "floor_type": "survival",
-        "debuff": {
-            "kind": "hp_decay",
-            "hp_per_min": 50,
-            "protection_item": "warmth_amulet",
-            "protection_item_name": "Амулет Тепла",
-            "damage_reduction": 0.0,
-        },
-    },
-    {
-        "key": "faction_war_plains",
-        "name": "Поля Вечной Войны",
-        "emoji": "⚔️",
-        "floor_from": 121,
-        "floor_to": 134,
-        "description": "Война Фракций: Эльфы Света vs Орки Крови. Выбери сторону и набери 1000 репутации чтобы вызвать генерала.",
-        "floor_type": "faction_war",
-        "factions": {
-            "light_elves": {
-                "name": "Эльфы Света",
-                "emoji": "🧝",
-                "enemy_key": "blood_orcs",
-                "reward_passive": "elven_grace",
-                "reward_passive_name": "Эльфийская Грация",
-                "reward_passive_desc": "+15% уклонение, +10% к скорости атаки",
-            },
-            "blood_orcs": {
-                "name": "Орки Крови",
-                "emoji": "👹",
-                "enemy_key": "light_elves",
-                "reward_passive": "orc_fury",
-                "reward_passive_name": "Ярость Орков",
-                "reward_passive_desc": "+20% физ. урон, +15% к максимальному HP",
-            },
-        },
-        "reputation_required": 1000,
-    },
-)
-
-ZONE_FINAL_RAW: dict[str, Any] = {
-    "key": "tower_warden",
-    "name": "Страж Башни",
-    "emoji": "👁️",
-    "floor_from": 135,
-    "floor_to": 135,
-    "description": "Финальный страж. Три фазы, легендарный лут.",
-    "floor_type": "normal",
-}
-
+# Ключ — after_floor: город между этим ярусом и следующим (не занимает боевой этаж).
 CITIES_RAW: dict[int, dict[str, Any]] = {
-    1: {
-        "floor": 1,
+    0: {
+        "key": "quiet_brook",
+        "after_floor": 0,
         "name": "Тихий Ручей",
         "emoji": "🏘️",
-        "theme_ru": "Деревня новичков у подножия башни — тёплый очаг и простые советы",
+        "theme_ru": "Деревня между подножием и 1-м ярусом — безопасный очаг",
     },
-    31: {
-        "floor": 31,
+    30: {
+        "key": "ironfall",
+        "after_floor": 30,
         "name": "Айронфолл",
         "emoji": "🏙️",
-        "theme_ru": "Ледяное средневековье, викинги",
+        "theme_ru": "Ледяной форпост между 30 и 31 — викинги и кузни",
     },
-    61: {
-        "floor": 61,
+    60: {
+        "key": "emberhall",
+        "after_floor": 60,
         "name": "Эмберхолл",
         "emoji": "🏙️",
-        "theme_ru": "Вулканический промышленный город гномов",
+        "theme_ru": "Последний огонь между 60 и Кровавым Шпилем",
     },
-    91: {
-        "floor": 91,
+    90: {
+        "key": "eternis",
+        "after_floor": 90,
         "name": "Этернис",
         "emoji": "🏙️",
-        "theme_ru": "Небесный эндгейм-хаб",
+        "theme_ru": "Город между 90 и порогом Зала Вечности",
     },
 }

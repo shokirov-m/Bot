@@ -17,13 +17,13 @@ python -m game.data.catalogs.export_seed
 | Файл | Что редактировать |
 |------|-------------------|
 | **coliseum_fighters.json** | 50 бойцов колизея: имя, `phrase` (реплика в бою), `victory_quote`, HP/ATK/DEF, награды, `element_tz`, `special`, `loot` |
-| **cities_hubs.json** | Города-хабы (этажи 3, 31, 61, 91…): лор, `welcome_html`, NPC-поручения, таверна, пути картинок `art` |
+| **cities_hubs.json** | Города-хабы (якоря 0, 30, 60, 90 между ярусами): лор, `welcome_html`, NPC, таверна, `art` |
 | **npcs_index.json** | Путники на этажах, зональные квестодатели (`zone_quest_givers`) |
 | **quests_registry.json** | Сводка квестов NPC (этаж ×3): награды, тип, цель — для обзора и будущих правок |
 | **archetypes_skills.json** | Активные навыки: урон, MP, эффекты |
 | **archetypes_passives.json** | Пассивки: `modifiers` (def_bonus, crit_bonus, …) |
-| **archetypes_classes.json** | Классы и подклассы (tier 0–2): статы, списки skill/passive ключей |
-| **archetypes_skill_trees.json** | Деревья SP: узлы, `parent_keys`, `cost_sp`, тип узла |
+| **archetypes_classes.json** | Классы и специализации (tier 0–2): статы, списки skill/passive ключей |
+| **archetypes_skill_trees.json** | Узлы навыков (источник для гримуаров): `parent_keys`, тип узла |
 
 Карточки башни (этажи 1–20): `game/tower_cards/tower_card_catalog.json`.
 

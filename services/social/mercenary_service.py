@@ -104,6 +104,10 @@ def merc_to_combat_dict(m: Mercenary) -> dict[str, Any]:
 
 
 async def build_combat_companions(session: AsyncSession, character: Character) -> list[dict[str, Any]]:
+    from game.necromancer.service import build_skeleton_companions, is_necromancer
+
+    if is_necromancer(character):
+        return build_skeleton_companions(character)
     if not FEATURE_BLACK_MARKET_COMBAT:
         return []
     ids = get_party_merc_ids(character)
@@ -142,6 +146,19 @@ def _apply_merc_baseline_stats_for_level(m: Mercenary) -> None:
     m.atk = int(rd.base_atk) + lv * int(MERC_PER_LEVEL_ATK)
 
 
+def _living_merc_ids_from_companions(comps: list[dict[str, Any]]) -> list[int]:
+    ids: list[int] = []
+    for c in comps:
+        if c.get("dead") or c.get("is_skeleton"):
+            continue
+        raw = c.get("id")
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
 def split_tower_battle_xp_for_mercs(
     character: Character,
     gross_xp: int,
@@ -154,7 +171,7 @@ def split_tower_battle_xp_for_mercs(
     if not FEATURE_BLACK_MARKET_COMBAT:
         return max(0, int(gross_xp)), 0
     comps = list(combat_state.get("companions") or [])
-    ids = [int(c["id"]) for c in comps if not c.get("dead")]
+    ids = _living_merc_ids_from_companions(comps)
     if not ids:
         return max(0, int(gross_xp)), 0
     gx = max(0, int(gross_xp))
@@ -178,7 +195,7 @@ async def apply_merc_battle_xp_pool(
     if not FEATURE_BLACK_MARKET_COMBAT or merc_pool <= 0:
         return 0
     comps = list(combat_state.get("companions") or [])
-    ids = [int(c["id"]) for c in comps if not c.get("dead")]
+    ids = _living_merc_ids_from_companions(comps)
     if not ids:
         return 0
     rows = await mercenary_repo.get_by_ids_for_character(session, int(character.id), ids)

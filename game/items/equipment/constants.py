@@ -24,6 +24,6 @@ RARITY_NAME_RU: dict[str, str] = {
     "mythic": "Мифический",
 }
 
-SECRET_GEAR_MAX_FLOOR = 135
+SECRET_GEAR_MAX_FLOOR = 99
 SECRET_GEAR_DROP_CHANCE = min(0.95, 0.55 * 1.2)
 SECRET_GEAR_EARLY_MAX_FLOOR = 3

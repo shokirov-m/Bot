@@ -1,5 +1,5 @@
 ﻿"""
-Таверна в городах-хабах (этажи 3, 31, 61, 91): меню, цены (золото). Баффы «пьяного бойца» — позже.
+Таверна в городах-хабах (якоря 0, 30, 60, 90): меню, цены (золото). Баффы «пьяного бойца» — позже.
 """
 
 from __future__ import annotations
@@ -49,9 +49,9 @@ TAVERN_MENU: tuple[TavernOffer, ...] = (
     ),
 )
 
-# Доп. блюда в хабах 61 и 91 (ключ города — city.floor из floor_data).
+# Доп. блюда в хабах 60 и 90 (якорь between-floors из floor_data).
 TAVERN_EXTRAS_BY_CITY: dict[int, tuple[TavernOffer, ...]] = {
-    61: (
+    60: (
         TavernOffer(
             key="mulled",
             name="Глинтвейн стражей",
@@ -67,7 +67,7 @@ TAVERN_EXTRAS_BY_CITY: dict[int, tuple[TavernOffer, ...]] = {
             blurb="Щедрая порция: +40% HP и +30% MP.",
         ),
     ),
-    91: (
+    90: (
         TavernOffer(
             key="star_soup",
             name="Суп звёздной соли",
@@ -81,7 +81,7 @@ TAVERN_EXTRAS_BY_CITY: dict[int, tuple[TavernOffer, ...]] = {
 
 def tavern_offers_for_floor(floor_number: int) -> tuple[TavernOffer, ...]:
     city = floor_data.get_city_for_floor(int(floor_number))
-    cf = int(city.floor) if city is not None else 0
+    cf = int(city.after_floor) if city is not None else 0
     extra = TAVERN_EXTRAS_BY_CITY.get(cf, ())
     return TAVERN_MENU + extra
 

@@ -41,7 +41,7 @@ _ZONE_NPC: dict[str, tuple[str, str]] = {
     "icy_peaks": ("Следопыт Юна", "🧣"),
     "desert_oblivion": ("Караванщик Саид", "🐪"),
     "volcanic_ruins": ("Кузнец Варрак", "🔥"),
-    "sky_citadel": ("Дозорный Кейл", "☁️"),
+    "blood_spire": ("Морриган", "🦇"),
     "chaos_abyss": ("Отступник Малекс", "🌀"),
     "eternity_hall": ("Глашатай Век", "⚡"),
     floor_data.ZONE_FINAL_KEY: ("Эхо башни", "👁️"),
@@ -169,8 +169,10 @@ def _two_quests_for_floor(floor: int) -> list[QuestTemplate]:
 
 
 def generate_quest_pool() -> dict[int, list[QuestTemplate]]:
-    """Квесты для каждого этажа 3, 6, …, 135."""
-    return {f: _two_quests_for_floor(f) for f in range(3, 136, 3)}
+    """Квесты для каждого этажа 3, 6, … до KNOWN_MAX_FLOOR."""
+    from game.tower.progression.floor_data import KNOWN_MAX_FLOOR
+
+    return {f: _two_quests_for_floor(f) for f in range(3, KNOWN_MAX_FLOOR + 1, 3)}
 
 
 @lru_cache(maxsize=1)
@@ -179,7 +181,9 @@ def quest_pool() -> dict[int, list[QuestTemplate]]:
 
 
 def templates_for_floor(floor: int) -> list[QuestTemplate]:
-    if floor <= 0 or floor % 3 != 0 or floor > 135:
+    from game.tower.progression.floor_data import KNOWN_MAX_FLOOR
+
+    if floor <= 0 or floor % 3 != 0 or floor > KNOWN_MAX_FLOOR:
         return []
     return list(quest_pool().get(floor, []))
 

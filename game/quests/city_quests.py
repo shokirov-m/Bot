@@ -1,5 +1,5 @@
 ﻿"""
-Поручения стражи в городах-хабах (3, 31, 61, 91): победы в боях башни.
+Поручения стражи в городах-хабах (между 0↔1, 30↔31, 60↔61, 90↔91): победы в боях башни.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def _city_floor(floor_number: int) -> int | None:
     city = floor_data.get_city_for_floor(floor_number)
     if city is None:
         return None
-    return int(city.floor)
+    return int(city.after_floor)
 
 
 def city_quest_template(floor_number: int) -> CityQuestTemplate | None:
@@ -39,8 +39,8 @@ def city_quest_template(floor_number: int) -> CityQuestTemplate | None:
     name_esc = html.escape(city.name)
     role_esc = html.escape(guard_npc_title_for_floor(floor_number).capitalize())
     reward_gear: dict[str, Any] | None = None
-    if cf == 1:
-        # Стартовый хаб (Тихий Ручей): раньше попадал в ветку else (как этаж 91) — неверный баланс и ощущение «сломанного» квеста.
+    if cf == 0:
+        # Стартовый хаб (Тихий Ручей, между подножием и 1-м ярусом).
         need, rg, rx = 1, 15, 12
         intro = (
             f"{role_esc} у ворот <b>{name_esc}</b>: "
@@ -54,14 +54,14 @@ def city_quest_template(floor_number: int) -> CityQuestTemplate | None:
             "«У окраины башни шебуршат твари — небольшая угроза деревне. "
             f"Одолей <b>{need}</b> врагов где угодно в башне — и прими нашу благодарность.»"
         )
-    elif cf == 31:
+    elif cf == 30:
         need, rg, rx = 3, 85, 48
         intro = (
             f"{role_esc} <b>{name_esc}</b> хмурится: "
             "«Твари с нижних колец лезут к воротам. "
             f"Уложи <b>{need}</b> врагов башни — дам награду и благодарность гильдии.»"
         )
-    elif cf == 61:
+    elif cf == 60:
         need, rg, rx = 4, 160, 88
         intro = (
             f"{role_esc} в <b>{name_esc}</b>: "
@@ -77,7 +77,7 @@ def city_quest_template(floor_number: int) -> CityQuestTemplate | None:
         )
     qtitle = (
         f"Поручение старосты — {city.name}"
-        if cf in (1, 3)
+        if cf in (0, 3)
         else f"Поручение стражи — {city.name}"
     )
     return CityQuestTemplate(

@@ -83,6 +83,33 @@ def monster_post_floor5_strength_mult(floor_number: int) -> float:
     return 1.0 + (fl - 5) * float(MONSTER_POST_FLOOR5_EXTRA_MULT_PER_FLOOR)
 
 
+def apply_floor_difficulty_tiers(
+    hp: int,
+    atk: int,
+    defense: int,
+    floor_number: int,
+) -> tuple[int, int, int]:
+    """Прогрессивное усиление мобов по ярусу (общий путь формулы и каталога)."""
+    fl = int(floor_number)
+    if fl >= 71:
+        hp_m, atk_m, def_m = 5.0, 3.8, 3.5
+    elif fl >= 61:
+        hp_m, atk_m, def_m = 4.0, 3.2, 3.0
+    elif fl >= 50:
+        hp_m, atk_m, def_m = 3.0, 2.6, 2.4
+    elif fl >= 30:
+        hp_m, atk_m, def_m = 1.70, 1.55, 1.55
+    elif fl >= 20:
+        hp_m, atk_m, def_m = 1.40, 1.30, 1.30
+    else:
+        return max(1, hp), max(1, atk), max(0, defense)
+    return (
+        max(1, int(hp * hp_m)),
+        max(1, int(atk * atk_m)),
+        max(0, int(defense * def_m)),
+    )
+
+
 def monster_strike_ailment(
     floor_number: int,
     spawn: FloorMonsterSpawn,
@@ -162,20 +189,7 @@ def compute_formula_stat_bundle(floor_number: int, spawn: FloorMonsterSpawn) -> 
         atk_out = max(1, int(atk_out * m1819))
         def_out = max(0, int(def_out * m1819))
 
-    # Прогрессивный буст для этажей 20+
-    _fl = int(floor_number)
-    if _fl >= 50:
-        hp_out  = max(1, int(hp_out  * 2.0))
-        atk_out = max(1, int(atk_out * 1.85))
-        def_out = max(0, int(def_out * 1.85))
-    elif _fl >= 30:
-        hp_out  = max(1, int(hp_out  * 1.70))
-        atk_out = max(1, int(atk_out * 1.55))
-        def_out = max(0, int(def_out * 1.55))
-    elif _fl >= 20:
-        hp_out  = max(1, int(hp_out  * 1.40))
-        atk_out = max(1, int(atk_out * 1.30))
-        def_out = max(0, int(def_out * 1.30))
+    # Прогрессивные ярусы 20+ — в apply_floor_difficulty_tiers (вызывается из combat_service).
 
     if (
         int(floor_number) == 20

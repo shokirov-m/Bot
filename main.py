@@ -32,6 +32,7 @@ from bot.handlers.auction import router as auction_router
 from bot.handlers.arena import router as arena_router
 from bot.handlers.city_quests import router as city_quests_router
 from bot.handlers.class_arc import router as class_arc_router
+from bot.handlers.necromancer import router as necromancer_router
 from bot.handlers.daily import router as daily_router
 from bot.handlers.economy_sinks import router as economy_sinks_router
 from bot.handlers.leaderboard import router as leaderboard_router
@@ -47,12 +48,15 @@ from bot.handlers.workshop import router as workshop_router
 from bot.handlers.coliseum import router as coliseum_router
 from bot.handlers.city import router as city_router
 from bot.handlers.floor import router as floor_router
+from bot.handlers.pack_npc_quests import router as pack_npc_quests_router
 from bot.handlers.forest_beginnings import router as forest_beginnings_router
 from bot.handlers.quests import router as quests_router
 from bot.handlers.tavern import router as tavern_router
 from bot.handlers.inventory import router as inventory_router
 from bot.handlers.clans import router as clans_router
 from bot.handlers.profile import router as profile_router
+from bot.handlers.grimoires import router as grimoires_router
+from bot.handlers.grimoire_library import router as grimoire_library_router
 from bot.handlers.titles import router as titles_router
 from bot.handlers.shop import router as shop_router
 from bot.handlers.start import router as start_router
@@ -138,6 +142,8 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(tutorial_router)
     dp.include_router(admin_router)
     dp.include_router(profile_router)
+    dp.include_router(grimoires_router)
+    dp.include_router(grimoire_library_router)
     dp.include_router(clans_router)
     dp.include_router(stats_alloc_router)
     dp.include_router(menu_router)
@@ -161,7 +167,9 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(city_router)
     dp.include_router(city_quests_router)
     dp.include_router(class_arc_router)
+    dp.include_router(necromancer_router)
     dp.include_router(forest_beginnings_router)
+    dp.include_router(pack_npc_quests_router)
     dp.include_router(floor_router)
     dp.include_router(daily_router)
 

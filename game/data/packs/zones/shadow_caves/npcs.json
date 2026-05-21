@@ -1,0 +1,117 @@
+{
+  "entries": [
+    {
+      "id": "shade_scribe",
+      "name": "Писарь тени",
+      "emoji": "📜",
+      "profession": "jewelry",
+      "floor_from": 21,
+      "floor_to": 30,
+      "floors_hub": [
+        25
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Писарь тени ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "shade_scribe_sc_void_dust",
+          "title": "Пыль бездны",
+          "objective": "collect_material",
+          "target": {
+            "id": "void_dust",
+            "qty": 16
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "crimson_gem",
+                "qty": 2
+              }
+            ]
+          },
+          "floors": [
+            21,
+            22
+          ]
+        },
+        {
+          "id": "shade_scribe_sc_bone_set",
+          "title": "Костяные оправы",
+          "objective": "collect_material",
+          "target": {
+            "id": "bone_setting",
+            "qty": 10
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "ring_crimson_2",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            23,
+            24
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    },
+    {
+      "id": "umbra_smith",
+      "name": "Умбра",
+      "emoji": "🔨",
+      "profession": "smithing",
+      "floor_from": 21,
+      "floor_to": 30,
+      "floors_hub": [
+        25
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Умбра ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "umbra_smith_sc_dark_ingot",
+          "title": "Слитки тёмного металла",
+          "objective": "collect_material",
+          "target": {
+            "id": "dark_steel",
+            "qty": 14
+          },
+          "rewards": {},
+          "floors": [
+            21,
+            22
+          ]
+        },
+        {
+          "id": "umbra_smith_sc_chain_bits",
+          "title": "Осколки цепей",
+          "objective": "collect_material",
+          "target": {
+            "id": "chain_fragment",
+            "qty": 22
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "armor_patch_dark_1",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            23,
+            24
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    }
+  ]
+}

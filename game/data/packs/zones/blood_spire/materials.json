@@ -1,0 +1,88 @@
+{
+  "entries": {
+    "blood_vial": {
+      "name_ru": "Сосуд крови",
+      "rarity": "uncommon",
+      "profession": "alchemy",
+      "tags": ["vampire", "reagent"]
+    },
+    "nightshade": {
+      "name_ru": "Паслён ночи",
+      "rarity": "common",
+      "profession": "alchemy",
+      "tags": ["herb"]
+    },
+    "coagulant": {
+      "name_ru": "Сгуститель",
+      "rarity": "common",
+      "profession": "alchemy",
+      "tags": ["reagent"]
+    },
+    "garlic_oil": {
+      "name_ru": "Масло чеснока",
+      "rarity": "uncommon",
+      "profession": "alchemy",
+      "tags": ["anti_vampire"]
+    },
+    "vampire_fang": {
+      "name_ru": "Клык вампира",
+      "rarity": "rare",
+      "profession": "smithing",
+      "tags": ["trophy"]
+    },
+    "dark_steel": {
+      "name_ru": "Тёмная сталь",
+      "rarity": "uncommon",
+      "profession": "smithing",
+      "tags": ["ingot"]
+    },
+    "chain_fragment": {
+      "name_ru": "Осколок цепи",
+      "rarity": "common",
+      "profession": "smithing",
+      "tags": ["scrap"]
+    },
+    "crimson_gem": {
+      "name_ru": "Багровый камень",
+      "rarity": "rare",
+      "profession": "jewelry",
+      "tags": ["gem"]
+    },
+    "bone_setting": {
+      "name_ru": "Костяная оправа",
+      "rarity": "uncommon",
+      "profession": "jewelry",
+      "tags": ["part"]
+    },
+    "holy_herb": {
+      "name_ru": "Священная трава",
+      "rarity": "common",
+      "profession": "herbalism",
+      "tags": ["herb"]
+    },
+    "bandage_roll": {
+      "name_ru": "Бинты",
+      "rarity": "common",
+      "profession": "herbalism",
+      "tags": ["consumable_base"]
+    },
+    "fang_elite_vampire": {
+      "name_ru": "Клык элитного вампира",
+      "rarity": "epic",
+      "profession": "hunting",
+      "tags": ["trophy"]
+    },
+    "bat_wing": {
+      "name_ru": "Крыло летучей",
+      "rarity": "common",
+      "profession": "hunting",
+      "tags": ["trophy"]
+    },
+    "ghoul_hide": {
+      "name_ru": "Шкура гуля",
+      "rarity": "uncommon",
+      "profession": "hunting",
+      "tags": ["hide"]
+    }
+  }
+}

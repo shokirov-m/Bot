@@ -1,0 +1,23 @@
+{
+  "floor": 61,
+  "trial_type": "search",
+  "grounds_count": 14,
+  "hardcore": true,
+  "death_reset": "phase",
+  "progress_default": 0,
+  "required_progress_pct": 88,
+  "stamina_per_venture": 2,
+  "daily_venture_cap": 5,
+  "targets": {
+    "clues": 38,
+    "fights": 95,
+    "elites": 20,
+    "named": 6,
+    "mini_bosses": 1
+  },
+  "boss_key": "mini_fang_hunter",
+  "zone_debuff": "blood_scent",
+  "wins_per_ground": 4,
+  "grounds_visible_initial": 6,
+  "checkpoint_every_grounds": 3
+}

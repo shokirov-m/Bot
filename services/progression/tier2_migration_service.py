@@ -79,11 +79,16 @@ async def run_tier2_reset(bot: "Bot") -> None:
             old_name = old_arch.name_ru if old_arch else old_class_key
             new_name = new_arch.name_ru
 
-            # --- reset class ---
+            from game.archetypes.grimoires import migrate_tree_to_grimoires
+
+            migrate_tree_to_grimoires(char)
             char.class_key = parent_key
-            mp["unlocked_nodes"] = []
+            mp = dict(char.meta_progress or {})
             mp["equipped_skill_keys"] = []
-            mp["unspent_sp"] = max(0, int(char.level) - 9)
+            mp.pop("unlocked_nodes", None)
+            mp.pop("unspent_sp", None)
+            learned = [k for k in (mp.get("learned_grimoires_v1") or []) if not str(k).startswith("supreme_")]
+            mp["learned_grimoires_v1"] = learned
             mp[_MIGRATION_FLAG] = True
             char.meta_progress = mp
 

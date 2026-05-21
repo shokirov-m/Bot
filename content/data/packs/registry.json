@@ -1,0 +1,16 @@
+{
+  "_comment": "Активные паки зон. Добавь zone_key и папку packs/zones/<key>/",
+  "tower_height_unknown": true,
+  "max_floor_cap": 99,
+  "zones": [
+    "blood_spire",
+    "chaos_abyss",
+    "desert_oblivion",
+    "eternity_hall",
+    "forest_beginnings",
+    "icy_peaks",
+    "rotten_swamps",
+    "shadow_caves",
+    "volcanic_ruins"
+  ]
+}

@@ -32,7 +32,6 @@ from bot.keyboards.profile_kb import (
     profile_spec_submenu_keyboard,
     profile_view_keyboard,
 )
-from bot.keyboards.tree_kb import skill_tree_keyboard, node_action_keyboard
 from utils.telegram.game_ui import push_game_ui
 from utils.media.ui_photos import specialization_menu_photo_path
 import services.progression.character_service as character_service
@@ -137,8 +136,8 @@ def build_skills_screen_html(char: Character, *, locale: str) -> str:
 
     lines.append("")
     lines.append(
-        "<i>Пассивные узлы из древа (Ярость, Жажда крови и др.) работают автоматически "
-        "и не попадают в список ниже — только активные навыки можно поставить в слоты 1–3.</i>"
+        "<i>Пассивные бонусы из <b>гримуаров</b> действуют автоматически после изучения книги. "
+        "В слоты 1–3 — только активные навыки.</i>"
     )
 
     learned = sorted(learned_skill_keys(char))
@@ -466,7 +465,7 @@ def _build_profile_text(
     stp = skill_tree_passives_block.strip()
     if stp:
         lines.extend([
-            "<b>🌳 Древо навыков (пассивные узлы)</b>",
+            "<b>📖 Гримуары (пассивные бонусы)</b>",
             "<i>Не в слотах 1–3 — бонусы действуют сами по себе.</i>",
             "",
             stp,
@@ -478,7 +477,7 @@ def _build_profile_text(
     lines.extend(
         [
             elem_ln,
-            f"📍 Этаж: {char.floor_number} / 135 · открыто до: {int(char.highest_floor_reached)}",
+            f"📍 Этаж: {char.floor_number} · открыто до: {int(char.highest_floor_reached)}",
         ],
     )
     return "\n".join(lines)
@@ -929,214 +928,15 @@ async def on_profile_back_compact(callback: CallbackQuery, session: AsyncSession
 
 
 @router.callback_query(F.data == "prf:skills")
-async def on_profile_skills(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.from_user is None or callback.message is None or callback.bot is None:
-            await callback.answer()
-            return
-        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
-        if user is None or user.is_banned:
-            await callback.answer("Нет доступа.", show_alert=True)
-            return
-        char = await character_repo.get_by_user_id(session, user.id)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-        ensure_skill_meta(char)
-        if char.level >= 10:
-            arch_manager.sync_unspent_sp_with_tree(char)
-        await session.flush()
-        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
+@router.callback_query(F.data.startswith("tree:"))
+async def on_profile_skills_legacy_redirect(
+    callback: CallbackQuery, session: AsyncSession, state: FSMContext,
+) -> None:
+    """Древо навыков снято — открыть гримуары."""
+    await callback.answer("Древо заменено гримуарами.", show_alert=False)
+    from bot.handlers.grimoires import on_grimoires_menu
 
-        text = (
-            "🌳 <b>Древо навыков</b>\n\n"
-            "Здесь ты тратишь очки навыков (SP): они начисляются после <b>10 уровня</b>. "
-            "Узлы дают постоянные бонусы или открывают активные способности для боевых кнопок.\n\n"
-            "<i>В карточке узла — текст ветки, блок «Эффект» с цифрами, для активных навыков ещё MP, КД и тип урона.</i>"
-        )
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=skill_tree_keyboard(char, locale=loc),
-            target_message=callback.message,
-            photo_path=specialization_menu_photo_path(),
-            character=char,
-        )
-        await callback.answer()
-    except Exception:
-        logger.exception("prf:skills")
-        await callback.answer("Ошибка.", show_alert=True)
-
-@router.callback_query(F.data.startswith("tree:view:"))
-async def on_tree_node_view(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.from_user is None or callback.message is None or callback.bot is None:
-            await callback.answer()
-            return
-        node_key = callback.data.split(":")[-1]
-        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
-        if user is None or user.is_banned:
-            await callback.answer("Нет доступа.", show_alert=True)
-            return
-        char = await character_repo.get_by_user_id(session, user.id)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-
-        tree = arch_manager.get_character_tree(char)
-        node = tree.get(node_key)
-        if not node:
-            await callback.answer("Узел не найден.", show_alert=True)
-            return
-
-        unlocked = arch_manager.get_unlocked_node_keys(char)
-        is_unlocked = node_key in unlocked
-        can_buy = (
-            not is_unlocked
-            and all(p in unlocked for p in node.parent_keys)
-            and arch_manager.get_character_sp(char) >= node.cost_sp
-        )
-
-        status = "✅ Изучено" if is_unlocked else ("🌟 Доступно" if can_buy else "🔒 Заблокировано")
-
-        text = (
-            f"📍 <b>{html.escape(node.name_ru)}</b>\n"
-            f"Стоимость: <b>{node.cost_sp} SP</b>\n"
-            f"Статус: <b>{status}</b>\n\n"
-            f"{node.description_ru}\n\n"
-        )
-
-        fx = arch_manager.format_skill_tree_node_effect_ru(node)
-        if fx.strip():
-            text += f"<b>Эффект (цифры):</b>\n<pre>{html.escape(fx)}</pre>\n\n"
-
-        if node.node_type == "active_skill":
-            sk = arch_manager.get_skill(str(node.value))
-            if sk:
-                text += (
-                    f"🔮 <b>Активный навык:</b> {html.escape(sk.name_ru)}\n"
-                    f"<i>{html.escape(sk.description_ru)}</i>\n"
-                    f"Ресурс: <b>{sk.mp_cost}</b> MP · перезарядка <b>{sk.cooldown}</b> ход. · "
-                    f"{'магия' if sk.kind == 'mag' else 'физ'} · сила ×{sk.power_mult:g}\n\n"
-                )
-
-        if node.parent_keys:
-            parents = ", ".join([tree[p].name_ru for p in node.parent_keys])
-            text += f"<i>Требуется:</i> {html.escape(parents)}"
-
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=node_action_keyboard(node_key, can_buy, cost_sp=node.cost_sp),
-            target_message=callback.message,
-            photo_path=specialization_menu_photo_path(),
-            character=char,
-        )
-        await callback.answer()
-    except Exception:
-        logger.exception("tree:view")
-        await callback.answer("Ошибка.", show_alert=True)
-
-@router.callback_query(F.data.startswith("tree:buy:"))
-async def on_tree_node_buy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    try:
-        if callback.from_user is None or callback.message is None or callback.bot is None:
-            await callback.answer()
-            return
-        node_key = callback.data.split(":")[-1]
-        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
-        if user is None or user.is_banned:
-            await callback.answer("Нет доступа.", show_alert=True)
-            return
-        char = await character_repo.get_by_user_id(session, user.id)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-
-        from config import is_admin as _is_admin
-
-        ok, msg = arch_manager.try_unlock_node(char, node_key, admin_bypass=_is_admin(callback.from_user.id))
-        if not ok:
-            await callback.answer(msg, show_alert=True)
-            return
-
-        await session.commit()
-        await callback.answer(msg, show_alert=False)
-
-        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        text = (
-            "🌳 <b>Древо навыков</b>\n\n"
-            "Узел успешно изучен! Новые способности можно выбрать в "
-            "<b>Специализация → Экипировать навыки</b>."
-        )
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=skill_tree_keyboard(char, locale=loc),
-            target_message=callback.message,
-            photo_path=specialization_menu_photo_path(),
-            character=char,
-        )
-    except Exception:
-        logger.exception("tree:buy")
-        await callback.answer("Ошибка при изучении.", show_alert=True)
-
-
-@router.callback_query(F.data == "tree:spxg")
-async def on_tree_sp_exchange_gold(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-    """Пост-кап: обменять 1 неизрасходованный SP на золото, если все узлы открыты."""
-    try:
-        if callback.from_user is None or callback.message is None or callback.bot is None:
-            await callback.answer()
-            return
-        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
-        if user is None or user.is_banned:
-            await callback.answer("Нет доступа.", show_alert=True)
-            return
-        char = await character_repo.get_by_user_id(session, user.id)
-        if char is None:
-            await callback.answer("Нет персонажа.", show_alert=True)
-            return
-        if char.level >= 10:
-            arch_manager.sync_unspent_sp_with_tree(char)
-        ok, err = arch_manager.consume_one_unspent_sp(char)
-        if not ok:
-            await callback.answer(err, show_alert=True)
-            return
-        gold_amt = max(150, int(char.level or 1) * 40)
-        character_service.add_gold(
-            char,
-            gold_amt,
-            spend_for="",
-            spend_kind="skill_tree",
-        )
-        await session.commit()
-        loc = get_locale(char, callback.from_user.language_code if callback.from_user else None)
-        text = (
-            "🌳 <b>Древо навыков</b>\n\n"
-            f"Обмен: <b>−1 SP</b> → <b>+{gold_amt:,}</b> 💰 "
-            "<i>(доступно, пока древо полностью открыто и есть очки.)</i>"
-        )
-        await push_game_ui(
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            text=text,
-            reply_markup=skill_tree_keyboard(char, locale=loc),
-            target_message=callback.message,
-            photo_path=specialization_menu_photo_path(),
-            character=char,
-        )
-        await callback.answer("Готово!")
-    except Exception:
-        logger.exception("tree:spxg")
-        await callback.answer("Ошибка.", show_alert=True)
+    await on_grimoires_menu(callback, session, state)
 
 
 @router.callback_query(F.data == "prf:skills_equip")

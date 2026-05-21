@@ -1886,6 +1886,11 @@ async def home_merc_party_toggle_detail(callback: CallbackQuery, session: AsyncS
                 show_alert=True,
             )
             return
+        from game.necromancer.service import is_necromancer, mercenaries_blocked_message
+
+        if is_necromancer(char):
+            await callback.answer(mercenaries_blocked_message(), show_alert=True)
+            return
         cur = list(get_party_merc_ids(char))
         if mid in cur:
             cur = [x for x in cur if int(x) != mid]

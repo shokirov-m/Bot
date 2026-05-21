@@ -526,6 +526,21 @@ def apply_shatter_death(state: dict[str, Any], logs: list[str]) -> None:
 
 # ── Проверка уникальных пробиваний брони ─────────────────────────────────────
 
+def _merge_boss_unique_abilities() -> None:
+    try:
+        from game.combat.boss_uniques import merge_ability_map_overrides
+
+        for key, row in merge_ability_map_overrides().items():
+            base = dict(ABILITY_MAP.get(key) or {})
+            base.update(row)
+            ABILITY_MAP[key] = base
+    except Exception:
+        pass
+
+
+_merge_boss_unique_abilities()
+
+
 def get_extra_pierce_fraction(template_key: str) -> float:
     """
     Дополнительное пробивание брони из таблицы способностей (0.0–0.95).

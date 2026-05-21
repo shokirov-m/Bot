@@ -604,7 +604,7 @@ async def try_enchant_equipped_weapon(
 
 
 def brew_elixir_cost_gold(floor_number: int) -> int:
-    f = max(1, min(135, int(floor_number)))
+    f = max(1, min(99, int(floor_number)))
     return 20 + min(f, 60) // 3
 
 
@@ -1285,7 +1285,7 @@ async def try_repair_all_equipped(session: AsyncSession, character: Character) -
     return True, [f"✅ Всё отремонтировано за <b>{total}</b> 💰."]
 
 
-_STAR_MERGE_MIN_CITY_FLOOR = 61
+_STAR_MERGE_MIN_CITY_ANCHOR = 60
 
 _RARITY_SORT: dict[str, int] = {
     "common": 0,
@@ -1305,7 +1305,7 @@ def star_merge_unlocked_on_floor(floor_number: int) -> bool:
     if not forge_loc.forge_available_on_floor(floor_number):
         return False
     c = floor_data.get_city_for_floor(int(floor_number))
-    return c is not None and int(c.floor) >= _STAR_MERGE_MIN_CITY_FLOOR
+    return c is not None and int(c.after_floor) >= _STAR_MERGE_MIN_CITY_ANCHOR
 
 
 def _star_merge_bucket(data: dict[str, Any]) -> str | None:

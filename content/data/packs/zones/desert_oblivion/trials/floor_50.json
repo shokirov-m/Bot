@@ -1,0 +1,15 @@
+{
+  "floor": 50,
+  "trial_type": "boss_chamber",
+  "boss_key": "boss_time_scarab",
+  "trial_title_ru": "Пески Скарабея Времени",
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 88,
+  "boss_retry_cooldown_min_minutes": 17,
+  "boss_retry_cooldown_max_minutes": 20,
+  "floor_stat_mult": 1.12,
+  "stamina_per_venture": 2,
+  "daily_venture_cap": 6,
+  "hub_blurb_ru": "С этажа 50 враги резко усилены — готовься к долгим боям."
+}

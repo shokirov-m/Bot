@@ -61,8 +61,12 @@ async def on_city_hub_open(
         if floor != char.floor_number:
             await query.answer("Этаж устарел. Открой /floor снова.", show_alert=True)
             return
-        if floor_data.get_city_for_floor(char.floor_number) is None:
-            await query.answer()
+        city = floor_data.get_city_for_floor(
+            int(char.floor_number),
+            highest_reached=int(char.highest_floor_reached),
+        )
+        if city is None:
+            await query.answer("Город ещё не открыт — поднимись выше.", show_alert=True)
             return
         loc = get_locale(char, query.from_user.language_code)
         await push_game_ui(
@@ -87,7 +91,7 @@ async def on_city_floor3_market(
     session: AsyncSession,
     state: FSMContext,
 ) -> None:
-    """Рынок этажа 3: лавка, скупщик, банк, храм."""
+    """Рынок «Тихий Ручей» (якорь 0): лавка, скупщик, банк, храм."""
     try:
         if query.data is None or query.from_user is None or query.message is None:
             await query.answer()
@@ -109,8 +113,8 @@ async def on_city_floor3_market(
         if char is None:
             await query.answer("Сначала /start.", show_alert=True)
             return
-        if floor_key != int(char.floor_number) or int(char.floor_number) != 3:
-            await query.answer("Рынок только в деревне на 3 этаже.", show_alert=True)
+        if not floor_data.city_service_floor_ok(char, floor_key) or floor_key != 0:
+            await query.answer("Рынок только в «Тихом Ручье» (первый город-хаб).", show_alert=True)
             return
         loc = get_locale(char, query.from_user.language_code)
         economy_sink_service.clear_bank_ui_back(char)
@@ -175,7 +179,7 @@ async def on_city_floor3_market(
                     chat_id=query.message.chat.id,
                     text=(
                         "⛪ <b>Храм призыва</b>\n"
-                        "<i>Дар духов уже с тобой — алтарь молчит. Дальнейшие питомцы — в других городах башни.</i>"
+                        "<i>Дар духов уже с тобой — алтарь молчит. Новых питомцев ищи в промо и на этажах 8/48.</i>"
                     ),
                     reply_markup=city_floor3_market_keyboard(floor_key),
                     target_message=query.message,
@@ -291,8 +295,8 @@ async def on_city_floor3_simple_npc(
             await query.answer("Нет доступа.", show_alert=True)
             return
         char = await character_repo.get_by_user_id(session, user.id)
-        if char is None or floor_key != int(char.floor_number) or int(char.floor_number) != 3:
-            await query.answer("Это только в деревне на 3 этаже.", show_alert=True)
+        if char is None or not floor_data.city_service_floor_ok(char, floor_key) or floor_key != 0:
+            await query.answer("Эти NPC только в «Тихом Ручье» (первый город-хаб).", show_alert=True)
             return
         loc = get_locale(char, query.from_user.language_code)
         await character_repo.lock_character_row(session, char.id)

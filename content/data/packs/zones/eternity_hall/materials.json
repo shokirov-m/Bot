@@ -1,0 +1,36 @@
+{
+  "entries": {
+    "star_dust": {
+      "name_ru": "Звёздная пыль",
+      "rarity": "epic",
+      "profession": "jewelry",
+      "tags": [
+        "eternity"
+      ]
+    },
+    "eternal_gem": {
+      "name_ru": "Вечный кристалл",
+      "rarity": "legendary",
+      "profession": "jewelry",
+      "tags": [
+        "eternity"
+      ]
+    },
+    "void_plate": {
+      "name_ru": "Лист пустоты",
+      "rarity": "epic",
+      "profession": "smithing",
+      "tags": [
+        "eternity"
+      ]
+    },
+    "light_chain": {
+      "name_ru": "Светлое звено",
+      "rarity": "rare",
+      "profession": "smithing",
+      "tags": [
+        "eternity"
+      ]
+    }
+  }
+}

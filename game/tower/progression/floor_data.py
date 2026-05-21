@@ -1,12 +1,13 @@
 """
-Справочник башни: 135 этажей, 13 зон, города 31/61/91, флаги NPC и боссов.
-Тайная комната (15%) обрабатывается при входе на этаж на поздних шагах.
+Справочник башни: зоны 1–99, города между этажами (0/30/60/90). Высота башни неизвестна.
+Контент зон-испытаний: content/data/packs/zones/
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from db.models.character import Character
 from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR as _WSP_HUB_FLOOR
 from game.data import floors as tower_data
 
@@ -26,12 +27,18 @@ class ZoneInfo:
 
 @dataclass(frozen=True, slots=True)
 class CityInfo:
-    """Особый город-хаб."""
+    """Город-хаб в зазоре между боевыми ярусами (не занимает номер этажа)."""
 
-    floor: int
+    key: str
+    after_floor: int
     name: str
     emoji: str
     theme_ru: str
+
+    @property
+    def floor(self) -> int:
+        """Якорь для callback кузницы/таверны (legacy-имя поля)."""
+        return self.after_floor
 
 
 _ZONE_INFO_FIELDS = {"key", "name", "emoji", "floor_from", "floor_to", "description", "floor_type"}
@@ -42,29 +49,46 @@ def _zone_info_from_raw(z: dict) -> ZoneInfo:
     return ZoneInfo(**{k: v for k, v in z.items() if k in _ZONE_INFO_FIELDS})
 
 
-# Десять зон + финал (этаж 100 отдельно в логике).
+def _city_info_from_raw(row: dict) -> CityInfo:
+    anchor = int(row.get("after_floor", row.get("floor", 0)))
+    return CityInfo(
+        key=str(row.get("key") or f"city_{anchor}"),
+        after_floor=anchor,
+        name=str(row["name"]),
+        emoji=str(row["emoji"]),
+        theme_ru=str(row.get("theme_ru") or ""),
+    )
+
+
 ZONES: tuple[ZoneInfo, ...] = tuple(_zone_info_from_raw(z) for z in tower_data.ZONES_RAW)
 
-ZONE_FINAL_KEY: str = str(tower_data.ZONE_FINAL_RAW["key"])
+_raw_final = tower_data.ZONE_FINAL_RAW
+if _raw_final:
+    ZONE_FINAL_KEY: str = str(_raw_final["key"])
+    ZONE_FINAL: ZoneInfo = _zone_info_from_raw(_raw_final)
+else:
+    ZONE_FINAL_KEY = "eternity_hall"
+    ZONE_FINAL = ZONES[-1]
 
-ZONE_FINAL: ZoneInfo = _zone_info_from_raw(tower_data.ZONE_FINAL_RAW)
+# Потолок известной карты (этажи 101+ сняты)
+KNOWN_MAX_FLOOR = 99
 
 CITIES: dict[int, CityInfo] = {
-    floor: CityInfo(**row) for floor, row in tower_data.CITIES_RAW.items()
+    int(k): _city_info_from_raw(row) for k, row in tower_data.CITIES_RAW.items()
 }
-# Город игроков (хаб ремесленных заказов) — этаж из мастерской, пока нет в CITIES_RAW
+# Город игроков (хаб ремесленных заказов) — отдельный боевой этаж мастерской
 if _WSP_HUB_FLOOR not in CITIES:
     CITIES[_WSP_HUB_FLOOR] = CityInfo(
-        floor=_WSP_HUB_FLOOR,
+        key="workshop_union",
+        after_floor=_WSP_HUB_FLOOR,
         name="Свод союза",
         emoji="🏙",
         theme_ru="Город игроков: общий хаб, ремесло и заказы мастерских.",
     )
 
 # Быстрый переход через меню «Портал»
-# Города-хабы (1/31/61/91/121), сюжетные этажи (8/10) и кратные 5 (5..135).
 PORTAL_DESTINATION_FLOORS: tuple[int, ...] = tuple(
-    sorted({1, 8, 10, 31, 61, 91, 121} | {f for f in range(5, 136, 5)}),
+    sorted({1, 8, 10, 31, 60, 61, 91} | {f for f in range(5, KNOWN_MAX_FLOOR + 1, 5)}),
 )
 
 # Уникальные «комнаты» внутри зоны — циклически по этажу
@@ -122,7 +146,7 @@ EPITHETS: dict[str, tuple[str, ...]] = {
         "Оазис-призрак",
         "Руины часовни",
         "Рассохшийся акведук",
-        "Площадь песков времени",
+        "Площадка песков времени",
         "Каньон жара",
         "Колодец яда",
         "След скорпионов",
@@ -141,17 +165,17 @@ EPITHETS: dict[str, tuple[str, ...]] = {
         "Тоннель жара",
         "Алтарь пепла",
     ),
-    "sky_citadel": (
-        "Парящий двор",
-        "Мост без опор",
-        "Балкон гроз",
-        "Зал перьев",
-        "Кольцо ветров",
-        "Арена облаков",
-        "Свод из молний",
-        "Терраса грифонов",
-        "Коридор эха крыльев",
-        "Шпиль без тени",
+    "blood_spire": (
+        "Внешние стены Шпиля",
+        "Кладбище первого колокола",
+        "Двор с залитой луной",
+        "Балконы без света",
+        "Склеп баронов",
+        "Галерея клыков",
+        "Тронный коридор",
+        "Алтарь сгустившейся крови",
+        "Тюремный ярус",
+        "Врата Князя",
     ),
     "chaos_abyss": (
         "Вихрь искажений",
@@ -177,72 +201,63 @@ EPITHETS: dict[str, tuple[str, ...]] = {
         "Зал последних клятв",
         "Порог вечности",
     ),
-    "jade_labyrinth": (
-        "Зал нефритовых врат",
-        "Коридор слепых стражей",
-        "Ловушка трёх зеркал",
-        "Тронный чертог мудрецов",
-        "Переход сквозь туман",
-        "Комната без теней",
-        "Алтарь нефритового дракона",
-        "Лабиринт без выхода",
-        "Тайная библиотека",
-        "Зал вечного нефрита",
-    ),
-    "frozen_wastes": (
-        "Ледяная равнина без конца",
-        "Поле обмороженных статуй",
-        "Вьюжный перевал",
-        "Пустошь скованных душ",
-        "Кладбище экспедиций",
-        "Провал в вечный лёд",
-        "Тропа замёрзших слёз",
-        "Алтарь стужи",
-        "Снежный лабиринт",
-        "Вершина смерти",
-    ),
-    "faction_war_plains": (
-        "Поле первой битвы",
-        "Лагерь эльфов",
-        "Лагерь орков",
-        "Линия фронта",
-        "Руины нейтрального города",
-        "Мост раздора",
-        "Переправа крови",
-        "Поляна переговоров",
-        "Алтарь верности",
-        "Трон победителя",
-    ),
-    ZONE_FINAL_KEY: (
-        "Сердце башни",
-        "Зал третьей фазы",
-        "Трон ока",
-        "Кольцо испытаний",
-        "Площадка последнего выбора",
-        "Свод без неба",
-        "Мост к желанию",
-        "Алтарь стража",
-        "Периметр печати",
-        "Врата ста",
-    ),
 }
 
 
 def get_zone_for_floor(floor_number: int) -> ZoneInfo:
-    """Возвращает зону по номеру этажа (1–135)."""
-    if floor_number >= 135:
-        return ZONE_FINAL
+    """Возвращает зону по номеру этажа (1–KNOWN_MAX_FLOOR)."""
     if floor_number < 1:
         floor_number = 1
+    if floor_number > KNOWN_MAX_FLOOR:
+        floor_number = KNOWN_MAX_FLOOR
     for zone in ZONES:
         if zone.floor_from <= floor_number <= zone.floor_to:
             return zone
     return ZONES[-1]
 
 
-def get_city_for_floor(floor_number: int) -> CityInfo | None:
-    """Город-хаб или None."""
-    return CITIES.get(floor_number)
+def _city_unlocked(highest_reached: int, city: CityInfo) -> bool:
+    return int(highest_reached) > int(city.after_floor)
+
+
+def get_city_for_floor(
+    floor_number: int,
+    *,
+    highest_reached: int | None = None,
+) -> CityInfo | None:
+    """
+    Ближайший доступный город-хаб с боевого яруса.
+    Город стоит между after_floor и after_floor+1 (не на боевом номере).
+    """
+    hi = int(highest_reached if highest_reached is not None else floor_number)
+    best: CityInfo | None = None
+    for city in sorted(CITIES.values(), key=lambda c: c.after_floor):
+        if _city_unlocked(hi, city):
+            best = city
+    return best
+
+
+def city_service_anchor_for_character(character: Character) -> int | None:
+    """Якорь города для callback кузницы/таверны/экономики."""
+    city = get_city_for_floor(
+        int(character.floor_number),
+        highest_reached=int(character.highest_floor_reached),
+    )
+    return city.after_floor if city else None
+
+
+def city_service_floor_ok(character: Character, floor_key: int) -> bool:
+    """Проверка floor_key в callback города (якорь, не боевой этаж)."""
+    anchor = city_service_anchor_for_character(character)
+    return anchor is not None and int(floor_key) == int(anchor)
+
+
+def city_button_label(floor_number: int, *, highest_reached: int | None = None) -> str | None:
+    city = get_city_for_floor(floor_number, highest_reached=highest_reached)
+    if city is None:
+        return None
+    gap = f"{city.after_floor}→{city.after_floor + 1}"
+    return f"{city.emoji} {city.name} ({gap})"
 
 
 def epithet_for_floor(zone: ZoneInfo, floor_number: int) -> str:
@@ -270,8 +285,8 @@ def is_major_boss_floor(floor_number: int) -> bool:
 
 
 def is_tower_milestone_boss_floor(floor_number: int) -> bool:
-    """Вехи ×20: фаза «Ярость» у сильного босса (20/40/60/80/100/120/135)."""
-    return floor_number in (20, 40, 60, 80, 100, 120, 135)
+    """Вехи ×20: фаза «Ярость» у сильного босса."""
+    return floor_number in (20, 40, 60, 80)
 
 
 def is_mini_boss_floor(floor_number: int) -> bool:
@@ -286,11 +301,17 @@ def is_mini_boss_floor(floor_number: int) -> bool:
 SECRET_ROOM_CHANCE: float = 0.15
 
 
+def format_floor_label(floor_number: int) -> str:
+    """Подпись этажа без раскрытия высоты башни."""
+    return f"🗼 <b>ЭТАЖ {int(floor_number)}</b>"
+
+
 def get_zone_floor_type(floor_number: int) -> str:
     """Возвращает тип этажа: 'normal', 'survival', 'faction_war'."""
     zone = get_zone_for_floor(floor_number)
     raw: list[dict] = list(tower_data.ZONES_RAW)
-    raw.append(tower_data.ZONE_FINAL_RAW)
+    if tower_data.ZONE_FINAL_RAW:
+        raw.append(tower_data.ZONE_FINAL_RAW)
     for z in raw:
         if z["key"] == zone.key:
             return str(z.get("floor_type", "normal"))
@@ -301,7 +322,8 @@ def get_zone_raw(floor_number: int) -> dict:
     """Возвращает raw-словарь зоны для заданного этажа."""
     zone = get_zone_for_floor(floor_number)
     raw: list[dict] = list(tower_data.ZONES_RAW)
-    raw.append(tower_data.ZONE_FINAL_RAW)
+    if tower_data.ZONE_FINAL_RAW:
+        raw.append(tower_data.ZONE_FINAL_RAW)
     for z in raw:
         if z["key"] == zone.key:
             return z

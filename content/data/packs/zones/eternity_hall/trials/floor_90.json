@@ -1,0 +1,14 @@
+{
+  "floor": 90,
+  "trial_type": "boss_chamber",
+  "boss_key": "boss_eternity_judge",
+  "trial_title_ru": "Суд Вечности",
+  "hardcore": true,
+  "death_reset": "phase",
+  "required_progress_pct": 92,
+  "boss_retry_cooldown_min_minutes": 18,
+  "boss_retry_cooldown_max_minutes": 20,
+  "floor_stat_mult": 1.2,
+  "stamina_per_venture": 3,
+  "daily_venture_cap": 4
+}

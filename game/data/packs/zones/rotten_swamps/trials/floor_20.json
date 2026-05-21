@@ -1,0 +1,14 @@
+{
+  "floor": 20,
+  "trial_type": "boss_chamber",
+  "boss_key": "boss_slime_king",
+  "trial_title_ru": "Топи Короля Слизи",
+  "hardcore": false,
+  "death_reset": "phase",
+  "required_progress_pct": 86,
+  "boss_retry_cooldown_min_minutes": 15,
+  "boss_retry_cooldown_max_minutes": 19,
+  "floor_stat_mult": 1.0,
+  "stamina_per_venture": 1,
+  "daily_venture_cap": 9
+}

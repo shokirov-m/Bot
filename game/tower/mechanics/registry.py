@@ -129,6 +129,12 @@ def spawns_for_tower_progress(
     from game.enemies.floors.spawns import build_spawns_for_floor
 
     n = int(floor_number)
+    from game.tower.trials import floor_trial as floor_trial_mod
+
+    if floor_trial_mod.is_trial_scenario_active(character) and int(character.floor_number) == n:
+        floor_trial_mod.ensure_started(character)
+        return floor_trial_mod.build_trial_spawns(character)
+
     if n == long_floor_mod.PILOT_FLOOR and long_floor_mod.is_long_floor_scenario_active(character):
         return long_floor_mod.all_long_floor_spawns()
 

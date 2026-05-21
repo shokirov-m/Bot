@@ -18,8 +18,27 @@ _DATA_DIR = Path(__file__).resolve().parent
 _CATALOG_PATH = _DATA_DIR / "monsters_catalog.json"
 
 
+def _merge_zone_packs(raw: dict[str, Any]) -> dict[str, Any]:
+    """Пулы и монстры из content/data/packs/zones/*/monsters.json."""
+    try:
+        from game.data.packs import pack_monsters_merge
+
+        pools_delta, monsters_delta = pack_monsters_merge()
+    except Exception:
+        return raw
+    pools = dict(raw.get("pools") or {})
+    monsters = dict(raw.get("monsters") or {})
+    for zk, keys in pools_delta.items():
+        if keys:
+            pools[zk] = list(keys)
+    for mid, row in monsters_delta.items():
+        monsters[mid] = row
+    return {"pools": pools, "monsters": monsters}
+
+
 def _load_catalog() -> dict[str, Any]:
-    return json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+    raw = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+    return _merge_zone_packs(raw)
 
 
 _RAW: dict[str, Any] = _load_catalog()
@@ -67,10 +86,10 @@ CAVES_MONSTERS = _subset(ZONE_POOL_KEYS["shadow_caves"])
 ICY_PEAKS_MONSTERS = _subset(ZONE_POOL_KEYS["icy_peaks"])
 DESERT_MONSTERS = _subset(ZONE_POOL_KEYS["desert_oblivion"])
 VOLCANIC_MONSTERS = _subset(ZONE_POOL_KEYS["volcanic_ruins"])
-SKY_CITADEL_MONSTERS = _subset(ZONE_POOL_KEYS["sky_citadel"])
+BLOOD_SPIRE_MONSTERS = _subset(ZONE_POOL_KEYS.get("blood_spire", ()))
 CHAOS_ABYSS_MONSTERS = _subset(ZONE_POOL_KEYS["chaos_abyss"])
 ETERNITY_HALL_MONSTERS = _subset(ZONE_POOL_KEYS["eternity_hall"])
-FINAL_BOSS = _subset(ZONE_POOL_KEYS["tower_warden"])
+FINAL_BOSS = _subset(ZONE_POOL_KEYS.get("tower_warden", ()))
 
 
 def get_monster(key: str) -> dict[str, Any] | None:
@@ -99,7 +118,7 @@ def reload_monsters_catalog() -> None:
     """Перечитать monsters_catalog.json (после правки файла без перезапуска бота — только для отладки)."""
     global _RAW, ZONE_POOL_KEYS, KEY_TO_ZONE, MONSTER_TEMPLATE_META, ALL_MONSTERS
     global FOREST_MONSTERS, SWAMP_MONSTERS, CAVES_MONSTERS, ICY_PEAKS_MONSTERS
-    global DESERT_MONSTERS, VOLCANIC_MONSTERS, SKY_CITADEL_MONSTERS, CHAOS_ABYSS_MONSTERS
+    global DESERT_MONSTERS, VOLCANIC_MONSTERS, BLOOD_SPIRE_MONSTERS, CHAOS_ABYSS_MONSTERS
     global ETERNITY_HALL_MONSTERS, FINAL_BOSS
     _RAW = _load_catalog()
     ZONE_POOL_KEYS = {zone: tuple(keys) for zone, keys in _RAW["pools"].items()}
@@ -120,10 +139,10 @@ def reload_monsters_catalog() -> None:
     ICY_PEAKS_MONSTERS = _subset(ZONE_POOL_KEYS["icy_peaks"])
     DESERT_MONSTERS = _subset(ZONE_POOL_KEYS["desert_oblivion"])
     VOLCANIC_MONSTERS = _subset(ZONE_POOL_KEYS["volcanic_ruins"])
-    SKY_CITADEL_MONSTERS = _subset(ZONE_POOL_KEYS["sky_citadel"])
+    BLOOD_SPIRE_MONSTERS = _subset(ZONE_POOL_KEYS.get("blood_spire", ()))
     CHAOS_ABYSS_MONSTERS = _subset(ZONE_POOL_KEYS["chaos_abyss"])
     ETERNITY_HALL_MONSTERS = _subset(ZONE_POOL_KEYS["eternity_hall"])
-    FINAL_BOSS = _subset(ZONE_POOL_KEYS["tower_warden"])
+    FINAL_BOSS = _subset(ZONE_POOL_KEYS.get("tower_warden", ()))
     try:
         from game.enemies.catalog.registry import mr
         mr.reload_definitions()
@@ -141,7 +160,7 @@ __all__ = [
     "ICY_PEAKS_MONSTERS",
     "KEY_TO_ZONE",
     "MONSTER_TEMPLATE_META",
-    "SKY_CITADEL_MONSTERS",
+    "BLOOD_SPIRE_MONSTERS",
     "SWAMP_MONSTERS",
     "VOLCANIC_MONSTERS",
     "ZONE_POOL_KEYS",

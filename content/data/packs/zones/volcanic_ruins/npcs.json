@@ -1,0 +1,124 @@
+{
+  "entries": [
+    {
+      "id": "ember_forge",
+      "name": "Бранн",
+      "emoji": "🔨",
+      "profession": "smithing",
+      "floor_from": 51,
+      "floor_to": 60,
+      "floors_hub": [
+        55
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Бранн ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "ember_forge_vr_obsidian",
+          "title": "Обсидиан",
+          "objective": "collect_material",
+          "target": {
+            "id": "obsidian_shard",
+            "qty": 16
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "dark_steel",
+                "qty": 12
+              }
+            ]
+          },
+          "floors": [
+            51,
+            52
+          ]
+        },
+        {
+          "id": "ember_forge_vr_slag_brick",
+          "title": "Шлаковый кирпич",
+          "objective": "collect_material",
+          "target": {
+            "id": "slag_brick",
+            "qty": 20
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "chain_fragment",
+                "qty": 8
+              }
+            ]
+          },
+          "floors": [
+            53,
+            54
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    },
+    {
+      "id": "ash_alchemist",
+      "name": "Пепель",
+      "emoji": "⚗️",
+      "profession": "alchemy",
+      "floor_from": 51,
+      "floor_to": 60,
+      "floors_hub": [
+        55
+      ],
+      "greeting_by_reputation": {
+        "neutral": "{player_name}, Пепель ждёт материалы.",
+        "honored": "{player_name}, твои поставки не забыты."
+      },
+      "quests": [
+        {
+          "id": "ash_alchemist_vr_ember_salt",
+          "title": "Соль пепла",
+          "objective": "collect_material",
+          "target": {
+            "id": "ember_salt",
+            "qty": 14
+          },
+          "rewards": {
+            "materials": [
+              {
+                "id": "coagulant",
+                "qty": 8
+              }
+            ]
+          },
+          "floors": [
+            51,
+            52
+          ]
+        },
+        {
+          "id": "ash_alchemist_vr_magma_resin",
+          "title": "Смола магмы",
+          "objective": "collect_material",
+          "target": {
+            "id": "magma_resin",
+            "qty": 12
+          },
+          "rewards": {
+            "blueprints": [
+              {
+                "id": "potion_bloodshield_3",
+                "qty": 1
+              }
+            ]
+          },
+          "floors": [
+            53,
+            54
+          ],
+          "profession_tier_min": 2
+        }
+      ]
+    }
+  ]
+}

@@ -99,6 +99,10 @@ def roster_collection_cap(character: Character) -> int:
 
 
 def max_mercs_in_battle(character: Character) -> int:
+    from game.necromancer.service import is_necromancer
+
+    if is_necromancer(character):
+        return 0
     if int(character.level) >= 25:
         return 2
     return 1

@@ -10,7 +10,7 @@ from game.economy.shop import VIP_STAR_GOODS, shop_goods_for_floor
 def shop_main_keyboard(floor_number: int, origin: str) -> InlineKeyboardMarkup:
     """
     Обычный магазин — расходники за золото.
-    origin: c — из города, f — с этажа, m — с рынка 3 эт., h — из дома, u — из меню.
+    origin: c — из города, f — с этажа, m — с рынка хаба, h — из дома, u — из меню.
     """
     if origin == "a":
         back_cd = "auc:hub"

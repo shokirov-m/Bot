@@ -7,35 +7,41 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
 from game.crafting.workshop_constants import WORKSHOP_ORDERS_HUB_FLOOR
+from game.tower.progression import floor_data
 
 
 def city_hub_keyboard(
-    floor_number: int,
+    combat_floor: int,
     character: Character,
     *,
     locale: str = "ru",
 ) -> InlineKeyboardMarkup:
-    _ = (character, locale)  # API сохранён для совместимости с вызовами
-    f = int(floor_number)
-    if f == 3:
+    _ = locale
+    city = floor_data.get_city_for_floor(
+        int(combat_floor),
+        highest_reached=int(character.highest_floor_reached),
+    )
+    anchor = int(city.after_floor) if city is not None else int(combat_floor)
+    f = int(combat_floor)
+    if anchor == 0:
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="⚒️ Кузница", callback_data=f"frg:main:{f}")],
-                [InlineKeyboardButton(text="🍺 Таверна", callback_data=f"tvr:open:{f}")],
-                [InlineKeyboardButton(text="🏛️ Рынок", callback_data=f"cty:mkt:{f}:open")],
+                [InlineKeyboardButton(text="⚒️ Кузница", callback_data=f"frg:main:{anchor}")],
+                [InlineKeyboardButton(text="🍺 Таверна", callback_data=f"tvr:open:{anchor}")],
+                [InlineKeyboardButton(text="🏛️ Рынок", callback_data=f"cty:mkt:{anchor}:open")],
                 [
-                    InlineKeyboardButton(text="⚔️ Стражник", callback_data=f"cty:{f}:view"),
-                    InlineKeyboardButton(text="📜 Писарь", callback_data=f"cty:f3npc:scribe:{f}"),
+                    InlineKeyboardButton(text="⚔️ Стражник", callback_data=f"cty:{anchor}:view"),
+                    InlineKeyboardButton(text="📜 Писарь", callback_data=f"cty:f3npc:scribe:{anchor}"),
                 ],
                 [
-                    InlineKeyboardButton(text="🌿 Мара", callback_data=f"cty:f3npc:herb:{f}"),
+                    InlineKeyboardButton(text="🌿 Мара", callback_data=f"cty:f3npc:herb:{anchor}"),
                 ],
                 [InlineKeyboardButton(text="🗺️ К этажу", callback_data=f"fl:{f}:return")],
                 menu_nav_button_row(),
             ],
         )
     hub_rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="⚒️ Кузница", callback_data=f"frg:main:{floor_number}")],
+        [InlineKeyboardButton(text="⚒️ Кузница", callback_data=f"frg:main:{anchor}")],
     ]
     if f == WORKSHOP_ORDERS_HUB_FLOOR:
         hub_rows.append(
@@ -43,13 +49,13 @@ def city_hub_keyboard(
         )
     hub_rows.extend(
         [
-            [InlineKeyboardButton(text="🍺 Таверна", callback_data=f"tvr:open:{floor_number}")],
-            [InlineKeyboardButton(text="🏪 Лавка", callback_data=f"shp:main:{floor_number}:c")],
+            [InlineKeyboardButton(text="🍺 Таверна", callback_data=f"tvr:open:{anchor}")],
+            [InlineKeyboardButton(text="🏪 Лавка", callback_data=f"shp:main:{anchor}:c")],
             [
-                InlineKeyboardButton(text="⚔️ Стражник", callback_data=f"cty:{floor_number}:view"),
-                InlineKeyboardButton(text="💸 Экономика", callback_data=f"ecy:hub:{floor_number}"),
+                InlineKeyboardButton(text="⚔️ Стражник", callback_data=f"cty:{anchor}:view"),
+                InlineKeyboardButton(text="💸 Экономика", callback_data=f"ecy:hub:{anchor}"),
             ],
-            [InlineKeyboardButton(text="🗺️ К этажу", callback_data=f"fl:{floor_number}:return")],
+            [InlineKeyboardButton(text="🗺️ К этажу", callback_data=f"fl:{f}:return")],
             menu_nav_button_row(),
         ],
     )
