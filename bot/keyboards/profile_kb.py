@@ -10,7 +10,6 @@ from db.models.character import Character
 from game.archetypes import manager as arch_manager
 from game.characters import pets as pets_mod
 from game.crafting.workshop_meta import get_workshop_state
-from game.necromancer.service import is_necromancer
 from bot.keyboards.necromancer_kb import necromancer_spec_extra_row
 
 

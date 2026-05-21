@@ -15,6 +15,22 @@
       "tags": [
         "shadow"
       ]
+    },
+    "dark_steel": {
+      "name_ru": "Тёмная сталь",
+      "rarity": "uncommon",
+      "profession": "smithing",
+      "tags": [
+        "shadow"
+      ]
+    },
+    "chain_fragment": {
+      "name_ru": "Осколок цепи",
+      "rarity": "common",
+      "profession": "smithing",
+      "tags": [
+        "shadow"
+      ]
     }
   }
 }

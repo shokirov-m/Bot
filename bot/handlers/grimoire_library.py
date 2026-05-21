@@ -59,7 +59,7 @@ async def on_library_open(
             query.bot,
             chat_id=query.message.chat.id,
             text=library_service.format_library_hub_html(char),
-            reply_markup=library_hub_keyboard(floor),
+            reply_markup=library_hub_keyboard(char, floor),
             target_message=query.message,
             character=char,
         )
@@ -84,10 +84,13 @@ async def on_library_class(
             await query.answer()
             return
         arch, floor = m.group(1), int(m.group(2))
-        if arch not in lib.LIBRARY_ARCHETYPES:
+        _, char = await _load_char(session, query.from_user.id)
+        if char is None:
+            await query.answer("Нет персонажа.", show_alert=True)
+            return
+        if arch not in lib.library_archetype_keys_for(char):
             await query.answer("Нет такого раздела.", show_alert=True)
             return
-        _, char = await _load_char(session, query.from_user.id)
         if char is None or not lib.library_floor_ok(char, floor):
             await query.answer("Библиотека недоступна.", show_alert=True)
             return

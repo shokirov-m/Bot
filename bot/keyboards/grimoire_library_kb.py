@@ -9,10 +9,10 @@ from game.archetypes.grimoires import SKILL_GRIMOIRES
 from game.locations import grimoire_library as lib
 
 
-def library_hub_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+def library_hub_keyboard(character: Character, floor_number: int) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     pair = []
-    for arch in lib.LIBRARY_ARCHETYPES:
+    for arch in lib.library_archetype_keys_for(character):
         lbl = lib.archetype_label_ru(arch)[:28]
         pair.append(
             InlineKeyboardButton(

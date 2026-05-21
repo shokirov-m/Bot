@@ -290,13 +290,30 @@ def apply_supreme_grimoire_class_change(character: Character, grimoire_key: str)
     mp.pop("unlocked_nodes", None)
     mp.pop("unspent_sp", None)
     _save_meta(character, mp)
+    prune_incompatible_grimoires(character)
     return True, f"Вы стали {arch.name_ru}!"
+
+
+def prune_incompatible_grimoires(character: Character) -> int:
+    """Убрать из изученных/сумки гримуары другого пути (после смены класса)."""
+    migrate_tree_to_grimoires(character)
+    mp = _meta(character)
+    before_l = set(learned_keys(character))
+    before_i = set(inventory_keys(character))
+    kept_l = [k for k in before_l if grimoire_usable_by_character(character, k)]
+    kept_i = [k for k in before_i if grimoire_usable_by_character(character, k)]
+    mp[META_LEARNED] = kept_l
+    mp[META_INVENTORY] = kept_i
+    _save_meta(character, mp)
+    return (len(before_l) - len(kept_l)) + (len(before_i) - len(kept_i))
 
 
 def get_unlocked_skill_keys_from_grimoires(character: Character) -> list[str]:
     migrate_tree_to_grimoires(character)
     keys: list[str] = []
     for gk in learned_keys(character):
+        if not grimoire_usable_by_character(character, gk):
+            continue
         g = SKILL_GRIMOIRES.get(gk)
         if g and g.node_type == "active_skill":
             sk = str(g.value)
@@ -309,6 +326,8 @@ def get_grimoire_combat_bonuses(character: Character) -> dict[str, float | int]:
     migrate_tree_to_grimoires(character)
     merged: dict[str, float | int] = {}
     for gk in learned_keys(character):
+        if not grimoire_usable_by_character(character, gk):
+            continue
         g = SKILL_GRIMOIRES.get(gk)
         if not g:
             continue
@@ -321,6 +340,8 @@ def get_grimoire_combat_bonuses(character: Character) -> dict[str, float | int]:
 def passive_grimoires_as_passives(character: Character) -> list[PassiveV2]:
     out: list[PassiveV2] = []
     for gk in learned_keys(character):
+        if not grimoire_usable_by_character(character, gk):
+            continue
         g = SKILL_GRIMOIRES.get(gk)
         if g and g.node_type == "passive_bonus" and isinstance(g.value, dict):
             out.append(
@@ -340,6 +361,8 @@ def format_grimoires_profile_html_ru(character: Character) -> str:
 
     chunks: list[str] = []
     for gk in sorted(learned_keys(character)):
+        if not grimoire_usable_by_character(character, gk):
+            continue
         g = SKILL_GRIMOIRES.get(gk)
         if not g or g.node_type not in ("passive_bonus", "stat_boost"):
             continue

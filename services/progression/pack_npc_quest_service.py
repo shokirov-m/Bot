@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from db.models.character import Character
-from game.crafting.workshop_meta import add_known_blueprint, profession_level
+from game.crafting.workshop_meta import add_known_blueprint, prof_level
 from game.data.packs import load_zone_pack, npcs_for_floor
 from game.tower.progression import floor_data
 from game.tower.quests.pack_npc_quests import (
@@ -123,7 +123,7 @@ def _profession_ok(character: Character, npc: dict, qdef: dict) -> bool:
     if tier_need is None:
         return True
     prof = workshop_profession_key(str(npc.get("profession") or ""))
-    return profession_level(character, prof) >= int(tier_need)
+    return prof_level(character, prof) >= int(tier_need)
 
 
 def greeting_line(character: Character, npc: dict, *, reputation: str = "neutral") -> str:
@@ -133,11 +133,21 @@ def greeting_line(character: Character, npc: dict, *, reputation: str = "neutral
     return html.escape(tpl.replace("{player_name}", character.name or "странник"))
 
 
+def _zone_hub_title(zone_key: str) -> str:
+    pack = load_zone_pack(zone_key)
+    z = pack.get("zone") or {}
+    if isinstance(z, dict) and z.get("name"):
+        em = str(z.get("emoji") or "🗼")
+        return f"{em} <b>Мастера: {html.escape(str(z['name']))}</b>"
+    return f"🗼 <b>Мастера зоны</b>"
+
+
 def format_hub_html(character: Character, floor: int) -> str:
     zk = zone_key_for_floor(floor) or "?"
     npcs = list_npcs_on_floor(floor)
+    title = _zone_hub_title(zk) if zk != "?" else "🗼 <b>Мастера зоны</b>"
     lines = [
-        f"🦇 <b>Мастера Кровавого Шпиля</b> · этаж <b>{int(floor)}</b>",
+        f"{title} · этаж <b>{int(floor)}</b>",
         "<i>Поручения дают материалы и чертежи — не готовую экипировку.</i>",
         "",
     ]
@@ -351,13 +361,16 @@ async def claim_quest_reward(
 
 
 def maybe_drop_material_on_victory(character: Character, floor: int) -> str | None:
-    """После победы на этаже пака — шанс дропа материала (пока фикс. blood_vial)."""
+    """После победы на этаже — шанс дропа материала текущей зоны (из materials.json пака)."""
     zk = zone_key_for_floor(floor)
-    if zk != "blood_spire":
+    if not zk:
+        return None
+    pack = load_zone_pack(zk)
+    entries = (pack.get("materials") or {}).get("entries") or {}
+    if not isinstance(entries, dict) or not entries:
         return None
     if random.random() > 0.22:
         return None
-    choices = ("blood_vial", "bat_wing", "ghoul_hide", "nightshade")
-    mid = random.choice(choices)
+    mid = random.choice(list(entries.keys()))
     add_pack_material(character, mid, 1)
     return material_label(zk, mid)

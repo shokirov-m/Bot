@@ -26,8 +26,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "coagulant",
-                "qty": 6
+                "id": "leech_sac",
+                "qty": 5
               }
             ]
           },
@@ -45,6 +45,12 @@
             "qty": 10
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "swamp_slime",
+                "qty": 6
+              }
+            ],
             "blueprints": [
               {
                 "id": "potion_bloodshield_3",
@@ -86,7 +92,7 @@
           "rewards": {
             "materials": [
               {
-                "id": "garlic_oil",
+                "id": "bog_fang",
                 "qty": 4
               }
             ]
@@ -107,8 +113,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "chain_fragment",
-                "qty": 3
+                "id": "toxin_vial",
+                "qty": 5
               }
             ]
           },

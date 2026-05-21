@@ -26,8 +26,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "crimson_gem",
-                "qty": 2
+                "id": "bone_setting",
+                "qty": 8
               }
             ]
           },
@@ -45,6 +45,12 @@
             "qty": 10
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "void_dust",
+                "qty": 6
+              }
+            ],
             "blueprints": [
               {
                 "id": "ring_crimson_2",
@@ -83,7 +89,14 @@
             "id": "dark_steel",
             "qty": 14
           },
-          "rewards": {},
+          "rewards": {
+            "materials": [
+              {
+                "id": "chain_fragment",
+                "qty": 8
+              }
+            ]
+          },
           "floors": [
             21,
             22
@@ -98,6 +111,12 @@
             "qty": 22
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "dark_steel",
+                "qty": 10
+              }
+            ],
             "blueprints": [
               {
                 "id": "armor_patch_dark_1",

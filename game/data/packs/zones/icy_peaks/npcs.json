@@ -26,7 +26,7 @@
           "rewards": {
             "materials": [
               {
-                "id": "dark_steel",
+                "id": "beast_fur",
                 "qty": 8
               }
             ]
@@ -45,6 +45,12 @@
             "qty": 15
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "ice_shard",
+                "qty": 12
+              }
+            ],
             "blueprints": [
               {
                 "id": "armor_patch_dark_1",
@@ -86,7 +92,7 @@
           "rewards": {
             "materials": [
               {
-                "id": "bat_wing",
+                "id": "frost_feather",
                 "qty": 10
               }
             ]
@@ -107,8 +113,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "garlic_oil",
-                "qty": 2
+                "id": "yeti_claw",
+                "qty": 6
               }
             ]
           },

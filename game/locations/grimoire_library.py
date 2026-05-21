@@ -34,6 +34,15 @@ _SP_GOLD: dict[int, int] = {
 LIBRARY_ARCHETYPES: tuple[str, ...] = ("warrior", "mage", "scout", "acolyte")
 
 
+def library_archetype_keys_for(character: Character) -> tuple[str, ...]:
+    """Классы в каталоге библиотеки: базовые + некромант, если он выбран."""
+    from game.necromancer.service import is_necromancer
+
+    if is_necromancer(character):
+        return LIBRARY_ARCHETYPES + ("necromancer",)
+    return LIBRARY_ARCHETYPES
+
+
 @dataclass(frozen=True, slots=True)
 class LibraryOffer:
     grimoire_key: str

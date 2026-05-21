@@ -26,8 +26,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "crimson_gem",
-                "qty": 6
+                "id": "light_chain",
+                "qty": 8
               }
             ]
           },
@@ -45,6 +45,12 @@
             "qty": 6
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "star_dust",
+                "qty": 6
+              }
+            ],
             "blueprints": [
               {
                 "id": "ring_crimson_2",
@@ -86,8 +92,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "dark_steel",
-                "qty": 15
+                "id": "light_chain",
+                "qty": 10
               }
             ]
           },
@@ -107,8 +113,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "chain_fragment",
-                "qty": 12
+                "id": "void_plate",
+                "qty": 8
               }
             ]
           },

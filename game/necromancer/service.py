@@ -16,14 +16,14 @@ from game.mercenaries.shadow_market_meta import set_party_merc_ids
 NECROMANCER_CLASS_KEY = "necromancer"
 NECROMANCER_COST_GOLD = 800_000
 NECROMANCER_MIN_LEVEL = 60
-MAX_SKELETONS_IN_BATTLE = 2
+MAX_SKELETONS_IN_BATTLE = 3
 
 META_NECRO = "necromancer_v1"
 META_UNLOCKS = "skeleton_unlocks"
 META_PARTY = "skeleton_party"
 
 _DEFAULT_UNLOCKS = ("skel_tank", "skel_blade", "skel_mage")
-_DEFAULT_PARTY = ("skel_tank", "skel_blade")
+_DEFAULT_PARTY = ("skel_tank", "skel_blade", "skel_mage")
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,6 +229,9 @@ def purchase_necromancer(character: Character) -> tuple[bool, str]:
     character.meta_progress = mp
     flag_modified(character, "meta_progress")
     clear_merc_party_for_necromancer(character)
+    from game.archetypes.grimoires import prune_incompatible_grimoires
+
+    prune_incompatible_grimoires(character)
     ensure_necro_meta(character)
     character.hp_max = character_service._compute_hp_max(
         character.stat_vitality,

@@ -897,6 +897,10 @@ async def start_coliseum_combat(
         await _equipped_gear_resist_pct_sum(session, character.id, "dark_resist_pct", 75),
     )
 
+    _comps = await mercenary_service.build_combat_companions(session, character)
+    if _comps:
+        combat_state["companions"] = _comps
+
     taunt = engine.opening_taunt(combat_state)
     combat_state["battle_taunt_html"] = _taunt_banner_html(taunt)
 

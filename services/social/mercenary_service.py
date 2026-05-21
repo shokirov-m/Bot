@@ -267,6 +267,10 @@ async def hire_from_lot(
     character: Character,
     lot: dict[str, Any],
 ) -> tuple[bool, str]:
+    from game.necromancer.service import is_necromancer, mercenaries_blocked_message
+
+    if is_necromancer(character):
+        return False, mercenaries_blocked_message()
     cap = roster_collection_cap(character)
     if cap <= 0:
         return False, "Нужен 15+ уровень для первого слота наёмника."

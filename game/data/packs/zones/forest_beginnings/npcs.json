@@ -26,8 +26,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "nightshade",
-                "qty": 5
+                "id": "pine_resin",
+                "qty": 6
               }
             ]
           },
@@ -45,6 +45,12 @@
             "qty": 12
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "forest_moss",
+                "qty": 8
+              }
+            ],
             "blueprints": [
               {
                 "id": "potion_antibleed_2",
@@ -86,8 +92,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "garlic_oil",
-                "qty": 3
+                "id": "owl_feather",
+                "qty": 10
               }
             ]
           },
@@ -104,7 +110,14 @@
             "id": "owl_feather",
             "qty": 18
           },
-          "rewards": {},
+          "rewards": {
+            "materials": [
+              {
+                "id": "wolf_pelt",
+                "qty": 8
+              }
+            ]
+          },
           "floors": [
             3,
             4

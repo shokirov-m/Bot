@@ -26,7 +26,7 @@
           "rewards": {
             "materials": [
               {
-                "id": "crimson_gem",
+                "id": "void_ink",
                 "qty": 5
               }
             ]
@@ -45,6 +45,12 @@
             "qty": 15
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "rift_shard",
+                "qty": 6
+              }
+            ],
             "blueprints": [
               {
                 "id": "ring_crimson_2",
@@ -86,8 +92,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "vampire_fang",
-                "qty": 2
+                "id": "chaos_hide",
+                "qty": 6
               }
             ]
           },
@@ -107,8 +113,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "bat_wing",
-                "qty": 15
+                "id": "demon_horn",
+                "qty": 8
               }
             ]
           },

@@ -213,6 +213,9 @@ async def on_archetype_confirm(callback: CallbackQuery, session: AsyncSession, s
         mp.pop("unspent_sp", None)
         mp["equipped_skill_keys"] = []
         char.meta_progress = mp
+        from game.archetypes.grimoires import prune_incompatible_grimoires
+
+        prune_incompatible_grimoires(char)
         # Refresh HP/MP and restore
         char.hp_max = character_service._compute_hp_max(char.stat_vitality, char.stat_strength, arch)
         char.mp_max = character_service._compute_mp_max(char.stat_intelligence, arch)

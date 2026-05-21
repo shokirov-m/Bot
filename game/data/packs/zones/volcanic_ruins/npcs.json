@@ -26,8 +26,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "dark_steel",
-                "qty": 12
+                "id": "slag_brick",
+                "qty": 10
               }
             ]
           },
@@ -47,8 +47,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "chain_fragment",
-                "qty": 8
+                "id": "obsidian_shard",
+                "qty": 12
               }
             ]
           },
@@ -86,8 +86,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "coagulant",
-                "qty": 8
+                "id": "magma_resin",
+                "qty": 5
               }
             ]
           },
@@ -105,6 +105,12 @@
             "qty": 12
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "ember_salt",
+                "qty": 8
+              }
+            ],
             "blueprints": [
               {
                 "id": "potion_bloodshield_3",

@@ -22,12 +22,12 @@ ZONE_SPECS: list[dict] = [
         "theme": "forest",
         "npcs": [
             ("elara_herb", "Элара", "🌿", "alchemy", [
-                ("fb_herb_bundle", "Сбор трав", "forest_moss", 15, {"nightshade": 5}),
-                ("fb_resin_jar", "Смола для настоек", "pine_resin", 12, {"blueprint_potion_antibleed_2": 1}),
+                ("fb_herb_bundle", "Сбор трав", "forest_moss", 15, {"pine_resin": 6}),
+                ("fb_resin_jar", "Смола для настоек", "pine_resin", 12, {"forest_moss": 8, "blueprint_potion_antibleed_2": 1}),
             ]),
             ("torin_hunt", "Торин", "🏹", "hunting", [
-                ("fb_wolf_pelt", "Шкуры волков", "wolf_pelt", 20, {"bat_wing": 0, "garlic_oil": 3}),
-                ("fb_feather_lure", "Перья для приманки", "owl_feather", 18, {"blueprint_blade_vampire_2": 0}),
+                ("fb_wolf_pelt", "Шкуры волков", "wolf_pelt", 20, {"owl_feather": 10}),
+                ("fb_feather_lure", "Перья для приманки", "owl_feather", 18, {"wolf_pelt": 8}),
             ]),
         ],
         "mats": {
@@ -47,12 +47,12 @@ ZONE_SPECS: list[dict] = [
         "theme": "swamp",
         "npcs": [
             ("mire_witch", "Болотница", "🧪", "alchemy", [
-                ("sw_mire_slime", "Слизь болота", "swamp_slime", 14, {"coagulant": 6}),
-                ("sw_toxin_vial", "Сосуды яда", "toxin_vial", 10, {"blueprint_potion_bloodshield_3": 1}),
+                ("sw_mire_slime", "Слизь болота", "swamp_slime", 14, {"leech_sac": 5}),
+                ("sw_toxin_vial", "Сосуды яда", "toxin_vial", 10, {"swamp_slime": 6, "blueprint_potion_bloodshield_3": 1}),
             ]),
             ("reed_trapper", "Кузьма", "🪤", "hunting", [
-                ("sw_leech_sack", "Мешок пиявок", "leech_sac", 25, {"garlic_oil": 4}),
-                ("sw_bog_fang", "Клыки болотника", "bog_fang", 12, {"chain_fragment": 3}),
+                ("sw_leech_sack", "Мешок пиявок", "leech_sac", 25, {"bog_fang": 4}),
+                ("sw_bog_fang", "Клыки болотника", "bog_fang", 12, {"toxin_vial": 5}),
             ]),
         ],
         "mats": {
@@ -72,17 +72,19 @@ ZONE_SPECS: list[dict] = [
         "theme": "shadow",
         "npcs": [
             ("shade_scribe", "Писарь тени", "📜", "jewelry", [
-                ("sc_void_dust", "Пыль бездны", "void_dust", 16, {"crimson_gem": 2}),
-                ("sc_bone_set", "Костяные оправы", "bone_setting", 10, {"blueprint_ring_crimson_2": 1}),
+                ("sc_void_dust", "Пыль бездны", "void_dust", 16, {"bone_setting": 8}),
+                ("sc_bone_set", "Костяные оправы", "bone_setting", 10, {"void_dust": 6, "blueprint_ring_crimson_2": 1}),
             ]),
             ("umbra_smith", "Умбра", "🔨", "smithing", [
-                ("sc_dark_ingot", "Слитки тёмного металла", "dark_steel", 14, {"vampire_fang": 0}),
-                ("sc_chain_bits", "Осколки цепей", "chain_fragment", 22, {"blueprint_armor_patch_dark_1": 1}),
+                ("sc_dark_ingot", "Слитки тёмного металла", "dark_steel", 14, {"chain_fragment": 8}),
+                ("sc_chain_bits", "Осколки цепей", "chain_fragment", 22, {"dark_steel": 10, "blueprint_armor_patch_dark_1": 1}),
             ]),
         ],
         "mats": {
             "void_dust": ("Пыль бездны", "uncommon", "jewelry"),
             "bone_setting": ("Костяная оправа", "common", "jewelry"),
+            "dark_steel": ("Тёмная сталь", "uncommon", "smithing"),
+            "chain_fragment": ("Осколок цепи", "common", "smithing"),
         },
     },
     {
@@ -95,12 +97,12 @@ ZONE_SPECS: list[dict] = [
         "theme": "ice",
         "npcs": [
             ("frost_smith", "Хельга", "🔨", "smithing", [
-                ("ip_ice_shard", "Осколки льда", "ice_shard", 20, {"dark_steel": 8}),
-                ("ip_fur_lining", "Мех для доспехов", "beast_fur", 15, {"blueprint_armor_patch_dark_1": 1}),
+                ("ip_ice_shard", "Осколки льда", "ice_shard", 20, {"beast_fur": 8}),
+                ("ip_fur_lining", "Мех для доспехов", "beast_fur", 15, {"ice_shard": 12, "blueprint_armor_patch_dark_1": 1}),
             ]),
             ("peak_ranger", "Сигур", "🏹", "hunting", [
-                ("ip_yeti_claw", "Когти йети", "yeti_claw", 12, {"bat_wing": 10}),
-                ("ip_frost_feather", "Ледяные перья", "frost_feather", 18, {"garlic_oil": 2}),
+                ("ip_yeti_claw", "Когти йети", "yeti_claw", 12, {"frost_feather": 10}),
+                ("ip_frost_feather", "Ледяные перья", "frost_feather", 18, {"yeti_claw": 6}),
             ]),
         ],
         "mats": {
@@ -120,12 +122,12 @@ ZONE_SPECS: list[dict] = [
         "theme": "desert",
         "npcs": [
             ("nomad_alch", "Зафир", "⚗️", "alchemy", [
-                ("do_sand_glass", "Песчаные реагенты", "sand_glass", 18, {"nightshade": 6}),
-                ("do_sun_herb", "Солнечные травы", "sun_herb", 14, {"blueprint_potion_antibleed_2": 1}),
+                ("do_sand_glass", "Песчаные реагенты", "sand_glass", 18, {"sun_herb": 6}),
+                ("do_sun_herb", "Солнечные травы", "sun_herb", 14, {"sand_glass": 10, "blueprint_potion_antibleed_2": 1}),
             ]),
             ("dune_jewel", "Лейла", "💎", "jewelry", [
-                ("do_amber_chip", "Янтарные осколки", "amber_chip", 10, {"crimson_gem": 3}),
-                ("do_scarab_shell", "Панцири скарабеев", "scarab_shell", 16, {"bone_setting": 5}),
+                ("do_amber_chip", "Янтарные осколки", "amber_chip", 10, {"scarab_shell": 5}),
+                ("do_scarab_shell", "Панцири скарабеев", "scarab_shell", 16, {"amber_chip": 4}),
             ]),
         ],
         "mats": {
@@ -145,12 +147,12 @@ ZONE_SPECS: list[dict] = [
         "theme": "volcano",
         "npcs": [
             ("ember_forge", "Бранн", "🔨", "smithing", [
-                ("vr_obsidian", "Обсидиан", "obsidian_shard", 16, {"dark_steel": 12}),
-                ("vr_slag_brick", "Шлаковый кирпич", "slag_brick", 20, {"chain_fragment": 8}),
+                ("vr_obsidian", "Обсидиан", "obsidian_shard", 16, {"slag_brick": 10}),
+                ("vr_slag_brick", "Шлаковый кирпич", "slag_brick", 20, {"obsidian_shard": 12}),
             ]),
             ("ash_alchemist", "Пепель", "⚗️", "alchemy", [
-                ("vr_ember_salt", "Соль пепла", "ember_salt", 14, {"coagulant": 8}),
-                ("vr_magma_resin", "Смола магмы", "magma_resin", 12, {"blueprint_potion_bloodshield_3": 1}),
+                ("vr_ember_salt", "Соль пепла", "ember_salt", 14, {"magma_resin": 5}),
+                ("vr_magma_resin", "Смола магмы", "magma_resin", 12, {"ember_salt": 8, "blueprint_potion_bloodshield_3": 1}),
             ]),
         ],
         "mats": {
@@ -170,12 +172,12 @@ ZONE_SPECS: list[dict] = [
         "theme": "chaos",
         "npcs": [
             ("chaos_sage", "Оракул разлома", "📜", "jewelry", [
-                ("ca_rift_shard", "Осколки разлома", "rift_shard", 12, {"crimson_gem": 5}),
-                ("ca_void_ink", "Чернила пустоты", "void_ink", 15, {"blueprint_ring_crimson_2": 1}),
+                ("ca_rift_shard", "Осколки разлома", "rift_shard", 12, {"void_ink": 5}),
+                ("ca_void_ink", "Чернила пустоты", "void_ink", 15, {"rift_shard": 6, "blueprint_ring_crimson_2": 1}),
             ]),
             ("demon_hunter", "Каз", "🏹", "hunting", [
-                ("ca_demon_horn", "Рога демонов", "demon_horn", 10, {"vampire_fang": 2}),
-                ("ca_chaos_hide", "Шкуры хаоса", "chaos_hide", 18, {"bat_wing": 15}),
+                ("ca_demon_horn", "Рога демонов", "demon_horn", 10, {"chaos_hide": 6}),
+                ("ca_chaos_hide", "Шкуры хаоса", "chaos_hide", 18, {"demon_horn": 8}),
             ]),
         ],
         "mats": {
@@ -195,12 +197,12 @@ ZONE_SPECS: list[dict] = [
         "theme": "eternity",
         "npcs": [
             ("archivist", "Архивариус", "📚", "jewelry", [
-                ("eh_star_dust", "Звёздная пыль", "star_dust", 10, {"crimson_gem": 6}),
-                ("eh_eternal_gem", "Вечные кристаллы", "eternal_gem", 6, {"blueprint_ring_crimson_2": 1}),
+                ("eh_star_dust", "Звёздная пыль", "star_dust", 10, {"light_chain": 8}),
+                ("eh_eternal_gem", "Вечные кристаллы", "eternal_gem", 6, {"star_dust": 6, "blueprint_ring_crimson_2": 1}),
             ]),
             ("void_knight", "Сераф", "⚔️", "smithing", [
-                ("eh_void_plate", "Листы пустоты", "void_plate", 14, {"dark_steel": 15}),
-                ("eh_light_chain", "Светлые звенья", "light_chain", 20, {"chain_fragment": 12}),
+                ("eh_void_plate", "Листы пустоты", "void_plate", 14, {"light_chain": 10}),
+                ("eh_light_chain", "Светлые звенья", "light_chain", 20, {"void_plate": 8}),
             ]),
         ],
         "mats": {

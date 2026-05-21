@@ -26,7 +26,7 @@
           "rewards": {
             "materials": [
               {
-                "id": "nightshade",
+                "id": "sun_herb",
                 "qty": 6
               }
             ]
@@ -45,6 +45,12 @@
             "qty": 14
           },
           "rewards": {
+            "materials": [
+              {
+                "id": "sand_glass",
+                "qty": 10
+              }
+            ],
             "blueprints": [
               {
                 "id": "potion_antibleed_2",
@@ -86,8 +92,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "crimson_gem",
-                "qty": 3
+                "id": "scarab_shell",
+                "qty": 5
               }
             ]
           },
@@ -107,8 +113,8 @@
           "rewards": {
             "materials": [
               {
-                "id": "bone_setting",
-                "qty": 5
+                "id": "amber_chip",
+                "qty": 4
               }
             ]
           },
