@@ -86,6 +86,10 @@ from utils.telegram.ui import LINE_SEP, LINE_SEP_CITY
 
 def get_spawns_for_character(character: Character) -> list[FloorMonsterSpawn]:
     """Варианты врагов на текущем этаже персонажа."""
+    from game.locations import hub_floors as hf
+
+    if hf.is_hub_floor(int(character.floor_number)):
+        return []
     import game.tower.trials.floor_trial as floor_trial_mod
 
     if floor_trial_mod.is_trial_scenario_active(character):
@@ -103,7 +107,7 @@ async def get_spawns_for_character_session(
 
     if int(character.floor_number) == 26 and floor_26_shadow_cleared(character):
         return []
-    base = build_spawns_for_floor(character.floor_number)
+    base = get_spawns_for_character(character)
     return await golden_goblin_service.merge_spawns_if_active(session, character, base)
 
 
@@ -137,7 +141,14 @@ async def floor_keyboard_for_character(
     telegram_user_id: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура этажа с отметками ✅ у побеждённых целей."""
+    from game.locations import hub_floors as hf
+    from bot.keyboards.hub_floor_kb import city_hub_screen_keyboard, library_hub_screen_keyboard
+
     n = int(character.floor_number)
+    if hf.is_library_hub_floor(n):
+        return library_hub_screen_keyboard(character)
+    if hf.is_city_hub_floor(n):
+        return city_hub_screen_keyboard(character, locale="ru")
     # Стартовый ярус: открыть 2-й этаж после первого визита (город — между 0↔1, не на этаже).
     if n == 1 and int(character.highest_floor_reached) < 2:
         character.highest_floor_reached = 2
@@ -228,13 +239,29 @@ async def floor_keyboard_for_character(
     return floor_screen_keyboard(character, spawns, defeated_slots=defeated, nav_ceiling=nav_ceiling)
 
 
-def format_city_hub_message(character: Character) -> str:
-    """Текст входа в город (кнопка «Город» на этаже)."""
-    n = character.floor_number
-    city = floor_data.get_city_for_floor(
-        int(n),
-        highest_reached=int(character.highest_floor_reached),
+def format_library_hub_message(character: Character) -> str:
+    """Текст экрана хаб-этажа библиотеки."""
+    import services.progression.grimoire_library_service as library_service
+
+    body = library_service.format_library_hub_html(character)
+    return (
+        "🗺️ <b>Отдельный этаж · Библиотека</b>\n"
+        "<i>Здесь нет боёв — только покупка книг навыков.</i>\n\n"
+        + body
     )
+
+
+def format_city_hub_message(character: Character) -> str:
+    """Текст входа в город (хаб-этаж или устаревший вызов с боевого яруса)."""
+    from game.locations import hub_floors as hf
+
+    n = int(character.floor_number)
+    city = hf.city_for_hub_floor(n)
+    if city is None:
+        city = floor_data.get_city_for_floor(
+            n,
+            highest_reached=int(character.highest_floor_reached),
+        )
     if city is None:
         return ""
     rich = city_locations.format_city_hub_rich_html(city)
@@ -363,8 +390,14 @@ def _format_explore_floor_22_message(character: Character) -> str:
 
 def format_floor_message(character: Character, *, defeated_slots: frozenset[str] | None = None) -> str:
     """Текстовое описание текущего этажа (HTML) — коротко, без воды."""
+    from game.locations import hub_floors as hf
+
+    n = int(character.floor_number)
+    if hf.is_library_hub_floor(n):
+        return format_library_hub_message(character)
+    if hf.is_city_hub_floor(n):
+        return format_city_hub_message(character)
     long_floor_mod.ensure_long_floor_started(character)
-    n = character.floor_number
     # Этаж 4 — специальный экран исследования леса
     if exp4_mod.is_explore_floor_4(int(n)):
         return _format_explore_floor_4_message(character)
@@ -511,8 +544,17 @@ def format_floor_message_photo_caption(character: Character) -> str:
     Короткий текст под фото этажа (лимит подписи Telegram ~1024 символа).
     Без длинного описания зоны — полный текст по-прежнему без фото или в логике без картинки.
     """
+    from game.locations import hub_floors as hf
+
+    n = int(character.floor_number)
+    if hf.is_library_hub_floor(n):
+        return "📚 Библиотека гримуаров · хаб-этаж"
+    if hf.is_city_hub_floor(n):
+        city = hf.city_for_hub_floor(n)
+        if city:
+            return f"{city.emoji} {city.name} · город-хаб"
+        return "🏙 Город-хаб"
     long_floor_mod.ensure_long_floor_started(character)
-    n = character.floor_number
     # Этаж 8 — исследование
     if exp_mod.is_explore_floor(int(n)):
         zone = floor_data.get_zone_for_floor(n)
@@ -578,10 +620,6 @@ def format_floor_message_photo_caption(character: Character) -> str:
         lines.append(
             f"{city.emoji} <b>{html.escape(city.name)}</b> — безопасная зона <i>({gap})</i>",
         )
-    from game.locations import grimoire_library as _lib
-
-    if _lib.library_unlocked(character) and _lib.library_visible_on_floor(n):
-        lines.append("📚 <b>Библиотека</b> — книги навыков (10–100k 💰, один раз)")
     tags: list[str] = []
     if floor_data.is_mini_boss_floor(n):
         tags.append("⚔️ Мини-босс")
@@ -863,8 +901,32 @@ async def travel_to_floor(
 ) -> tuple[bool, str | None]:
     """Перейти на целевой этаж. Обычно 1..highest_floor_reached; админ — до 135 с автоподъёмом highest."""
 
+    from game.locations import hub_floors as hf
+
     tower_top = floor_data.KNOWN_MAX_FLOOR
     old_floor = int(character.floor_number)
+    target_floor = int(target_floor)
+
+    if hf.is_hub_floor(target_floor):
+        if not admin_floor_bypass and not hf.can_travel_to_hub_floor(character, target_floor):
+            return False, "Локация ещё не открыта."
+        if not hf.is_hub_floor(old_floor):
+            hf.remember_tower_floor(character)
+        character.floor_number = target_floor
+        await session.flush()
+        if telegram_id is not None and target_floor != old_floor:
+            import services.system.anticheat_service as anticheat_service
+
+            await anticheat_service.record_floor_change(
+                session,
+                character,
+                telegram_id=telegram_id,
+                username=username,
+                old_floor=old_floor,
+                new_floor=target_floor,
+                bot=bot,
+            )
+        return True, None
 
     if admin_floor_bypass:
         if target_floor < 1 or target_floor > tower_top:
@@ -877,6 +939,8 @@ async def travel_to_floor(
             return False, "Этаж ещё не открыт или недоступен."
     if old_floor != int(target_floor):
         rotten_swamps_mod.on_travel_floor_change(character, old_floor, int(target_floor))
+    if hf.is_hub_floor(old_floor) and not hf.is_hub_floor(target_floor):
+        target_floor = hf.pop_return_tower_floor(character)
     if target_floor > old_floor:
         clear_tower_ascent_pending(character)
     if old_floor == 10 and target_floor == 11:

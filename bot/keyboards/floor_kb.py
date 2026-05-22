@@ -61,31 +61,22 @@ def _append_city_hub_row(
         [
             InlineKeyboardButton(
                 text=lbl,
-                callback_data=_cb(floor_number, "city"),
+                callback_data=f"hub:go:{_city_hub_floor_for_label(character, floor_number)}",
             ),
         ],
     )
-    _append_grimoire_library_row(rows, character, floor_number)
 
 
-def _append_grimoire_library_row(
-    rows: list[list[InlineKeyboardButton]],
-    character: Character,
-    floor_number: int,
-) -> None:
-    """Библиотека гримуаров между 18↔19 ярусами."""
-    from game.locations import grimoire_library as lib
+def _city_hub_floor_for_label(character: Character, floor_number: int) -> int:
+    from game.locations import hub_floors as hf
 
-    if not lib.library_floor_ok(character, int(floor_number)):
-        return
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="📚 Библиотека (18→19)",
-                callback_data=f"lib:open:{int(floor_number)}",
-            ),
-        ],
+    city = floor_data.get_city_for_floor(
+        int(floor_number),
+        highest_reached=int(character.highest_floor_reached),
     )
+    if city is None:
+        return hf.city_hub_floor(0)
+    return hf.city_hub_floor(int(city.after_floor))
 
 
 def _append_tower_field_repair_row(rows: list[list[InlineKeyboardButton]], floor_number: int) -> None:

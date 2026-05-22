@@ -46,13 +46,33 @@ async def on_library_open(
         if await state.get_state() == CombatStates.in_battle.state:
             await query.answer("Сначала заверши бой.", show_alert=True)
             return
+        from game.locations import hub_floors as hf
+        from services.progression.floor_service import travel_to_floor
+
         floor = int(query.data.split(":")[2])
         _, char = await _load_char(session, query.from_user.id)
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
+        if not lib.library_unlocked(char):
+            await query.answer("Библиотека откроется после 18-го яруса.", show_alert=True)
+            return
+        if int(char.floor_number) != hf.LIBRARY_HUB_FLOOR:
+            hf.remember_tower_floor(char)
+            ok, err = await travel_to_floor(
+                session,
+                char,
+                hf.LIBRARY_HUB_FLOOR,
+                telegram_id=query.from_user.id,
+                username=query.from_user.username,
+                bot=query.bot,
+            )
+            if not ok:
+                await query.answer(err or "Нельзя перейти.", show_alert=True)
+                return
+            floor = hf.LIBRARY_HUB_FLOOR
         if not lib.library_floor_ok(char, floor):
-            await query.answer("Библиотека недоступна на этом ярусе.", show_alert=True)
+            await query.answer("Библиотека недоступна.", show_alert=True)
             return
         await push_game_ui(
             state,

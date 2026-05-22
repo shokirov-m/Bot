@@ -142,6 +142,24 @@ def locations_hub_keyboard(*, locale: str = "ru", character: Character | None = 
         rows.append([InlineKeyboardButton(text="🏰 Клан", callback_data="mnu:clan")])
     if "menu_sticker" in allow:
         rows.append([InlineKeyboardButton(text=t(loc, "menu_sticker_btn"), callback_data="mnu:stk")])
+    if character is not None:
+        from game.locations import grimoire_library as lib
+        from game.locations import hub_floors as hf
+
+        hub_row: list[InlineKeyboardButton] = []
+        if lib.library_unlocked(character):
+            hub_row.append(
+                InlineKeyboardButton(
+                    text="📚 Библиотека",
+                    callback_data=f"hub:go:{hf.LIBRARY_HUB_FLOOR}",
+                ),
+            )
+        if hf.list_accessible_city_hub_floors(character):
+            hub_row.append(
+                InlineKeyboardButton(text="🏙 Города", callback_data="mnu:hubs"),
+            )
+        if hub_row:
+            rows.append(hub_row)
     rows.append([InlineKeyboardButton(text=t(loc, "portal_back_menu"), callback_data="mnu:hub")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

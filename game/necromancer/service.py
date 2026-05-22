@@ -21,6 +21,7 @@ MAX_SKELETONS_IN_BATTLE = 3
 META_NECRO = "necromancer_v1"
 META_UNLOCKS = "skeleton_unlocks"
 META_PARTY = "skeleton_party"
+META_CLASS_SWAP_USED = "class_swap_used"
 
 _DEFAULT_UNLOCKS = ("skel_tank", "skel_blade", "skel_mage")
 _DEFAULT_PARTY = ("skel_tank", "skel_blade", "skel_mage")
@@ -189,6 +190,10 @@ def clear_merc_party_for_necromancer(character: Character) -> None:
     set_party_merc_ids(character, [])
 
 
+def class_swap_to_necromancer_used(character: Character) -> bool:
+    return bool(_necro_block(character).get(META_CLASS_SWAP_USED))
+
+
 def can_purchase_necromancer(character: Character) -> tuple[bool, str]:
     if is_necromancer(character):
         return False, "Вы уже некромант."
@@ -202,6 +207,8 @@ def can_purchase_necromancer(character: Character) -> tuple[bool, str]:
     cur = arch_manager.get_character_archetype(character)
     if cur.tier < 1:
         return False, "Сначала выберите базовый путь (с 10 уровня)."
+    if cur.tier >= 2 and class_swap_to_necromancer_used(character):
+        return False, "Смена класса на некроманта уже была использована (один раз)."
     return True, "Можно провести ритуал."
 
 
@@ -232,7 +239,9 @@ def purchase_necromancer(character: Character) -> tuple[bool, str]:
     from game.archetypes.grimoires import prune_incompatible_grimoires
 
     prune_incompatible_grimoires(character)
-    ensure_necro_meta(character)
+    block = ensure_necro_meta(character)
+    block[META_CLASS_SWAP_USED] = True
+    _save_necro(character, block)
     character.hp_max = character_service._compute_hp_max(
         character.stat_vitality,
         character.stat_strength,

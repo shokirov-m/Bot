@@ -33,6 +33,7 @@ from bot.handlers.arena import router as arena_router
 from bot.handlers.city_quests import router as city_quests_router
 from bot.handlers.class_arc import router as class_arc_router
 from bot.handlers.necromancer import router as necromancer_router
+from bot.handlers.hub_floors import router as hub_floors_router
 from bot.handlers.daily import router as daily_router
 from bot.handlers.economy_sinks import router as economy_sinks_router
 from bot.handlers.leaderboard import router as leaderboard_router
@@ -147,6 +148,7 @@ def _register_routers(dp: Dispatcher) -> None:
     dp.include_router(clans_router)
     dp.include_router(stats_alloc_router)
     dp.include_router(menu_router)
+    dp.include_router(hub_floors_router)
     dp.include_router(sticker_duel_router)
     dp.include_router(home_router)
     dp.include_router(black_market_router)

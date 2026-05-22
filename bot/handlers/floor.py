@@ -400,6 +400,15 @@ async def on_floor_callback(
             await query.answer("Этаж устарел. Открой /floor снова.", show_alert=True)
             return
 
+        from game.locations import hub_floors as hf
+
+        if hf.is_hub_floor(int(char.floor_number)):
+            await query.answer(
+                "На хаб-этаже нет боёв. Вернись в башню кнопкой «В башню».",
+                show_alert=True,
+            )
+            return
+
         if code == "tutorial":
             if int(char.floor_number) != 2:
                 await query.answer("Обучение у наставника доступно на 2 этаже.", show_alert=True)

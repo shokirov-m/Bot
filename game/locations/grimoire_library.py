@@ -1,5 +1,5 @@
 """
-Библиотека гримуаров между 18-м и 19-м ярусами (якорь after_floor=18).
+Библиотека гримуаров — отдельный хаб-этаж 9001 (доступ после 18-го яруса).
 Книги навыков: 10 000–100 000 💰, один раз на героя, без передачи и продажи.
 """
 
@@ -19,7 +19,6 @@ from game.archetypes.grimoires import (
 from game.archetypes.trees import TREES
 
 LIBRARY_ANCHOR_FLOOR = 18
-LIBRARY_COMBAT_FLOORS: tuple[int, ...] = (18, 19)
 
 META_LIBRARY_PURCHASES = "library_grimoire_purchases_v1"
 
@@ -56,15 +55,14 @@ def library_unlocked(character: Character) -> bool:
     return int(character.highest_floor_reached) > LIBRARY_ANCHOR_FLOOR
 
 
-def library_visible_on_floor(floor_number: int) -> bool:
-    return int(floor_number) in LIBRARY_COMBAT_FLOORS
+def library_floor_ok(character: Character, floor_number: int | None = None) -> bool:
+    from game.locations.hub_floors import LIBRARY_HUB_FLOOR, is_library_hub_floor
 
-
-def library_floor_ok(character: Character, floor_number: int) -> bool:
+    fl = int(floor_number if floor_number is not None else character.floor_number)
     return (
         library_unlocked(character)
-        and library_visible_on_floor(int(floor_number))
-        and int(character.floor_number) == int(floor_number)
+        and is_library_hub_floor(fl)
+        and int(character.floor_number) == fl == LIBRARY_HUB_FLOOR
     )
 
 

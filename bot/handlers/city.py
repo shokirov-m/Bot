@@ -29,7 +29,12 @@ from game.characters import pets as pets_mod
 from game.characters import temple_floor3
 from game.tower.progression import floor_data
 import services.system.hub_floor3_npc_service as hub_floor3_npc_service
-from services.progression.floor_service import format_city_hub_message
+from services.progression.floor_service import (
+    floor_keyboard_for_character,
+    format_city_hub_message,
+    push_floor_screen_ui,
+    travel_to_floor,
+)
 import services.economy.economy_sink_service as economy_sink_service
 
 router = Router(name="city")
@@ -56,30 +61,42 @@ async def on_city_hub_open(
         if char is None:
             await query.answer("Сначала /start.", show_alert=True)
             return
+        from game.locations import hub_floors as hf
+
         parts = query.data.split(":")
         floor = int(parts[1])
-        if floor != char.floor_number:
-            await query.answer("Этаж устарел. Открой /floor снова.", show_alert=True)
-            return
         city = floor_data.get_city_for_floor(
-            int(char.floor_number),
+            floor,
             highest_reached=int(char.highest_floor_reached),
         )
         if city is None:
             await query.answer("Город ещё не открыт — поднимись выше.", show_alert=True)
             return
-        loc = get_locale(char, query.from_user.language_code)
-        await push_game_ui(
+        hub_fl = hf.city_hub_floor(int(city.after_floor))
+        hf.remember_tower_floor(char)
+        ok, err = await travel_to_floor(
+            session,
+            char,
+            hub_fl,
+            telegram_id=query.from_user.id,
+            username=query.from_user.username,
+            bot=query.bot,
+        )
+        if not ok:
+            await query.answer(err or "Нельзя перейти.", show_alert=True)
+            return
+        await push_floor_screen_ui(
+            session,
             state,
             query.bot,
             chat_id=query.message.chat.id,
-            text=format_city_hub_message(char),
-            reply_markup=city_hub_keyboard(char.floor_number, char, locale=loc),
-            target_message=query.message,
-            photo_path=menu_city_photo_path(),
             character=char,
+            reply_markup=await floor_keyboard_for_character(
+                session, char, telegram_user_id=query.from_user.id,
+            ),
+            target_message=query.message,
         )
-        await query.answer()
+        await query.answer(city.name)
     except Exception:
         logger.exception("city hub")
         await query.answer("Ошибка.", show_alert=True)

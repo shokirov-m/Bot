@@ -7,6 +7,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from db.models.character import Character
 from game.archetypes.grimoires import SKILL_GRIMOIRES
 from game.locations import grimoire_library as lib
+from game.locations.hub_floors import is_library_hub_floor
+
+
+def _library_back_callback(floor_number: int) -> str:
+    if is_library_hub_floor(int(floor_number)):
+        return "hub:back:tower"
+    return f"fl:{int(floor_number)}:return"
 
 
 def library_hub_keyboard(character: Character, floor_number: int) -> InlineKeyboardMarkup:
@@ -26,7 +33,7 @@ def library_hub_keyboard(character: Character, floor_number: int) -> InlineKeybo
     if pair:
         rows.append(pair)
     rows.append(
-        [InlineKeyboardButton(text="🗺️ К этажу", callback_data=f"fl:{floor_number}:return")],
+        [InlineKeyboardButton(text="🗺️ В башню", callback_data=_library_back_callback(floor_number))],
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -61,7 +68,7 @@ def library_class_keyboard(
         [InlineKeyboardButton(text="◀️ Классы", callback_data=f"lib:open:{floor_number}")],
     )
     rows.append(
-        [InlineKeyboardButton(text="🗺️ К этажу", callback_data=f"fl:{floor_number}:return")],
+        [InlineKeyboardButton(text="🗺️ В башню", callback_data=_library_back_callback(floor_number))],
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

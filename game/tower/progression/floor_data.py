@@ -239,8 +239,13 @@ def get_city_for_floor(
 
 def city_service_anchor_for_character(character: Character) -> int | None:
     """Якорь города для callback кузницы/таверны/экономики."""
+    from game.locations import hub_floors as hf
+
+    n = int(character.floor_number)
+    if hf.is_city_hub_floor(n):
+        return hf.city_anchor_from_hub_floor(n)
     city = get_city_for_floor(
-        int(character.floor_number),
+        n,
         highest_reached=int(character.highest_floor_reached),
     )
     return city.after_floor if city else None

@@ -16,13 +16,20 @@ def city_hub_keyboard(
     *,
     locale: str = "ru",
 ) -> InlineKeyboardMarkup:
+    from game.locations import hub_floors as hf
+
     _ = locale
-    city = floor_data.get_city_for_floor(
-        int(combat_floor),
-        highest_reached=int(character.highest_floor_reached),
-    )
-    anchor = int(city.after_floor) if city is not None else int(combat_floor)
     f = int(combat_floor)
+    if hf.is_city_hub_floor(f):
+        anchor = int(hf.city_anchor_from_hub_floor(f) or 0)
+        back_cb = "hub:back:tower"
+    else:
+        city = floor_data.get_city_for_floor(
+            f,
+            highest_reached=int(character.highest_floor_reached),
+        )
+        anchor = int(city.after_floor) if city is not None else f
+        back_cb = f"fl:{f}:return"
     if anchor == 0:
         return InlineKeyboardMarkup(
             inline_keyboard=[
@@ -36,7 +43,7 @@ def city_hub_keyboard(
                 [
                     InlineKeyboardButton(text="🌿 Мара", callback_data=f"cty:f3npc:herb:{anchor}"),
                 ],
-                [InlineKeyboardButton(text="🗺️ К этажу", callback_data=f"fl:{f}:return")],
+                [InlineKeyboardButton(text="🗺️ В башню", callback_data=back_cb)],
                 menu_nav_button_row(),
             ],
         )
@@ -55,7 +62,7 @@ def city_hub_keyboard(
                 InlineKeyboardButton(text="⚔️ Стражник", callback_data=f"cty:{anchor}:view"),
                 InlineKeyboardButton(text="💸 Экономика", callback_data=f"ecy:hub:{anchor}"),
             ],
-            [InlineKeyboardButton(text="🗺️ К этажу", callback_data=f"fl:{f}:return")],
+            [InlineKeyboardButton(text="🗺️ В башню", callback_data=back_cb)],
             menu_nav_button_row(),
         ],
     )
