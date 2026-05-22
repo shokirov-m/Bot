@@ -30,16 +30,35 @@ _SP_GOLD: dict[int, int] = {
     5: 100_000,
 }
 
-LIBRARY_ARCHETYPES: tuple[str, ...] = ("warrior", "mage", "scout", "acolyte")
+LIBRARY_BASE_ARCHETYPES: tuple[str, ...] = ("warrior", "mage", "scout", "acolyte")
+LIBRARY_PRESTIGE_ARCHETYPES: tuple[str, ...] = ("necromancer",)
+
+# обратная совместимость
+LIBRARY_ARCHETYPES = LIBRARY_BASE_ARCHETYPES
+
+
+def library_base_archetype_keys() -> tuple[str, ...]:
+    return LIBRARY_BASE_ARCHETYPES
+
+
+def library_prestige_visible(character: Character) -> bool:
+    """Раздел высших гримуаров: после 18 яруса и уровня 60+ (или уже некромант)."""
+    from game.necromancer.service import NECROMANCER_MIN_LEVEL, is_necromancer
+
+    if not library_unlocked(character):
+        return False
+    return is_necromancer(character) or int(character.level) >= NECROMANCER_MIN_LEVEL
+
+
+def library_prestige_archetype_keys(character: Character) -> tuple[str, ...]:
+    if not library_prestige_visible(character):
+        return ()
+    return LIBRARY_PRESTIGE_ARCHETYPES
 
 
 def library_archetype_keys_for(character: Character) -> tuple[str, ...]:
-    """Классы в каталоге библиотеки: базовые + некромант, если он выбран."""
-    from game.necromancer.service import is_necromancer
-
-    if is_necromancer(character):
-        return LIBRARY_ARCHETYPES + ("necromancer",)
-    return LIBRARY_ARCHETYPES
+    """Все ключи каталога (база + престиж) — для проверок callback."""
+    return library_base_archetype_keys() + library_prestige_archetype_keys(character)
 
 
 @dataclass(frozen=True, slots=True)

@@ -13,7 +13,13 @@ from bot.keyboards.hub_floor_kb import hub_travel_menu_keyboard
 from bot.states.combat_states import CombatStates
 from db.repository import character_repo, user_repo
 from game.locations import hub_floors as hf
-from services.progression.floor_service import push_floor_screen_ui, travel_to_floor
+from game.locations.hub_floors import LIBRARY_HUB_FLOOR
+from services.progression.floor_service import (
+    floor_keyboard_for_character,
+    format_library_hub_message,
+    push_floor_screen_ui,
+    travel_to_floor,
+)
 from utils.telegram.game_ui import push_game_ui
 
 router = Router(name="hub_floors")
@@ -76,15 +82,37 @@ async def hub_travel_go(callback: CallbackQuery, session: AsyncSession, state: F
         if not ok:
             await callback.answer(err or "Нельзя перейти.", show_alert=True)
             return
-        await push_floor_screen_ui(
-            session,
-            state,
-            callback.bot,
-            chat_id=callback.message.chat.id,
-            character=char,
-            target_message=callback.message,
+        await session.flush()
+        if hf.is_library_hub_floor(target):
+            from bot.keyboards.hub_floor_kb import library_hub_screen_keyboard
+
+            await push_game_ui(
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                text=format_library_hub_message(char),
+                reply_markup=library_hub_screen_keyboard(char),
+                target_message=callback.message,
+                character=char,
+            )
+        else:
+            kb = await floor_keyboard_for_character(
+                session,
+                char,
+                telegram_user_id=callback.from_user.id,
+            )
+            await push_floor_screen_ui(
+                session,
+                state,
+                callback.bot,
+                chat_id=callback.message.chat.id,
+                character=char,
+                reply_markup=kb,
+                target_message=callback.message,
+            )
+        await callback.answer(
+            "Библиотека" if target == LIBRARY_HUB_FLOOR else f"Этаж {char.floor_number}",
         )
-        await callback.answer(f"Этаж {char.floor_number}")
     except Exception:
         logger.exception("hub:go")
         await callback.answer("Ошибка перехода.", show_alert=True)
@@ -113,12 +141,19 @@ async def hub_back_tower(callback: CallbackQuery, session: AsyncSession, state: 
         if not ok:
             await callback.answer(err or "Нельзя.", show_alert=True)
             return
+        await session.flush()
+        kb = await floor_keyboard_for_character(
+            session,
+            char,
+            telegram_user_id=callback.from_user.id,
+        )
         await push_floor_screen_ui(
             session,
             state,
             callback.bot,
             chat_id=callback.message.chat.id,
             character=char,
+            reply_markup=kb,
             target_message=callback.message,
         )
         await callback.answer(f"Башня · этаж {dest}")

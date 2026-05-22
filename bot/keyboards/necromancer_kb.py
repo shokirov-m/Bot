@@ -29,8 +29,8 @@ def necromancer_menu_keyboard(character: Character) -> InlineKeyboardMarkup:
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text="📖 Гримуары (библиотека)",
-                        callback_data=f"lib:cls:necromancer:{LIBRARY_HUB_FLOOR}",
+                        text="📖 Высшие гримуары",
+                        callback_data=f"lib:prestige:{LIBRARY_HUB_FLOOR}",
                     ),
                 ],
             )

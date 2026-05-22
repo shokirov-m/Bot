@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repository import character_repo, user_repo
 from game.tower.quests.pack_npc_quests import quests_for_npc_on_floor
-from services.progression.floor_service import push_floor_screen_ui
+from services.progression.floor_service import floor_keyboard_for_character, push_floor_screen_ui
 from services.progression.pack_npc_quest_service import (
     can_claim_quest,
     can_take_quest,
@@ -94,7 +94,18 @@ async def on_pack_npc_quest_callback(
 
     try:
         if action == "back":
-            await push_floor_screen_ui(session, state, query.bot, query.message, char)
+            kb = await floor_keyboard_for_character(
+                session, char, telegram_user_id=query.from_user.id,
+            )
+            await push_floor_screen_ui(
+                session,
+                state,
+                query.bot,
+                chat_id=query.message.chat.id,
+                character=char,
+                reply_markup=kb,
+                target_message=query.message,
+            )
             await query.answer()
             return
 
