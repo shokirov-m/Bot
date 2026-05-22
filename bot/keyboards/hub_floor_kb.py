@@ -7,9 +7,8 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
 from game.locations import hub_floors as hf
-from game.locations import grimoire_library as lib
-from game.tower.progression import floor_data
 from bot.keyboards.city_kb import city_hub_keyboard
+from bot.keyboards.grimoire_library_kb import library_hub_keyboard
 
 
 def hub_travel_menu_keyboard(character: Character) -> InlineKeyboardMarkup:
@@ -34,33 +33,8 @@ def hub_travel_menu_keyboard(character: Character) -> InlineKeyboardMarkup:
 
 
 def library_hub_screen_keyboard(character: Character) -> InlineKeyboardMarkup:
-    from game.locations.grimoire_library import library_archetype_keys_for
-
-    rows: list[list[InlineKeyboardButton]] = []
-    pair: list[InlineKeyboardButton] = []
-    for arch in library_archetype_keys_for(character):
-        lbl = lib.archetype_label_ru(arch)[:28]
-        pair.append(
-            InlineKeyboardButton(
-                text=lbl,
-                callback_data=f"lib:cls:{arch}:{hf.LIBRARY_HUB_FLOOR}",
-            ),
-        )
-        if len(pair) == 2:
-            rows.append(pair)
-            pair = []
-    if pair:
-        rows.append(pair)
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="🗼 В башню",
-                callback_data="hub:back:tower",
-            ),
-        ],
-    )
-    rows.append(menu_nav_button_row())
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    """Экран библиотеки на хаб-этаже — единая клавиатура с lib:open."""
+    return library_hub_keyboard(character, hf.LIBRARY_HUB_FLOOR)
 
 
 def city_hub_screen_keyboard(
@@ -79,10 +53,3 @@ def city_hub_screen_keyboard(
     kb = city_hub_keyboard(fl, character, locale=locale)
     extra = [[InlineKeyboardButton(text="🗼 В башню", callback_data="hub:back:tower")]]
     return InlineKeyboardMarkup(inline_keyboard=[*kb.inline_keyboard, *extra])
-
-
-def hub_floor_nav_row(character: Character, nav_ceiling: int | None) -> list[InlineKeyboardButton]:
-    """Навигация на хаб-этаже: только возврат в башню."""
-    return [
-        InlineKeyboardButton(text="🗼 В башню", callback_data="hub:back:tower"),
-    ]

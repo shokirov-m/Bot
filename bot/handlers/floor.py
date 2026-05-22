@@ -1070,8 +1070,18 @@ async def on_floor_callback(
             )
             return
 
-        # ── Этаж 10: волны вторжения (легаси) ────────────────────────────────
+        # ── Этаж 10: волны вторжения (легаси; не при room_clear / trial) ───
         if code in wv_mod.WAVE_FLOOR_ALL_SLOTS or code == "wv:locked":
+            import game.tower.trials.floor_trial as floor_trial_mod
+
+            if floor_trial_mod.is_trial_scenario_active(char) or rc10_mod.is_room_clear_floor_10(
+                int(char.floor_number),
+            ):
+                await query.answer(
+                    "На 10-м этаже другой сценарий. Обнови экран /floor.",
+                    show_alert=True,
+                )
+                return
             if code == "wv:locked":
                 await query.answer("Сначала победи предыдущую волну.", show_alert=True)
                 return

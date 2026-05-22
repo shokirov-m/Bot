@@ -126,11 +126,34 @@ def _profession_ok(character: Character, npc: dict, qdef: dict) -> bool:
     return prof_level(character, prof) >= int(tier_need)
 
 
-def greeting_line(character: Character, npc: dict, *, reputation: str = "neutral") -> str:
-    name = html.escape((character.name or "странник")[:40])
+def _player_display_name(character: Character) -> str:
+    raw = getattr(character, "display_name", None) or getattr(character, "name", None)
+    return str(raw).strip() if raw else "странник"
+
+
+def reputation_for_npc(character: Character, npc: dict) -> str:
+    """neutral / honored по числу сданных поручений этого NPC."""
+    claimed = 0
+    for q in npc.get("quests") or []:
+        if not isinstance(q, dict):
+            continue
+        qid = str(q.get("id") or "")
+        if not qid:
+            continue
+        st = get_quest_state(character, qid)
+        if st and st.get("claimed"):
+            claimed += 1
+    if claimed >= 2:
+        return "honored"
+    return "neutral"
+
+
+def greeting_line(character: Character, npc: dict, *, reputation: str | None = None) -> str:
+    rep = reputation if reputation is not None else reputation_for_npc(character, npc)
+    player = _player_display_name(character)
     greets = npc.get("greeting_by_reputation") or {}
-    tpl = greets.get(reputation) or greets.get("neutral") or "{player_name}."
-    return html.escape(tpl.replace("{player_name}", character.name or "странник"))
+    tpl = greets.get(rep) or greets.get("neutral") or "{player_name}."
+    return html.escape(tpl.replace("{player_name}", player))
 
 
 def _zone_hub_title(zone_key: str) -> str:

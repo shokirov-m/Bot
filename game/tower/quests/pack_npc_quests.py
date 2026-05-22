@@ -37,12 +37,24 @@ def blueprint_label(zone_key: str, blueprint_id: str) -> str:
     return str(blueprint_id)
 
 
+def npc_on_zone_hub_floor(npc: dict[str, Any], floor: int) -> bool:
+    """NPC отображается на hub-этаже зоны (floors_hub)."""
+    hub_floors = npc.get("floors_hub")
+    if not isinstance(hub_floors, list):
+        return False
+    return int(floor) in {int(x) for x in hub_floors}
+
+
 def quests_for_npc_on_floor(npc: dict[str, Any], floor: int) -> list[dict[str, Any]]:
-    """Квесты NPC, доступные на данном этаже."""
+    """Квесты NPC на этаже. На hub-этаже зоны — все поручения NPC (каталог мастера)."""
     fl = int(floor)
+    on_hub = npc_on_zone_hub_floor(npc, fl)
     out: list[dict[str, Any]] = []
     for q in npc.get("quests") or []:
         if not isinstance(q, dict):
+            continue
+        if on_hub:
+            out.append(dict(q))
             continue
         floors = q.get("floors")
         if isinstance(floors, list) and fl not in {int(x) for x in floors}:

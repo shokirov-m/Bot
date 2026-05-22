@@ -257,8 +257,10 @@ def _write_zone(spec: dict) -> None:
         qrows = []
         for i, (qid, title, mat, qty, rew) in enumerate(quests):
             floors = [fr + i * 2, min(to, fr + i * 2 + 1)]
+            floors_set = set(floors)
+            floors_set.add(int(hub))
             q = _quest_row(f"{npc_id}_{qid}", title, mat, qty, rew)
-            q["floors"] = sorted(set(floors))
+            q["floors"] = sorted(floors_set)
             if i == 1:
                 q["profession_tier_min"] = 2
             qrows.append(q)

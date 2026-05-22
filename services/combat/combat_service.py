@@ -1582,15 +1582,23 @@ async def _apply_tower_progress_after_victory(
         await session.flush()
         return ""
 
+    import game.tower.trials.floor_trial as floor_trial_mod
+
     if spawn.slot_code not in cleared:
-        cleared.append(spawn.slot_code)
+        trial_partial = (
+            floor_trial_mod.is_trial_scenario_active(character)
+            and int(character.floor_number) == cur
+            and floor_trial_mod.is_trial_slot(spawn.slot_code)
+        )
+        if trial_partial:
+            st_tr = floor_trial_mod._trial_meta(character, cur)
+            if st_tr and spawn.slot_code in (st_tr.get("grounds_cleared") or []):
+                cleared.append(spawn.slot_code)
+        else:
+            cleared.append(spawn.slot_code)
     extra["slots_cleared"] = cleared
     row.extra = extra
-    # Сразу фиксируем изменение, чтобы следующий запрос в той же транзакции
-    # и следующий callback увидели актуальный slots_cleared.
     await session.flush()
-
-    import game.tower.trials.floor_trial as floor_trial_mod
 
     all_spawns = long_floor_mod.spawns_for_tower_progress(character, cur)
     cleared_set = set(cleared)

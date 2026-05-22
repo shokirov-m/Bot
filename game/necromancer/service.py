@@ -207,7 +207,7 @@ def can_purchase_necromancer(character: Character) -> tuple[bool, str]:
     cur = arch_manager.get_character_archetype(character)
     if cur.tier < 1:
         return False, "Сначала выберите базовый путь (с 10 уровня)."
-    if cur.tier >= 2 and class_swap_to_necromancer_used(character):
+    if cur.tier >= 1 and class_swap_to_necromancer_used(character):
         return False, "Смена класса на некроманта уже была использована (один раз)."
     return True, "Можно провести ритуал."
 

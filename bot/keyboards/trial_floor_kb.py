@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.floor_kb import (
     _append_city_hub_row,
+    _append_zone_masters_row,
     _append_tower_field_repair_row,
     _cb,
     _navigation_max_floor,
@@ -34,18 +35,7 @@ def trial_floor_screen_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
     rows.extend(_pet_rows(character, floor_number))
 
-    import services.progression.pack_npc_quest_service as _pqn_svc
-
-    zone = floor_data.get_zone_for_floor(floor_number)
-    if _pqn_svc.list_npcs_on_floor(floor_number):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"{zone.emoji} Мастера зоны"[:36],
-                    callback_data=f"pqn:hub:{floor_number}",
-                ),
-            ],
-        )
+    _append_zone_masters_row(rows, character, floor_number)
 
     spawns = floor_trial_mod.build_trial_spawns(character)
 

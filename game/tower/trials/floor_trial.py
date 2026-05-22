@@ -71,16 +71,44 @@ def _chamber_slots(cfg: dict[str, Any]) -> list[str]:
     return out
 
 
-def _trial_meta(character: Character) -> dict[str, Any] | None:
-    raw = character.meta_progress or {}
-    st = raw.get(META_KEY)
+def _normalize_trials_store(raw: object) -> dict[str, dict[str, Any]]:
+    """Хранилище по этажам: {"61": {...}, "64": {...}}; миграция со старого одного блока."""
+    if not isinstance(raw, dict):
+        return {}
+    if "floor" in raw and ("grounds_open" in raw or "grounds_cleared" in raw):
+        return {str(int(raw["floor"])): dict(raw)}
+    out: dict[str, dict[str, Any]] = {}
+    for key, val in raw.items():
+        if isinstance(val, dict) and "floor" in val:
+            out[str(key)] = dict(val)
+    return out
+
+
+def _trial_meta(character: Character, floor: int | None = None) -> dict[str, Any] | None:
+    fl = int(floor if floor is not None else character.floor_number)
+    store = _normalize_trials_store((character.meta_progress or {}).get(META_KEY))
+    st = store.get(str(fl))
     return dict(st) if isinstance(st, dict) else None
 
 
 def _save_meta(character: Character, st: dict[str, Any]) -> None:
+    fl = int(st.get("floor", character.floor_number))
     meta = dict(character.meta_progress or {})
-    meta[META_KEY] = st
+    store = _normalize_trials_store(meta.get(META_KEY))
+    store[str(fl)] = dict(st)
+    meta[META_KEY] = store
     character.meta_progress = meta
+
+
+def trial_cleared_slots_for_ui(character: Character) -> frozenset[str]:
+    """Слоты с ✅ на клавиатуре испытания — только полностью зачищенные угодья."""
+    st = _trial_meta(character)
+    if not st:
+        return frozenset()
+    out: set[str] = set(str(x) for x in (st.get("grounds_cleared") or []))
+    if bool(st.get("completed")):
+        out.add(SLOT_BOSS)
+    return frozenset(out)
 
 
 def _cfg_for_floor(floor: int) -> dict[str, Any]:
@@ -132,10 +160,8 @@ def is_trial_active(character: Character) -> bool:
     fl = int(character.floor_number)
     if not is_trial_floor(fl):
         return False
-    st = _trial_meta(character)
+    st = _trial_meta(character, fl)
     if st is None:
-        return True
-    if int(st.get("floor", -1)) != fl:
         return True
     return not bool(st.get("completed"))
 
@@ -169,8 +195,8 @@ def ensure_started(character: Character) -> None:
         return
     cfg = _cfg_for_floor(fl)
     zone = floor_data.get_zone_for_floor(fl)
-    st = _trial_meta(character)
-    if st is not None and int(st.get("floor", -1)) == fl and "grounds_open" in st:
+    st = _trial_meta(character, fl)
+    if st is not None and "grounds_open" in st:
         return
     total = _grounds_total(cfg)
     if is_boss_chamber_trial(cfg):

@@ -88,10 +88,14 @@ async def try_purchase(
     session: AsyncSession,
     character: Character,
     grimoire_key: str,
+    *,
+    require_library_hub: bool = True,
 ) -> tuple[bool, str]:
     g = SKILL_GRIMOIRES.get(grimoire_key)
     if not g:
         return False, "Нет такой книги."
+    if require_library_hub and not lib.library_floor_ok(character, None):
+        return False, "Покупка только в библиотеке (этаж 9001)."
     ok, err = lib.can_purchase(character, grimoire_key)
     if not ok:
         return False, err

@@ -43,6 +43,29 @@ def _cb(floor_number: int, code: str) -> str:
     return f"fl:{floor_number}:{code}"
 
 
+def _append_zone_masters_row(
+    rows: list[list[InlineKeyboardButton]],
+    character: Character,
+    floor_number: int,
+) -> None:
+    """Кнопка «Мастера зоны» (пак зоны), если на этаже есть NPC."""
+    import services.progression.pack_npc_quest_service as _pqn_svc
+
+    fl = int(floor_number)
+    if not _pqn_svc.list_npcs_on_floor(fl):
+        return
+    zone_fl = floor_data.get_zone_for_floor(fl)
+    hub_lbl = f"{zone_fl.emoji} Мастера зоны"[:36]
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=hub_lbl,
+                callback_data=f"pqn:hub:{fl}",
+            ),
+        ],
+    )
+
+
 def _append_city_hub_row(
     rows: list[list[InlineKeyboardButton]],
     character: Character,
@@ -197,19 +220,7 @@ def floor_screen_keyboard(
             ],
         )
 
-    import services.progression.pack_npc_quest_service as _pqn_svc
-
-    zone_fl = floor_data.get_zone_for_floor(int(floor_number))
-    if _pqn_svc.list_npcs_on_floor(int(floor_number)):
-        hub_lbl = f"{zone_fl.emoji} Мастера зоны"[:36]
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=hub_lbl,
-                    callback_data=f"pqn:hub:{int(floor_number)}",
-                ),
-            ],
-        )
+    _append_zone_masters_row(rows, character, floor_number)
 
     buffer: list[InlineKeyboardButton] = []
 
@@ -260,7 +271,9 @@ def floor_screen_keyboard(
         # Если учебный бой активен, можно добавить подсказку или оставить пусто
         pass
 
-    flush()
+    flush(        )
+
+    _append_zone_masters_row(rows, character, floor_number)
 
     pend = tower_next_floor_pending(character)
     if pend is not None:
@@ -412,6 +425,8 @@ def long_floor_screen_keyboard(character: Character, *, nav_ceiling: int | None 
                 ),
             ],
         )
+
+    _append_zone_masters_row(rows, character, floor_number)
 
     pend = tower_next_floor_pending(character)
     if pend is not None:

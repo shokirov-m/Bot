@@ -160,7 +160,7 @@ async def floor_keyboard_for_character(
 
     floor_trial_mod.ensure_started(character)
     if floor_trial_mod.is_trial_scenario_active(character):
-        defeated = await defeated_slot_codes_for_floor(session, character.id, n)
+        defeated = floor_trial_mod.trial_cleared_slots_for_ui(character)
         return trial_floor_screen_keyboard(
             character,
             defeated_slots=defeated,
