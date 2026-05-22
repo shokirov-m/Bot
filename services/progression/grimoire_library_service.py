@@ -13,24 +13,35 @@ import services.progression.character_service as character_service
 
 
 def format_library_hub_html(character: Character) -> str:
+    from game.archetypes.grimoires import _archetype_for_grimoires
+
     gold = int(character.gold)
     bought = len(lib._purchased_keys(character))
+    arch = _archetype_for_grimoires(character)
     lines = [
         "📚 <b>Библиотека гримуаров</b>",
-        "<i>Отдельный хаб-этаж башни. Здесь продают книги навыков — "
-        "только за золото, без обмена и скупки.</i>",
+        "<i>Мирная локация. Книги навыков — только за золото, без обмена.</i>",
         "",
         f"💰 Золото: <b>{gold:,}</b> · куплено книг: <b>{bought}</b>",
         "",
         "<b>Правила:</b>",
-        "• цена одной книги — от <b>10 000</b> до <b>100 000</b> 💰;",
-        "• каждую книгу можно купить <b>один раз</b> на героя;",
-        "• передать или продать нельзя — только прочитать в «Гримуарах»;",
+        "• цена книги — от <b>10 000</b> до <b>100 000</b> 💰;",
+        "• каждую книгу — <b>один раз</b> на героя;",
+        "• после покупки — прочитать в меню «Гримуары».",
         "",
-        "<b>Разделы:</b>",
-        "• <b>Базовые пути</b> — воин, маг, разведчик, жрец;",
-        "• <b>💀 Высшие гримуары</b> — некромант и другие престиж-классы (отдельный зал).",
     ]
+    if arch:
+        lines.append(
+            f"Ваш путь: <b>{html.escape(lib.archetype_label_ru(arch))}</b> — "
+            "кнопка каталога ниже.",
+        )
+    else:
+        lines.append(
+            "Сначала выберите <b>базовый класс</b> в «Специализация», "
+            "затем откройте каталог своего пути.",
+        )
+    if lib.library_prestige_visible(character):
+        lines.append("💀 <b>Высшие гримуары</b> — отдельная кнопка (некромант и др.).")
     return "\n".join(lines)
 
 
@@ -116,7 +127,7 @@ async def try_purchase(
     if not g:
         return False, "Нет такой книги."
     if require_library_hub and not lib.library_floor_ok(character, None):
-        return False, "Покупка только в библиотеке (этаж 9001)."
+        return False, "Покупка только в библиотеке (Меню → Локации)."
     ok, err = lib.can_purchase(character, grimoire_key)
     if not ok:
         return False, err

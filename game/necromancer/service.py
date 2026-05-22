@@ -17,6 +17,9 @@ NECROMANCER_CLASS_KEY = "necromancer"
 NECROMANCER_COST_GOLD = 800_000
 NECROMANCER_MIN_LEVEL = 60
 MAX_SKELETONS_IN_BATTLE = 3
+NEC_BARRIER_MP_COST = 800
+# Множитель поглощения к базовой формуле (ИНТ + уровень).
+NEC_BARRIER_EFFECT_MULT = 2.5
 
 META_NECRO = "necromancer_v1"
 META_UNLOCKS = "skeleton_unlocks"
@@ -145,6 +148,70 @@ def _scale_stat(base: int, hero_level: int, per_level: float) -> int:
     return max(1, int(round(base + delta * per_level)))
 
 
+def intelligence_stat(character: Character) -> int:
+    return max(0, int(character.stat_intelligence or 0))
+
+
+def skeleton_power_mult_from_intelligence(character: Character) -> float:
+    """
+    Сила скелетов от ИНТ некроманта: +0.75% HP и ATK за каждую единицу ИНТ.
+    При 60 ИНТ ≈ ×1.45, при 100 ИНТ ≈ ×1.75.
+    """
+    intel = intelligence_stat(character)
+    return 1.0 + intel * 0.0075
+
+
+def defensive_barrier_hp(
+    character: Character | None = None,
+    *,
+    hp_max: int | None = None,
+    intelligence: int | None = None,
+    level: int | None = None,
+) -> int:
+    """
+    Ёмкость защитного барьера: база + ИНТ + уровень, с потолком от max HP героя.
+    """
+    if character is not None:
+        intel = intelligence_stat(character)
+        lv = max(NECROMANCER_MIN_LEVEL, int(character.level or NECROMANCER_MIN_LEVEL))
+        hp_cap = int(hp_max if hp_max is not None else character.hp_max or 1)
+    else:
+        intel = max(0, int(intelligence or 0))
+        lv = max(1, int(level or NECROMANCER_MIN_LEVEL))
+        hp_cap = max(1, int(hp_max or 1))
+    raw = int(30 + intel * 14 + max(0, lv - NECROMANCER_MIN_LEVEL) * 5)
+    ceiling = max(80, int(hp_cap * 0.5))
+    base = max(40, min(raw, ceiling))
+    return max(72, int(round(base * NEC_BARRIER_EFFECT_MULT)))
+
+
+def apply_necromancer_barrier_upkeep(state: dict[str, Any]) -> list[str]:
+    """
+    Поддержание барьера в конце раунда: −800 MP.
+    Если маны нет — барьер рушится.
+    """
+    logs: list[str] = []
+    if str(state.get("player_shield_kind") or "") != "barrier":
+        return logs
+    if int(state.get("player_shield_hp", 0) or 0) <= 0:
+        return logs
+    cost = NEC_BARRIER_MP_COST
+    mp = int(state.get("player_mp", 0) or 0)
+    if mp < cost:
+        state["player_shield_hp"] = 0
+        state["player_shield_hp_max"] = 0
+        state["player_shield_kind"] = ""
+        logs.append(
+            f"💀 <b>Барьер рухнул</b> — нужно {cost:,} MP за ход (осталось {mp:,}).".replace(",", " "),
+        )
+        return logs
+    state["player_mp"] = mp - cost
+    logs.append(
+        f"🔮 Барьер: −{cost:,} MP за ход поддержания (осталось {int(state['player_mp']):,}).".replace(",", " "),
+    )
+    return logs
+
+
 def _skeleton_atk_bonus_mult(character: Character) -> float:
     from game.characters.skills import passive_combat_modifiers_merged
 
@@ -161,14 +228,15 @@ def build_skeleton_companions(character: Character) -> list[dict[str, Any]]:
     if not party:
         return []
     atk_mult = _skeleton_atk_bonus_mult(character)
+    int_mult = skeleton_power_mult_from_intelligence(character)
     lv = int(character.level)
     out: list[dict[str, Any]] = []
     for key in party:
         rd = SKELETON_ROLES.get(key)
         if rd is None:
             continue
-        hp = _scale_stat(rd.base_hp, lv, 10.0)
-        atk = max(1, int(round(_scale_stat(rd.base_atk, lv, 2.2) * atk_mult)))
+        hp = max(1, int(round(_scale_stat(rd.base_hp, lv, 10.0) * int_mult)))
+        atk = max(1, int(round(_scale_stat(rd.base_atk, lv, 2.2) * atk_mult * int_mult)))
         out.append(
             {
                 "id": f"skel:{key}",

@@ -741,10 +741,7 @@ def format_banner_html(character: Character) -> str:
     from game.tower.trials.default_config import trial_type_label_ru
 
     name = trial_type_label_ru(ttype, cfg)
-    variant_note = ""
-    vid = str(cfg.get("variant_id") or st.get("variant_id") or "")
-    if vid and not vid.startswith("simple_"):
-        variant_note = f" <i>({html.escape(vid)})</i>"
+    blurb = str(cfg.get("hub_blurb_ru") or "").strip()
     pct = progress_percent(character)
     cleared = len(st.get("grounds_cleared") or [])
     total = _grounds_total(cfg)
@@ -766,24 +763,28 @@ def format_banner_html(character: Character) -> str:
         mx = int(cfg.get("boss_retry_cooldown_max_minutes") or 20)
         if mn and mx:
             cd_note = f"\n<i>После победы над боссом — пауза {mn}–{mx} мин до повторного боя.</i>"
+        blurb_line = f"\n<i>{html.escape(blurb)}</i>" if blurb else ""
         return (
-            f"👑 <b>{html.escape(name)}</b>{variant_note}{hard}\n"
-            f"Залы босса <b>{cleared}/{total}</b> · прогресс <b>{pct}%</b> · "
+            f"👑 <b>{html.escape(name)}</b>{hard}\n"
+            f"Залы <b>{cleared}/{total}</b> · прогресс <b>{pct}%</b> · "
             f"финал: {boss}{dline}{extra}\n"
-            f"<i>У каждого зала свой слот (ft_br) и стражи.</i>{cd_note}"
+            f"<i>Пройдите все залы, затем босс.</i>{cd_note}{blurb_line}"
         )
     if is_defense_hub(cfg):
         wt = _waves_total(cfg)
         wd = int(st.get("waves_done") or 0)
-        return (
-            f"⚔️ <b>{html.escape(name)}</b>{variant_note}{hard}\n"
-            f"Волны <b>{wd}/{wt}</b> · периметр <b>{cleared}/{total}</b> · "
-            f"прогресс <b>{pct}%</b> · босс: {boss}{dline}{extra}\n"
-            f"<i>Смерть: −{_waves_loss_on_death(cfg)} волны, сброс периметра.</i>"
+        blurb_line = f"\n<i>{html.escape(blurb)}</i>" if blurb else (
+            f"\n<i>Смерть: −{_waves_loss_on_death(cfg)} волны, сброс периметра.</i>"
         )
+        return (
+            f"⚔️ <b>{html.escape(name)}</b>{hard}\n"
+            f"Волны <b>{wd}/{wt}</b> · периметр <b>{cleared}/{total}</b> · "
+            f"прогресс <b>{pct}%</b> · босс: {boss}{dline}{extra}{blurb_line}"
+        )
+    blurb_line = f"\n<i>{html.escape(blurb)}</i>" if blurb else ""
     return (
-        f"⚔️ <b>{html.escape(name)}</b>{variant_note}{hard}\n"
-        f"Прогресс <b>{pct}%</b> · угодья <b>{cleared}/{total}</b> · босс: {boss}{dline}{extra}\n"
+        f"⚔️ <b>{html.escape(name)}</b>{hard}\n"
+        f"Прогресс <b>{pct}%</b> · угодья <b>{cleared}/{total}</b> · босс: {boss}{dline}{extra}{blurb_line}\n"
         f"<i>Смерть сбрасывает фазу угодья"
         f"{' и весь этап' if cfg.get('death_reset') == 'full_trial' else ''}.</i>"
     )

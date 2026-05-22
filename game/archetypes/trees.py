@@ -338,6 +338,15 @@ _BUILTIN_TREES: dict[str, dict[str, SkillTreeNode]] = {
             cost_sp=5,
             parent_keys=("nec_n3",),
         ),
+        "nec_n5": SkillTreeNode(
+            "nec_n5",
+            "🛡️ Защитный барьер",
+            "Щит из тёмной энергии: сила растёт с интеллектом.",
+            "active_skill",
+            "nec_barrier",
+            cost_sp=4,
+            parent_keys=("nec_n2",),
+        ),
     },
 }
 

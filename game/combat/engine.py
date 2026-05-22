@@ -764,7 +764,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
 
     from game.combat import boss_uniques as boss_uniques_mod
 
-    if sk.effect_key not in ("heal", "block_next", "dodge_buff", "shield", "fortify", "cleanse"):
+    if sk.effect_key not in ("heal", "block_next", "dodge_buff", "shield", "barrier", "fortify", "cleanse"):
         if boss_uniques_mod.monster_evades_player_attack(state, logs):
             return logs, "continue", 0
 
@@ -798,10 +798,35 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
         logs.append(f"{sk.name}: +18% к шансу уклонения на 3 хода.")
         return logs, "continue", 0
 
+    if sk.effect_key == "barrier":
+        from game.necromancer.service import defensive_barrier_hp
+
+        intel = int(st.get("int", 0))
+        absorb = defensive_barrier_hp(
+            None,
+            hp_max=int(state["player_hp_max"]),
+            intelligence=intel,
+            level=int(state.get("player_level", st.get("level", 1))),
+        )
+        state["player_shield_hp"] = absorb
+        state["player_shield_hp_max"] = absorb
+        state["player_shield_kind"] = "barrier"
+        from game.necromancer.service import NEC_BARRIER_MP_COST
+
+        logs.append(
+            f"{sk.name}: барьер <b>{absorb}</b> HP (🔮 ИНТ {intel}). "
+            f"Поддержание: <b>{NEC_BARRIER_MP_COST}</b> MP/ход.",
+        )
+        return logs, "continue", 0
+
     if sk.effect_key == "shield":
         absorb = max(14, int(int(state["player_hp_max"]) * 0.18))
-        state["player_shield_hp"] = int(state.get("player_shield_hp", 0)) + absorb
-        logs.append(f"{sk.name}: щит поглощает до {absorb} урона (накопительно).")
+        new_shield = int(state.get("player_shield_hp", 0)) + absorb
+        state["player_shield_hp"] = new_shield
+        state["player_shield_hp_max"] = max(int(state.get("player_shield_hp_max", 0)), new_shield)
+        if str(state.get("player_shield_kind")) != "barrier":
+            state["player_shield_kind"] = "shield"
+        logs.append(f"{sk.name}: щит +{absorb} поглощения (всего {new_shield}).")
         return logs, "continue", 0
 
     if sk.effect_key == "smoke":
@@ -1228,9 +1253,14 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
     if shield > 0:
         absorbed = min(shield, dmg)
         state["player_shield_hp"] = shield - absorbed
+        if int(state["player_shield_hp"]) <= 0:
+            state["player_shield_hp_max"] = 0
+            state["player_shield_kind"] = ""
         dmg -= absorbed
         if absorbed > 0:
-            logs.append(f"🛡️ Щит поглотил {absorbed} урона.")
+            kind = str(state.get("player_shield_kind") or "shield")
+            label = "Барьер" if kind == "barrier" else "Щит"
+            logs.append(f"🛡️ {label} поглотил {absorbed} урона.")
     state["player_hp"] = max(0, int(state["player_hp"]) - dmg)
     if int(state["player_hp"]) < pre_php:
         combo_break_on_player_hurt(state)
@@ -1284,9 +1314,14 @@ def monster_turn(state: dict[str, Any]) -> tuple[list[str], Outcome]:
         if shield2 > 0:
             absorbed2 = min(shield2, dmg2)
             state["player_shield_hp"] = shield2 - absorbed2
+            if int(state["player_shield_hp"]) <= 0:
+                state["player_shield_hp_max"] = 0
+                state["player_shield_kind"] = ""
             dmg2 -= absorbed2
             if absorbed2 > 0:
-                logs.append(f"🛡️ Щит поглотил {absorbed2} урона.")
+                kind2 = str(state.get("player_shield_kind") or "shield")
+                label2 = "Барьер" if kind2 == "barrier" else "Щит"
+                logs.append(f"🛡️ {label2} поглотил {absorbed2} урона.")
         state["player_hp"] = max(0, int(state["player_hp"]) - dmg2)
         if dmg2 > 0:
             combo_break_on_player_hurt(state)
@@ -1348,5 +1383,9 @@ def end_round_tick(state: dict[str, Any]) -> list[str]:
     from game.combat import boss_uniques as boss_uniques_mod
 
     boss_uniques_mod.tick_round_debuffs(state, logs)
+
+    from game.necromancer.service import apply_necromancer_barrier_upkeep
+
+    logs.extend(apply_necromancer_barrier_upkeep(state))
 
     return logs

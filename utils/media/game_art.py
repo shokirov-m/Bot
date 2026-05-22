@@ -95,6 +95,37 @@ def menu_home_library_photo_path() -> str | None:
     return _png("menus/home_library.png")
 
 
+# --- Библиотека гримуаров (хаб, не боевой этаж) ---
+
+_LIBRARY_CLASS_KEYS: tuple[str, ...] = (
+    "warrior",
+    "mage",
+    "scout",
+    "acolyte",
+    "necromancer",
+)
+
+
+def library_hub_photo_path() -> str | None:
+    """Зал библиотеки: ``library/grimoire_library.png`` или ``menus/home_library.png``."""
+    p = _png("library/grimoire_library.png")
+    if p is not None:
+        return p
+    return menu_home_library_photo_path()
+
+
+def library_class_photo_path(archetype_key: str) -> str | None:
+    """
+    Баннер каталога класса: ``library/class_<archetype>.png``.
+
+    warrior · mage · scout · acolyte · necromancer
+    """
+    raw = (archetype_key or "").strip().lower()
+    if raw not in _LIBRARY_CLASS_KEYS:
+        return None
+    return _png(f"library/class_{raw}.png")
+
+
 # --- Колизей ---
 
 

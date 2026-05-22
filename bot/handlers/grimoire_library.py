@@ -25,6 +25,7 @@ from game.locations import hub_floors as hf
 from game.locations.hub_floors import LIBRARY_HUB_FLOOR
 import services.progression.grimoire_library_service as library_service
 from services.progression.floor_service import format_library_hub_message, travel_to_floor
+from utils.media.game_art import library_class_photo_path, library_hub_photo_path
 from utils.telegram.game_ui import push_game_ui
 
 router = Router(name="grimoire_library")
@@ -89,6 +90,7 @@ async def _show_library_hub(
         text=format_library_hub_message(char),
         reply_markup=library_hub_keyboard(char, LIBRARY_HUB_FLOOR),
         target_message=query.message,
+        photo_path=library_hub_photo_path(),
         character=char,
     )
 
@@ -169,6 +171,7 @@ async def on_library_class(
             text=library_service.format_class_catalog_html(char, arch),
             reply_markup=library_class_keyboard(char, arch, LIBRARY_HUB_FLOOR),
             target_message=query.message,
+            photo_path=library_class_photo_path(arch) or library_hub_photo_path(),
             character=char,
         )
         await query.answer()

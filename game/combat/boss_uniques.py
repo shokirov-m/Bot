@@ -312,9 +312,14 @@ def _meteor_strike(
     if shield > 0:
         absorbed = min(shield, dmg)
         state["player_shield_hp"] = shield - absorbed
+        if int(state["player_shield_hp"]) <= 0:
+            state["player_shield_hp_max"] = 0
+            state["player_shield_kind"] = ""
         dmg -= absorbed
         if absorbed > 0:
-            logs.append(f"🛡️ Щит поглотил {absorbed} урона от метеорита.")
+            kind = str(state.get("player_shield_kind") or "shield")
+            label = "Барьер" if kind == "barrier" else "Щит"
+            logs.append(f"🛡️ {label} поглотил {absorbed} урона от метеорита.")
     pre = int(state["player_hp"])
     state["player_hp"] = max(0, pre - dmg)
     if dmg > 0:

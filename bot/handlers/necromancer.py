@@ -40,7 +40,7 @@ def _menu_intro_html(char) -> str:
     if is_necromancer(char):
         return (
             "💀 <b>Некромант</b>\n\n"
-            "Ковчег костей и гримуары пути — в библиотеке (этаж 9001)."
+            "Ковчег костей и гримуары пути — в библиотеке (Меню → Локации)."
         )
     can_ok, reason = can_purchase_necromancer(char)
     extra = f"\n\n⚠️ {html.escape(reason)}" if not can_ok else ""

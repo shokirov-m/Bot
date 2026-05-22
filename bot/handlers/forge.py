@@ -195,6 +195,19 @@ def _repair_keyboard_return_to_floor(char) -> bool:
     )
 
 
+def _tower_repair_callback_ok(char, floor_key: int) -> bool:
+    """Починка с карты этажа: floor_key — текущий боевой этаж, не якорь города."""
+    fl = int(char.floor_number)
+    if int(floor_key) != fl:
+        return False
+    return forge_loc.repair_allowed_on_floor(fl)
+
+
+def _forge_city_callback_ok(char, floor_key: int) -> bool:
+    """Кузница в городе-хабе: floor_key — якорь (0/30/60/90)."""
+    return floor_data.city_service_floor_ok(char, floor_key)
+
+
 @router.callback_query(F.data.startswith("frg:main:"))
 async def forge_open_main(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -327,7 +340,9 @@ async def forge_repair_menu(query: CallbackQuery, session: AsyncSession, state: 
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.repair_allowed_on_floor(char.floor_number):
+        if not _tower_repair_callback_ok(char, floor_key) and not (
+            _forge_city_callback_ok(char, floor_key) and forge_loc.repair_allowed_on_floor(char.floor_number)
+        ):
             await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         text = await forge_service.build_repair_message_html(session, char)
@@ -364,7 +379,9 @@ async def forge_repair_slot_apply(query: CallbackQuery, session: AsyncSession, s
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.repair_allowed_on_floor(char.floor_number):
+        if not _tower_repair_callback_ok(char, floor_key) and not (
+            _forge_city_callback_ok(char, floor_key) and forge_loc.repair_allowed_on_floor(char.floor_number)
+        ):
             await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         ok, lines = await forge_service.try_repair_equipped_slot(session, char, slot)
@@ -404,7 +421,9 @@ async def forge_repair_all_apply(query: CallbackQuery, session: AsyncSession, st
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if not floor_data.city_service_floor_ok(char, floor_key) or not forge_loc.repair_allowed_on_floor(char.floor_number):
+        if not _tower_repair_callback_ok(char, floor_key) and not (
+            _forge_city_callback_ok(char, floor_key) and forge_loc.repair_allowed_on_floor(char.floor_number)
+        ):
             await query.answer("Починка здесь недоступна.", show_alert=True)
             return
         ok, lines = await forge_service.try_repair_all_equipped(session, char)

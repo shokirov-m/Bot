@@ -89,6 +89,32 @@ def trial_for_floor(zone_key: str, floor_number: int) -> dict[str, Any]:
     return dict(row) if isinstance(row, dict) else {}
 
 
+def zone_pack_hub_floor(zone_key: str) -> int | None:
+    """Этаж «привала мастеров» зоны из zone.json (hub_floor)."""
+    pack = load_zone_pack(zone_key)
+    zone = pack.get("zone") or {}
+    hub = zone.get("hub_floor")
+    return int(hub) if isinstance(hub, int) else None
+
+
+def npcs_hub_on_floor(zone_key: str, floor_number: int) -> list[dict[str, Any]]:
+    """NPC с floors_hub — только на этаже-привале зоны (поручения, не бой)."""
+    pack = load_zone_pack(zone_key)
+    npcs_raw = pack.get("npcs") or {}
+    entries = npcs_raw.get("entries")
+    if not isinstance(entries, list):
+        return []
+    fl = int(floor_number)
+    out: list[dict[str, Any]] = []
+    for row in entries:
+        if not isinstance(row, dict):
+            continue
+        hub_floors = row.get("floors_hub")
+        if isinstance(hub_floors, list) and fl in {int(x) for x in hub_floors}:
+            out.append(dict(row))
+    return out
+
+
 def npcs_for_floor(zone_key: str, floor_number: int) -> list[dict[str, Any]]:
     pack = load_zone_pack(zone_key)
     npcs_raw = pack.get("npcs") or {}

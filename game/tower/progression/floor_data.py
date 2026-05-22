@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass
 
 from db.models.character import Character
@@ -307,8 +308,18 @@ SECRET_ROOM_CHANCE: float = 0.15
 
 
 def format_floor_label(floor_number: int) -> str:
-    """Подпись этажа без раскрытия высоты башни."""
-    return f"🗼 <b>ЭТАЖ {int(floor_number)}</b>"
+    """Подпись локации: боевой ярус или хаб (библиотека/город)."""
+    from game.locations import hub_floors as hf
+
+    n = int(floor_number)
+    if hf.is_library_hub_floor(n):
+        return "📚 <b>Библиотека гримуаров</b>"
+    if hf.is_city_hub_floor(n):
+        city = hf.city_for_hub_floor(n)
+        if city:
+            return f"{city.emoji} <b>{html.escape(city.name)}</b>"
+        return "🏙 <b>Город</b>"
+    return f"🗼 <b>ЭТАЖ {n}</b>"
 
 
 def get_zone_floor_type(floor_number: int) -> str:

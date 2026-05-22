@@ -90,6 +90,17 @@ SKILLS: dict[str, SkillV2] = {
         effect_key="slow",
         effect_chance=0.5,
     ),
+    "nec_barrier": SkillV2(
+        "nec_barrier",
+        "Защитный барьер",
+        "Тёмный щит: 800 MP при активации и 800 MP каждый ход, пока стоит. Сила от ИНТ.",
+        800,
+        5,
+        0.0,
+        "mag",
+        effect_key="barrier",
+        effect_chance=1.0,
+    ),
     "nec_aura": SkillV2(
         "nec_aura",
         "Аура упадка",
@@ -281,7 +292,7 @@ ARCHETYPES: dict[str, Archetype] = {
         hp_multiplier=1.12,
         mp_multiplier=1.58,
         passives=(PASSIVES["pas_nec_command"], PASSIVES["pas_nec_undying"]),
-        skills=("nec_bolt", "nec_wither", "nec_aura"),
+        skills=("nec_bolt", "nec_barrier", "nec_wither"),
         requirements={"level": 60},
     ),
 }

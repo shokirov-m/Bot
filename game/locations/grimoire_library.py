@@ -41,6 +41,16 @@ def library_base_archetype_keys() -> tuple[str, ...]:
     return LIBRARY_BASE_ARCHETYPES
 
 
+def library_base_archetype_keys_for(character: Character) -> tuple[str, ...]:
+    """В каталоге — только свой базовый путь; странник видит все четыре."""
+    from game.archetypes.grimoires import _archetype_for_grimoires
+
+    arch = _archetype_for_grimoires(character)
+    if arch and arch in LIBRARY_BASE_ARCHETYPES:
+        return (arch,)
+    return LIBRARY_BASE_ARCHETYPES
+
+
 def library_prestige_visible(character: Character) -> bool:
     """Раздел высших гримуаров: после 18 яруса и уровня 60+ (или уже некромант)."""
     from game.necromancer.service import NECROMANCER_MIN_LEVEL, is_necromancer
@@ -58,7 +68,7 @@ def library_prestige_archetype_keys(character: Character) -> tuple[str, ...]:
 
 def library_archetype_keys_for(character: Character) -> tuple[str, ...]:
     """Все ключи каталога (база + престиж) — для проверок callback."""
-    return library_base_archetype_keys() + library_prestige_archetype_keys(character)
+    return library_base_archetype_keys_for(character) + library_prestige_archetype_keys(character)
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +153,25 @@ def offer_status(character: Character, grimoire_key: str) -> str:
     return ""
 
 
+def _skill_node_already_owned(character: Character, g: SkillGrimoireDef) -> bool:
+    """Узел навыка уже закрыт (другая книга, изучение, сумка)."""
+    node = g.source_node_key
+    if not node:
+        return False
+    owned = _purchased_keys(character) | set(learned_keys(character)) | set(inventory_keys(character))
+    for gk in owned:
+        if gk == g.key:
+            continue
+        other = SKILL_GRIMOIRES.get(gk)
+        if (
+            other
+            and other.archetype_key == g.archetype_key
+            and other.source_node_key == node
+        ):
+            return True
+    return False
+
+
 def can_purchase(
     character: Character,
     grimoire_key: str,
@@ -158,6 +187,8 @@ def can_purchase(
         return False, "Вы уже покупали эту книгу здесь."
     if grimoire_key in inventory_keys(character):
         return False, "Книга уже у вас — прочитайте в «Гримуарах»."
+    if _skill_node_already_owned(character, g):
+        return False, "Этот навык у вас уже есть — другую книгу на тот же узел купить нельзя."
     if not grimoire_usable_by_character(character, grimoire_key):
         return (
             False,

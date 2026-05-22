@@ -24,6 +24,8 @@ def init_effects(state: dict[str, Any]) -> None:
     state.setdefault("player_damage_mult", 1.0)
     state.setdefault("skip_player_turn", False)
     state.setdefault("player_shield_hp", 0)
+    state.setdefault("player_shield_hp_max", 0)
+    state.setdefault("player_shield_kind", "")
     state.setdefault("player_temp_dodge", 0.0)
     state.setdefault("player_temp_dodge_turns", 0)
     state.setdefault("player_fortify_bonus", 0)

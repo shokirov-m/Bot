@@ -17,7 +17,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from db.models.character import Character
 from game.crafting.workshop_meta import add_known_blueprint, prof_level
-from game.data.packs import load_zone_pack, npcs_for_floor
+from game.data.packs import load_zone_pack, npcs_hub_on_floor, zone_pack_hub_floor
 from game.tower.progression import floor_data
 from game.tower.quests.pack_npc_quests import (
     blueprint_label,
@@ -47,11 +47,23 @@ def zone_key_for_floor(floor: int) -> str | None:
     return None
 
 
+def is_zone_quest_hub_floor(floor: int) -> bool:
+    """Поручения мастеров зоны — только на hub_floor пака (5, 15, 25…)."""
+    zk = zone_key_for_floor(floor)
+    if not zk:
+        return False
+    hub = zone_pack_hub_floor(zk)
+    return hub is not None and int(floor) == int(hub)
+
+
 def list_npcs_on_floor(floor: int) -> list[dict[str, Any]]:
+    """Мастера зоны на этаже-привале (floors_hub), не на каждом боевом этаже."""
+    if not is_zone_quest_hub_floor(floor):
+        return []
     zk = zone_key_for_floor(floor)
     if not zk:
         return []
-    return npcs_for_floor(zk, int(floor))
+    return npcs_hub_on_floor(zk, int(floor))
 
 
 def pack_material_count(character: Character, material_id: str) -> int:

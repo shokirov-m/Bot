@@ -59,11 +59,23 @@ def location_image_for_floor(floor_number: int) -> Path | None:
     Картинка фона этажа.
 
     Приоритет:
+    0. Хабы (библиотека 9001, города 91xx) — отдельные арты, не зона этажа 99.
     1. `locations/floor_{N}.png` — свой фон для конкретного этажа (например 1–3).
     2. `locations/{zone.key}.png` — картинка зоны из `floor_data`.
     3. `locations/default.png`.
     """
     n = int(floor_number)
+    from game.locations import hub_floors as hf
+    from utils.media import game_art as ga
+
+    if hf.is_library_hub_floor(n):
+        p = ga.library_hub_photo_path()
+        if p:
+            return Path(p)
+    if hf.is_city_hub_floor(n):
+        p = ga.menu_city_photo_path()
+        if p:
+            return Path(p)
     loc_dir = assets_images_root() / "locations"
     per_floor = loc_dir / f"floor_{n}.png"
     if per_floor.is_file():

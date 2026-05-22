@@ -243,12 +243,7 @@ def format_library_hub_message(character: Character) -> str:
     """Текст экрана хаб-этажа библиотеки."""
     import services.progression.grimoire_library_service as library_service
 
-    body = library_service.format_library_hub_html(character)
-    return (
-        "🗺️ <b>Отдельный этаж · Библиотека</b>\n"
-        "<i>Здесь нет боёв — только покупка книг навыков.</i>\n\n"
-        + body
-    )
+    return library_service.format_library_hub_html(character)
 
 
 def format_city_hub_message(character: Character) -> str:
@@ -409,7 +404,6 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         return _format_explore_floor_22_message(character)
     zone = floor_data.get_zone_for_floor(n)
     room = floor_data.epithet_for_floor(zone, n)
-    city = floor_data.get_city_for_floor(n)
 
     lines: list[str] = []
     if combat_night.is_night_utc():
@@ -427,12 +421,6 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
 
     if floor_trial_mod.is_trial_scenario_active(character):
         lines.append(floor_trial_mod.format_banner_html(character))
-        from game.tower.trials.pack_config import get_trial_config
-
-        tcfg = get_trial_config(int(n))
-        blurb = str(tcfg.get("hub_blurb_ru") or "").strip()
-        if blurb:
-            lines.append(f"<i>{html.escape(blurb)}</i>")
 
     if long_floor_mod.is_long_floor_active(character):
         lines.append(long_floor_mod.format_long_floor_banner_html())
@@ -483,17 +471,6 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
         _ds = defeated_slots if defeated_slots is not None else frozenset()
         lines.append(wv_mod.format_wave_floor_banner_html(_ds))
 
-    if city:
-        lines.append(f"{city.emoji} <b>{html.escape(city.name)}</b> — зайди в «Город».")
-
-    tags: list[str] = []
-    if floor_data.is_mini_boss_floor(n):
-        tags.append("⚔️ Мини-босс")
-    if floor_data.is_major_boss_floor(n):
-        tags.append("👑 Босс этажа")
-    if tags:
-        lines.append(" · ".join(tags))
-
     wn = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), n)
     if wn:
         lines.append(f"🎭 <b>{html.escape(wn['title'])}</b> — кнопка «{html.escape(wn['button'])}».")
@@ -529,9 +506,6 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
                 lines.append(f"{aura['emoji']} <b>{html.escape(str(aura['name']))}</b>")
     except Exception:
         pass
-
-    hi = int(character.highest_floor_reached)
-    lines.append(f"🧭 Открыто 1–{hi}")
 
     pend = tower_next_floor_pending(character)
     if pend is not None:
@@ -570,7 +544,6 @@ def format_floor_message_photo_caption(character: Character) -> str:
         return "\n".join(bits)
     zone = floor_data.get_zone_for_floor(n)
     room = floor_data.epithet_for_floor(zone, n)
-    city = floor_data.get_city_for_floor(n)
 
     lines: list[str] = []
     if combat_night.is_night_utc():
@@ -615,18 +588,6 @@ def format_floor_message_photo_caption(character: Character) -> str:
     if wv_mod.is_wave_floor(int(n)) and not rc10_mod.is_room_clear_floor_10(int(n)):
         b = wv_mod.format_wave_floor_banner_html(frozenset())
         lines.append(b if len(b) <= 120 else b[:117] + "…")
-    if city:
-        gap = f"{city.after_floor}→{city.after_floor + 1}"
-        lines.append(
-            f"{city.emoji} <b>{html.escape(city.name)}</b> — безопасная зона <i>({gap})</i>",
-        )
-    tags: list[str] = []
-    if floor_data.is_mini_boss_floor(n):
-        tags.append("⚔️ Мини-босс")
-    if floor_data.is_major_boss_floor(n):
-        tags.append("👑 Босс")
-    if tags:
-        lines.append(" · ".join(tags))
     wn = wandering_npcs_mod.wandering_npc_for_floor(int(character.id), n)
     if wn:
         lines.append(html.escape(f"🎭 {wn['title']} — кнопка «{wn['button']}»"))

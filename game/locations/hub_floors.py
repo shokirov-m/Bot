@@ -104,6 +104,19 @@ def pop_return_tower_floor(character: Character) -> int:
     return max(1, min(n, int(character.highest_floor_reached)))
 
 
+def player_location_label(floor_number: int) -> str:
+    """Подпись локации для игрока (без технических номеров хабов 9001/91xx)."""
+    n = int(floor_number)
+    if is_library_hub_floor(n):
+        return "Библиотека гримуаров"
+    if is_city_hub_floor(n):
+        city = city_for_hub_floor(n)
+        if city:
+            return f"{city.emoji} {city.name}"
+        return "Город-хаб"
+    return f"Этаж {n}"
+
+
 def resolve_city_anchor_for_character(character: Character) -> int | None:
     """Якорь города для кузницы/таверны (боевой этаж или хаб-этаж города)."""
     if is_city_hub_floor(int(character.floor_number)):

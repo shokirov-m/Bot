@@ -5,7 +5,6 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.floor_kb import (
-    _append_city_hub_row,
     _append_zone_masters_row,
     _append_tower_field_repair_row,
     _cb,
@@ -152,8 +151,6 @@ def trial_floor_screen_keyboard(
                 ),
             ],
         )
-
-    _append_city_hub_row(rows, character, floor_number)
 
     nav: list[InlineKeyboardButton] = []
     if floor_number < highest:

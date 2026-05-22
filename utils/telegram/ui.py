@@ -71,6 +71,29 @@ def render_hp_bar(
     return f"{icon} {bar_s}{gap}{n}"
 
 
+def render_shield_bar(
+    current: int,
+    max_shield: int,
+    length: int = _BAR_LEN,
+    *,
+    wrap_bar_in_code: bool = True,
+    spaced_numbers: bool = False,
+    label: str = "Барьер",
+) -> str:
+    """Полоска поглощения урона (барьер / магический щит)."""
+    bar = _mono_bar(current, max_shield, length)
+    pct = (current / max_shield) * 100 if max_shield > 0 else 0
+    icon = "🔷" if pct < 25 else "🛡️"
+    if spaced_numbers:
+        n = f"{format_number(current)} / {format_number(max_shield)}"
+        gap = "   "
+    else:
+        n = f"{format_number(current)}/{format_number(max_shield)}"
+        gap = "  "
+    bar_s = f"<code>{bar}</code>" if wrap_bar_in_code else bar
+    return f"{icon} <b>{html.escape(label)}</b> {bar_s}{gap}{n}"
+
+
 def render_mp_bar(
     current: int,
     max_mp: int,

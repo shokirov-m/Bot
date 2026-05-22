@@ -8,6 +8,7 @@ from pathlib import Path
 from bot.i18n import t
 from db.models.character import Character
 from game.characters.path_ranks import path_rank_name_ru
+from game.locations.hub_floors import player_location_label
 from game.core.paths import images_root
 from utils.game_images_prefs import game_images_enabled
 from utils.media.profile_portraits import portrait_path_for_character
@@ -36,7 +37,8 @@ def format_menu_hub_html(character: Character, *, locale: str) -> str:
     return (
         f"{t(locale, 'hub_title')}\n"
         f"{LINE_SEP}\n"
-        f"{t(locale, 'hub_floor_line', floor=int(character.floor_number), level=int(character.level))}\n"
+        f"📍 <b>{html.escape(player_location_label(int(character.floor_number)))}</b> · "
+        f"Ур. <b>{int(character.level)}</b>\n"
         f"{t(locale, 'hub_rank_line', rank=rank_s)}\n"
         f"{t(locale, 'hub_title_line', title=title_s)}\n"
         f"{t(locale, 'hub_pet_line')}\n"

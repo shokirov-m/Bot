@@ -27,7 +27,7 @@ def library_hub_keyboard(character: Character, floor_number: int | None = None) 
     fl = int(floor_number if floor_number is not None else _floor())
     rows: list[list[InlineKeyboardButton]] = []
     pair: list[InlineKeyboardButton] = []
-    for arch in lib.library_base_archetype_keys():
+    for arch in lib.library_base_archetype_keys_for(character):
         lbl = lib.archetype_label_ru(arch)[:28]
         pair.append(
             InlineKeyboardButton(

@@ -701,7 +701,21 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
     shield_p = ""
     sh_val = int(state.get("player_shield_hp", 0))
     if sh_val > 0:
-        shield_p = f"🛡️ Щит: <b>{sh_val}</b>\n"
+        from utils.telegram.ui import render_shield_bar
+
+        sh_max = max(sh_val, int(state.get("player_shield_hp_max", 0) or sh_val))
+        kind = str(state.get("player_shield_kind") or "shield")
+        sh_label = "Барьер" if kind == "barrier" else "Щит"
+        shield_p = (
+            render_shield_bar(
+                sh_val,
+                sh_max,
+                wrap_bar_in_code=False,
+                spaced_numbers=True,
+                label=sh_label,
+            )
+            + "\n"
+        )
 
     pet_p = ""
     pl = state.get("pet_line_html")
@@ -718,7 +732,8 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
                 f"{st} <b>{html.escape(str(c.get('name', '?')))}</b> "
                 f"{render_hp_bar(int(c.get('hp', 0)), int(c.get('hp_max', 1)), wrap_bar_in_code=False, spaced_numbers=True)}",
             )
-        merc_p = "<b>▸ НАЁМНИКИ</b>\n" + "\n".join(bits) + "\n\n"
+        squad_title = "▸ НЕЖИТЬ" if any(c.get("is_skeleton") for c in comps) else "▸ НАЁМНИКИ"
+        merc_p = f"<b>{squad_title}</b>\n" + "\n".join(bits) + "\n\n"
 
     logs = list(state.get("ui_logs", []) or [])
     log_lines = "\n".join(logs) if logs else ""

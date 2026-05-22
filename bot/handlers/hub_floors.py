@@ -86,6 +86,8 @@ async def hub_travel_go(callback: CallbackQuery, session: AsyncSession, state: F
         if hf.is_library_hub_floor(target):
             from bot.keyboards.hub_floor_kb import library_hub_screen_keyboard
 
+            from utils.media.game_art import library_hub_photo_path
+
             await push_game_ui(
                 state,
                 callback.bot,
@@ -93,6 +95,7 @@ async def hub_travel_go(callback: CallbackQuery, session: AsyncSession, state: F
                 text=format_library_hub_message(char),
                 reply_markup=library_hub_screen_keyboard(char),
                 target_message=callback.message,
+                photo_path=library_hub_photo_path(),
                 character=char,
             )
         else:
@@ -110,9 +113,9 @@ async def hub_travel_go(callback: CallbackQuery, session: AsyncSession, state: F
                 reply_markup=kb,
                 target_message=callback.message,
             )
-        await callback.answer(
-            "Библиотека" if target == LIBRARY_HUB_FLOOR else f"Этаж {char.floor_number}",
-        )
+        from game.locations.hub_floors import player_location_label
+
+        await callback.answer(player_location_label(int(char.floor_number)))
     except Exception:
         logger.exception("hub:go")
         await callback.answer("Ошибка перехода.", show_alert=True)
