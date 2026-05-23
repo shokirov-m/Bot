@@ -511,9 +511,9 @@ def format_home_main_html(character: Character) -> str:
         bonus_parts.append("⚡ −50% передышка, +1 материал при разборе, 👑")
 
     if bonus_parts:
-        lines.append("✨ <b>Бонусы:</b> " + ", ".join(bonus_parts))
+        lines.append("✨ " + " · ".join(bonus_parts))
     else:
-        lines.append("✨ Бонусы: улучши дом для получения.")
+        lines.append("✨ Улучши дом — появятся бонусы.")
     lines.append("")
 
     # Фичи

@@ -344,10 +344,8 @@ def format_daily_quests_html(character: Character) -> str:
     }
 
     lines = [
-        LINE_SEP,
-        "📅 <b>ЕЖЕДНЕВНЫЕ ЗАДАНИЯ</b>",
-        f"<i>Тир: {tier_names.get(tier, str(tier))} · Сброс в 00:00 UTC</i>",
-        LINE_SEP,
+        "📅 <b>Ежедневные задания</b>",
+        f"<i>{tier_names.get(tier, str(tier))} · сброс 00:00 UTC</i>",
         "",
     ]
 

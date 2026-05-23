@@ -51,6 +51,13 @@ def companions_turn(state: dict) -> tuple[list[str], Outcome]:
     for c in list(state.get("companions") or []):
         if c.get("dead") or int(c.get("hp", 0) or 0) <= 0:
             continue
+        if c.get("is_skeleton"):
+            from game.necromancer.skeleton_abilities import companion_skeleton_turn
+
+            outcome = companion_skeleton_turn(c, state, logs)
+            if outcome == "win":
+                return logs, "win"
+            continue
         base = max(1, int(c.get("atk", 5)))
         hi_loy = int(c.get("loyalty", 0)) >= 70
         sk = 1.1 if hi_loy else 1.0

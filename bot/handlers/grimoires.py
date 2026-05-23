@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.keyboards.grimoire_kb import (
     grimoire_read_confirm_keyboard,
+    grimoires_inventory_list_keyboard,
+    grimoires_learned_keyboard,
     grimoires_menu_keyboard,
     mentor_quest_keyboard,
     supreme_use_confirm_keyboard,
@@ -22,6 +24,8 @@ from game.archetypes.grimoires import (
     SKILL_GRIMOIRES,
     SUPREME_GRIMOIRES,
     apply_supreme_grimoire_class_change,
+    format_grimoires_profile_html_ru,
+    grimoire_usable_by_character,
     inventory_keys,
     learned_keys,
     learn_grimoire,
@@ -99,6 +103,98 @@ async def on_mentor_quest(callback: CallbackQuery, session: AsyncSession, state:
         await callback.answer()
     except Exception:
         logger.exception("prf:mentor")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "grim:list")
+@router.callback_query(F.data.startswith("grim:list:"))
+async def on_grim_inventory_list(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        offset = 8
+        if callback.data and callback.data.startswith("grim:list:"):
+            try:
+                offset = max(8, int(callback.data.split(":")[2]))
+            except (IndexError, ValueError):
+                offset = 8
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        char = await character_repo.get_by_user_id(session, user.id) if user else None
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        inv = inventory_keys(char)
+        if len(inv) <= 8:
+            await callback.answer("Все книги уже в списке.", show_alert=True)
+            return
+        total = len(inv)
+        shown_end = min(total, offset + 8)
+        text = (
+            f"📖 <b>Гримуары в сумке</b> ({offset + 1}–{shown_end} из {total})\n\n"
+            "<i>Выберите книгу, чтобы прочитать.</i>"
+        )
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=text,
+            reply_markup=grimoires_inventory_list_keyboard(char, offset),
+            target_message=callback.message,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("grim:list")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "grim:learned")
+async def on_grim_learned_list(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.from_user is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+        char = await character_repo.get_by_user_id(session, user.id) if user else None
+        if char is None:
+            await callback.answer("Нет персонажа.", show_alert=True)
+            return
+        learned = sorted(learned_keys(char))
+        lines = [f"📚 <b>Изученные гримуары</b> — <b>{len(learned)}</b>\n"]
+        if not learned:
+            lines.append("<i>Пока ничего не изучено. Прочитайте книгу из сумки.</i>")
+        else:
+            for gk in learned:
+                if not grimoire_usable_by_character(char, gk):
+                    continue
+                g = SKILL_GRIMOIRES.get(gk)
+                sg = SUPREME_GRIMOIRES.get(gk)
+                if sg:
+                    lines.append(f"{sg.emoji} <b>{html.escape(sg.name_ru)}</b> — <i>высший гримуар</i>")
+                elif g:
+                    kind = {"active_skill": "активный", "passive_bonus": "пассив", "stat_boost": "стат"}.get(
+                        g.node_type,
+                        g.node_type,
+                    )
+                    lines.append(f"📖 <b>{html.escape(g.name_ru)}</b> — <i>{kind}</i>")
+        passive = format_grimoires_profile_html_ru(char).strip()
+        if passive:
+            lines.extend(["", "—", "", "📌 <b>Пассивные бонусы</b>", passive])
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text="\n".join(lines),
+            reply_markup=grimoires_learned_keyboard(char),
+            target_message=callback.message,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("grim:learned")
         await callback.answer("Ошибка.", show_alert=True)
 
 

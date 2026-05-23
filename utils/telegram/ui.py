@@ -27,9 +27,9 @@ from game.items.stat_bonuses import format_item_stat_bonus_line
 # Базовый разделитель (совместимость со старыми экранами).
 LINE_SEP: str = "------------------------"
 # Разные экраны — разный настрой (узнаваемо в ленте).
-LINE_SEP_BATTLE: str = "────────────────────"
-LINE_SEP_CITY: str = "════════════════════"
-LINE_SEP_TAVERN: str = "∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿"
+LINE_SEP_BATTLE: str = LINE_SEP
+LINE_SEP_CITY: str = LINE_SEP
+LINE_SEP_TAVERN: str = LINE_SEP
 
 
 def format_number(value: int) -> str:

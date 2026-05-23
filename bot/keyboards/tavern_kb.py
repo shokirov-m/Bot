@@ -5,9 +5,15 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from game.locations.tavern import tavern_offers_for_floor
+from game.tower.progression import floor_data
 
 
-def tavern_menu_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+def _city_anchor(city_anchor: int) -> int:
+    return floor_data.normalize_city_callback_key(city_anchor)
+
+
+def tavern_menu_keyboard(city_anchor: int) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(city_anchor)
     rows: list[list[InlineKeyboardButton]] = []
     for o in tavern_offers_for_floor(floor_number):
         label = f"{o.emoji} {o.name} — {o.price}💰"
@@ -34,12 +40,13 @@ def tavern_menu_keyboard(floor_number: int) -> InlineKeyboardMarkup:
 
 
 def tavern_daily_keyboard(
-    floor_number: int,
+    city_anchor: int,
     offers: dict,
     bought_blueprints: set[str],
     bought_gears: set[str],
     known_recipes: set[str],
 ) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(city_anchor)
     rows: list[list[InlineKeyboardButton]] = []
     for rid, name, price in offers.get("blueprints", []):
         if rid in known_recipes:
@@ -69,8 +76,9 @@ def tavern_daily_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def buyer_quest_keyboard(floor_number: int, state: dict) -> InlineKeyboardMarkup:
+def buyer_quest_keyboard(city_anchor: int, state: dict) -> InlineKeyboardMarkup:
     """Клавиатура экрана скупщика."""
+    floor_number = _city_anchor(city_anchor)
     rows: list[list[InlineKeyboardButton]] = []
 
     if not state:

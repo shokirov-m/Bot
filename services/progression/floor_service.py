@@ -319,11 +319,13 @@ def _format_explore_floor_4_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"{floor_data.format_floor_label(n)}  🌿 <b>Лес Начал</b>")
+    from utils.telegram.screen_style import floor_header_html
+
+    lines.append(floor_header_html(n, "🌿", "Лес Начал"))
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
-        "<i>Густой лес хранит тайны. Исследуй чащу, находи добычу и сразись "
-        "с Хранителем Рощи, чтобы открыть путь выше.</i>"
+        "<i>🗺 Исследуй чащу, собирай добычу и пробуди Хранителя Рощи — "
+        "тогда откроется путь выше.</i>"
     )
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️")
@@ -344,11 +346,12 @@ def _format_explore_floor_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"{floor_data.format_floor_label(n)}  🗻 <b>Пещера Первородных</b>")
+    from utils.telegram.screen_style import floor_header_html
+
+    lines.append(floor_header_html(n, "🗻", "Пещера Первородных"))
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
-        "<i>Тёмная пещера скрывает множество тайн. Исследуй каждый угол, "
-        "чтобы пробудить Хранителя и открыть путь выше.</i>"
+        "<i>🕯️ Каждый угол — загадка. Найди Хранителя и открой путь выше.</i>"
     )
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️")
@@ -369,11 +372,12 @@ def _format_explore_floor_22_message(character: Character) -> str:
             "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
             "после победы — <b>+40% золото и опыт</b>.</i>",
         )
-    lines.append(f"{floor_data.format_floor_label(n)}  🕳️ <b>Пещеры Теней</b>")
+    from utils.telegram.screen_style import floor_header_html
+
+    lines.append(floor_header_html(n, "🕳️", "Пещеры Теней"))
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     lines.append(
-        "<i>Тьма здесь живая. Каждый шаг — риск. Исследуй пещеру, "
-        "уничтожь Ткача Теней и открой путь выше.</i>"
+        "<i>🌑 Тьма живая. Исследуй залы, победи Ткача Теней — путь откроется.</i>"
     )
     hi = int(character.highest_floor_reached)
     lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️")
@@ -405,18 +409,19 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
     zone = floor_data.get_zone_for_floor(n)
     room = floor_data.epithet_for_floor(zone, n)
 
+    from utils.telegram.screen_style import compact_night_line, floor_header_html
+
     lines: list[str] = []
     if combat_night.is_night_utc():
-        lines.append(
-            "🌑 <b>[НОЧЬ UTC]</b> <i>Враги сильнее (<b>+20% HP/ATK</b>), "
-            "после победы — <b>+40% золото и опыт</b>. Играй с оглядкой.</i>",
-        )
-    lines.append(f"{floor_data.format_floor_label(n)}  {zone.emoji} <b>{html.escape(zone.name)}</b>")
+        lines.append(compact_night_line())
+    lines.append(floor_header_html(n, zone.emoji, zone.name))
     lines.append(f"📍 <i>{html.escape(room)}</i>")
     if not long_floor_mod.is_long_floor_active(character):
-        zd = zone.description
-        short = zd if len(zd) <= 80 else zd[:77] + "…"
-        lines.append(f"<i>{html.escape(short)}</i>")
+        zd = (zone.description or "").strip()
+        if zd:
+            lines.append(f"<i>{html.escape(zd)}</i>")
+    hi = int(character.highest_floor_reached)
+    lines.append(f"🧭 Открыто 1–{hi} · ⬆️⬇️")
     import game.tower.trials.floor_trial as floor_trial_mod
 
     if floor_trial_mod.is_trial_scenario_active(character):

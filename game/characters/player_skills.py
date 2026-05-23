@@ -9,8 +9,16 @@ from game.archetypes.models import PassiveV2
 from game.characters.skills import SkillDef, skills_for_class
 
 
-def skill_emoji(kind: str) -> str:
-    """⚔️ для физ. навыков, 🔮 для магических."""
+def skill_emoji(kind: str = "", *, skill: SkillDef | None = None, key: str = "") -> str:
+    """Эмодзи навыка: из SkillDef, по ключу в SKILLS или fallback phys/mag."""
+    if skill is not None and (skill.emoji or "").strip():
+        return str(skill.emoji).strip()
+    if key:
+        from game.archetypes.data import SKILLS, skill_emoji_for_v2
+
+        sk = SKILLS.get(key)
+        if sk is not None:
+            return skill_emoji_for_v2(sk)
     return "🔮" if kind == "mag" else "⚔️"
 
 
@@ -31,6 +39,8 @@ def passive_emoji(modifiers: dict) -> str:
 def _build_skill_by_key() -> dict[str, SkillDef]:
     result: dict[str, SkillDef] = {}
     from game.archetypes.data import SKILLS
+    from game.archetypes.data import skill_emoji_for_v2
+
     for key, sk in SKILLS.items():
         result[key] = SkillDef(
             key=sk.key,
@@ -41,6 +51,7 @@ def _build_skill_by_key() -> dict[str, SkillDef]:
             kind=str(sk.kind),
             effect_key=sk.effect_key,
             effect_chance=float(sk.effect_chance),
+            emoji=skill_emoji_for_v2(sk),
         )
     return result
 

@@ -128,16 +128,20 @@ def try_close_bank_term(character: Character, *, floor_key: int, force_early: bo
 
 
 def _in_city_hub(character: Character, floor_key: int) -> bool:
-    # Accept any city floor — the floor_key in old callbacks may differ if city was relocated.
-    return floor_data.get_city_for_floor(character.floor_number) is not None
+    if not floor_data.city_service_floor_ok(character, floor_key):
+        return False
+    return floor_data.get_city_for_floor(
+        int(character.floor_number),
+        highest_reached=int(character.highest_floor_reached),
+    ) is not None
 
 
 def try_play_lottery(character: Character, *, floor_key: int) -> tuple[bool, str]:
-    if int(character.floor_number) != int(floor_key):
+    if not floor_data.city_service_floor_ok(character, floor_key):
         return False, "Ты не на этом этаже."
     if floor_data.get_city_for_floor(character.floor_number) is None:
         return False, "Лотерея только в городе-хабе."
-    cost = sink_rules.lottery_ticket_cost_gold(int(floor_key))
+    cost = sink_rules.lottery_ticket_cost_gold(int(floor_data.normalize_city_callback_key(floor_key)))
     if int(character.gold) < cost:
         return False, f"Нужно {cost} золота для билета."
     dg, dr, code = sink_rules.run_lottery_draw(cost)
@@ -152,7 +156,7 @@ def try_play_lottery(character: Character, *, floor_key: int) -> tuple[bool, str
 
 
 def try_borrow_moneylender(character: Character, *, floor_key: int) -> tuple[bool, str]:
-    if int(character.floor_number) != int(floor_key):
+    if not floor_data.city_service_floor_ok(character, floor_key):
         return False, "Ты не на этом этаже."
     if floor_data.get_city_for_floor(character.floor_number) is None:
         return False, "Ростовщик только в городе."
@@ -171,7 +175,7 @@ def try_borrow_moneylender(character: Character, *, floor_key: int) -> tuple[boo
 
 
 def try_repay_moneylender(character: Character, *, floor_key: int) -> tuple[bool, str]:
-    if int(character.floor_number) != int(floor_key):
+    if not floor_data.city_service_floor_ok(character, floor_key):
         return False, "Ты не на этом этаже."
     d = sink_rules.moneylender_debt(character)
     if d <= 0:

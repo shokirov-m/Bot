@@ -39,6 +39,55 @@ def grimoires_menu_keyboard(character: Character) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def grimoires_inventory_list_keyboard(character: Character, offset: int = 8) -> InlineKeyboardMarkup:
+    """Страница сумки гримуаров (после первых 8 в меню)."""
+    inv = inventory_keys(character)
+    page_size = 8
+    off = max(8, int(offset))
+    rows: list[list[InlineKeyboardButton]] = []
+    for gk in inv[off : off + page_size]:
+        g = SKILL_GRIMOIRES.get(gk) or SUPREME_GRIMOIRES.get(gk)
+        label = getattr(g, "name_ru", gk)[:28] if g else gk[:28]
+        rows.append(
+            [InlineKeyboardButton(text=f"📖 {label}", callback_data=f"grim:read:{gk}")],
+        )
+    nav: list[InlineKeyboardButton] = []
+    if off > 8:
+        prev_off = max(8, off - page_size)
+        nav.append(
+            InlineKeyboardButton(text="◀️ Назад", callback_data=f"grim:list:{prev_off}"),
+        )
+    if off + page_size < len(inv):
+        nav.append(
+            InlineKeyboardButton(text="▶️ Ещё", callback_data=f"grim:list:{off + page_size}"),
+        )
+    if nav:
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(text="◀️ Гримуары", callback_data="prf:grimoires")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def grimoires_learned_keyboard(character: Character) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    learned = sorted(learned_keys(character))
+    for gk in learned:
+        sg = SUPREME_GRIMOIRES.get(gk)
+        if sg is None:
+            continue
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{sg.emoji} {sg.name_ru[:26]}",
+                    callback_data=f"grim:supreme:{gk}",
+                ),
+            ],
+        )
+    rows.append([InlineKeyboardButton(text="◀️ Гримуары", callback_data="prf:grimoires")])
+    rows.append(menu_nav_button_row())
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def grimoire_read_confirm_keyboard(grimoire_key: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

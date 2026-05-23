@@ -20,11 +20,22 @@ class SkillDef:
     kind: str  # phys | mag
     effect_key: str | None = None
     effect_chance: float = 0.0
+    emoji: str = ""
 
 def _map_v2_to_def(v2) -> SkillDef:
+    from game.archetypes.data import skill_emoji_for_v2
+
+    em = skill_emoji_for_v2(v2)
     return SkillDef(
-        v2.key, v2.name_ru, v2.mp_cost, v2.cooldown, v2.power_mult, v2.kind, 
-        v2.effect_key, v2.effect_chance
+        v2.key,
+        v2.name_ru,
+        v2.mp_cost,
+        v2.cooldown,
+        v2.power_mult,
+        v2.kind,
+        v2.effect_key,
+        v2.effect_chance,
+        em,
     )
 
 def skills_for_class(class_key: str, character: Character | None = None) -> tuple[SkillDef, SkillDef, SkillDef]:

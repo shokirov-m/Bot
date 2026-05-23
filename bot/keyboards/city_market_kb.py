@@ -53,7 +53,7 @@ def profile_skills_pick_keyboard(*, slot: int, learned_keys: list[str]) -> Inlin
         sk = SKILL_BY_KEY.get(k)
         if sk is None:
             continue
-        emoji = skill_emoji(sk.kind)
+        emoji = skill_emoji(skill=sk)
         label = f"{emoji} {sk.name}"[:20]
         row.append(
             InlineKeyboardButton(

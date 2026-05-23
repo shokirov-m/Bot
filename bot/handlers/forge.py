@@ -208,6 +208,11 @@ def _forge_city_callback_ok(char, floor_key: int) -> bool:
     return floor_data.city_service_floor_ok(char, floor_key)
 
 
+def _city_ck(char) -> int:
+    ck = floor_data.city_callback_key(char)
+    return ck if ck is not None else int(char.floor_number)
+
+
 @router.callback_query(F.data.startswith("frg:main:"))
 async def forge_open_main(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -231,7 +236,7 @@ async def forge_open_main(query: CallbackQuery, session: AsyncSession, state: FS
             query.bot,
             chat_id=query.message.chat.id,
             text=text,
-            reply_markup=forge_actions_keyboard(char.floor_number),
+            reply_markup=forge_actions_keyboard(_city_ck(char)),
             target_message=query.message,
             photo_path=menu_city_photo_path(),
             character=char,
@@ -278,7 +283,7 @@ async def forge_star_merge_menu(query: CallbackQuery, session: AsyncSession, sta
             query.bot,
             chat_id=query.message.chat.id,
             text=text,
-            reply_markup=forge_star_merge_pick_keyboard(char.floor_number, rows),
+            reply_markup=forge_star_merge_pick_keyboard(_city_ck(char), rows),
             target_message=query.message,
             photo_path=menu_city_photo_path(),
             character=char,
@@ -318,7 +323,7 @@ async def forge_star_merge_apply(query: CallbackQuery, session: AsyncSession, st
             query.bot,
             chat_id=query.message.chat.id,
             text=text,
-            reply_markup=forge_actions_keyboard(char.floor_number),
+            reply_markup=forge_actions_keyboard(_city_ck(char)),
             target_message=query.message,
             photo_path=menu_city_photo_path(),
             character=char,
@@ -521,7 +526,7 @@ async def _handle_forge_enchant_callback(
         query.bot,
         chat_id=query.message.chat.id,
         text=f"{refreshed}\n\n{body}",
-        reply_markup=forge_actions_keyboard(char.floor_number),
+        reply_markup=forge_actions_keyboard(_city_ck(char)),
         target_message=query.message,
         photo_path=menu_city_photo_path(),
         character=char,
@@ -614,7 +619,7 @@ async def forge_craft_run(query: CallbackQuery, session: AsyncSession) -> None:
         refreshed = await forge_service.build_forge_message_html(session, char)
         await edit_game_message_content(query.message,
             f"{refreshed}\n\n{body}",
-            reply_markup=forge_actions_keyboard(char.floor_number),
+            reply_markup=forge_actions_keyboard(_city_ck(char)),
             parse_mode=ParseMode.HTML,
         )
         await query.answer("Сварено!" if "насто" in body.lower() else "Готово!")
@@ -648,7 +653,7 @@ async def forge_brew_elixir(query: CallbackQuery, session: AsyncSession) -> None
         refreshed = await forge_service.build_forge_message_html(session, char)
         await edit_game_message_content(query.message,
             f"{refreshed}\n\n{body}",
-            reply_markup=forge_actions_keyboard(char.floor_number),
+            reply_markup=forge_actions_keyboard(_city_ck(char)),
         )
         await query.answer("Сварено!")
     except Exception:
@@ -871,7 +876,7 @@ async def forge_disassemble_sweep(query: CallbackQuery, session: AsyncSession) -
         body = await forge_service.build_forge_message_html(session, char)
         await edit_game_message_content(query.message,
             f"{body}\n\n{msg}",
-            reply_markup=forge_actions_keyboard(char.floor_number),
+            reply_markup=forge_actions_keyboard(_city_ck(char)),
             parse_mode="HTML",
         )
         await query.answer("Свип готов!")

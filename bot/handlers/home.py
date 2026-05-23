@@ -1204,6 +1204,11 @@ async def home_merc_quarters(callback: CallbackQuery, session: AsyncSession, sta
         if int(char.level) < 15:
             await callback.answer("Покои откроются с 15 уровня.", show_alert=True)
             return
+        from game.necromancer.service import is_necromancer, mercenaries_blocked_message
+
+        if is_necromancer(char):
+            await callback.answer(mercenaries_blocked_message(), show_alert=True)
+            return
         mercs = await mercenary_repo.list_for_character(session, char.id)
         cap = roster_collection_cap(char)
         raw_party = get_party_merc_ids(char)

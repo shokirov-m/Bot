@@ -14,7 +14,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "🌲",
         "floor_from": 1,
         "floor_to": 10,
-        "description": "Волки, пауки и гоблины охраняют нижние кольца.",
+        "description": "🌿 Тихий лес у подножия башни. Здесь учатся драться — враги слабее, но коварны. Элита опаснее обычных.",
     },
     {
         "key": "rotten_swamps",
@@ -22,10 +22,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "🌿",
         "floor_from": 11,
         "floor_to": 20,
-        "description": (
-            "Токсичный туман бьёт по HP перед боями (иммунитет при защите снаряжения 5+); "
-            "пиявки заносят яд на следующий этаж; густой туман на карте; заброшенный лагерь — лут или ловушка."
-        ),
+        "description": "🐸 Туман −5 HP перед боем, пиявки после боя. Ищи лагерь и не спеши с элитой.",
     },
     {
         "key": "shadow_caves",
@@ -33,7 +30,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "🕳️",
         "floor_from": 21,
         "floor_to": 30,
-        "description": "Теневые твари и крылатые тени в темноте.",
+        "description": "🕳️ Тьма живёт своей жизнью: тени бьют из засады, эхо путает шаги.",
     },
     {
         "key": "icy_peaks",
@@ -41,7 +38,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "❄️",
         "floor_from": 31,
         "floor_to": 40,
-        "description": "Мороз, големы и снежные йети.",
+        "description": "❄️ Мороз и йети давят массой. Лёд слабит уклонение — зато награды сочнее.",
     },
     {
         "key": "desert_oblivion",
@@ -49,7 +46,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "🏜️",
         "floor_from": 41,
         "floor_to": 50,
-        "description": "Жар, скорпионы и пески, искажающие время.",
+        "description": "🏜️ Жар и миражи: враги бьют резко, песок крадёт выносливость.",
     },
     {
         "key": "volcanic_ruins",
@@ -57,7 +54,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "🌋",
         "floor_from": 51,
         "floor_to": 60,
-        "description": "Лава, огненные элементали и драконьи тени.",
+        "description": "🌋 Пепел в лёгких, лава под ногами. Огненные твари горят ярче с каждым этажом.",
     },
     {
         "key": "blood_spire",
@@ -65,10 +62,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "🦇",
         "floor_from": 61,
         "floor_to": 70,
-        "description": (
-            "Десять ярусов вампирской саги — испытания, охота, захват и оборона. "
-            "Контент: content/data/packs/zones/blood_spire/"
-        ),
+        "description": "🩸 Вампирская сага: охота, ритуалы, оборона. Смерть сбрасывает фазу — играй осторожно.",
         "floor_type": "trial_hardcore",
     },
     {
@@ -77,7 +71,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "🌀",
         "floor_from": 71,
         "floor_to": 80,
-        "description": "Демоны и искажённые духи ломают разум.",
+        "description": "🌀 Реальность ломается: демоны, зеркала, крики. Здесь нет «обычных» боёв.",
     },
     {
         "key": "eternity_hall",
@@ -85,7 +79,7 @@ ZONES_RAW: tuple[dict[str, Any], ...] = (
         "emoji": "⚡",
         "floor_from": 81,
         "floor_to": 99,
-        "description": "Архидемоны и стражи вечности. Вершина известной карты — дальше туман.",
+        "description": "✨ Зал вечного света — вершина карты. Стражи проверяют всё, чему ты научился.",
     },
 )
 

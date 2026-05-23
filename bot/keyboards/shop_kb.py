@@ -5,13 +5,19 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from game.economy.shop import VIP_STAR_GOODS, shop_goods_for_floor
+from game.tower.progression import floor_data
 
 
-def shop_main_keyboard(floor_number: int, origin: str) -> InlineKeyboardMarkup:
+def _city_anchor(city_anchor: int) -> int:
+    return floor_data.normalize_city_callback_key(city_anchor)
+
+
+def shop_main_keyboard(city_anchor: int, origin: str) -> InlineKeyboardMarkup:
     """
     Обычный магазин — расходники за золото.
     origin: c — из города, f — с этажа, m — с рынка хаба, h — из дома, u — из меню.
     """
+    floor_number = _city_anchor(city_anchor)
     if origin == "a":
         back_cd = "auc:hub"
     elif origin == "u":
@@ -50,8 +56,9 @@ def shop_main_keyboard(floor_number: int, origin: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def shop_vip_keyboard(floor_number: int, origin: str) -> InlineKeyboardMarkup:
+def shop_vip_keyboard(city_anchor: int, origin: str) -> InlineKeyboardMarkup:
     """VIP-магазин — облики за Telegram Stars."""
+    floor_number = _city_anchor(city_anchor)
     rows: list[list[InlineKeyboardButton]] = []
     for g in VIP_STAR_GOODS:
         label = f"{g.emoji} {g.name} — {g.stars_price} ⭐"

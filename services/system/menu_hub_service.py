@@ -36,12 +36,10 @@ def format_menu_hub_html(character: Character, *, locale: str) -> str:
     ch = t(locale, "channel_display_name")
     return (
         f"{t(locale, 'hub_title')}\n"
-        f"{LINE_SEP}\n"
         f"📍 <b>{html.escape(player_location_label(int(character.floor_number)))}</b> · "
         f"Ур. <b>{int(character.level)}</b>\n"
         f"{t(locale, 'hub_rank_line', rank=rank_s)}\n"
         f"{t(locale, 'hub_title_line', title=title_s)}\n"
         f"{t(locale, 'hub_pet_line')}\n"
-        f"{LINE_SEP}\n"
         f"{t(locale, 'hub_daily_hint', channel=html.escape(ch))}"
     )

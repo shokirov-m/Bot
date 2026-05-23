@@ -70,13 +70,11 @@ def format_tavern_welcome_html(character: Character) -> str:
     lines = [
         f"{cem} <b>Таверна «У усталого стража»</b> — {cname}",
         "<i>Хозяин кивает: «Этаж не прощает слабых. Поешь — и снова в бой.»</i>",
-        LINE_SEP_TAVERN,
-        f"💰 Твоё золото: <b>{int(character.gold):,}</b>",
-        f"❤️ HP: {character.hp_current}/{character.hp_max}  "
-        f"💙 MP: {character.mp_current}/{character.mp_max}  "
-        f"⚡ Стамина: {character.stamina}/{settings.MAX_STAMINA}",
-        LINE_SEP_TAVERN,
-        "<b>Меню:</b>",
+        f"💰 Золото: <b>{int(character.gold):,}</b>",
+        f"❤️ {character.hp_current}/{character.hp_max} · "
+        f"💧 {character.mp_current}/{character.mp_max} · "
+        f"⚡ {character.stamina}/{settings.MAX_STAMINA}",
+        "🍽️ <i>Меню — на кнопках ниже.</i>",
     ]
     for o in tavern_loc.tavern_offers_for_floor(int(character.floor_number)):
         extra = ""

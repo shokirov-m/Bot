@@ -42,6 +42,11 @@ def _origin_ok(s: str) -> str:
     return s if s in ("c", "f", "m", "h", "u", "a") else "f"
 
 
+def _city_ck(char) -> int:
+    ck = floor_data.city_callback_key(char)
+    return ck if ck is not None else int(char.floor_number)
+
+
 async def _shop_push_ui(
     state: FSMContext,
     query: CallbackQuery,
@@ -116,7 +121,7 @@ async def shop_open(query: CallbackQuery, session: AsyncSession, state: FSMConte
             query,
             char,
             text,
-            shop_main_keyboard(char.floor_number, origin),
+            shop_main_keyboard(_city_ck(char), origin),
         )
         await query.answer()
     except Exception:
@@ -180,7 +185,7 @@ async def shop_buy(query: CallbackQuery, session: AsyncSession, state: FSMContex
             query,
             char,
             f"{header}\n\n{LINE_SEP}\n{payload}",
-            shop_main_keyboard(char.floor_number, origin),
+            shop_main_keyboard(_city_ck(char), origin),
         )
         await query.answer("Куплено!")
     except Exception:

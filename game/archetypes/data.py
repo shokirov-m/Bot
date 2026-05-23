@@ -2,7 +2,51 @@
 Raw data for Archetypes and Skills 2.0.
 """
 from __future__ import annotations
+
+from dataclasses import replace
+
 from game.archetypes.models import Archetype, SkillV2, PassiveV2
+
+SKILL_EMOJI: dict[str, str] = {
+    "wn_strike": "⚔️",
+    "wn_block": "🛡️",
+    "war_heavy": "🪓",
+    "war_bash": "🛡️",
+    "war_roar": "📣",
+    "war_whirlwind": "🌪️",
+    "mag_fire": "🔥",
+    "mag_frost": "❄️",
+    "mag_shield": "🔮",
+    "sct_shot": "🏹",
+    "sct_poison": "☠️",
+    "sct_dodge": "💨",
+    "aco_smite": "✨",
+    "aco_heal": "💚",
+    "aco_bless": "🙏",
+    "aco_smite_x25": "✨",
+    "pal_smite_x25": "⚜️",
+    "grd_wall": "🛡️",
+    "grd_crush": "💥",
+    "brs_rend": "🩸",
+    "brs_fury": "😤",
+    "pyro_flame": "🔥",
+    "pyro_ember": "🌋",
+    "cryo_lance": "❄️",
+    "cryo_barrier": "🧊",
+    "ass_shadow": "🌑",
+    "ass_venom": "☠️",
+    "rng_mark": "🎯",
+    "rng_evasion": "🌫️",
+    "pal_smite": "⚜️",
+    "pal_guard": "🛡️",
+    "prp_radiance": "💚",
+    "prp_hymn": "🎵",
+    "nec_bolt": "💀",
+    "nec_mend": "🖤",
+    "nec_wither": "🥀",
+    "nec_barrier": "🛡️",
+    "nec_aura": "👻",
+}
 
 SKILLS: dict[str, SkillV2] = {
     # --- Wanderer (Tier 0) ---
@@ -74,10 +118,21 @@ SKILLS: dict[str, SkillV2] = {
         "Тёмная магия по врагу.",
         18,
         0,
-        2.0,
+        3.0,
         "mag",
         effect_key="poison",
         effect_chance=0.35,
+    ),
+    "nec_mend": SkillV2(
+        "nec_mend",
+        "Поглощение жизни",
+        "Исцеляет некроманта и нежить в отряде.",
+        32,
+        4,
+        0.0,
+        "mag",
+        effect_key="nec_mend",
+        effect_chance=1.0,
     ),
     "nec_wither": SkillV2(
         "nec_wither",
@@ -93,8 +148,8 @@ SKILLS: dict[str, SkillV2] = {
     "nec_barrier": SkillV2(
         "nec_barrier",
         "Защитный барьер",
-        "Тёмный щит: 800 MP при активации и 800 MP каждый ход, пока стоит. Сила от ИНТ.",
-        800,
+        "Тёмный щит: 120 MP при активации и 120 MP каждый ход, пока стоит. Сила от ИНТ.",
+        120,
         5,
         0.0,
         "mag",
@@ -159,7 +214,7 @@ PASSIVES: dict[str, PassiveV2] = {
         "pas_nec_command",
         "Повелитель мёртвых",
         "Нежить бьёт сильнее; личные удары слабее.",
-        {"atk_bonus_pct": -30, "mag_bonus_percent": 12, "companion_atk_pct": 20},
+        {"atk_bonus_pct": -12, "mag_bonus_percent": 12, "companion_atk_pct": 20},
     ),
     "pas_nec_undying": PassiveV2(
         "pas_nec_undying",
@@ -292,10 +347,30 @@ ARCHETYPES: dict[str, Archetype] = {
         hp_multiplier=1.12,
         mp_multiplier=1.58,
         passives=(PASSIVES["pas_nec_command"], PASSIVES["pas_nec_undying"]),
-        skills=("nec_bolt", "nec_barrier", "nec_wither"),
+        skills=("nec_bolt", "nec_barrier", "nec_mend"),
         requirements={"level": 60},
     ),
 }
+
+
+def skill_emoji_for_v2(sk: SkillV2) -> str:
+    em = (sk.emoji or "").strip()
+    if em:
+        return em
+    return SKILL_EMOJI.get(sk.key) or ("🔮" if sk.kind == "mag" else "⚔️")
+
+
+def _apply_skill_emojis(skills: dict[str, SkillV2]) -> dict[str, SkillV2]:
+    out: dict[str, SkillV2] = {}
+    for key, sk in skills.items():
+        em = (sk.emoji or "").strip() or SKILL_EMOJI.get(key) or (
+            "🔮" if sk.kind == "mag" else "⚔️"
+        )
+        out[key] = replace(sk, emoji=em)
+    return out
+
+
+SKILLS = _apply_skill_emojis(SKILLS)
 
 
 def _merge_catalog_data() -> None:
@@ -306,7 +381,7 @@ def _merge_catalog_data() -> None:
         cs = ac.catalog_skills()
         cp = ac.catalog_passives()
         if cs:
-            SKILLS = {**SKILLS, **cs}
+            SKILLS = _apply_skill_emojis({**SKILLS, **cs})
         if cp:
             PASSIVES = {**PASSIVES, **cp}
         if cp:

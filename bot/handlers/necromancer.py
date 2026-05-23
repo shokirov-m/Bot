@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.necromancer_kb import (
     necromancer_coffin_keyboard,
     necromancer_menu_keyboard,
+    necromancer_quarters_keyboard,
     necromancer_ritual_keyboard,
+    necromancer_skeleton_detail_keyboard,
+    necromancer_soul_shop_keyboard,
 )
 from bot.states.combat_states import CombatStates
 from db.repository import character_repo, user_repo
@@ -30,8 +33,16 @@ from game.necromancer.service import (
     skeleton_role_label,
     unlocked_skeleton_keys,
 )
-from utils.telegram.game_ui import push_game_ui
+from game.necromancer.souls import (
+    format_skeleton_detail_html,
+    format_skeleton_quarters_html,
+    format_soul_shop_html,
+    get_souls,
+    try_buy_soul_shop_item,
+    try_upgrade_skeleton,
+)
 from utils.media.ui_photos import specialization_menu_photo_path
+from utils.telegram.game_ui import push_game_ui
 
 router = Router(name="necromancer")
 
@@ -40,7 +51,8 @@ def _menu_intro_html(char) -> str:
     if is_necromancer(char):
         return (
             "💀 <b>Некромант</b>\n\n"
-            "Ковчег костей и гримуары пути — в библиотеке (Меню → Локации)."
+            f"👻 Душ: <b>{get_souls(char)}</b> · покои нежити · лавка душ.\n"
+            "Ковчег костей и гримуары — в меню ниже."
         )
     can_ok, reason = can_purchase_necromancer(char)
     extra = f"\n\n⚠️ {html.escape(reason)}" if not can_ok else ""
@@ -93,6 +105,7 @@ def _coffin_html(char) -> str:
     return (
         "⚰️ <b>Ковчег костей</b>\n\n"
         f"Выберите до <b>{MAX_SKELETONS_IN_BATTLE}</b> союзников (колосс — 2 слота). "
+        "Склепный колосс открывается гримуаром «☠️ Склепный колосс».\n\n"
         "Нажмите, чтобы добавить или убрать:\n\n"
         + ("\n".join(lines) if lines else "• Нет открытых типов нежити.")
     )
@@ -281,3 +294,165 @@ async def on_necro_toggle(callback: CallbackQuery, session: AsyncSession, state:
     except Exception:
         logger.exception("necro:tog")
         await callback.answer("Ошибка.", show_alert=True)
+
+
+async def _require_necro(callback: CallbackQuery, session: AsyncSession):
+    if callback.from_user is None:
+        return None
+    user = await user_repo.get_by_telegram_id(session, callback.from_user.id)
+    if user is None:
+        return None
+    char = await character_repo.get_by_user_id(session, user.id)
+    if char is None or not is_necromancer(char):
+        await callback.answer("Только для некроманта.", show_alert=True)
+        return None
+    return char
+
+
+@router.callback_query(F.data.in_(("prf:necro:quarters", "hom:skel_q")))
+async def on_necro_quarters(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        if await state.get_state() == CombatStates.in_battle.state:
+            await callback.answer("Сначала заверши бой.", show_alert=True)
+            return
+        char = await _require_necro(callback, session)
+        if char is None:
+            return
+        back_home = callback.data == "hom:skel_q"
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=format_skeleton_quarters_html(char),
+            reply_markup=necromancer_quarters_keyboard(char, back_home=back_home),
+            target_message=callback.message,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("necro:quarters")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("prf:necro:skdet:"))
+async def on_necro_skeleton_detail(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        role_key = callback.data.split(":")[-1]
+        char = await _require_necro(callback, session)
+        if char is None:
+            return
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=format_skeleton_detail_html(char, role_key),
+            reply_markup=necromancer_skeleton_detail_keyboard(char, role_key, back_home=False),
+            target_message=callback.message,
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("necro:skdet")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("prf:necro:skupg:"))
+async def on_necro_skeleton_upgrade(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        parts = callback.data.split(":")
+        if len(parts) < 5:
+            await callback.answer()
+            return
+        role_key = parts[3]
+        kind = parts[4]
+        char = await _require_necro(callback, session)
+        if char is None:
+            return
+        ok, msg = try_upgrade_skeleton(char, role_key, kind=kind)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        await session.flush()
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=format_skeleton_detail_html(char, role_key) + f"\n\n✅ {html.escape(msg)}",
+            reply_markup=necromancer_skeleton_detail_keyboard(char, role_key),
+            target_message=callback.message,
+            character=char,
+        )
+        await callback.answer("Улучшено!")
+    except Exception:
+        logger.exception("necro:skupg")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:necro:shop")
+async def on_necro_soul_shop(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        char = await _require_necro(callback, session)
+        if char is None:
+            return
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=format_soul_shop_html(char),
+            reply_markup=necromancer_soul_shop_keyboard(char),
+            target_message=callback.message,
+            photo_path=specialization_menu_photo_path(),
+            character=char,
+        )
+        await callback.answer()
+    except Exception:
+        logger.exception("necro:shop")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("prf:necro:shopbuy:"))
+async def on_necro_soul_shop_buy(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+    try:
+        if callback.data is None or callback.message is None or callback.bot is None:
+            await callback.answer()
+            return
+        item_key = callback.data.split(":")[-1]
+        char = await _require_necro(callback, session)
+        if char is None:
+            return
+        ok, msg = try_buy_soul_shop_item(char, item_key)
+        if not ok:
+            await callback.answer(msg, show_alert=True)
+            return
+        await session.flush()
+        await push_game_ui(
+            state,
+            callback.bot,
+            chat_id=callback.message.chat.id,
+            text=format_soul_shop_html(char) + f"\n\n✅ {html.escape(msg)}",
+            reply_markup=necromancer_soul_shop_keyboard(char),
+            target_message=callback.message,
+            character=char,
+        )
+        await callback.answer("Куплено!")
+    except Exception:
+        logger.exception("necro:shopbuy")
+        await callback.answer("Ошибка.", show_alert=True)
+
+
+@router.callback_query(F.data == "prf:necro:shop:nop")
+async def on_necro_shop_nop(callback: CallbackQuery) -> None:
+    await callback.answer("Улучшение уже на максимуме.", show_alert=True)

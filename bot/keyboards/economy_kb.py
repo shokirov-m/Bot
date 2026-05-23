@@ -5,10 +5,15 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.keyboards.menu_kb import menu_nav_button_row
+from game.tower.progression import floor_data
 
 
-def economy_hub_keyboard(floor_number: int) -> InlineKeyboardMarkup:
-    f = int(floor_number)
+def _city_anchor(city_anchor: int) -> int:
+    return floor_data.normalize_city_callback_key(city_anchor)
+
+
+def economy_hub_keyboard(city_anchor: int) -> InlineKeyboardMarkup:
+    f = _city_anchor(city_anchor)
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text="🎰 Лотерея", callback_data=f"ecy:lot:{f}")],
         [
@@ -24,14 +29,14 @@ def economy_hub_keyboard(floor_number: int) -> InlineKeyboardMarkup:
 
 
 def bank_safe_keyboard(
-    floor_number: int,
+    city_anchor: int,
     *,
     bank_back: str = "hub",
     has_term: bool = False,
     has_pending_interest: bool = False,
     seal_active: bool = False,
 ) -> InlineKeyboardMarkup:
-    f = int(floor_number)
+    f = _city_anchor(city_anchor)
     back_cd = f"cty:mkt:{f}:open" if bank_back == "mkt" else f"ecy:hub:{f}"
     back_txt = "⬅ Рынок" if bank_back == "mkt" else "⬅ Экономика"
     rows: list[list[InlineKeyboardButton]] = [

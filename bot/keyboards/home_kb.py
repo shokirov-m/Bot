@@ -9,6 +9,18 @@ from bot.keyboards.menu_kb import menu_nav_button_row
 from db.models.character import Character
 
 
+from db.models.character import Character
+from game.necromancer.service import is_necromancer
+
+
+def _home_quarters_row(character: Character) -> list[InlineKeyboardButton] | None:
+    if int(character.level) < 15:
+        return None
+    if is_necromancer(character):
+        return [InlineKeyboardButton(text="🦴 Покои нежити", callback_data="hom:skel_q")]
+    return [InlineKeyboardButton(text="🛏 Покои наёмников", callback_data="hom:merc_q")]
+
+
 def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKeyboardMarkup:
     import services.progression.home_service as home_service
     from services.progression.rest_service import apply_completed_rest_if_needed, rest_seconds_left
@@ -22,8 +34,9 @@ def home_main_keyboard(character: Character, *, locale: str = "ru") -> InlineKey
 
     # Гардероб всегда
     rows.append([InlineKeyboardButton(text="🪞 Гардероб", callback_data="hom:ward")])
-    if int(character.level) >= 15:
-        rows.append([InlineKeyboardButton(text="🛏 Покои наёмников", callback_data="hom:merc_q")])
+    qrow = _home_quarters_row(character)
+    if qrow:
+        rows.append(qrow)
     # Передышка всегда
     rows.append([InlineKeyboardButton(text=rest_txt[:64], callback_data="hom:rest")])
 
@@ -111,8 +124,9 @@ def buildings_keyboard(character: Character) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if home_service.can_access_workbench(character):
         rows.append([InlineKeyboardButton(text="🛠 Верстак", callback_data="hom:bench")])
-    if int(character.level) >= 15:
-        rows.append([InlineKeyboardButton(text="🛏 Покои наёмников", callback_data="hom:merc_q")])
+    qrow = _home_quarters_row(character)
+    if qrow:
+        rows.append(qrow)
     rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -187,8 +201,9 @@ def mine_farm_keyboard(character: Character) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton(text="🍱 Тренировать питомцев", callback_data="hom:pet_train")])
     else:
         rows.append([InlineKeyboardButton(text=f"⛏ Расчистить шахту ({home_service.MINE_PURCHASE_GOLD:,}💰)", callback_data="hom:mine_buy")])
-    if int(character.level) >= 15:
-        rows.append([InlineKeyboardButton(text="🛏 Покои наёмников", callback_data="hom:merc_q")])
+    qrow = _home_quarters_row(character)
+    if qrow:
+        rows.append(qrow)
     rows.append([InlineKeyboardButton(text="⬅ В дом", callback_data="hom:hub")])
     rows.append(menu_nav_button_row())
     return InlineKeyboardMarkup(inline_keyboard=rows)

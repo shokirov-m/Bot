@@ -580,7 +580,10 @@
       "exp": 400,
       "gold": 300,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/boss_slime_king.png",
@@ -604,7 +607,10 @@
       "exp": 900,
       "gold": 600,
       "element": "poison",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/snake.png",
@@ -1111,7 +1117,10 @@
       "exp": 1760,
       "gold": 164,
       "element": "ice",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/mini_frost_troll.png",
@@ -1135,7 +1144,10 @@
       "exp": 2000,
       "gold": 1000,
       "element": "ice",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/boss_glacier_king.png",
@@ -1355,7 +1367,10 @@
       "exp": 960,
       "gold": 584,
       "element": "earth",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/mini_sand_titan.png",
@@ -1379,7 +1394,10 @@
       "exp": 2120,
       "gold": 1288,
       "element": "lightning",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/boss_time_scarab.png",
@@ -1599,7 +1617,10 @@
       "exp": 1160,
       "gold": 704,
       "element": "fire",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/mini_magma_lord.png",
@@ -1623,7 +1644,10 @@
       "exp": 2520,
       "gold": 1528,
       "element": "fire",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/boss_ember_dragon.png",
@@ -1647,7 +1671,10 @@
       "exp": 272,
       "gold": 204,
       "element": "earth",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/griffon.png",
@@ -1671,7 +1698,10 @@
       "exp": 272,
       "gold": 204,
       "element": "light",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/fallen.png",
@@ -1695,7 +1725,10 @@
       "exp": 272,
       "gold": 204,
       "element": "lightning",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/storm_elem.png",
@@ -1719,7 +1752,10 @@
       "exp": 272,
       "gold": 204,
       "element": "lightning",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/sky_serpent.png",
@@ -1743,7 +1779,10 @@
       "exp": 272,
       "gold": 204,
       "element": "light",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/valkyrie.png",
@@ -1767,7 +1806,10 @@
       "exp": 272,
       "gold": 204,
       "element": "light",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/cloud_stalker.png",
@@ -1791,7 +1833,10 @@
       "exp": 272,
       "gold": 204,
       "element": "lightning",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/thunder_wisp.png",
@@ -1815,7 +1860,10 @@
       "exp": 1360,
       "gold": 824,
       "element": "lightning",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/mini_storm_herald.png",
@@ -1839,7 +1887,10 @@
       "exp": 2920,
       "gold": 1768,
       "element": "light",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/boss_sky_tyrant.png",
@@ -1863,7 +1914,10 @@
       "exp": 312,
       "gold": 234,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/demon_imp.png",
@@ -1887,7 +1941,10 @@
       "exp": 312,
       "gold": 234,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/chaos_spawn.png",
@@ -1911,7 +1968,10 @@
       "exp": 312,
       "gold": 234,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/void_ling.png",
@@ -1935,7 +1995,10 @@
       "exp": 312,
       "gold": 234,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/corruptor.png",
@@ -1959,7 +2022,10 @@
       "exp": 312,
       "gold": 234,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/mad_cultist.png",
@@ -1983,7 +2049,10 @@
       "exp": 312,
       "gold": 234,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/fractal_hound.png",
@@ -2007,7 +2076,10 @@
       "exp": 312,
       "gold": 234,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/entropy_mite.png",
@@ -2031,7 +2103,10 @@
       "exp": 1560,
       "gold": 944,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/mini_chaos_knight.png",
@@ -2055,7 +2130,10 @@
       "exp": 3320,
       "gold": 2008,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/boss_chaos_avatar.png",
@@ -2079,7 +2157,10 @@
       "exp": 372,
       "gold": 279,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/archdemon.png",
@@ -2103,7 +2184,10 @@
       "exp": 372,
       "gold": 279,
       "element": "light",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/eternity_warden.png",
@@ -2127,7 +2211,10 @@
       "exp": 372,
       "gold": 279,
       "element": "lightning",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/time_phantom.png",
@@ -2151,7 +2238,10 @@
       "exp": 372,
       "gold": 279,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Ещё разок — и конец."
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/seraph_dark.png",
@@ -2175,7 +2265,10 @@
       "exp": 372,
       "gold": 279,
       "element": "earth",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/rune_golem.png",
@@ -2199,7 +2292,10 @@
       "exp": 372,
       "gold": 279,
       "element": "light",
-      "phrases": [],
+      "phrases": [
+        "Ты дрожишь?",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/chrono_wraith.png",
@@ -2223,7 +2319,10 @@
       "exp": 372,
       "gold": 279,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/seal_breaker.png",
@@ -2247,7 +2346,10 @@
       "exp": 1760,
       "gold": 1064,
       "element": "light",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/mini_time_judge.png",
@@ -2271,7 +2373,10 @@
       "exp": 3720,
       "gold": 2248,
       "element": "light",
-      "phrases": [],
+      "phrases": [
+        "Ещё разок — и конец.",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/boss_eternity_judge.png",
@@ -2295,7 +2400,10 @@
       "exp": 412,
       "gold": 309,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Слабак!"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/tower_warden.png",
@@ -2321,7 +2429,10 @@
       "exp": 4120,
       "gold": 2488,
       "element": "dark",
-      "phrases": [],
+      "phrases": [
+        "Слабак!",
+        "Ты дрожишь?"
+      ],
       "skills": [],
       "loot_table": "",
       "image": "assets/monsters/boss_tower_core.png",

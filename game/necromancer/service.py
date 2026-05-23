@@ -17,9 +17,13 @@ NECROMANCER_CLASS_KEY = "necromancer"
 NECROMANCER_COST_GOLD = 800_000
 NECROMANCER_MIN_LEVEL = 60
 MAX_SKELETONS_IN_BATTLE = 3
-NEC_BARRIER_MP_COST = 800
+NEC_BARRIER_CAST_MP = 120
+NEC_BARRIER_UPKEEP_MP = 120
+# Обратная совместимость (upkeep)
+NEC_BARRIER_MP_COST = NEC_BARRIER_UPKEEP_MP
+SKELETON_COMBAT_POWER_MULT = 3.0
 # Множитель поглощения к базовой формуле (ИНТ + уровень).
-NEC_BARRIER_EFFECT_MULT = 2.5
+NEC_BARRIER_EFFECT_MULT = 4.5
 
 META_NECRO = "necromancer_v1"
 META_UNLOCKS = "skeleton_unlocks"
@@ -158,7 +162,7 @@ def skeleton_power_mult_from_intelligence(character: Character) -> float:
     При 60 ИНТ ≈ ×1.45, при 100 ИНТ ≈ ×1.75.
     """
     intel = intelligence_stat(character)
-    return 1.0 + intel * 0.0075
+    return 1.0 + intel * 0.01
 
 
 def defensive_barrier_hp(
@@ -180,14 +184,19 @@ def defensive_barrier_hp(
         lv = max(1, int(level or NECROMANCER_MIN_LEVEL))
         hp_cap = max(1, int(hp_max or 1))
     raw = int(30 + intel * 14 + max(0, lv - NECROMANCER_MIN_LEVEL) * 5)
-    ceiling = max(80, int(hp_cap * 0.5))
+    ceiling = max(120, int(hp_cap * 0.75))
     base = max(40, min(raw, ceiling))
-    return max(72, int(round(base * NEC_BARRIER_EFFECT_MULT)))
+    barrier = max(72, int(round(base * NEC_BARRIER_EFFECT_MULT)))
+    if character is not None and is_necromancer(character):
+        from game.necromancer.souls import soul_shop_barrier_bonus_pct
+
+        barrier = max(72, int(round(barrier * (1.0 + soul_shop_barrier_bonus_pct(character)))))
+    return barrier
 
 
 def apply_necromancer_barrier_upkeep(state: dict[str, Any]) -> list[str]:
     """
-    Поддержание барьера в конце раунда: −800 MP.
+    Поддержание барьера в конце раунда: −NEC_BARRIER_UPKEEP_MP MP.
     Если маны нет — барьер рушится.
     """
     logs: list[str] = []
@@ -195,7 +204,7 @@ def apply_necromancer_barrier_upkeep(state: dict[str, Any]) -> list[str]:
         return logs
     if int(state.get("player_shield_hp", 0) or 0) <= 0:
         return logs
-    cost = NEC_BARRIER_MP_COST
+    cost = NEC_BARRIER_UPKEEP_MP
     mp = int(state.get("player_mp", 0) or 0)
     if mp < cost:
         state["player_shield_hp"] = 0
@@ -229,14 +238,30 @@ def build_skeleton_companions(character: Character) -> list[dict[str, Any]]:
         return []
     atk_mult = _skeleton_atk_bonus_mult(character)
     int_mult = skeleton_power_mult_from_intelligence(character)
+    from game.necromancer.souls import skeleton_upgrade_mults, soul_shop_skeleton_atk_bonus_pct
+
     lv = int(character.level)
+    soul_atk_pct = 1.0 + soul_shop_skeleton_atk_bonus_pct(character)
     out: list[dict[str, Any]] = []
     for key in party:
         rd = SKELETON_ROLES.get(key)
         if rd is None:
             continue
-        hp = max(1, int(round(_scale_stat(rd.base_hp, lv, 10.0) * int_mult)))
-        atk = max(1, int(round(_scale_stat(rd.base_atk, lv, 2.2) * atk_mult * int_mult)))
+        atk_up, hp_up = skeleton_upgrade_mults(character, key)
+        hp = max(1, int(round(_scale_stat(rd.base_hp, lv, 14.0) * int_mult * hp_up)))
+        atk = max(
+            1,
+            int(
+                round(
+                    _scale_stat(rd.base_atk, lv, 3.0)
+                    * atk_mult
+                    * int_mult
+                    * SKELETON_COMBAT_POWER_MULT
+                    * atk_up
+                    * soul_atk_pct,
+                ),
+            ),
+        )
         out.append(
             {
                 "id": f"skel:{key}",
@@ -249,9 +274,27 @@ def build_skeleton_companions(character: Character) -> list[dict[str, Any]]:
                 "loyalty": 80,
                 "dead": False,
                 "is_skeleton": True,
+                "ability_cd": 0,
             },
         )
     return out
+
+
+def unlock_skeleton(character: Character, skeleton_key: str) -> bool:
+    """Разблокировать тип нежити (гримуар / узел древа)."""
+    if not is_necromancer(character):
+        return False
+    sk = str(skeleton_key)
+    if sk not in SKELETON_ROLES:
+        return False
+    block = ensure_necro_meta(character)
+    unlocks = list(block.get(META_UNLOCKS) or [])
+    if sk in unlocks:
+        return True
+    unlocks.append(sk)
+    block[META_UNLOCKS] = unlocks
+    _save_necro(character, block)
+    return True
 
 
 def clear_merc_party_for_necromancer(character: Character) -> None:

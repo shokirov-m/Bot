@@ -19,6 +19,7 @@ class SkillV2:
     effect_key: str | None = None
     effect_chance: float = 0.0
     required_level: int = 1
+    emoji: str = ""
 
 @dataclass(frozen=True, slots=True)
 class PassiveV2:

@@ -267,9 +267,20 @@ def learn_grimoire(character: Character, grimoire_key: str) -> tuple[bool, str]:
     _save_meta(character, mp)
     g = SKILL_GRIMOIRES.get(grimoire_key)
     if g:
+        _apply_grimoire_unlock_side_effects(character, g)
         return True, f"Изучен гримуар: {g.name_ru}"
     sg = SUPREME_GRIMOIRES[grimoire_key]
     return True, f"Получен {sg.name_ru}. Используйте его для смены класса."
+
+
+def _apply_grimoire_unlock_side_effects(character: Character, grimoire: SkillGrimoireDef) -> None:
+    val = grimoire.value
+    if isinstance(val, dict):
+        sk_key = val.get("skeleton_unlock")
+        if sk_key:
+            from game.necromancer.service import unlock_skeleton
+
+            unlock_skeleton(character, str(sk_key))
 
 
 def apply_supreme_grimoire_class_change(character: Character, grimoire_key: str) -> tuple[bool, str]:

@@ -175,6 +175,28 @@ def _stats(state: dict[str, Any]) -> dict[str, int]:
     return state["stats"]
 
 
+def _skill_display_name(sk: Any) -> str:
+    from game.archetypes.data import skill_emoji_for_v2
+
+    name = str(getattr(sk, "name_ru", None) or getattr(sk, "name", None) or getattr(sk, "key", "Навык"))
+    em = ""
+    if hasattr(sk, "emoji") and (getattr(sk, "emoji", "") or "").strip():
+        em = str(sk.emoji).strip()
+    elif hasattr(sk, "key"):
+        try:
+            from game.archetypes.data import SKILLS
+
+            v2 = SKILLS.get(str(sk.key))
+            if v2 is not None:
+                em = skill_emoji_for_v2(v2)
+        except Exception:
+            pass
+    if not em:
+        kind = str(getattr(sk, "kind", "phys"))
+        em = "🔮" if kind == "mag" else "⚔️"
+    return f"{em} {name}"
+
+
 def _mods(state: dict[str, Any]) -> dict[str, Any]:
     raw = state.get("passive_mods")
     if isinstance(raw, dict):
@@ -764,7 +786,7 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
 
     from game.combat import boss_uniques as boss_uniques_mod
 
-    if sk.effect_key not in ("heal", "block_next", "dodge_buff", "shield", "barrier", "fortify", "cleanse"):
+    if sk.effect_key not in ("heal", "block_next", "dodge_buff", "shield", "barrier", "fortify", "cleanse", "nec_mend"):
         if boss_uniques_mod.monster_evades_player_attack(state, logs):
             return logs, "continue", 0
 
@@ -784,7 +806,21 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     if sk.effect_key == "heal":
         heal = int(state["player_hp_max"] * 0.25)
         state["player_hp"] = min(int(state["player_hp_max"]), int(state["player_hp"]) + heal)
-        logs.append(f"{sk.name}: +{heal} HP.")
+        logs.append(f"{_skill_display_name(sk)}: +{heal} HP.")
+        return logs, "continue", 0
+
+    if sk.effect_key == "nec_mend":
+        heal = int(state["player_hp_max"] * 0.22)
+        state["player_hp"] = min(int(state["player_hp_max"]), int(state["player_hp"]) + heal)
+        logs.append(f"{_skill_display_name(sk)}: +{heal} HP.")
+        for c in list(state.get("companions") or []):
+            if c.get("dead") or int(c.get("hp", 0) or 0) <= 0:
+                continue
+            chp_max = max(1, int(c.get("hp_max", c.get("hp", 1))))
+            mend = max(1, int(chp_max * 0.12))
+            c["hp"] = min(chp_max, int(c.get("hp", 0)) + mend)
+            nm = str(c.get("name", "Нежить"))
+            logs.append(f"💀 <b>{nm}</b>: +{mend} HP.")
         return logs, "continue", 0
 
     if sk.effect_key == "block_next":
@@ -808,14 +844,17 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
             intelligence=intel,
             level=int(state.get("player_level", st.get("level", 1))),
         )
+        bonus = float(state.get("necro_barrier_bonus_pct", 0) or 0)
+        if bonus > 0:
+            absorb = max(72, int(round(absorb * (1.0 + bonus))))
         state["player_shield_hp"] = absorb
         state["player_shield_hp_max"] = absorb
         state["player_shield_kind"] = "barrier"
-        from game.necromancer.service import NEC_BARRIER_MP_COST
+        from game.necromancer.service import NEC_BARRIER_UPKEEP_MP
 
         logs.append(
             f"{sk.name}: барьер <b>{absorb}</b> HP (🔮 ИНТ {intel}). "
-            f"Поддержание: <b>{NEC_BARRIER_MP_COST}</b> MP/ход.",
+            f"Поддержание: <b>{NEC_BARRIER_UPKEEP_MP}</b> MP/ход.",
         )
         return logs, "continue", 0
 
@@ -1020,11 +1059,11 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     # Поглощение рун голема
     dmg = apply_rune_golem_absorb(state, dmg, logs)
 
-    tag = "🔮" if sk.kind == "mag" else "🗡️"
+    tag = _skill_display_name(sk).split(" ", 1)[0]
     if crit:
-        logs.append(f"→ 👤 Герой: {tag} {sk.name}: {dmg} урона [КРИТ💥]")
+        logs.append(f"→ {_skill_display_name(sk)}: {dmg} урона [КРИТ💥]")
     else:
-        logs.append(f"→ 👤 Герой: {tag} {sk.name}: {dmg} урона")
+        logs.append(f"→ {_skill_display_name(sk)}: {dmg} урона")
 
     apply_equipment_on_hit_procs(state, mods, logs)
 

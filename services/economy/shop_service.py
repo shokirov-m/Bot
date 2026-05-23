@@ -14,6 +14,7 @@ from db.models.character import Character
 from db.repository import inventory_repo
 from game.combat import consumables as combat_consumables
 from game.economy import shop as shop_data
+from game.tower.progression import floor_data
 import services.progression.character_service as character_service
 import services.progression.home_service as home_service
 import services.economy.vip_shop_bonus_service as vip_shop_bonus_service
@@ -33,6 +34,7 @@ def format_shop_welcome_html(character: Character, *, from_city: bool) -> str:
     from game.tower.progression import floor_data
 
     fln = int(character.floor_number)
+    price_floor = floor_data.economy_pricing_floor(character)
     city = floor_data.get_city_for_floor(fln, highest_reached=int(character.highest_floor_reached))
     quiet_brook = city is not None and int(city.after_floor) == 0
     if from_city:
@@ -49,30 +51,14 @@ def format_shop_welcome_html(character: Character, *, from_city: bool) -> str:
     shop_title = "🏛️ <b>Рынок — лавка</b>" if (from_city and quiet_brook) else "🏪 <b>Лавка торговца</b>"
     lines = [
         f"{shop_title} {place}",
-        f"<i>Ассортимент и наценка по этажу героя: <b>{fln}</b>. Сейчас {where_ru}.</i>",
-        "<i>«Всё лучшее с нижних колец башни… наличные только золотом.»</i>",
-        LINE_SEP,
+        f"<i>Этаж цен: <b>{price_floor}</b> · {where_ru}.</i>",
+        "💬 <i>«Выбирай с кнопок — всё честно, только золото.»</i>",
         f"💰 Золото: <b>{int(character.gold):,}</b>",
-        LINE_SEP,
-        "🛒 <b>Товар (обычный):</b>",
+        "🛒 <i>Товары — на кнопках ниже.</i>",
     ]
-    fl = int(character.floor_number)
     fam_disc = float(npc_merchant_price_multiplier(character)) < 0.999
-    for g in shop_data.shop_goods_for_floor(fl):
-        p = _final_shop_gold_price(character, g.price, fl)
-        p_no_scale = g.price
-        p_floor = int(shop_data.effective_good_price(g.price, fl))
-        eff_note = ""
-        if p != p_no_scale and p == p_floor:
-            eff_note = f" <i>(кат. {g.price} 💰)</i>"
-        elif p != p_floor and not fam_disc:
-            eff_note = f" <i>(надбавка этажа, база {g.price})</i>"
-        lines.append(
-            f"{g.emoji} <b>{html.escape(g.name)}</b> — {p} 💰{eff_note}\n"
-            f"<i>{html.escape(g.blurb)}</i>",
-        )
     if fam_disc:
-        lines.append("<i>Известность: −10% к золотым ценам (слава 75+), суммируется с акцией бродячего торговца.</i>")
+        lines.append("<i>⭐ Слава 75+: −10% к ценам в золоте.</i>")
     return "\n".join(lines)
 
 
@@ -117,17 +103,18 @@ async def try_buy_good(
     allow_remote_shop: bool = False,
 ) -> tuple[bool, str]:
     """Покупка за золото. (False, plain) или (True, HTML)."""
-    if character.floor_number != expected_floor:
+    if not floor_data.city_service_floor_ok(character, expected_floor):
         return False, "Ты не на этом этаже."
 
     if not allow_remote_shop and not shop_data.shop_available_on_floor(character.floor_number):
         return False, "Здесь нет торговца."
 
-    good = shop_data.good_by_key(good_key, floor_number=int(character.floor_number))
+    price_floor = floor_data.economy_pricing_floor(character)
+    good = shop_data.good_by_key(good_key, floor_number=price_floor)
     if good is None:
         return False, "Такого товара нет."
 
-    price = _final_shop_gold_price(character, good.price, int(character.floor_number))
+    price = _final_shop_gold_price(character, good.price, price_floor)
     mp = dict(character.meta_progress or {})
     disc_left = int(mp.get("merchant_discount_charges") or 0)
     used_discount = False

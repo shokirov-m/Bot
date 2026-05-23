@@ -92,6 +92,19 @@ def remember_tower_floor(character: Character) -> None:
     character.meta_progress = mp
 
 
+def peek_return_tower_floor(character: Character) -> int:
+    """Боевой этаж, с которого ушли в хаб (без pop)."""
+    mp = dict(character.meta_progress or {})
+    raw = mp.get(_TOWER_RETURN_FLOOR_META)
+    if raw is None:
+        return max(1, min(int(character.highest_floor_reached), int(character.floor_number)))
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        n = 1
+    return max(1, min(n, int(character.highest_floor_reached)))
+
+
 def pop_return_tower_floor(character: Character) -> int:
     mp = dict(character.meta_progress or {})
     raw = mp.pop(_TOWER_RETURN_FLOOR_META, None)

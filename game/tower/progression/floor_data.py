@@ -227,15 +227,30 @@ def get_city_for_floor(
     highest_reached: int | None = None,
 ) -> CityInfo | None:
     """
-    Ближайший доступный город-хаб с боевого яруса.
-    Город стоит между after_floor и after_floor+1 (не на боевом номере).
+    Ближайший доступный город-хаб с боевого яруса башни.
+    На хаб-этаже 91xx — конкретный город этого хаба.
     """
+    from game.locations import hub_floors as hf
+
+    n = int(floor_number)
+    if hf.is_city_hub_floor(n):
+        return hf.city_for_hub_floor(n)
     hi = int(highest_reached if highest_reached is not None else floor_number)
     best: CityInfo | None = None
     for city in sorted(CITIES.values(), key=lambda c: c.after_floor):
         if _city_unlocked(hi, city):
             best = city
     return best
+
+
+def normalize_city_callback_key(floor_or_anchor: int) -> int:
+    """Якорь города (0/30/60/90) из callback или hub-этажа 91xx."""
+    from game.locations import hub_floors as hf
+
+    v = int(floor_or_anchor)
+    if hf.is_city_hub_floor(v):
+        return int(hf.city_anchor_from_hub_floor(v) or 0)
+    return v
 
 
 def city_service_anchor_for_character(character: Character) -> int | None:
@@ -252,10 +267,27 @@ def city_service_anchor_for_character(character: Character) -> int | None:
     return city.after_floor if city else None
 
 
+def city_callback_key(character: Character) -> int | None:
+    """Якорь для callback кузницы/лавки/таверны/экономики."""
+    return city_service_anchor_for_character(character)
+
+
 def city_service_floor_ok(character: Character, floor_key: int) -> bool:
-    """Проверка floor_key в callback города (якорь, не боевой этаж)."""
+    """Проверка floor_key в callback города (якорь или legacy hub 91xx)."""
     anchor = city_service_anchor_for_character(character)
-    return anchor is not None and int(floor_key) == int(anchor)
+    if anchor is None:
+        return False
+    return int(normalize_city_callback_key(floor_key)) == int(anchor)
+
+
+def economy_pricing_floor(character: Character) -> int:
+    """Этаж башни для наценок лавки/услуг (не hub 91xx)."""
+    from game.locations import hub_floors as hf
+
+    n = int(character.floor_number)
+    if hf.is_hub_floor(n):
+        return hf.peek_return_tower_floor(character)
+    return max(1, n)
 
 
 def city_button_label(floor_number: int, *, highest_reached: int | None = None) -> str | None:

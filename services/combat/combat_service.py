@@ -136,6 +136,17 @@ from services.progression.stamina_service import can_start_combat
 from services.combat.combat_fsm_backup import clear_combat_backup, persist_combat_backup
 from utils.telegram.ui import LINE_SEP, LINE_SEP_BATTLE, render_hp_bar, render_mp_bar
 
+
+def _apply_necromancer_combat_meta(combat_state: dict[str, Any], character) -> None:
+    from game.necromancer.service import is_necromancer
+
+    if not is_necromancer(character):
+        return
+    from game.necromancer.souls import soul_shop_barrier_bonus_pct
+
+    combat_state["necro_barrier_bonus_pct"] = soul_shop_barrier_bonus_pct(character)
+
+
 TUTORIAL_DUMMY_TEMPLATE = MonsterTemplate(
     "tutorial_dummy",
     "Учебный манекен",
@@ -732,8 +743,8 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
                 f"{st} <b>{html.escape(str(c.get('name', '?')))}</b> "
                 f"{render_hp_bar(int(c.get('hp', 0)), int(c.get('hp_max', 1)), wrap_bar_in_code=False, spaced_numbers=True)}",
             )
-        squad_title = "▸ НЕЖИТЬ" if any(c.get("is_skeleton") for c in comps) else "▸ НАЁМНИКИ"
-        merc_p = f"<b>{squad_title}</b>\n" + "\n".join(bits) + "\n\n"
+        squad_title = "👻 Нежить" if any(c.get("is_skeleton") for c in comps) else "🤝 Отряд"
+        merc_p = f"{squad_title}\n" + "\n".join(bits) + "\n\n"
 
     logs = list(state.get("ui_logs", []) or [])
     log_lines = "\n".join(logs) if logs else ""
@@ -750,38 +761,29 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
         log_block = "<i>—</i>"
 
     fln = int(state.get("floor", 0))
-    sep = LINE_SEP_BATTLE
     night_note = ""
     if state.get("night_battle"):
-        night_note = (
-            "<i>🌑 Ночь UTC: враг +20% HP/ATK, победа +40% золото и опыт.</i>\n"
-        )
+        from utils.telegram.screen_style import compact_night_line
 
-    title = f"⚔️ <b>— ЭТАЖ {fln} —</b>"
+        night_note = compact_night_line() + "\n"
+
+    title = f"⚔️ <b>Этаж {fln}</b>"
     if state.get("night_battle"):
         title += " 🌑"
 
     return (
-        f"{sep}\n"
         f"{title}\n"
-        f"{sep}\n"
         f"{night_note}"
-        f"<b>▸ ВРАГ</b>\n"
-        f"{enemy_line}\n"
+        f"👹 {enemy_line}\n"
         f"{hp_mon}\n"
         f"{buff_line}"
-        f"\n"
-        f"<b>▸ ИГРОК</b>\n"
+        f"🧙 <b>Ты</b>\n"
         f"{php_line}\n"
-        f"\n"
         f"{mp_line}\n"
         f"{shield_p}"
         f"{pet_p}"
         f"{merc_p}"
-        f"{sep}\n"
-        f"📜 Лог хода:\n"
-        f"{log_block}\n"
-        f"{sep}"
+        f"📜 {log_block}"
     )
 
 
@@ -915,6 +917,7 @@ async def start_coliseum_combat(
     _comps = await mercenary_service.build_combat_companions(session, character)
     if _comps:
         combat_state["companions"] = _comps
+    _apply_necromancer_combat_meta(combat_state, character)
 
     taunt = engine.opening_taunt(combat_state)
     combat_state["battle_taunt_html"] = _taunt_banner_html(taunt)
@@ -1216,6 +1219,7 @@ async def start_combat(
         _comps = await mercenary_service.build_combat_companions(session, character)
         if _comps:
             combat_state["companions"] = _comps
+    _apply_necromancer_combat_meta(combat_state, character)
 
     leech_tgt = rotten_swamps_mod.get_leech_target_floor(character)
     if leech_tgt is not None and int(character.floor_number) == leech_tgt:
@@ -2180,6 +2184,10 @@ async def _victory_sequence(
     _pack_mat_note = ""
     if _pack_mat_drop:
         _pack_mat_note = f"\n📦 <b>Материал Шпиля:</b> {html.escape(_pack_mat_drop)}"
+    from game.necromancer.souls import maybe_grant_soul_on_victory
+
+    _soul_granted = maybe_grant_soul_on_victory(character)
+    _soul_note = "\n👻 <b>+1 душа</b>" if _soul_granted else ""
     # Обновляем прогресс цепочек кузнеца и скупщика (по всем хабам)
     import services.progression.forge_quest_service as forge_quest_service
     import services.progression.tavern_buyer_service as tavern_buyer_service
@@ -2563,6 +2571,7 @@ async def _victory_sequence(
                 + gg_kill_note
                 + _mat_note
                 + _pack_mat_note
+                + _soul_note
                 + durability_note
             )
             gg_body = (
@@ -2621,6 +2630,7 @@ async def _victory_sequence(
                         + gg_kill_note
                         + _mat_note
                         + _pack_mat_note
+                        + _soul_note
                         + durability_note
                     )
                 gold_line = f"💰 +{net_gold} золота"

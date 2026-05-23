@@ -69,6 +69,10 @@ def profile_view_keyboard(character: Character | None = None, *, locale: str = "
             InlineKeyboardButton(text="📊 Полные характеристики", callback_data="prf:full"),
         ],
     ]
+    if character is not None and pets_mod.owned_keys(character):
+        rows.append(
+            [InlineKeyboardButton(text=t(loc, "profile_pet_btn"), callback_data="prf:pet")],
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

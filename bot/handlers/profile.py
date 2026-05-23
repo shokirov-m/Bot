@@ -42,6 +42,7 @@ import services.progression.title_service as title_service
 from services.economy.workshop_profile_ui import workshop_compact_line, workshop_full_stats_block
 from services.progression.rest_service import apply_completed_rest_if_needed
 from game.characters import pets as pets_mod
+from game.necromancer.service import is_necromancer
 from game.characters.classes import get_class_or_none
 from game.archetypes import manager as arch_manager
 from game.characters.global_passives import format_unlocked_global_passives_ru, refresh_global_passives
@@ -112,7 +113,7 @@ def build_skills_screen_html(char: Character, *, locale: str) -> str:
     for i, key in enumerate(slots):
         sk = SKILL_BY_KEY.get(key) if key else None
         if sk:
-            emoji = skill_emoji(sk.kind)
+            emoji = skill_emoji(skill=sk)
             nm = f"{emoji} {html.escape(sk.name)}"
         else:
             nm = "— (не выбран)"
@@ -147,13 +148,13 @@ def build_skills_screen_html(char: Character, *, locale: str) -> str:
             sk_row = SKILL_BY_KEY.get(k)
             sk_v2 = arch_manager.get_skill(k)
             if sk_row and sk_v2:
-                emoji = skill_emoji(sk_row.kind)
+                emoji = skill_emoji(skill=sk_row)
                 lines.append(
                     f"  {emoji} <b>{html.escape(sk_row.name)}</b> — "
                     f"<i>{html.escape(sk_v2.description_ru)}</i> · MP {sk_row.mp_cost}, CD {sk_row.cooldown}"
                 )
             elif sk_row:
-                emoji = skill_emoji(sk_row.kind)
+                emoji = skill_emoji(skill=sk_row)
                 lines.append(f"  {emoji} <b>{html.escape(sk_row.name)}</b>")
             else:
                 lines.append(f"  • <code>{html.escape(k)}</code>")
@@ -291,24 +292,20 @@ def _build_profile_text(
     if compact:
         gp_show = html.escape(global_passives_line) if global_passives_line.strip() else "—"
         lines: list[str] = [
-            LINE_SEP,
             head_row_compact,
-            f"🎖️ Звание: {rank_combine}",
-            f"🏆 Титулы: {titles_row}",
+            f"🎖️ {rank_combine} · 🏆 {titles_row}",
+            f"🌐 <i>{gp_show}</i>",
+            f"💰 {format_number(int(char.gold))}",
         ]
+        if is_necromancer(char):
+            from game.necromancer.souls import get_souls
+
+            lines.insert(-1, f"👻 Душ: <b>{get_souls(char)}</b>")
         lines.extend(
             [
-                f"🌐 Глобальные бонусы: <i>{gp_show}</i>",
-                LINE_SEP,
-                f"💰 Золото: {format_number(int(char.gold))}",
-                "",
                 fame_service.format_fame_html(char),
-                _sticker_profile_block(char),
-                LINE_SEP,
                 render_hp_bar(char.hp_current, char.hp_max, wrap_bar_in_code=False),
-                "",
                 render_mp_bar(char.mp_current, char.mp_max, wrap_bar_in_code=False),
-                "",
                 render_stamina_bar(
                     char.stamina,
                     settings.MAX_STAMINA,
@@ -316,17 +313,15 @@ def _build_profile_text(
                     minutes_to_next=st_hint,
                     wrap_bar_in_code=False,
                 ),
-                "",
                 render_exp_bar(int(char.experience), xp_need, wrap_bar_in_code=False),
-                "",
                 workshop_compact_line(char),
-                LINE_SEP,
-                "📊 <b>Характеристики</b>",
-                f"⚔️ СИЛ: {_fmt_stat_plain(char.stat_strength, str_e)}    🏃 ЛОВ: {_fmt_stat_plain(char.stat_dexterity, dex_e)}",
-                f"🔮 ИНТ: {_fmt_stat_plain(char.stat_intelligence, int_e)}    🛡️ ВЫН: {_fmt_stat_plain(char.stat_vitality, vit_e)}",
-                f"🍀 УДА: {_fmt_stat_plain(char.stat_luck, luck_e)}",
-                f"🛡️ Защита (броня): <b>{gear_defense}</b>",
-                LINE_SEP,
+                "📊 "
+                f"СИЛ {_fmt_stat_plain(char.stat_strength, str_e)} · "
+                f"ЛОВ {_fmt_stat_plain(char.stat_dexterity, dex_e)} · "
+                f"ИНТ {_fmt_stat_plain(char.stat_intelligence, int_e)}",
+                f"ВЫН {_fmt_stat_plain(char.stat_vitality, vit_e)} · "
+                f"УДА {_fmt_stat_plain(char.stat_luck, luck_e)} · "
+                f"🛡️ {gear_defense}",
             ],
         )
         unspent = int(getattr(char, "unspent_stat_points", 0) or 0)

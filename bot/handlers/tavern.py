@@ -29,6 +29,11 @@ async def _load_char(session: AsyncSession, telegram_id: int):
     return await character_repo.get_by_user_id(session, user.id)
 
 
+def _city_ck(char) -> int:
+    ck = floor_data.city_callback_key(char)
+    return ck if ck is not None else int(char.floor_number)
+
+
 @router.callback_query(F.data.startswith("tvr:open:"))
 async def tavern_open(query: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
     try:
@@ -52,7 +57,7 @@ async def tavern_open(query: CallbackQuery, session: AsyncSession, state: FSMCon
             query.bot,
             chat_id=query.message.chat.id,
             text=text,
-            reply_markup=tavern_menu_keyboard(char.floor_number),
+            reply_markup=tavern_menu_keyboard(_city_ck(char)),
             target_message=query.message,
             photo_path=menu_city_photo_path(),
             character=char,
@@ -94,7 +99,7 @@ async def tavern_buy(query: CallbackQuery, session: AsyncSession, state: FSMCont
             query.bot,
             chat_id=query.message.chat.id,
             text=f"{header}\n\n{LINE_SEP}\n{payload}",
-            reply_markup=tavern_menu_keyboard(char.floor_number),
+            reply_markup=tavern_menu_keyboard(_city_ck(char)),
             target_message=query.message,
             photo_path=menu_city_photo_path(),
             character=char,
@@ -227,7 +232,7 @@ async def _render_tavern_daily(state: FSMContext, query: CallbackQuery, char) ->
             query.bot,
             chat_id=query.message.chat.id,
             text=text,
-            reply_markup=tavern_daily_keyboard(int(char.floor_number), offers, bb, bg, known),
+            reply_markup=tavern_daily_keyboard(_city_ck(char), offers, bb, bg, known),
             target_message=query.message,
             photo_path=menu_city_photo_path(),
             character=char,

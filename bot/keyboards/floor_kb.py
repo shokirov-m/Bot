@@ -186,15 +186,8 @@ def floor_screen_keyboard(
 
     _append_zone_masters_row(rows, character, floor_number)
 
-    buffer: list[InlineKeyboardButton] = []
-
-    def flush() -> None:
-        nonlocal buffer
-        if buffer:
-            rows.append(buffer)
-            buffer = []
-
     from game.tower.combat import boss_retry_cooldown as boss_retry_mod
+    from utils.telegram.screen_style import truncate_button_label
 
     if not (tutorial_battle_pending(character) and floor_number == 2):
         for sp in spawns:
@@ -206,37 +199,22 @@ def floor_screen_keyboard(
                 and sp.slot_code not in beaten
             ):
                 base = rotten_swamps_mod.mystery_spawn_label()
-            max_len = 64 if (sp.is_major_boss or sp.is_mini_boss or sp.is_elite) else 30
+            suffix = ""
             if sp.slot_code in beaten:
                 suffix = " ✅"
                 if sp.is_major_boss:
                     cd_left = boss_retry_mod.retry_seconds_left(character, floor_number)
                     if cd_left > 0:
                         suffix = f" ⏳{cd_left // 60}м"
-                avail = max_len - len(suffix)
-                if len(base) > avail:
-                    base = base[: avail - 1] + "…"
-                label = base + suffix
-            else:
-                label = base
-                if len(label) > max_len:
-                    label = label[: max_len - 1] + "…"
-            btn = InlineKeyboardButton(
-                text=label,
-                callback_data=_cb(floor_number, sp.slot_code),
+            label = truncate_button_label(base + suffix, 64)
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=label,
+                        callback_data=_cb(floor_number, sp.slot_code),
+                    ),
+                ],
             )
-            if sp.is_major_boss or sp.is_mini_boss or sp.is_elite:
-                flush()
-                rows.append([btn])
-            else:
-                buffer.append(btn)
-                if len(buffer) >= 2:
-                    flush()
-    else:
-        # Если учебный бой активен, можно добавить подсказку или оставить пусто
-        pass
-
-    flush()
 
     pend = tower_next_floor_pending(character)
     if pend is not None:

@@ -347,6 +347,15 @@ _BUILTIN_TREES: dict[str, dict[str, SkillTreeNode]] = {
             cost_sp=4,
             parent_keys=("nec_n2",),
         ),
+        "nec_n6": SkillTreeNode(
+            "nec_n6",
+            "☠️ Склепный колосс",
+            "Открывает склепного колосса в ковчеге (2 слота).",
+            "passive_bonus",
+            {"skeleton_unlock": "skel_colossus"},
+            cost_sp=6,
+            parent_keys=("nec_n4", "nec_n5"),
+        ),
     },
 }
 

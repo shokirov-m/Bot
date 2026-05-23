@@ -11,6 +11,11 @@ from game.items.equipment import RARITY_NAME_RU, item_kind_label_ru
 from game.locations import forge as forge_loc
 
 
+def _city_anchor(city_anchor: int) -> int:
+    """Нормализация: якорь 0/30/60/90 (legacy hub 91xx тоже)."""
+    return floor_data.normalize_city_callback_key(city_anchor)
+
+
 def _dis_rarity_filter_label(code: str) -> str:
     if code == "all":
         return "Все"
@@ -30,14 +35,13 @@ __all__ = [
 ]
 
 
-def _forge_star_merge_row_visible(floor_number: int) -> bool:
-    if not forge_loc.forge_available_on_floor(floor_number):
-        return False
-    c = floor_data.get_city_for_floor(int(floor_number))
-    return c is not None and int(c.after_floor) >= 60
+def _forge_star_merge_row_visible(city_anchor: int) -> bool:
+    anchor = _city_anchor(city_anchor)
+    return int(anchor) >= 60
 
 
-def forge_star_merge_pick_keyboard(floor_number: int, items: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+def forge_star_merge_pick_keyboard(city_anchor: int, items: list[tuple[int, str]]) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(city_anchor)
     rows: list[list[InlineKeyboardButton]] = []
     for iid, lab in items[:14]:
         short = lab if len(lab) <= 40 else lab[:37] + "…"
@@ -54,7 +58,8 @@ def forge_star_merge_pick_keyboard(floor_number: int, items: list[tuple[int, str
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def forge_rune_menu_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+def forge_rune_menu_keyboard(city_anchor: int) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(city_anchor)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="💎 Вставить руну", callback_data=f"frg:rsl:{floor_number}")],
@@ -75,6 +80,7 @@ def forge_rune_bag_pick_keyboard(
     floor_number: int,
     items: list[tuple[int, str]],
 ) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(floor_number)
     rows: list[list[InlineKeyboardButton]] = []
     for item_id, label in items[:14]:
         short = label if len(label) <= 36 else label[:33] + "…"
@@ -97,6 +103,7 @@ def forge_rune_socket_pick_keyboard(
     floor_number: int,
     labels: list[tuple[int, str]],
 ) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(floor_number)
     rows: list[list[InlineKeyboardButton]] = []
     for idx, label in labels[:8]:
         rows.append(
@@ -120,6 +127,7 @@ def forge_enchant_slots_keyboard(
     *,
     ward: bool = False,
 ) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(floor_number)
     prefix = "enchw" if ward else "ench"
     rows: list[list[InlineKeyboardButton]] = []
     for slot_code, label in slots[:12]:
@@ -141,6 +149,7 @@ def forge_craft_recipes_keyboard(
     recipe_ids: list[tuple[str, str]],
 ) -> InlineKeyboardMarkup:
     """(recipe_id, short_label)"""
+    floor_number = _city_anchor(floor_number)
     rows: list[list[InlineKeyboardButton]] = []
     for rid, lab in recipe_ids[:10]:
         rows.append(
@@ -167,6 +176,7 @@ def forge_dis_bag_keyboard(
     n_selected: int = 0,
 ) -> InlineKeyboardMarkup:
     """Список предметов для разбора (item_id, label) + фильтры и свип."""
+    floor_number = _city_anchor(floor_number)
     rows: list[list[InlineKeyboardButton]] = []
     rar_btns: list[InlineKeyboardButton] = []
     for code in ("all", "common", "uncommon", "rare", "epic"):
@@ -257,6 +267,7 @@ def forge_repair_keyboard(
     *,
     return_to_floor: bool = False,
 ) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(floor_number)
     rows_btn: list[list[InlineKeyboardButton]] = []
     if slot_rows:
         rows_btn.append(
@@ -285,6 +296,7 @@ def forge_repair_keyboard(
 
 
 def forge_actions_keyboard(floor_number: int) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(floor_number)
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text="✨ Заточить предмет", callback_data=f"frg:ench:{floor_number}")],
         [
@@ -313,6 +325,7 @@ def forge_set_shop_keyboard(
     """
     items: (key, label, price)
     """
+    floor_number = _city_anchor(floor_number)
     rows: list[list[InlineKeyboardButton]] = []
     for key, label, price in items[:12]:
         rows.append(
@@ -329,6 +342,7 @@ def forge_set_shop_keyboard(
 
 
 def forge_quest_keyboard(floor_number: int, state: dict) -> InlineKeyboardMarkup:
+    floor_number = _city_anchor(floor_number)
     """Клавиатура экрана цепочки заданий кузнеца."""
     rows: list[list[InlineKeyboardButton]] = []
 

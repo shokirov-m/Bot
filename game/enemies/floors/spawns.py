@@ -26,8 +26,8 @@ class MonsterTemplate:
     blurb: str
 
 
-def _short_monster_name(name: str, max_len: int = 28) -> str:
-    """Подпись для кнопок в паре; элита/босс — полное имя в floor_kb."""
+def _button_monster_name(name: str, max_len: int = 56) -> str:
+    """Полное имя на кнопке (один монстр на строку)."""
     n = (name or "").strip()
     if len(n) <= max_len:
         return n
@@ -46,11 +46,8 @@ class FloorMonsterSpawn:
 
     @property
     def display_name(self) -> str:
-        """Полное имя для элиты/босса; короче — для обычных в паре на клавиатуре."""
-        if self.is_major_boss or self.is_mini_boss or self.is_elite:
-            label = (self.template.name or "").strip()
-        else:
-            label = _short_monster_name(self.template.name)
+        """Имя для кнопки этажа (одна кнопка — один монстр)."""
+        label = _button_monster_name(self.template.name)
         if self.is_major_boss:
             return f"👑 {label}"
         if self.is_mini_boss:
