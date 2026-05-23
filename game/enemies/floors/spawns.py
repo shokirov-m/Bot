@@ -133,9 +133,6 @@ def build_spawns_for_floor(floor_number: int) -> list[FloorMonsterSpawn]:
     Список целей на этаже: 6 обычных + элита (на базе первого),
     плюс мини-босс / сильный босс по правилам этажа.
     """
-    # Этаж 1 — только город-хаб: боёв на карте нет (монстры, тайник, привал — убраны с экрана).
-    if int(floor_number) == 1:
-        return []
     zone = floor_data.get_zone_for_floor(floor_number)
     pool = _pool(zone.key)
     picks = _pick_indices(floor_number, 6, len(pool))

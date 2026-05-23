@@ -144,15 +144,15 @@ async def floor_keyboard_for_character(
     from game.locations import hub_floors as hf
     from bot.keyboards.hub_floor_kb import city_hub_screen_keyboard, library_hub_screen_keyboard
 
+    hf.migrate_legacy_city_hub_floor(character)
     n = int(character.floor_number)
     if hf.is_library_hub_floor(n):
         return library_hub_screen_keyboard(character)
     if hf.is_city_hub_floor(n):
+        if hf.city_anchor_from_hub_floor(n) == 0 and int(character.highest_floor_reached) < 2:
+            character.highest_floor_reached = 2
+            await session.flush()
         return city_hub_screen_keyboard(character, locale="ru")
-    # Стартовый ярус: открыть 2-й этаж после первого визита (город — между 0↔1, не на этаже).
-    if n == 1 and int(character.highest_floor_reached) < 2:
-        character.highest_floor_reached = 2
-        await session.flush()
     nav_ceiling = floor_navigation_ceiling_for_user(character, telegram_user_id)
 
     import game.tower.trials.floor_trial as floor_trial_mod
@@ -260,7 +260,7 @@ def format_city_hub_message(character: Character) -> str:
     if city is None:
         return ""
     rich = city_locations.format_city_hub_rich_html(city)
-    gap = f"<i>Безопасная зона между {city.after_floor} и {city.after_floor + 1} ярусом.</i>"
+    safe = "<i>Безопасная зона в башне — здесь бой не ведётся.</i>"
     loc = get_locale(character, None)
     if city and int(city.after_floor) == 0:
         hub = (
@@ -268,17 +268,17 @@ def format_city_hub_message(character: Character) -> str:
             "NPC с лёгкими поручениями и стражник."
         )
         pet_hint = (
-            "🐾 <b>Питомцы:</b> на этом ярусе первый дар — в <b>храме призыва</b> на рынке "
+            "🐾 <b>Питомцы:</b> первый дар — в <b>храме призыва</b> на рынке "
             "(один ритуал и до трёх перебросов)."
         )
-        return f"{rich}\n{gap}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
+        return f"{rich}\n{safe}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
     hub = (
         "🛠️ <b>Сервисы:</b> кузница, таверна, лавка, поручение стражи, "
         "раздел <b>«Экономика»</b> (лотерея, ростовщик, сейф банка). "
-        "Квесты странника — на боевых этажах (кнопка «К этажу»)."
+        "Квесты странника — на боевых этажах (кнопка «В башню»)."
     )
     pet_hint = pets_mod.format_city_hub_pets_hint_html(locale=loc)
-    return f"{rich}\n{gap}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
+    return f"{rich}\n{safe}\n{LINE_SEP_CITY}\n{pet_hint}\n{LINE_SEP_CITY}\n{hub}"
 
 
 def _format_floor1_city_only(character: Character) -> str:
@@ -391,6 +391,7 @@ def format_floor_message(character: Character, *, defeated_slots: frozenset[str]
     """Текстовое описание текущего этажа (HTML) — коротко, без воды."""
     from game.locations import hub_floors as hf
 
+    hf.migrate_legacy_city_hub_floor(character)
     n = int(character.floor_number)
     if hf.is_library_hub_floor(n):
         return format_library_hub_message(character)
@@ -531,8 +532,8 @@ def format_floor_message_photo_caption(character: Character) -> str:
     if hf.is_city_hub_floor(n):
         city = hf.city_for_hub_floor(n)
         if city:
-            return f"{city.emoji} {city.name} · город-хаб"
-        return "🏙 Город-хаб"
+            return f"{city.emoji} {city.name}"
+        return "🏙 Город"
     long_floor_mod.ensure_long_floor_started(character)
     # Этаж 8 — исследование
     if exp_mod.is_explore_floor(int(n)):
@@ -874,6 +875,10 @@ async def travel_to_floor(
     target_floor = int(target_floor)
 
     if hf.is_hub_floor(target_floor):
+        canonical = hf.canonical_city_hub_floor(target_floor)
+        if canonical is not None:
+            target_floor = canonical
+        hf.migrate_legacy_city_hub_floor(character)
         if not admin_floor_bypass and not hf.can_travel_to_hub_floor(character, target_floor):
             return False, "Локация ещё не открыта."
         if not hf.is_hub_floor(old_floor):

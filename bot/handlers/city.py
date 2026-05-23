@@ -131,7 +131,7 @@ async def on_city_floor3_market(
             await query.answer("Сначала /start.", show_alert=True)
             return
         if not floor_data.city_service_floor_ok(char, floor_key) or floor_key != 0:
-            await query.answer("Рынок только в «Тихом Ручье» (первый город-хаб).", show_alert=True)
+            await query.answer("Рынок только в «Тихом Ручье».", show_alert=True)
             return
         loc = get_locale(char, query.from_user.language_code)
         economy_sink_service.clear_bank_ui_back(char)
@@ -313,7 +313,7 @@ async def on_city_floor3_simple_npc(
             return
         char = await character_repo.get_by_user_id(session, user.id)
         if char is None or not floor_data.city_service_floor_ok(char, floor_key) or floor_key != 0:
-            await query.answer("Эти NPC только в «Тихом Ручье» (первый город-хаб).", show_alert=True)
+            await query.answer("Эти NPC только в «Тихом Ручье».", show_alert=True)
             return
         loc = get_locale(char, query.from_user.language_code)
         await character_repo.lock_character_row(session, char.id)

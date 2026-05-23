@@ -278,25 +278,36 @@ def _build_profile_text(
     vit_e = int(gb["vit"]) + int(tb["vit"])
     luck_e = int(gb["luck"]) + int(tb["luck"])
 
+    from game.locations.hub_floors import player_location_label
+
+    loc_lbl = html.escape(player_location_label(int(char.floor_number)))
     rp_esc = html.escape(ranker_name_prefix) if ranker_name_prefix else ""
     head_row_compact = (
         f"🗡️ {rp_esc}{html.escape(char.display_name)} · 🎮 <b>ID {gid_esc}</b> "
-        f"• Ур.{char.level} 📍 Этаж: {char.floor_number}"
+        f"• Ур.{char.level} 📍 {loc_lbl}"
     )
     head_row_full = (
         f"🗡️ {rp_esc}{html.escape(char.display_name)} · 🎮 ID {gid_esc} "
-        f"• Ур.{char.level} 📍 Этаж: {char.floor_number}"
+        f"• Ур.{char.level} 📍 {loc_lbl}"
     )
     rank_combine = rank_s
 
     if compact:
         gp_show = html.escape(global_passives_line) if global_passives_line.strip() else "—"
         lines: list[str] = [
+            LINE_SEP,
             head_row_compact,
-            f"🎖️ {rank_combine} · 🏆 {titles_row}",
-            f"🌐 <i>{gp_show}</i>",
-            f"💰 {format_number(int(char.gold))}",
+            f"🎖️ Звание: {rank_combine}",
+            f"🏆 Титулы: {titles_row}",
         ]
+        lines.extend(
+            [
+                f"🌐 Глобальные бонусы: <i>{gp_show}</i>",
+                LINE_SEP,
+                f"💰 Золото: {format_number(int(char.gold))}",
+                "",
+            ]
+        )
         if is_necromancer(char):
             from game.necromancer.souls import get_souls
 
@@ -304,8 +315,11 @@ def _build_profile_text(
         lines.extend(
             [
                 fame_service.format_fame_html(char),
+                LINE_SEP,
                 render_hp_bar(char.hp_current, char.hp_max, wrap_bar_in_code=False),
+                "",
                 render_mp_bar(char.mp_current, char.mp_max, wrap_bar_in_code=False),
+                "",
                 render_stamina_bar(
                     char.stamina,
                     settings.MAX_STAMINA,
@@ -313,15 +327,17 @@ def _build_profile_text(
                     minutes_to_next=st_hint,
                     wrap_bar_in_code=False,
                 ),
+                "",
                 render_exp_bar(int(char.experience), xp_need, wrap_bar_in_code=False),
+                "",
                 workshop_compact_line(char),
-                "📊 "
-                f"СИЛ {_fmt_stat_plain(char.stat_strength, str_e)} · "
-                f"ЛОВ {_fmt_stat_plain(char.stat_dexterity, dex_e)} · "
-                f"ИНТ {_fmt_stat_plain(char.stat_intelligence, int_e)}",
-                f"ВЫН {_fmt_stat_plain(char.stat_vitality, vit_e)} · "
-                f"УДА {_fmt_stat_plain(char.stat_luck, luck_e)} · "
-                f"🛡️ {gear_defense}",
+                LINE_SEP,
+                "📊 <b>Характеристики</b>",
+                f"⚔️ СИЛ: {_fmt_stat_plain(char.stat_strength, str_e)}    🏃 ЛОВ: {_fmt_stat_plain(char.stat_dexterity, dex_e)}",
+                f"🔮 ИНТ: {_fmt_stat_plain(char.stat_intelligence, int_e)}    🛡️ ВЫН: {_fmt_stat_plain(char.stat_vitality, vit_e)}",
+                f"🍀 УДА: {_fmt_stat_plain(char.stat_luck, luck_e)}",
+                f"🛡️ Защита (броня): <b>{gear_defense}</b>",
+                LINE_SEP,
             ],
         )
         unspent = int(getattr(char, "unspent_stat_points", 0) or 0)
@@ -472,7 +488,7 @@ def _build_profile_text(
     lines.extend(
         [
             elem_ln,
-            f"📍 Этаж: {char.floor_number} · открыто до: {int(char.highest_floor_reached)}",
+            f"📍 {player_location_label(int(char.floor_number))} · открыто до: {int(char.highest_floor_reached)}",
         ],
     )
     return "\n".join(lines)

@@ -656,7 +656,9 @@ async def delete_character_and_all_progress(session: AsyncSession, character: Ch
     character.mp_current = mp_max
     character.stamina = settings.MAX_STAMINA
     character.last_stamina_regen_at = now
-    character.floor_number = 1
+    from game.locations import hub_floors as hf
+
+    character.floor_number = hf.city_hub_floor(0)
     character.highest_floor_reached = 2
     character.level = 1
     character.unspent_stat_points = 0

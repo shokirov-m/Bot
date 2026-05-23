@@ -463,8 +463,10 @@ async def on_floor_callback(
             return
 
         if code == "story_npc":
-            if int(char.floor_number) != 1:
-                await query.answer("Сюжетные NPC только на 1 этаже.", show_alert=True)
+            from game.locations import hub_floors as hf
+
+            if not hf.is_quiet_brook_city(char):
+                await query.answer("Сюжетные NPC только в «Тихом Ручье».", show_alert=True)
                 return
             if query.message is None:
                 await query.answer()
@@ -1641,9 +1643,12 @@ async def story_npc_screen(
         if char is None:
             await query.answer("Нет персонажа.", show_alert=True)
             return
-        if int(char.floor_number) != 1:
-            await query.answer("Сюжетные NPC доступны только на первом ярусе.", show_alert=True)
+        from game.locations import hub_floors as hf
+
+        if not hf.is_quiet_brook_city(char):
+            await query.answer("Сюжетные NPC только в «Тихом Ручье».", show_alert=True)
             return
+        hub_fl = int(char.floor_number) if hf.is_city_hub_floor(int(char.floor_number)) else 1
 
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         from game.tower.quests.story_quests import (
@@ -1689,8 +1694,8 @@ async def story_npc_screen(
         else:
             text = sq.npc_completed
 
-        rows.append([InlineKeyboardButton(text="⬅ К списку NPC", callback_data="fl:1:story_npc")])
-        rows.append([InlineKeyboardButton(text="⬅ На этаж", callback_data="fl:1:back")])
+        rows.append([InlineKeyboardButton(text="⬅ К списку NPC", callback_data=f"fl:{hub_fl}:story_npc")])
+        rows.append([InlineKeyboardButton(text="⬅ Назад", callback_data=f"fl:{hub_fl}:back")])
         await push_game_ui(
             state,
             query.bot,
@@ -1797,9 +1802,12 @@ async def story_quest_claim(
         await session.flush()
         await session.commit()
 
+        from game.locations import hub_floors as hf
+
+        hub_fl = int(char.floor_number) if hf.is_city_hub_floor(int(char.floor_number)) else 1
         rows = [
-            [InlineKeyboardButton(text="⬅ К списку NPC", callback_data="fl:1:story_npc")],
-            [InlineKeyboardButton(text="⬅ На этаж", callback_data="fl:1:back")],
+            [InlineKeyboardButton(text="⬅ К списку NPC", callback_data=f"fl:{hub_fl}:story_npc")],
+            [InlineKeyboardButton(text="⬅ Назад", callback_data=f"fl:{hub_fl}:back")],
         ]
         await push_game_ui(
             state,

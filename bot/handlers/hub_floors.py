@@ -41,8 +41,8 @@ async def menu_hub_travel_list(callback: CallbackQuery, session: AsyncSession, s
             callback.bot,
             chat_id=callback.message.chat.id,
             text=(
-                "🗺️ <b>Хаб-локации</b>\n\n"
-                "<i>Отдельные этажи вне башни: библиотека гримуаров и города. "
+                "🗺️ <b>Локации башни</b>\n\n"
+                "<i>Библиотека гримуаров и города-привалы внутри башни. "
                 "Бои здесь не ведутся.</i>"
             ),
             reply_markup=hub_travel_menu_keyboard(char),
@@ -159,7 +159,7 @@ async def hub_back_tower(callback: CallbackQuery, session: AsyncSession, state: 
             reply_markup=kb,
             target_message=callback.message,
         )
-        await callback.answer(f"Башня · этаж {dest}")
+        await callback.answer(f"🗼 Башня · этаж {dest}")
     except Exception:
         logger.exception("hub:back")
         await callback.answer("Ошибка.", show_alert=True)

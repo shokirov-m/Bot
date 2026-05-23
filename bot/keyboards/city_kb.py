@@ -31,8 +31,15 @@ def city_hub_keyboard(
         anchor = int(city.after_floor) if city is not None else f
         back_cb = f"fl:{f}:return"
     if anchor == 0:
+        hub_fl = hf.city_hub_floor(0)
         return InlineKeyboardMarkup(
             inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📜 Сюжетные NPC",
+                        callback_data=f"fl:{hub_fl}:story_npc",
+                    ),
+                ],
                 [InlineKeyboardButton(text="⚒️ Кузница", callback_data=f"frg:main:{anchor}")],
                 [InlineKeyboardButton(text="🍺 Таверна", callback_data=f"tvr:open:{anchor}")],
                 [InlineKeyboardButton(text="🏛️ Рынок", callback_data=f"cty:mkt:{anchor}:open")],

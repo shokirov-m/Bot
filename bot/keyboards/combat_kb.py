@@ -13,12 +13,6 @@ from game.characters.player_skills import (
 )
 from game.combat import consumables
 from game.items.equipment import gear_icon_for_item_data
-from utils.telegram.screen_style import truncate_button_label
-
-
-def _skill_btn_label(sk) -> str:
-    name = (sk.name or "").strip()
-    return truncate_button_label(f"{skill_emoji(skill=sk)} {name}", 64)
 
 
 def combat_boss_intro_keyboard() -> InlineKeyboardMarkup:
@@ -47,9 +41,22 @@ def combat_main_keyboard(character: Character) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="⚔️ Атака", callback_data="cb:atk"),
             InlineKeyboardButton(text="🏃 Бежать", callback_data="cb:run"),
         ],
-        [InlineKeyboardButton(text=_skill_btn_label(sk[0]), callback_data="cb:sk:0")],
-        [InlineKeyboardButton(text=_skill_btn_label(sk[1]), callback_data="cb:sk:1")],
-        [InlineKeyboardButton(text=_skill_btn_label(sk[2]), callback_data="cb:sk:2")],
+        [
+            InlineKeyboardButton(
+                text=f"{skill_emoji(sk[0].kind)} {sk[0].name[:15]}",
+                callback_data="cb:sk:0",
+            ),
+            InlineKeyboardButton(
+                text=f"{skill_emoji(sk[1].kind)} {sk[1].name[:15]}",
+                callback_data="cb:sk:1",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"{skill_emoji(sk[2].kind)} {sk[2].name[:15]}",
+                callback_data="cb:sk:2",
+            ),
+        ],
         [
             InlineKeyboardButton(text="🎒 Предмет", callback_data="cb:item"),
         ],

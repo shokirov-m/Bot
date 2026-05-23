@@ -124,15 +124,6 @@ def floor_screen_keyboard(
             ],
         )
 
-    # Сюжетные NPC на Этаже 1
-    if floor_number == 1:
-        rows.append([
-            InlineKeyboardButton(
-                text="📜 Сюжетные NPC",
-                callback_data=_cb(floor_number, "story_npc"),
-            )
-        ])
-
     rows.extend(_pet_rows(character, floor_number))
 
     if (

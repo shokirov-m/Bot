@@ -743,8 +743,8 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
                 f"{st} <b>{html.escape(str(c.get('name', '?')))}</b> "
                 f"{render_hp_bar(int(c.get('hp', 0)), int(c.get('hp_max', 1)), wrap_bar_in_code=False, spaced_numbers=True)}",
             )
-        squad_title = "👻 Нежить" if any(c.get("is_skeleton") for c in comps) else "🤝 Отряд"
-        merc_p = f"{squad_title}\n" + "\n".join(bits) + "\n\n"
+        squad_title = "▸ НЕЖИТЬ" if any(c.get("is_skeleton") for c in comps) else "▸ НАЁМНИКИ"
+        merc_p = f"<b>{squad_title}</b>\n" + "\n".join(bits) + "\n\n"
 
     logs = list(state.get("ui_logs", []) or [])
     log_lines = "\n".join(logs) if logs else ""
@@ -761,29 +761,38 @@ def format_battle_view(state: dict[str, Any], _class_name_ru: str) -> str:
         log_block = "<i>—</i>"
 
     fln = int(state.get("floor", 0))
+    sep = LINE_SEP_BATTLE
     night_note = ""
     if state.get("night_battle"):
-        from utils.telegram.screen_style import compact_night_line
+        night_note = (
+            "<i>🌑 Ночь UTC: враг +20% HP/ATK, победа +40% золото и опыт.</i>\n"
+        )
 
-        night_note = compact_night_line() + "\n"
-
-    title = f"⚔️ <b>Этаж {fln}</b>"
+    title = f"⚔️ <b>— ЭТАЖ {fln} —</b>"
     if state.get("night_battle"):
         title += " 🌑"
 
     return (
+        f"{sep}\n"
         f"{title}\n"
+        f"{sep}\n"
         f"{night_note}"
-        f"👹 {enemy_line}\n"
+        f"<b>▸ ВРАГ</b>\n"
+        f"{enemy_line}\n"
         f"{hp_mon}\n"
         f"{buff_line}"
-        f"🧙 <b>Ты</b>\n"
+        f"\n"
+        f"<b>▸ ИГРОК</b>\n"
         f"{php_line}\n"
+        f"\n"
         f"{mp_line}\n"
         f"{shield_p}"
         f"{pet_p}"
         f"{merc_p}"
-        f"📜 {log_block}"
+        f"{sep}\n"
+        f"📜 Лог хода:\n"
+        f"{log_block}\n"
+        f"{sep}"
     )
 
 

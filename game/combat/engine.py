@@ -176,25 +176,7 @@ def _stats(state: dict[str, Any]) -> dict[str, int]:
 
 
 def _skill_display_name(sk: Any) -> str:
-    from game.archetypes.data import skill_emoji_for_v2
-
-    name = str(getattr(sk, "name_ru", None) or getattr(sk, "name", None) or getattr(sk, "key", "Навык"))
-    em = ""
-    if hasattr(sk, "emoji") and (getattr(sk, "emoji", "") or "").strip():
-        em = str(sk.emoji).strip()
-    elif hasattr(sk, "key"):
-        try:
-            from game.archetypes.data import SKILLS
-
-            v2 = SKILLS.get(str(sk.key))
-            if v2 is not None:
-                em = skill_emoji_for_v2(v2)
-        except Exception:
-            pass
-    if not em:
-        kind = str(getattr(sk, "kind", "phys"))
-        em = "🔮" if kind == "mag" else "⚔️"
-    return f"{em} {name}"
+    return str(getattr(sk, "name_ru", None) or getattr(sk, "name", None) or getattr(sk, "key", "Навык"))
 
 
 def _mods(state: dict[str, Any]) -> dict[str, Any]:
@@ -1059,11 +1041,11 @@ def player_skill(state: dict[str, Any], index: int) -> tuple[list[str], Outcome 
     # Поглощение рун голема
     dmg = apply_rune_golem_absorb(state, dmg, logs)
 
-    tag = _skill_display_name(sk).split(" ", 1)[0]
+    tag = "🔮" if sk.kind == "mag" else "🗡️"
     if crit:
-        logs.append(f"→ {_skill_display_name(sk)}: {dmg} урона [КРИТ💥]")
+        logs.append(f"→ 👤 Герой: {tag} {sk.name}: {dmg} урона [КРИТ💥]")
     else:
-        logs.append(f"→ {_skill_display_name(sk)}: {dmg} урона")
+        logs.append(f"→ 👤 Герой: {tag} {sk.name}: {dmg} урона")
 
     apply_equipment_on_hit_procs(state, mods, logs)
 

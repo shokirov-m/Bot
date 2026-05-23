@@ -228,7 +228,7 @@ def get_city_for_floor(
 ) -> CityInfo | None:
     """
     Ближайший доступный город-хаб с боевого яруса башни.
-    На хаб-этаже 91xx — конкретный город этого хаба.
+    На городском полуэтаже в башне (10xx) — конкретный город.
     """
     from game.locations import hub_floors as hf
 
@@ -244,7 +244,7 @@ def get_city_for_floor(
 
 
 def normalize_city_callback_key(floor_or_anchor: int) -> int:
-    """Якорь города (0/30/60/90) из callback или hub-этажа 91xx."""
+    """Якорь города (0/30/60/90) из callback или hub-этажа 10xx/91xx."""
     from game.locations import hub_floors as hf
 
     v = int(floor_or_anchor)
@@ -294,8 +294,7 @@ def city_button_label(floor_number: int, *, highest_reached: int | None = None) 
     city = get_city_for_floor(floor_number, highest_reached=highest_reached)
     if city is None:
         return None
-    gap = f"{city.after_floor}→{city.after_floor + 1}"
-    return f"{city.emoji} {city.name} ({gap})"
+    return f"{city.emoji} {city.name}"
 
 
 def epithet_for_floor(zone: ZoneInfo, floor_number: int) -> str:

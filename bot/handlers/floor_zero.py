@@ -7,7 +7,7 @@
   2 — Бой с Тенью (scripted, 3 раунда, инлайн)
   3 — Итог боя + выбор пассивки
   4 — Получение пассивки
-  5 — Переход на Этаж 1
+  5 — Переход в город (Тихий Ручей, в башне)
 """
 from __future__ import annotations
 
@@ -400,7 +400,7 @@ async def on_floor0_enter_tower(
     session: AsyncSession,
     state: FSMContext,
 ) -> None:
-    """Переход с Этажа 0 → Этаж 1 (город Тихий Ручей)."""
+    """Переход с Этажа 0 → город Тихий Ручей (в башне)."""
     try:
         if query.from_user is None or query.message is None:
             await query.answer()
@@ -413,7 +413,9 @@ async def on_floor0_enter_tower(
             await query.answer("Сначала сделай выбор.", show_alert=True)
             return
 
-        char.floor_number = 1
+        from game.locations import hub_floors as hf
+
+        char.floor_number = hf.city_hub_floor(0)
         char.highest_floor_reached = max(int(char.highest_floor_reached), 2)
         # Restore HP after tutorial
         char.hp_current = int(char.hp_max)
